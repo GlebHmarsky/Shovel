@@ -1,6 +1,6 @@
 # Git GUI preview
 
-A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.2.0** adds trusted, read-only repository metadata to the shell. File status, history, diffs, mutations, network access, installer and updater are not implemented. The product name and installation identity remain provisional.
+A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.3.0** adds real commit history: connected graph nodes with descriptions to the right, author/date/hash columns, and selected-commit details below. File status, diffs, mutations, network access, installer and updater are not implemented. Product name and installation identity remain provisional.
 
 Start with [AGENTS.md](AGENTS.md), [TODO.md](TODO.md) and the [roadmap](docs/roadmap.md). [Architecture](docs/architecture.md) describes implemented boundaries and future proposals separately.
 
@@ -31,7 +31,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 These environment variables affect only this shell. Single-process MSBuild and disabled compiler sharing avoid restrictions observed in the Codex execution environment. WPF needs no optional .NET workload here. Check each command's exit code; there are no third-party NuGet packages. The console checks return a nonzero exit code on failure; they do not use `dotnet test` or a test-framework package.
 
-Checks write inspectable, isolated fixtures under ignored `artifacts/foundation-checks/`; one empty non-repository fixture uses the temporary directory. Git mutations use disposable repositories and isolated configuration, never working repositories. [Roadmap evidence](docs/roadmap.md#read-only-preview-verification-2026-10-23) distinguishes automated checks from GUI verification.
+Checks write inspectable, isolated fixtures under ignored `artifacts/foundation-checks/`; one empty non-repository fixture uses the temporary directory. Git mutations use disposable repositories and isolated configuration, never working repositories. Headless WPF checks also save history-table PNGs without opening a window or controlling the desktop. [Roadmap evidence](docs/roadmap.md#history-preview-verification-2026-10-23) distinguishes these checks from interactive GUI verification.
 
 ## Run
 
@@ -47,7 +47,9 @@ dotnet run --project src/GitGui.App -c Release --no-build -- --data-directory "C
 
 `--data-directory` accepts an absolute path; omit it for normal use. Default data is `%LOCALAPPDATA%\GitGui\Foundation`, separate from binaries. Closing cancels/drains read-only inspection, then saves layout/tabs; there is no tray or autostart. One instance may own a profile at a time. Different test profiles are independent.
 
-Choose **Open repository…**, select a folder and review the session-trust prompt. Branch/unborn/detached HEAD, operation markers and repository identity appear after inspection. Use **Trust / Refresh** after external changes or after restarting; restored tabs perform no automatic reads. Errors retain original Git stderr in the **Git output** tab for this session. The app does not repair, continue or abort interrupted Git operations.
+Choose **Open…**, select a folder and review the session-trust prompt. The History table displays the inspected HEAD's ancestry, including merged branches. Select a row for its message and metadata below; **Load older commits** expands from 200 rows up to 2,000. Branch tips outside that ancestry, ref badges, searching and filtering are deferred. Open **Repository** details for worktree/common-directory identity and last-inspection time; interrupted-operation notices also appear above the table.
+
+Use **Trust / Refresh** after external changes, switching repository tabs or restarting; restored tabs perform no automatic reads. Refresh replaces the observed history; loading older commits keeps the original tip. Errors retain original Git stderr in **Git output** for this session. The app does not repair, continue or abort interrupted Git operations.
 
 ## Build a local preview
 
@@ -55,7 +57,7 @@ Choose **Open repository…**, select a folder and review the session-trust prom
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-The script restores/builds/runs checks and publishes to `Build/0.2.0-win-x64/`. Double-click **GitGui.App.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
+The script restores/builds/runs checks and publishes to `Build/0.3.0-win-x64/`. Double-click **GitGui.App.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
 
 `Build/` is ignored and must never be committed. The script refuses to replace an existing version folder and keeps incomplete publishes in ignored `artifacts/`. Set the next delivery version in `Directory.Build.props` and update `CHANGELOG.md` once per delivery; see AGENTS.md for bump rules. The folder includes launch notes and SHA256 checksums. It is an unsigned local preview, not an installer or automatic update package. No hosting, keys or remote push are configured by packaging.
 
@@ -68,4 +70,6 @@ The script restores/builds/runs checks and publishes to `Build/0.2.0-win-x64/`. 
 
 ## Current limits
 
-Tabs support selection, left/right movement and closing. Inspection is bounded and cancellable; one inspection runs at a time, with no background refresh. Cancel/error clears metadata until explicit refresh. Bare repositories are rejected; linked worktree identity is read but no shared-state mutation coordinator exists yet. Marker detection is observational, not a validated recovery workflow. No mock history or diffs are presented. English `.resx` resources cover app-owned visible text and accessibility names. Additional locales, plural messages, RTL certification, dark theme, full accessibility/DPI testing and measured performance budgets remain in [TODO.md](TODO.md).
+Tabs support selection, left/right movement and closing. Inspection is bounded and cancellable; one runs at a time, with no background refresh. Failed/cancelled history loads clear rows and retain any already-inspected repository metadata. Bare repositories are rejected; linked worktree identity is read but no shared-state mutation coordinator exists. Shallow history stops at local boundaries; missing partial-clone objects fail without fetching. Marker detection is observational, not a validated recovery workflow.
+
+History limits: 4 MiB Git output, 2,000 displayed commits, 64 concurrent graph lanes, 65,536 characters in a message preview (explicit truncation notice). Descriptions and identities have bounded display prefixes; original parsed text remains in memory. Graph continuations at the bottom are not invented parent rows. Additional locales, plural messages, RTL certification, dark theme, full accessibility/DPI testing and measured performance budgets remain in [TODO.md](TODO.md).

@@ -2,13 +2,22 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:GitGui.App.Localization"
+        xmlns:views="clr-namespace:GitGui.App.Views"
         Title="{loc:Text Key=AppTitle}" Width="1200" Height="800" MinWidth="900" MinHeight="620"
         WindowStartupLocation="CenterScreen" FlowDirection="{x:Static loc:UiText.Direction}"
         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
         Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True"
         AutomationProperties.AutomationId="MainWindow">
-  <Grid>
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <Style x:Key="HistoryText" TargetType="TextBlock">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="8,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </Window.Resources>
+  <Grid Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
@@ -79,32 +88,86 @@
                     AutomationProperties.Name="{loc:Text Key=ResizeSidebar}" AutomationProperties.AutomationId="SidebarSplitter" />
       <Grid x:Name="WorkspacePanel" Grid.Column="2" SizeChanged="OnWorkspaceSizeChanged">
         <Grid.RowDefinitions>
-          <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="180" />
+          <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="240" />
           <RowDefinition Height="5" />
           <RowDefinition x:Name="DetailsRow" Height="240" MinHeight="140" MaxHeight="360" />
         </Grid.RowDefinitions>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-        <StackPanel Margin="20,16">
-          <TextBlock Text="{Binding AreaTitle}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
-          <WrapPanel>
+        <Grid Margin="12,10,12,0">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <WrapPanel Margin="0,0,0,8">
+            <TextBlock Text="{Binding AreaTitle}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,18,0" />
             <Button Content="{loc:Text Key=InspectRepository}" Command="{Binding RefreshRepositoryCommand}" AutomationProperties.AutomationId="RefreshRepository" />
             <Button Content="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" AutomationProperties.AutomationId="CancelOperation" />
             <Button Content="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
-            <TextBlock Text="{Binding GitStatus}" VerticalAlignment="Center" Margin="6,0" />
           </WrapPanel>
-          <TextBlock Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" FontWeight="SemiBold" Margin="0,12,0,4" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding SelectedRepository.State}" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding SelectedRepository.ReadAt}" TextWrapping="Wrap" Margin="0,4,0,12" />
-          <TextBlock Text="{loc:Text Key=HistoryEmptyBody}" TextWrapping="Wrap" />
-        </StackPanel>
-        </ScrollViewer>
+          <DockPanel Grid.Row="1" Margin="4,0,4,8">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding GitStatus}" Margin="10,0,0,0" FontSize="11" VerticalAlignment="Center" />
+            <StackPanel>
+              <TextBlock Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedRepository.ReadAt}" />
+              <TextBlock Text="{Binding SelectedRepository.State}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding SelectedRepository.HasOperation, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+          </DockPanel>
+          <DataGrid Grid.Row="2" x:Name="HistoryTable" ItemsSource="{Binding Commits}" SelectedItem="{Binding SelectedCommit}"
+                    Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}"
+                    AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
+                    CanUserReorderColumns="False" CanUserResizeRows="False" SelectionMode="Single" SelectionUnit="FullRow"
+                    HeadersVisibility="Column" RowHeight="28" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="1"
+                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"
+                    EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.IsVirtualizing="True"
+                    VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                    AutomationProperties.Name="{loc:Text Key=CommitHistoryTable}" AutomationProperties.AutomationId="CommitHistory">
+            <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="AutomationProperties.Name" Value="{Binding AccessibilityLabel}" /></Style></DataGrid.RowStyle>
+            <DataGrid.CellStyle><Style TargetType="DataGridCell"><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/></Style></DataGrid.CellStyle>
+            <DataGrid.ColumnHeaderStyle><Style TargetType="DataGridColumnHeader"><Setter Property="Padding" Value="8,6"/><Setter Property="FontWeight" Value="SemiBold"/></Style></DataGrid.ColumnHeaderStyle>
+            <DataGrid.Columns>
+              <DataGridTemplateColumn Header="{loc:Text Key=HistoryGraph}" Width="Auto" CanUserResize="False">
+                <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                  <views:CommitGraphCell Row="{Binding Graph}" Width="{Binding DataContext.GraphWidth, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                         IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" FlowDirection="LeftToRight" />
+                </DataTemplate></DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTextColumn Header="{loc:Text Key=HistoryDescription}" Binding="{Binding Description}" Width="*" MinWidth="240" ElementStyle="{StaticResource HistoryText}" />
+              <DataGridTextColumn Header="{loc:Text Key=HistoryAuthor}" Binding="{Binding Author}" Width="140" MinWidth="100" ElementStyle="{StaticResource HistoryText}" />
+              <DataGridTextColumn Header="{loc:Text Key=HistoryDate}" Binding="{Binding Date}" Width="150" MinWidth="150" ElementStyle="{StaticResource HistoryText}" />
+              <DataGridTextColumn Header="{loc:Text Key=HistoryHash}" Binding="{Binding ShortHash}" Width="115" MinWidth="115" ElementStyle="{StaticResource HistoryText}" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <TextBlock Grid.Row="2" Text="{loc:Text Key=SectionUnavailable}" Margin="8,12" TextWrapping="Wrap">
+            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding IsHistory}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+          </TextBlock>
+          <DockPanel Grid.Row="3" Margin="4,6" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}">
+            <Button DockPanel.Dock="Right" Content="{loc:Text Key=LoadOlderCommits}" Command="{Binding LoadMoreHistoryCommand}" Margin="12,0,0,0" />
+            <TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11" AutomationProperties.LiveSetting="Polite" />
+          </DockPanel>
+        </Grid>
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows"
                       Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
                       AutomationProperties.Name="{loc:Text Key=ResizeDetails}" AutomationProperties.AutomationId="DetailsSplitter" />
         <TabControl Grid.Row="2" Margin="12,8" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
+          <TabItem Header="{loc:Text Key=Commit}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Margin="14,10">
+                <TextBlock Text="{Binding SelectedCommit.Description, TargetNullValue={loc:Text Key=SelectCommit}}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10" />
+                <TextBlock Text="{loc:Text Key=CommitMessage}" FontWeight="SemiBold" />
+                <TextBox Text="{Binding SelectedCommit.MessagePreview, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AcceptsReturn="True" AutomationProperties.Name="{loc:Text Key=CommitMessage}" />
+                <TextBlock Text="{Binding SelectedCommit.MessageNotice}" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Text Key=HistoryAuthor}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding SelectedCommit.AuthorDetails, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=HistoryAuthor}" />
+                <TextBlock Text="{loc:Text Key=Committer}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding SelectedCommit.CommitterDetails, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=Committer}" />
+                <TextBlock Text="{loc:Text Key=HistoryHash}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding SelectedCommit.Commit.Hash, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=HistoryHash}" />
+                <TextBlock Text="{loc:Text Key=CommitParents}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding SelectedCommit.Parents, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=CommitParents}" />
+              </StackPanel>
+            </ScrollViewer>
+          </TabItem>
           <TabItem Header="{loc:Text Key=RepositoryDetails}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="16">
+                <TextBlock Text="{Binding SelectedRepository.State}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                <TextBlock Text="{Binding SelectedRepository.ReadAt}" TextWrapping="Wrap" Margin="0,0,0,8" />
                 <TextBlock Text="{loc:Text Key=RepositoryPath}" FontWeight="SemiBold" />
                 <TextBox Text="{Binding SelectedRepository.Directory, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=RepositoryPath}" />
                 <TextBlock Text="{loc:Text Key=WorktreePath}" FontWeight="SemiBold" Margin="0,8,0,0" />
@@ -117,7 +180,6 @@
             </ScrollViewer>
           </TabItem>
           <TabItem Header="{loc:Text Key=RawOutput}"><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RawOutput}" /></TabItem>
-          <TabItem Header="{loc:Text Key=Commit}"><TextBlock Text="{loc:Text Key=CommitEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
           <TabItem Header="{loc:Text Key=ChangedFiles}"><TextBlock Text="{loc:Text Key=FilesEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
           <TabItem Header="{loc:Text Key=Diff}"><TextBlock Text="{loc:Text Key=DiffEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
           <TabItem Header="{loc:Text Key=FileTree}"><TextBlock Text="{loc:Text Key=TreeEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>

@@ -19,7 +19,7 @@
   <data name="ToolsUnavailable" xml:space="preserve"><value>Repository tools will become available in a later phase.</value></data>
   <data name="NoRepositorySelected" xml:space="preserve"><value>No repository selected</value></data>
   <data name="NoActiveOperation" xml:space="preserve"><value>No active operation</value></data>
-  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview: open a trusted repository to inspect its branch and operation state. Git mutations, file status, history and diffs are not implemented yet.</value></data>
+  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview · History follows the inspected HEAD. File status, diffs and Git mutations are not available yet.</value></data>
   <data name="Navigation" xml:space="preserve"><value>Repository navigation</value></data>
   <data name="LocalChanges" xml:space="preserve"><value>Local changes</value></data>
   <data name="History" xml:space="preserve"><value>History</value></data>
@@ -31,7 +31,7 @@
   <data name="ResizeSidebar" xml:space="preserve"><value>Resize repository sidebar</value></data>
   <data name="ResizeDetails" xml:space="preserve"><value>Resize details panel</value></data>
   <data name="HistoryEmptyTitle" xml:space="preserve"><value>Your repositories will appear here</value></data>
-  <data name="HistoryEmptyBody" xml:space="preserve"><value>File status, searchable history and diffs will arrive in later increments. Repository metadata is read only when you choose Open or Refresh.</value></data>
+  <data name="HistoryEmptyBody" xml:space="preserve"><value>Open a trusted repository or refresh an existing tab to read commit history.</value></data>
   <data name="Details" xml:space="preserve"><value>Repository details</value></data>
   <data name="Commit" xml:space="preserve"><value>Commit</value></data>
   <data name="ChangedFiles" xml:space="preserve"><value>Changed files</value></data>
@@ -68,11 +68,11 @@
 {0}
 
 Choose only an installation you trust. This choice is not saved.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
-  <data name="TrustRepositoryQuestion" xml:space="preserve"><value>Trust this folder and its containing repository for metadata inspection during this session?
+  <data name="TrustRepositoryQuestion" xml:space="preserve"><value>Trust this folder and its containing repository for metadata and commit-history inspection during this session?
 
 {0}
 
-Git reads repository configuration. This version runs only local metadata commands, with no hooks, filters or network operations. Reopened tabs require trust again.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+Git reads repository configuration and commit objects. This version requests no hooks, filters, signature checks or network operations. Reopened tabs require trust again.</value><comment>{0} is the selected absolute folder path.</comment></data>
   <data name="TrustDeclined" xml:space="preserve"><value>Repository inspection was not authorized. No Git command was run for this folder.</value></data>
   <data name="TooManyRepositories" xml:space="preserve"><value>This preview supports up to 20 repository tabs. Close a tab before opening another.</value></data>
   <data name="GitSelected" xml:space="preserve"><value>Git executable selected for this session. Refresh a trusted repository to validate it.</value></data>
@@ -92,8 +92,8 @@ Git reads repository configuration. This version runs only local metadata comman
   <data name="OperationSequencer" xml:space="preserve"><value>Sequencer</value></data>
   <data name="SnapshotTime" xml:space="preserve"><value>Last inspected: {0:G}. Use Refresh after external changes.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
   <data name="TrustRequired" xml:space="preserve"><value>This tab is restored without reading the repository. Choose Trust / Refresh to inspect it.</value></data>
-  <data name="InspectingDuration" xml:space="preserve"><value>Inspecting metadata · {0:F1} s</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
-  <data name="InspectingRepository" xml:space="preserve"><value>Reading repository metadata…</value></data>
+  <data name="InspectingDuration" xml:space="preserve"><value>Reading repository · {0:F1} s</value><comment>{0} is elapsed seconds.</comment></data>
+  <data name="InspectingRepository" xml:space="preserve"><value>Reading repository and commit history…</value></data>
   <data name="RepositoryInspected" xml:space="preserve"><value>Repository metadata loaded. File status, history and diffs are not implemented yet.</value></data>
   <data name="GitErrorMissingGit" xml:space="preserve"><value>Git for Windows was not found in the standard installation locations. Install it separately or choose a trusted Git executable.</value></data>
   <data name="GitErrorUnsupportedGit" xml:space="preserve"><value>This preview requires Git for Windows 2.47.0 or newer. Choose a supported installation.</value></data>
@@ -101,7 +101,7 @@ Git reads repository configuration. This version runs only local metadata comman
   <data name="GitErrorCommandFailed" xml:space="preserve"><value>Git could not inspect this folder. See the Git output tab for its original message.</value></data>
   <data name="GitErrorCancelled" xml:space="preserve"><value>Inspection stopped. The previous snapshot was invalidated; Refresh to inspect the current state.</value></data>
   <data name="GitErrorTimedOut" xml:space="preserve"><value>Git did not finish within the read timeout and was stopped. Interactive commands are not supported in this preview.</value></data>
-  <data name="GitErrorOutputLimit" xml:space="preserve"><value>Git produced more output than this metadata reader permits. Inspection was stopped.</value></data>
+  <data name="GitErrorOutputLimit" xml:space="preserve"><value>Git produced more output than this reader permits. Inspection was stopped; unusually large commit messages may require another Git tool.</value></data>
   <data name="GitErrorNotWorktree" xml:space="preserve"><value>This folder is not an accessible Git working tree. Bare repositories are not supported in this preview.</value></data>
   <data name="GitErrorInvalidOutput" xml:space="preserve"><value>Git returned metadata this version cannot interpret. No repository changes were requested.</value></data>
   <data name="GitErrorChangedDuringRead" xml:space="preserve"><value>Repository state changed during inspection. Refresh to obtain a new snapshot.</value></data>
@@ -112,4 +112,32 @@ Git reads repository configuration. This version runs only local metadata comman
   <data name="WorktreePath" xml:space="preserve"><value>Working tree</value></data>
   <data name="CommonDirectory" xml:space="preserve"><value>Shared Git directory</value></data>
   <data name="HeadCommit" xml:space="preserve"><value>HEAD commit</value></data>
+  <data name="CommitHistoryTable" xml:space="preserve"><value>Commit history</value></data>
+  <data name="HistoryGraph" xml:space="preserve"><value>Graph</value></data>
+  <data name="HistoryDescription" xml:space="preserve"><value>Description</value></data>
+  <data name="HistoryAuthor" xml:space="preserve"><value>Author</value></data>
+  <data name="HistoryDate" xml:space="preserve"><value>Committed (local)</value></data>
+  <data name="HistoryHash" xml:space="preserve"><value>Commit hash</value></data>
+  <data name="CommitMessage" xml:space="preserve"><value>Message</value></data>
+  <data name="CommitMessageTruncated" xml:space="preserve"><value>Message preview truncated to 65,536 characters. Use another Git tool to inspect the complete message.</value></data>
+  <data name="TruncatedCommitText" xml:space="preserve"><value>{0}…</value><comment>{0} is a bounded prefix of a long commit subject, name or email.</comment></data>
+  <data name="Committer" xml:space="preserve"><value>Committer</value></data>
+  <data name="CommitParents" xml:space="preserve"><value>Parents</value></data>
+  <data name="EmptyCommitSubject" xml:space="preserve"><value>(No subject)</value></data>
+  <data name="RootCommit" xml:space="preserve"><value>Root commit — no parents</value></data>
+  <data name="SelectCommit" xml:space="preserve"><value>Select a commit to inspect its message and metadata</value></data>
+  <data name="CommitIdentity" xml:space="preserve"><value>{0} &lt;{1}&gt; · {2} (UTC{3})</value><comment>{0} name, {1} email, {2} date in original commit offset, {3} UTC offset.</comment></data>
+  <data name="CommitRowAccessible" xml:space="preserve"><value>{0}. Author: {1}. Commit: {2}. Parents: {3}</value><comment>{0} subject, {1} author name, {2} abbreviated hash, {3} full parent hashes or localized root label.</comment></data>
+  <data name="LoadOlderCommits" xml:space="preserve"><value>Load older commits</value></data>
+  <data name="HistoryNotLoaded" xml:space="preserve"><value>Open a repository or choose Trust / Refresh to load history.</value></data>
+  <data name="HistoryLoading" xml:space="preserve"><value>Loading history…</value></data>
+  <data name="HistoryUnborn" xml:space="preserve"><value>This branch has no commits yet.</value></data>
+  <data name="HistoryMore" xml:space="preserve"><value>Inspected HEAD ancestry · More history is available below. Refresh to observe external changes.</value></data>
+  <data name="HistoryEnd" xml:space="preserve"><value>End of available HEAD ancestry. Refresh to observe external changes.</value></data>
+  <data name="HistoryShallowEnd" xml:space="preserve"><value>End of locally available history in this shallow clone. No additional objects were fetched.</value></data>
+  <data name="HistoryLimit" xml:space="preserve"><value>This preview displays up to 2,000 commits from the inspected HEAD. Older history remains available in your other Git tools.</value></data>
+  <data name="HistoryFailed" xml:space="preserve"><value>History is unavailable. See the status and Git output, then refresh to retry.</value></data>
+  <data name="HistoryLoaded" xml:space="preserve"><value>History loaded — select a commit to inspect it</value></data>
+  <data name="SectionUnavailable" xml:space="preserve"><value>This workspace is not implemented yet. Choose History to inspect commits.</value></data>
+  <data name="GitErrorHistoryTooWide" xml:space="preserve"><value>This history exceeds the preview's graph lane limit. Use another Git tool to inspect it.</value></data>
 </root>

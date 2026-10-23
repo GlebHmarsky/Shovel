@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-10-23
+
+- Show real HEAD history in a virtualized table: connected graph nodes on the left, then description, author, local commit date and abbreviated hash. Merge nodes have a second ring.
+- Select a row to inspect its message, author/committer identities and dates, full hash and parents in the bottom panel.
+- Read 200 commits initially; load older commits from the same observed tip, up to 2,000. Bound output, graph lanes and long message previews; distinguish unborn and shallow history. Refresh explicitly after external changes.
+- Verify disposable linear/merge/shallow histories, signature-helper suppression, stable loading, stale-result rejection and headless WPF rendering/virtualization. No desktop control or interactive launch in this delivery.
+- All-branch history, search/filter, file status, changed files/diffs and mutations remain deferred.
+
 ## 0.2.0 — 2026-10-23
 
 - Open trusted local repositories and inspect real branch/HEAD, worktree/common-directory identity and interrupted operation markers. Refresh manually after external changes.

@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-23. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1a:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics and read-only Git metadata. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
+Updated 2026-10-23. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1b:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
 
 ## Stack and boundaries
 
@@ -21,14 +21,15 @@ The following are **future logical boundaries**, not six projects already create
 
 Keep one primary language, minimal dependencies, pinned SDK/packages, reproducible build/test/publish commands. No embedded web server, plugin framework, or database initially.
 
-### Implemented structure (F0 + F1a)
+### Implemented structure (F0 + F1a/F1b)
 
 ```text
 GitGui.slnx / global.json / Directory.Build.props
 src/GitGui.App/                 WPF executable, composition and lifetime owner
   App.xaml(.cs)                Startup/shutdown, profile mutex, guarded error handling
   Views/MainWindow.xaml(.cs)   Layout and view-only geometry handling
-  ViewModels/                  ShellViewModel, RepositoryTab, small command/observable bases
+  Views/CommitGraphCell.cs     Visible-row drawing only; no Git/graph computation
+  ViewModels/                  ShellViewModel, RepositoryTab, CommitRow and small command/observable bases
   Services/UserInteraction.cs  Owned folder/executable selection and session-trust dialogs
   Localization/UiText.cs       Resource lookup, formatting, XAML markup extension
   Resources/Strings.resx       All app-owned English messages/labels
@@ -36,33 +37,45 @@ src/GitGui.Core/                UI-independent net10.0 library
   Settings/                    Schema-2 layout/tab model and bounded JSON store
   Diagnostics/                 Allowlisted events and bounded asynchronous log writer
   Git/RepositoryReader.cs      Discovery, audited metadata commands and typed snapshots
+  Git/CommitHistory.cs         Bounded HEAD history reader and NUL-field parser
+  Git/CommitGraph.cs           UI-independent deterministic parent-lane layout
   Processes/                   Requests/results and asynchronous runner contract
 src/GitGui.ProcessHost/         Windows runner/job ownership and gated child-launch helper
 tests/GitGui.FoundationChecks/  Disposable-file/Git, process, view-model and headless WPF checks
 scripts/Build-Preview.ps1       Verified local publish into ignored Build/<version>-win-x64
 ```
 
-App references Core and ProcessHost; Core never references WPF or Windows process APIs. There are no external NuGet packages. Small INotifyPropertyChanged/ICommand implementations suffice; no command framework, DI container or generic repository/service scaffolding. Add mature dependencies only when a concrete need outweighs owning a small amount of code. Standard WPF controls preserve native keyboard/automation behavior; custom graph/diff controls wait for real data.
+App references Core and ProcessHost; Core never references WPF or Windows process APIs. There are no external NuGet packages. Small INotifyPropertyChanged/ICommand implementations suffice; no command framework, DI container or generic repository/service scaffolding. Add mature dependencies only when a concrete need outweighs owning a small amount of code. Standard WPF controls preserve native keyboard/automation behavior; the graph cell draws already-computed real parent connections.
 
 App creates services explicitly, shows a loading shell, then loads settings on a worker task. Closing cancels startup, stops navigation, captures a plain layout snapshot on the dispatcher and saves it off-thread. Saving failure offers stay/retry or explicit exit without saving; normal exit drains diagnostics with a bounded wait. A per-profile mutex prevents two app writers. Dispatcher/startup failures show a resource-backed generic error and exit without saving potentially invalid state; fatal process logging is best effort. No tray, startup network work or background polling exists.
 
-Closing now also prevents new inspections, cancels the current read and awaits owned-process cleanup before saving. This gate covers read-only metadata only. Replace it with the E2-E4/U3 workflow gate **before** adding mutations, prompts, tracked external tools or updates. The settings mutex is not a repository or linked-worktree lock. No updater service or fake always-idle implementation exists.
+Closing also prevents new inspections, cancels the current read and awaits owned-process cleanup before saving. This gate covers read-only metadata/history only. Replace it with the E2-E4/U3 workflow gate **before** adding mutations, prompts, tracked external tools or updates. The settings mutex is not a repository or linked-worktree lock. No updater service or fake always-idle implementation exists.
 
 ## Implemented Git metadata and process execution
 
 Discovery checks standard Git for Windows installation paths or an explicitly confirmed executable, never PATH/current-directory git.exe. Each repository directory needs session trust before discovery/inspection; remembered tabs do not imply trust. This is not a secure sandbox for hostile repositories or executables. Version floor is 2.47.0 for the audited invocation controls; only installed 2.51.1 has runtime coverage. Configured executable and trust are session-only. Git configuration is preserved; inherited repository/trace overrides are removed, with explicit global/system config locations retained. No safe.directory changes are made.
 
-Core builds metadata commands and parses results on workers. It uses rev-parse/symbolic-ref for worktree, Git/common directory and HEAD identity, then observes operation markers (merge/rebase/am/cherry-pick/revert/sequencer). HEAD/markers are checked twice to reject detected races. Snapshots are timestamped observations, not transactions or authoritative safety gates. Bare repositories are rejected; a selected subdirectory may resolve to its containing worktree. No status/object reads, mutation or network commands exist. [Git rev-parse](https://git-scm.com/docs/git-rev-parse), [worktree semantics](https://git-scm.com/docs/git-worktree).
+Core builds metadata commands and parses results on workers. It uses rev-parse/symbolic-ref for worktree, Git/common directory and HEAD identity, then observes operation markers (merge/rebase/am/cherry-pick/revert/sequencer). HEAD/markers are checked twice to reject detected races. Snapshots are timestamped observations, not transactions or authoritative safety gates. Bare repositories are rejected; a selected subdirectory may resolve to its containing worktree. No status, file-content, mutation or network commands exist. [Git rev-parse](https://git-scm.com/docs/git-rev-parse), [worktree semantics](https://git-scm.com/docs/git-worktree).
 
 The Windows runner uses ArgumentList, no shell, explicit cwd/environment, closed stdin, concurrent byte-stream drains and optional worker callbacks (consumers must not block). Default limit is 256 KiB per stream and 15 seconds per process; two concurrent processes per runner, one inspection in this UI, 45-second inspection deadline. Output overflow, timeout, cancellation and launch failures have distinct results. Git error text is displayed in memory, never logged. UI elapsed-time ticks run only during an active inspection. Pagers, optional locks, lazy fetch, fsmonitor and automatic maintenance are disabled for these reads. No hooks/filters/helpers are intentionally invoked and no invisible input is supported. [Structured arguments](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0), [Git invocation controls](https://git-scm.com/docs/git).
 
 An owned helper waits for a bounded JSON request on stdin. The parent assigns it to a kill-on-close Windows Job Object **before** sending the request, so Git cannot spawn before ownership is established. The helper launches the child and relays both output streams; exit 125 is reserved for host/protocol failure. Closing the job stops only its owned descendants. Timeout also bounds descendants retaining pipe handles after their direct parent exits. The helper EXE/DLL/runtime files must ship together with the app. This small separate executable avoids a custom suspended-process/native pipe launcher. Job assignment failure fails closed. [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects), [assignment semantics](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject).
 
-UI generation checks discard obsolete results; beginning a read clears its old snapshot. Cancel/failed reads leave metadata unavailable until explicit refresh; cancellation is not rollback. Manual refresh is currently the external-change mechanism. No polling/watchers, cross-instance repository locks or mutation coordination exist yet.
+UI generation checks discard obsolete results; beginning a refresh clears the old snapshot/history. Cancel/failed history reads clear rows and preserve any already-inspected metadata; retry is explicit. Cancellation is not rollback. Manual refresh is the external-change mechanism. No polling/watchers, cross-instance repository locks or mutation coordination exist yet.
+
+### Commit history and graph (F1b, 0.3.0)
+
+The user prioritized history before status. Read `git log --topo-order` from the inspected HEAD hash, with NUL-delimited fields/records, UTF-8 output, no patches, external diff, textconv, notes, mailmap, decoration or signature verification. Git's configured `log.showSignature` must not launch gpg. Parse complete commit identities, original-offset dates (including UTC `Z`), parent hashes and messages on workers. Hash widths are validated without assuming SHA-1. [Git log options](https://git-scm.com/docs/git-log), [pretty-format placeholders/terminators](https://git-scm.com/docs/pretty-formats) (official documentation rechecked 2026-10-23).
+
+Load a 200-row prefix with one-row lookahead, increasing by 200 up to 2,000; each expansion re-reads that bounded prefix from the same hash. Compare prior hashes/parents before replacing rows, retain selection by hash and reject obsolete tab generations. This trades repeated bounded traversal for simpler stable loading; deeper cursor-based history remains deferred. Shallow state is queried, but missing objects fail without lazy fetch. Per-command output is capped at 4 MiB; pathological history fails visibly rather than allocating without bounds. Only the active tab holds history; switching tabs clears it and requires explicit refresh. Nothing is persisted or automatically fetched.
+
+`CommitGraph` maintains pending-parent lanes in topological order, merges shared destinations, and produces per-row line segments plus a node. It validates order/duplicates, caps at 64 lanes and does no drawing. WPF uses a fixed-order, read-only DataGrid with row recycling and finite viewport; only visible graph cells draw curves/nodes. Merge nodes have an outer ring; accessible row text includes parent hashes. Graph column minimum width follows computed lanes, allowing horizontal scrolling. Dates use local culture; bottom details preserve original offsets. Message display is capped at 65,536 characters with notice, and long subject/identity prefixes are bounded. Full parsed text stays in memory within the read cap. [WPF virtualization guidance](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/optimizing-performance-controls).
+
+The graph shows actual ancestry, including merges, from one observed HEAD. All-ref selection, ref badges, search/filter, continuous cursor loading, diff/file lists and more complete accessibility/RTL certification remain deferred. No fake rows or simulated Git interactions ship.
 
 ### Deferred execution boundaries
 
-Before status/history/diffs: add porcelain-v2/NUL parsers, literal pathspecs, bounded incremental loading, no external diff/textconv/lazy fetch, and refresh reconciliation. Before mutations: serialize by common-directory identity across instances, recheck prerequisites and allow valid reads only; shared-state identity is already captured. External clients remain outside app coordination. Before network/hooks/tools: explicit authenticated askpass/editor or visible terminal routes, prompt/tool lifecycle, cooperative cancellation policy and recovery reinspection. The current closed-stdin/forced-stop read runner alone is insufficient for these workflows. Never disable hooks silently to fit the runner.
+Before status/diffs: add porcelain-v2/NUL path parsers, literal pathspecs, bounded content loading, no external diff/textconv/lazy fetch, and refresh reconciliation. Before mutations: serialize by common-directory identity across instances, recheck prerequisites and allow valid reads only; shared-state identity is already captured. External clients remain outside app coordination. Before network/hooks/tools: explicit authenticated askpass/editor or visible terminal routes, prompt/tool lifecycle, cooperative cancellation policy and recovery reinspection. The current closed-stdin/forced-stop read runner alone is insufficient for these workflows. Never disable hooks silently to fit the runner.
 
 ## Settings, storage, localization
 

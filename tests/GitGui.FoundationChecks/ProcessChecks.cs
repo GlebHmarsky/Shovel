@@ -220,6 +220,7 @@ internal static partial class Program
                 catch (GitReadException exception) { Expect(exception.Failure == GitFailure.ChangedDuringRead, "Explicit race state expected"); }
                 Expect((await reader.InspectAsync(git, repo, default)).Branch == "renamed", "Manual refresh sees external changes");
             });
+            await RunHistoryChecksAsync(reader, git, Git);
         }
         finally
         {

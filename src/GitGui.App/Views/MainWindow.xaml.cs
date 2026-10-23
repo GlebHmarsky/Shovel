@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using GitGui.App.ViewModels;
 using GitGui.Core.Settings;
 
@@ -11,6 +13,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = ViewModel = viewModel;
+        // Columns are outside the visual tree. Keep every computed graph lane visible when
+        // the viewport narrows; the table can scroll horizontally instead of clipping edges.
+        BindingOperations.SetBinding(HistoryTable.Columns[0], DataGridColumn.MinWidthProperty,
+            new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
     }
 
     // Read WPF geometry here; the settings model stores only plain values.

@@ -4,14 +4,15 @@ Single prioritized task list. Updated 2026-10-23. P0 = prerequisite/safety, P1 =
 
 ## Current phase
 
-Read-only metadata F1a / 0.2.0 is complete. Stop after this delivery; status/history/diffs are separate increments. Roadmap owns evidence and limits. Interactive preview verification stopped when the user pressed Escape; see the next item below.
+History F1b / 0.3.0 is complete. The user prioritized the main history table ahead of status. Disposable Git and headless WPF checks passed; no desktop control or interactive app launch was performed. Stop after this increment; the next delivery should take one bounded item below.
 
 ## Next priorities
 
-- [ ] **P1 — Complete manual F1a UI checks.** Open a disposable repository, review trust, inspect metadata/error/cancel states, reorder/close tabs and verify normal exit/relaunch. Automated integration/model checks pass; the published window was visually inspected, but Computer Use was stopped before interactive checks.
-- [ ] **P0 — Add read-only status (F1b).** Parse porcelain v2 with NUL paths; distinguish staged/unstaged/untracked/ignored, rename/delete and conflict entries. Compare disposable fixtures with CLI; keep optional locks, helpers and lazy fetch controlled.
+- [ ] **P1 — Manual preview review when the user is ready.** Inspect trust/open/refresh/cancel, history selection/scrolling, tab reorder/close and normal exit/relaunch. Headless checks are separate evidence; no desktop control in the current delivery.
+- [ ] **P1 — Extend history after this increment.** All-branch/ref selection and badges, search/filter with truthful graph ancestry and bounded loading; preserve selection/scroll position through refresh.
+- [ ] **P0 — Add read-only status.** Parse porcelain v2 with NUL paths; distinguish staged/unstaged/untracked/ignored, rename/delete and conflict entries. Compare disposable fixtures with CLI; keep optional locks, helpers and lazy fetch controlled.
 - [ ] **P0 — Extend refresh/state coordination alongside status.** Reconcile external changes/focus/resume with bounded work and generation checks. Add more interrupted-sequence fixtures. Before mutations, coordinate by common-directory identity across instances; before prompts/tools, extend shutdown admission control.
-- [ ] **P1 — Add history, then diffs in separate increments.** Real paged data, virtualized views, exact path bytes, binary/EOL/large-content cases; enable controls only when their functions exist.
+- [ ] **P1 — Add selected-commit file list, then diffs.** Real bounded data, exact path bytes, binary/EOL/large-content cases; enable controls only when their functions exist.
 - [ ] **P1 — Broaden shell validation.** Target Windows 10 plus Windows 11; mixed DPI, high contrast, screen reader, keyboard focus and +40%/RTL layouts at minimum size. Add dark/light theme and a plural-capable formatter before first count-dependent message. Preserve complete resource messages.
 - [ ] **P1 — Record repeatable performance baselines.** Use the requirements' fixture/hardware/sample protocol; shell startup, private bytes, idle CPU and responsiveness separately. No p95 or lightweight claim from one launch.
 
@@ -43,3 +44,4 @@ Read-only metadata F1a / 0.2.0 is complete. Stop after this delivery; status/his
 - [x] **P1 — Preserve tabs safely.** Order/selection/reordering/close, schema 1-to-2 migration/backup; trust and snapshots never restored. Shutdown cancels/drains reads before save.
 - [x] **P1 — Establish versioned delivery.** Central version 0.2.0, changelog and preview script; Build stays ignored and prior version folders cannot be overwritten.
 - [x] **P0 — Verify and package F1a.** Restore/Release build/publish succeeded; 35 checks passed. Published 0.2.0 window launched and rendered on Windows 11; Build folder kept outside version control. Manual interaction coverage remains explicitly limited above.
+- [x] **P1 — Deliver F1b history / 0.3.0.** Real HEAD ancestry with connected graph nodes, description/author/date/hash columns, selected-commit details and bounded older-history loading. Restore/Release build/publish passed with zero warnings/errors; 45 checks passed, including real disposable histories, stale results and headless row virtualization. Reviewed two offscreen renders; interactive GUI remains unverified. Ignored preview checksums and tested/published assemblies match; prior preview preserved.

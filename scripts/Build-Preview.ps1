@@ -36,9 +36,11 @@ Git GUI $version - local Windows x64 preview
 
 Double-click GitGui.App.exe. Keep all files in this folder together.
 Requires the .NET 10 Desktop Runtime and Git for Windows 2.47.0 or newer.
-Open a folder, approve session trust, then inspect branch/HEAD and operation state.
+Open a folder, approve session trust, then inspect the commit-history table and graph.
+Select a row for its message, author/committer, dates, hash and parents below.
+Load older commits expands HEAD ancestry in batches of 200, up to 2,000 commits.
 Use Trust / Refresh after external changes. Tabs are saved; trust is not saved.
-File status, history, diffs, mutations, installer and automatic updates are not implemented.
+All-branch history, search/filter, file status, diffs, mutations, installer and automatic updates are not implemented.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.
 Settings are outside this folder: %LOCALAPPDATA%\GitGui\Foundation.

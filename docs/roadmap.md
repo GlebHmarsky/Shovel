@@ -4,21 +4,22 @@ Updated 2026-10-23. [Product](product.md) owns experience; [requirements](requir
 
 ## Current status
 
-- **F0 and F1a delivered; stop after the 0.2.0 preview.** C# + WPF / .NET 10 LTS is confirmed. Version 0.2.0 adds the process runner, session trust, Git discovery, metadata inspection and persistent tabs. Verification limits are recorded below. Build/run/package instructions are in [README](../README.md).
+- **F1b history / 0.3.0 is complete.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
 - Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
 - Official Fork screenshots/animations were inspected previously; user's attachment unavailable. X media could not be reviewed without login. Historical observations are not current runtime verification.
-- Git CLI is implemented for metadata only. No status/history/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
+- Git CLI is implemented for repository metadata and HEAD ancestry. No all-ref history/search/filter, status/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
 - New startup updater requirement supersedes old research advice to disable update checks. Other network privacy restrictions remain.
 
 ## Proposed delivery sequence
 
-Each phase is a working increment with evidence and limitations. The user authorized continuation into the next bounded increment, commits, version increments and a local preview. Stop after F1a delivery. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
+Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. Stop after F1b delivery. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
 
 | Phase | Deliverable and boundary | Dependency / exit gate |
 | --- | --- | --- |
 | F0: Application foundation — complete | C#/WPF solution, MVVM empty shell, settings/resources/logging, startup/shutdown and checks | Build + 17 checks + Windows 11 GUI smoke verification below; no Git integration |
 | 1a: Metadata preview — delivered | Runner, real open, session trust/Git detection, persistent tabs, HEAD/common-directory identity and interrupted markers | Build/publish + 35 checks + published-window inspection; manual interaction gates remain open; local package only |
-| 1b onward: Read-only Git — next | Status first; then history/graph, object metadata/tree/diff, expanded state detection and reconciliation | F1a; G2-G7 read cases, E/S/L/A gates; no mocked functionality; baseline performance measurements |
+| 1b: History preview — delivered | Real HEAD ancestry, graph/description table, selected-commit metadata, bounded older-history loading | Build/publish + 45 automated checks and headless render review; no desktop control or interactive launch |
+| 1c onward: Read-only Git — next | Expand history/ref selection/search; status and changed-file/tree/diff reads in bounded increments; external reconciliation | F1b; G2-G7 read cases, E/S/L/A gates; baseline performance measurements |
 | 2: Local MVP | Init, file/text-hunk staging, commit/amend, branch create/switch/delete/tracking, stash operations | Phase 1; mutation safety, hooks/signing, stale hunk tests |
 | 3: Network MVP | Clone, remotes, fetch, push, upstream setup, proposed fast-forward-only pull default; external conflict resolution and valid continue/skip/abort for existing sequences | Phase 2; explicit interactive/auth routes, failures, external races and recovery |
 | 3R: Pilot distribution | Install once/update in place, stable/test feeds, version/status UI, settings migration and bad-release repair procedure | Updater/IT/signing selection + phase 3; all U/D acceptance tests on actual standard-user Windows installs before initial 30-user rollout |
@@ -56,9 +57,24 @@ Same Windows 11 x64/SDK/runtime host as F0; Git for Windows 2.51.1. Automated ch
 
 **Still unverified:** manual trust/open/refresh/cancel/reorder/close/relaunch in the published GUI, more interrupted-sequence types, live authentication/network failure, crash/sleep/disk-full behavior, Windows 10, additional architectures, complete accessibility/DPI/localization and measured performance budgets. F0's idle sample does not measure 0.2.0. Cross-instance mutations and updater idle gates are deferred and must precede those features.
 
+## History preview verification 2026-10-23
+
+Host remains Windows 11 x64 build 26200, SDK 10.0.401, Desktop Runtime 10.0.12 and Git for Windows 2.51.1. No desktop control or interactive app launch was performed, as requested. This delivery does not close the older manual-UI verification gaps.
+
+| Evidence | Result and limit |
+| --- | --- |
+| Restore / Release build / publish | Passed with zero warnings/errors; final preview script ran all 45 checks successfully, including the early parent-count guard. No dependencies installed. |
+| Real Git histories | Disposable Unicode-path repositories with linear, merge, original-offset/UTC dates, multiline messages and a 2,005-commit history. Ordering matches CLI; lookahead/caps/pinned expansion survive ref movement; shallow boundaries are explicit. Signed fixture plus configured verifier proves history does not launch signature helpers. No working repositories or network used. |
+| Parser/graph | Malformed field boundaries and invalid hashes fail visibly; variable-width hash fixture supported. Merge/octopus/convergence edges meet adjacent rows, cycles/overwide graphs rejected. Original commit text remains in memory while visible text is bounded. |
+| Headless WPF | Actual views bound to real fixture histories, measured and rendered without Show/desktop input. Table has graph then description/author/date/hash; selected row exposes matching message/parents. 400 loaded rows realize fewer than 60 WPF rows; stale history completion cannot populate another tab. Inspected offscreen PNGs at 1200×760 and 900×580 content size; fixed background, inactive-selection graph contrast and narrow-column clipping. |
+| Reproduction | `scripts/Build-Preview.ps1`; final fixture run `artifacts/foundation-checks/20261023-140125-40cd3a52a608469fb58f8df98623891d`, with `history-table.png` and `history-minimum.png` offscreen renders. Fixtures and outputs are ignored. |
+| Preview | `Build/0.3.0-win-x64/GitGui.App.exe`; all 14 file checksums verified, published App/Core/ProcessHost assemblies match the tested assemblies, existing-version overwrite guard passed. Build/artifacts are ignored and untracked. Initial package retained unchanged under ignored `artifacts/preview-0.3.0-before-final-hardening`; 0.2.0 preview untouched. |
+
+**Limits:** the 2,005-commit fixture is a bounded-loading regression, not a large-repository performance benchmark. No interactive scrolling/keyboard/screen-reader, mixed DPI, high contrast, Windows 10 or published-GUI launch verification. Only HEAD ancestry is shown; all-ref history, search/filter, file status/diffs and all mutations remain deferred. Settings remain schema 2. No installation/update/hosting/signing work.
+
 ## Initial compatibility boundaries
 
-F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. It does not yet detect submodule/LFS/shallow/partial/sparse modes, inspect their contents, or coordinate mutations. Those compatibility gates apply before exposing relevant reads/actions. No submodule recursion, implicit object fetching, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.
+F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. F1b reads commit ancestry and recognizes shallow boundaries. Submodule/LFS/partial/sparse modes and file content are not comprehensively validated; missing commit objects fail without fetching. No submodule recursion, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.
 
 Phase 1 detects interrupted operations; phase 3 provides validated recovery actions. Starting advanced history operations waits for phase 4. Binary files get summaries rather than invented text diffs; hunk mutation initially covers validated text changes. Bare-repository editing, WSL repositories and network-share mutation are not promised by MVP; determine demand before adding support. ARM64 is proposed later; x86 is not currently planned.
 
