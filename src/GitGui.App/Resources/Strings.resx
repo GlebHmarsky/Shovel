@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="AppTitle" xml:space="preserve"><value>Git GUI — Foundation</value></data>
+  <data name="RepositoryTabs" xml:space="preserve"><value>Repositories</value></data>
+  <data name="NoRepositories" xml:space="preserve"><value>No repositories open</value></data>
+  <data name="Fetch" xml:space="preserve"><value>Fetch</value></data>
+  <data name="Pull" xml:space="preserve"><value>Pull</value></data>
+  <data name="Push" xml:space="preserve"><value>Push</value></data>
+  <data name="Stash" xml:space="preserve"><value>Stash</value></data>
+  <data name="Explorer" xml:space="preserve"><value>Explorer</value></data>
+  <data name="Terminal" xml:space="preserve"><value>Terminal</value></data>
+  <data name="Editor" xml:space="preserve"><value>Editor</value></data>
+  <data name="Tools" xml:space="preserve"><value>Tools</value></data>
+  <data name="GitUnavailable" xml:space="preserve"><value>Git operations are not available in this foundation build.</value></data>
+  <data name="ToolsUnavailable" xml:space="preserve"><value>Repository tools will become available in a later phase.</value></data>
+  <data name="NoRepositorySelected" xml:space="preserve"><value>No repository selected</value></data>
+  <data name="NoActiveOperation" xml:space="preserve"><value>No active operation</value></data>
+  <data name="FoundationNotice" xml:space="preserve"><value>Foundation preview: explore the layout and resize the panels. Opening repositories and Git operations are not implemented yet.</value></data>
+  <data name="Navigation" xml:space="preserve"><value>Repository navigation</value></data>
+  <data name="LocalChanges" xml:space="preserve"><value>Local changes</value></data>
+  <data name="History" xml:space="preserve"><value>History</value></data>
+  <data name="Branches" xml:space="preserve"><value>Branches</value></data>
+  <data name="Remotes" xml:space="preserve"><value>Remotes</value></data>
+  <data name="Tags" xml:space="preserve"><value>Tags</value></data>
+  <data name="Stashes" xml:space="preserve"><value>Stashes</value></data>
+  <data name="Submodules" xml:space="preserve"><value>Submodules</value></data>
+  <data name="ResizeSidebar" xml:space="preserve"><value>Resize repository sidebar</value></data>
+  <data name="ResizeDetails" xml:space="preserve"><value>Resize details panel</value></data>
+  <data name="HistoryEmptyTitle" xml:space="preserve"><value>Your repositories will appear here</value></data>
+  <data name="HistoryEmptyBody" xml:space="preserve"><value>This build establishes the application shell. No repository data has been loaded, and no Git command has been run.</value></data>
+  <data name="Details" xml:space="preserve"><value>Repository details</value></data>
+  <data name="Commit" xml:space="preserve"><value>Commit</value></data>
+  <data name="ChangedFiles" xml:space="preserve"><value>Changed files</value></data>
+  <data name="Diff" xml:space="preserve"><value>Diff</value></data>
+  <data name="FileTree" xml:space="preserve"><value>File tree</value></data>
+  <data name="CommitEmpty" xml:space="preserve"><value>Commit message, author, committer, dates, hashes and parents will be shown here when history is implemented.</value></data>
+  <data name="FilesEmpty" xml:space="preserve"><value>Changed files will be shown here when repository reading is implemented.</value></data>
+  <data name="DiffEmpty" xml:space="preserve"><value>File differences will be shown here when diff reading is implemented.</value></data>
+  <data name="TreeEmpty" xml:space="preserve"><value>The selected commit’s file tree will be shown here when repository reading is implemented.</value></data>
+  <data name="VersionFormat" xml:space="preserve"><value>Version {0}</value><comment>{0} is the installed application version, for example 0.1.0.</comment></data>
+  <data name="LoadingSettings" xml:space="preserve"><value>Loading local settings…</value></data>
+  <data name="FoundationReady" xml:space="preserve"><value>Ready — foundation preview</value></data>
+  <data name="SavingSettings" xml:space="preserve"><value>Saving layout and closing…</value></data>
+  <data name="SettingsNewer" xml:space="preserve"><value>Settings were created by a newer version. Defaults are in use; the existing file will be preserved.</value></data>
+  <data name="SettingsUnsupported" xml:space="preserve"><value>This settings format is unsupported. Defaults are in use; the existing file will be preserved.</value></data>
+  <data name="SettingsInvalid" xml:space="preserve"><value>Settings could not be read. Defaults are in use; the existing file will be preserved.</value></data>
+  <data name="SettingsUnavailable" xml:space="preserve"><value>Settings are inaccessible. Defaults are in use; changes will not be saved.</value></data>
+  <data name="SettingsSaveFailedStatus" xml:space="preserve"><value>Layout could not be saved. The application is still open; close again to retry.</value></data>
+  <data name="SettingsSaveFailedQuestion" xml:space="preserve"><value>The layout could not be saved. Close without saving this session’s layout? Choose No to stay in the application and retry later.</value></data>
+  <data name="AlreadyRunning" xml:space="preserve"><value>This settings profile is already open in another instance. Switch to that window or close it before trying again.</value></data>
+  <data name="FatalErrorMessage" xml:space="preserve"><value>The application encountered an unexpected error and needs to close. Existing settings will be preserved. Diagnostic event codes may be available in the local application data folder.</value></data>
+</root>

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GitGui.Core/GitGui.Core.csproj" />
+    <Project Path="src/GitGui.App/GitGui.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GitGui.FoundationChecks/GitGui.FoundationChecks.csproj" />
+  </Folder>
+</Solution>

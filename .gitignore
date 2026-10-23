@@ -1,0 +1,19 @@
+# .NET / IDE outputs
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+artifacts/
+/Build/
+# Local credentials / signing material must never be committed
+*.pfx
+*.p12
+*.key
+.env
+.env.*
+!.env.example
