@@ -4,7 +4,7 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
-  <data name="AppTitle" xml:space="preserve"><value>Git GUI — Foundation</value></data>
+  <data name="AppTitle" xml:space="preserve"><value>Git GUI — Preview</value></data>
   <data name="RepositoryTabs" xml:space="preserve"><value>Repositories</value></data>
   <data name="NoRepositories" xml:space="preserve"><value>No repositories open</value></data>
   <data name="Fetch" xml:space="preserve"><value>Fetch</value></data>
@@ -19,7 +19,7 @@
   <data name="ToolsUnavailable" xml:space="preserve"><value>Repository tools will become available in a later phase.</value></data>
   <data name="NoRepositorySelected" xml:space="preserve"><value>No repository selected</value></data>
   <data name="NoActiveOperation" xml:space="preserve"><value>No active operation</value></data>
-  <data name="FoundationNotice" xml:space="preserve"><value>Foundation preview: explore the layout and resize the panels. Opening repositories and Git operations are not implemented yet.</value></data>
+  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview: open a trusted repository to inspect its branch and operation state. Git mutations, file status, history and diffs are not implemented yet.</value></data>
   <data name="Navigation" xml:space="preserve"><value>Repository navigation</value></data>
   <data name="LocalChanges" xml:space="preserve"><value>Local changes</value></data>
   <data name="History" xml:space="preserve"><value>History</value></data>
@@ -31,7 +31,7 @@
   <data name="ResizeSidebar" xml:space="preserve"><value>Resize repository sidebar</value></data>
   <data name="ResizeDetails" xml:space="preserve"><value>Resize details panel</value></data>
   <data name="HistoryEmptyTitle" xml:space="preserve"><value>Your repositories will appear here</value></data>
-  <data name="HistoryEmptyBody" xml:space="preserve"><value>This build establishes the application shell. No repository data has been loaded, and no Git command has been run.</value></data>
+  <data name="HistoryEmptyBody" xml:space="preserve"><value>File status, searchable history and diffs will arrive in later increments. Repository metadata is read only when you choose Open or Refresh.</value></data>
   <data name="Details" xml:space="preserve"><value>Repository details</value></data>
   <data name="Commit" xml:space="preserve"><value>Commit</value></data>
   <data name="ChangedFiles" xml:space="preserve"><value>Changed files</value></data>
@@ -43,7 +43,7 @@
   <data name="TreeEmpty" xml:space="preserve"><value>The selected commit’s file tree will be shown here when repository reading is implemented.</value></data>
   <data name="VersionFormat" xml:space="preserve"><value>Version {0}</value><comment>{0} is the installed application version, for example 0.1.0.</comment></data>
   <data name="LoadingSettings" xml:space="preserve"><value>Loading local settings…</value></data>
-  <data name="FoundationReady" xml:space="preserve"><value>Ready — foundation preview</value></data>
+  <data name="FoundationReady" xml:space="preserve"><value>Ready — open a trusted local repository</value></data>
   <data name="SavingSettings" xml:space="preserve"><value>Saving layout and closing…</value></data>
   <data name="SettingsNewer" xml:space="preserve"><value>Settings were created by a newer version. Defaults are in use; the existing file will be preserved.</value></data>
   <data name="SettingsUnsupported" xml:space="preserve"><value>This settings format is unsupported. Defaults are in use; the existing file will be preserved.</value></data>
@@ -53,4 +53,63 @@
   <data name="SettingsSaveFailedQuestion" xml:space="preserve"><value>The layout could not be saved. Close without saving this session’s layout? Choose No to stay in the application and retry later.</value></data>
   <data name="AlreadyRunning" xml:space="preserve"><value>This settings profile is already open in another instance. Switch to that window or close it before trying again.</value></data>
   <data name="FatalErrorMessage" xml:space="preserve"><value>The application encountered an unexpected error and needs to close. Existing settings will be preserved. Diagnostic event codes may be available in the local application data folder.</value></data>
+  <data name="OpenRepository" xml:space="preserve"><value>Open…</value></data>
+  <data name="MoveLeft" xml:space="preserve"><value>Move left</value></data>
+  <data name="MoveRight" xml:space="preserve"><value>Move right</value></data>
+  <data name="CloseTab" xml:space="preserve"><value>Close tab</value></data>
+  <data name="InspectRepository" xml:space="preserve"><value>Trust / Refresh</value></data>
+  <data name="CancelOperation" xml:space="preserve"><value>Cancel</value></data>
+  <data name="ChooseGit" xml:space="preserve"><value>Git executable…</value></data>
+  <data name="ChooseRepositoryTitle" xml:space="preserve"><value>Open a local Git repository</value></data>
+  <data name="ChooseGitTitle" xml:space="preserve"><value>Choose a trusted Git for Windows executable</value></data>
+  <data name="ExecutableFilter" xml:space="preserve"><value>Windows executables (*.exe)|*.exe</value></data>
+  <data name="ConfirmGitExecutable" xml:space="preserve"><value>Run this executable as Git for this session?
+
+{0}
+
+Choose only an installation you trust. This choice is not saved.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="TrustRepositoryQuestion" xml:space="preserve"><value>Trust this folder and its containing repository for metadata inspection during this session?
+
+{0}
+
+Git reads repository configuration. This version runs only local metadata commands, with no hooks, filters or network operations. Reopened tabs require trust again.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="TrustDeclined" xml:space="preserve"><value>Repository inspection was not authorized. No Git command was run for this folder.</value></data>
+  <data name="TooManyRepositories" xml:space="preserve"><value>This preview supports up to 20 repository tabs. Close a tab before opening another.</value></data>
+  <data name="GitSelected" xml:space="preserve"><value>Git executable selected for this session. Refresh a trusted repository to validate it.</value></data>
+  <data name="GitNotChecked" xml:space="preserve"><value>Git has not been checked</value></data>
+  <data name="GitVersionFormat" xml:space="preserve"><value>Git {0}</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="NotInspected" xml:space="preserve"><value>Not inspected</value></data>
+  <data name="UnbornHead" xml:space="preserve"><value>Branch: {0} — no commits yet</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="DetachedHead" xml:space="preserve"><value>Detached HEAD: {0}</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="BranchHead" xml:space="preserve"><value>Branch: {0}</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="NoSequence" xml:space="preserve"><value>No interrupted Git sequence detected. Working-tree changes have not been checked.</value></data>
+  <data name="SequenceDetected" xml:space="preserve"><value>Operation in progress: {0}. Resolve it using your existing Git tools; recovery actions are not available here yet.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="OperationMerge" xml:space="preserve"><value>Merge</value></data>
+  <data name="OperationRebase" xml:space="preserve"><value>Rebase</value></data>
+  <data name="OperationApplyMailbox" xml:space="preserve"><value>Apply mailbox</value></data>
+  <data name="OperationCherryPick" xml:space="preserve"><value>Cherry-pick</value></data>
+  <data name="OperationRevert" xml:space="preserve"><value>Revert</value></data>
+  <data name="OperationSequencer" xml:space="preserve"><value>Sequencer</value></data>
+  <data name="SnapshotTime" xml:space="preserve"><value>Last inspected: {0:G}. Use Refresh after external changes.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="TrustRequired" xml:space="preserve"><value>This tab is restored without reading the repository. Choose Trust / Refresh to inspect it.</value></data>
+  <data name="InspectingDuration" xml:space="preserve"><value>Inspecting metadata · {0:F1} s</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="InspectingRepository" xml:space="preserve"><value>Reading repository metadata…</value></data>
+  <data name="RepositoryInspected" xml:space="preserve"><value>Repository metadata loaded. File status, history and diffs are not implemented yet.</value></data>
+  <data name="GitErrorMissingGit" xml:space="preserve"><value>Git for Windows was not found in the standard installation locations. Install it separately or choose a trusted Git executable.</value></data>
+  <data name="GitErrorUnsupportedGit" xml:space="preserve"><value>This preview requires Git for Windows 2.47.0 or newer. Choose a supported installation.</value></data>
+  <data name="GitErrorStartFailed" xml:space="preserve"><value>The Git process could not be started or safely contained. Check the Git executable and that all preview files are present.</value></data>
+  <data name="GitErrorCommandFailed" xml:space="preserve"><value>Git could not inspect this folder. See the Git output tab for its original message.</value></data>
+  <data name="GitErrorCancelled" xml:space="preserve"><value>Inspection stopped. The previous snapshot was invalidated; Refresh to inspect the current state.</value></data>
+  <data name="GitErrorTimedOut" xml:space="preserve"><value>Git did not finish within the read timeout and was stopped. Interactive commands are not supported in this preview.</value></data>
+  <data name="GitErrorOutputLimit" xml:space="preserve"><value>Git produced more output than this metadata reader permits. Inspection was stopped.</value></data>
+  <data name="GitErrorNotWorktree" xml:space="preserve"><value>This folder is not an accessible Git working tree. Bare repositories are not supported in this preview.</value></data>
+  <data name="GitErrorInvalidOutput" xml:space="preserve"><value>Git returned metadata this version cannot interpret. No repository changes were requested.</value></data>
+  <data name="GitErrorChangedDuringRead" xml:space="preserve"><value>Repository state changed during inspection. Refresh to obtain a new snapshot.</value></data>
+  <data name="GitErrorUnexpected" xml:space="preserve"><value>Repository inspection failed unexpectedly. Check the folder and Git installation, then retry.</value></data>
+  <data name="RepositoryDetails" xml:space="preserve"><value>Repository</value></data>
+  <data name="RawOutput" xml:space="preserve"><value>Git output</value></data>
+  <data name="RepositoryPath" xml:space="preserve"><value>Selected folder</value></data>
+  <data name="WorktreePath" xml:space="preserve"><value>Working tree</value></data>
+  <data name="CommonDirectory" xml:space="preserve"><value>Shared Git directory</value></data>
+  <data name="HeadCommit" xml:space="preserve"><value>HEAD commit</value></data>
 </root>

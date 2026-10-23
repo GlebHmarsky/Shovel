@@ -50,6 +50,7 @@ Run meaningful parser/unit and disposable-repository integration tests, followed
 | Gate | Pass condition |
 | --- | --- |
 | Foundation F0 | Restore/build cleanly; real resizable shell, clear unavailable Git controls, English resources, async profile I/O, safe diagnostic fields; corrupt/newer settings and failed/cancelled saves preserve existing bytes. Verify actual launch, layout changes, close and relaunch separately from headless checks. |
+| Metadata F1a | Structured arguments round-trip; both output streams drain within caps; timeouts/cancellation stop owned descendants, including inherited-pipe cases. Trusted discovery rejects missing/older Git. Disposable unborn/detached/linked/conflicted worktrees produce correct metadata. Denied trust and restored tabs run no commands; shutdown cancels/drains reads; stale completions cannot populate another selection. Verify published helper files and launch separately. |
 | Git reads | Status/index/worktree and commit/diff results match CLI fixtures, including empty, detached, binary, renamed, deleted, ignored, EOL and unusual paths. |
 | Mutations | Expected refs/index/files change and unrelated data stays intact; stale hunk and external-edit races fail safely. |
 | Recovery | Conflicts and interrupted sequences survive restart; only valid actions enabled; cancellation owns the correct children and refreshes state. |

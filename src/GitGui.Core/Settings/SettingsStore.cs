@@ -2,10 +2,10 @@ using System.Text.Json;
 
 namespace GitGui.Core.Settings;
 
-public enum SettingsLoadStatus { Defaults, Loaded, Invalid, NewerSchema, UnsupportedSchema, Unavailable }
+public enum SettingsLoadStatus { Defaults, Loaded, Migrated, Invalid, NewerSchema, UnsupportedSchema, Unavailable }
 public sealed record SettingsLoadResult(AppSettings Settings, SettingsLoadStatus Status)
 {
-    public bool CanSave => Status is SettingsLoadStatus.Defaults or SettingsLoadStatus.Loaded;
+    public bool CanSave => Status is SettingsLoadStatus.Defaults or SettingsLoadStatus.Loaded or SettingsLoadStatus.Migrated;
 }
 
 /// <summary>Single profile writer, owned by the application's instance lock. Never overwrites unknown data.</summary>
@@ -34,12 +34,13 @@ public sealed class SettingsStore(string directory)
                 return Complete(new(), SettingsLoadStatus.Invalid);
             if (schema > AppSettings.CurrentSchemaVersion)
                 return Complete(new(), SettingsLoadStatus.NewerSchema);
-            if (schema != AppSettings.CurrentSchemaVersion)
+            if (schema is not (1 or AppSettings.CurrentSchemaVersion))
                 return Complete(new(), SettingsLoadStatus.UnsupportedSchema);
 
             var settings = JsonSerializer.Deserialize<AppSettings>(_loadedBytes, JsonOptions);
             return settings is null ? Complete(new(), SettingsLoadStatus.Invalid) :
-                Complete(settings.Normalize(), SettingsLoadStatus.Loaded);
+                Complete(settings.Normalize() with { SchemaVersion = AppSettings.CurrentSchemaVersion },
+                    schema == AppSettings.CurrentSchemaVersion ? SettingsLoadStatus.Loaded : SettingsLoadStatus.Migrated);
         }
         catch (JsonException) { return Complete(new(), SettingsLoadStatus.Invalid); }
         catch (InvalidDataException) { return Complete(new(), SettingsLoadStatus.Invalid); }
@@ -50,7 +51,7 @@ public sealed class SettingsStore(string directory)
     public async Task SaveAsync(AppSettings settings, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_loadedStatus is not (SettingsLoadStatus.Defaults or SettingsLoadStatus.Loaded))
+        if (_loadedStatus is not (SettingsLoadStatus.Defaults or SettingsLoadStatus.Loaded or SettingsLoadStatus.Migrated))
             throw new InvalidOperationException("SettingsNotWritable");
 
         // Detect external edits since startup rather than silently replacing them.
@@ -63,6 +64,7 @@ public sealed class SettingsStore(string directory)
         var temporary = Path.Combine(directory, $"settings.{Guid.NewGuid():N}.tmp");
         var bytes = JsonSerializer.SerializeToUtf8Bytes(settings.Normalize() with
         { SchemaVersion = AppSettings.CurrentSchemaVersion }, JsonOptions);
+        if (bytes.Length > MaximumBytes) throw new IOException("SettingsTooLarge");
         try
         {
             await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write,

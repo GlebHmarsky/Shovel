@@ -7,6 +7,9 @@ using System.Windows.Threading;
 using GitGui.App.Localization;
 using GitGui.App.ViewModels;
 using GitGui.App.Views;
+using GitGui.App.Services;
+using GitGui.Core.Git;
+using GitGui.ProcessHost;
 using GitGui.Core.Diagnostics;
 using GitGui.Core.Settings;
 
@@ -50,7 +53,7 @@ public partial class App : Application
             _log = new DiagnosticLog(directory);
             _log.Record(DiagnosticEvent.Started);
             _settings = new SettingsStore(directory);
-            _shell = new ShellViewModel();
+            _shell = new ShellViewModel(new RepositoryReader(new WindowsProcessRunner()), new UserInteraction());
             var window = new MainWindow(_shell);
             MainWindow = window;
             window.Closing += OnWindowClosing;
@@ -86,10 +89,11 @@ public partial class App : Application
         try
         {
             await _startupTask;
+            await _shell.WaitForIdleAsync();
             if (_fatal) return;
             if (_shell.LoadedSettings?.CanSave == true)
             {
-                var snapshot = window.CaptureLayout();
+                var snapshot = _shell.CaptureSession(window.CaptureLayout());
                 try
                 {
                     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));

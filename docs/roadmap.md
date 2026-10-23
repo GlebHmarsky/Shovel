@@ -4,20 +4,21 @@ Updated 2026-10-23. [Product](product.md) owns experience; [requirements](requir
 
 ## Current status
 
-- **F0 foundation delivered; stop before Git features.** C# + WPF is confirmed by the user; .NET 10 LTS is selected. Solution, MVVM shell, English resources, lifecycle, local settings and safe diagnostics are implemented. Build/run instructions are in [README](../README.md).
-- Existing instructions/documents were read and preserved; Git was initialized as explicitly authorized, with `.gitignore`. No commit or remote was created. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed.
+- **F0 and F1a delivered; stop after the 0.2.0 preview.** C# + WPF / .NET 10 LTS is confirmed. Version 0.2.0 adds the process runner, session trust, Git discovery, metadata inspection and persistent tabs. Verification limits are recorded below. Build/run/package instructions are in [README](../README.md).
+- Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
 - Official Fork screenshots/animations were inspected previously; user's attachment unavailable. X media could not be reviewed without login. Historical observations are not current runtime verification.
-- No Git functionality, process runner, credentials/trust flow, installer/updater, hosting, signing keys or packages have been implemented. Git CLI remains the integration proposal. Updater/installer/host/signing remain unselected.
+- Git CLI is implemented for metadata only. No status/history/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
 - New startup updater requirement supersedes old research advice to disable update checks. Other network privacy restrictions remain.
 
 ## Proposed delivery sequence
 
-Each phase is a working increment with evidence and limitations. The user authorized the small F0 increment only; the next increment awaits instruction. Dependencies below are gates, not calendar estimates. Break each Git milestone into small reviewable deliveries rather than implementing a full row at once.
+Each phase is a working increment with evidence and limitations. The user authorized continuation into the next bounded increment, commits, version increments and a local preview. Stop after F1a delivery. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
 
 | Phase | Deliverable and boundary | Dependency / exit gate |
 | --- | --- | --- |
 | F0: Application foundation — complete | C#/WPF solution, MVVM empty shell, settings/resources/logging, startup/shutdown and checks | Build + 17 checks + Windows 11 GUI smoke verification below; no Git integration |
-| 1: Read-only Git — next | Robust runner first; then real open, trust/Git detection, tabs, status/history/graph, metadata/tree/diff and interrupted-state detection | F0; G2-G7 read cases, E/S/L/A gates; no mocked functionality; baseline performance measurements |
+| 1a: Metadata preview — delivered | Runner, real open, session trust/Git detection, persistent tabs, HEAD/common-directory identity and interrupted markers | Build/publish + 35 checks + published-window inspection; manual interaction gates remain open; local package only |
+| 1b onward: Read-only Git — next | Status first; then history/graph, object metadata/tree/diff, expanded state detection and reconciliation | F1a; G2-G7 read cases, E/S/L/A gates; no mocked functionality; baseline performance measurements |
 | 2: Local MVP | Init, file/text-hunk staging, commit/amend, branch create/switch/delete/tracking, stash operations | Phase 1; mutation safety, hooks/signing, stale hunk tests |
 | 3: Network MVP | Clone, remotes, fetch, push, upstream setup, proposed fast-forward-only pull default; external conflict resolution and valid continue/skip/abort for existing sequences | Phase 2; explicit interactive/auth routes, failures, external races and recovery |
 | 3R: Pilot distribution | Install once/update in place, stable/test feeds, version/status UI, settings migration and bad-release repair procedure | Updater/IT/signing selection + phase 3; all U/D acceptance tests on actual standard-user Windows installs before initial 30-user rollout |
@@ -39,11 +40,25 @@ Host: Windows 11 build 26200, x64; SDK 10.0.401, Windows Desktop Runtime/targeti
 | Preliminary idle sample | Empty Release shell, 900×620 DIP, 24 logical CPUs: 138.77 MiB private bytes, 154.43 MiB working set; 0.0 accumulated CPU seconds over 30.01 seconds. Saved in `artifacts/gui-minimum/idle-sample.json`. Single developer-machine sample before the minimum-layout correction, not a benchmark or budget pass; no repository/child-process load, cold-start/p95 or five-minute measurement. |
 | Preservation | GUI fixture settings and safe event logs confirmed normal save/close; newer/corrupt preservation is covered by automated fixtures, not a claim of installed-update recovery. |
 
-**Not verified:** Windows 10 runtime, additional architectures, mixed-monitor/DPI/screen-reader matrix, translated/RTL UI, full performance budgets, fatal crash UX, disk-full behavior or installer/update behavior. No Git semantic tests are applicable yet. Standard WPF/system colors are used; dark theme and plural formatting are deferred. See TODO for the next bounded work, not a duplicate phase checklist here.
+**F0 limits:** Windows 10 runtime, additional architectures, mixed-monitor/DPI/screen-reader matrix, translated/RTL UI, full performance budgets, fatal crash UX, disk-full behavior or installer/update behavior were not verified. Standard WPF/system colors are used; dark theme and plural formatting are deferred. Later evidence below does not retroactively broaden these results.
+
+## Read-only preview verification 2026-10-23
+
+Same Windows 11 x64/SDK/runtime host as F0; Git for Windows 2.51.1. Automated checks use real disposable repository mutations only for fixture setup, not production app capabilities. Test-only view-model transports do not substitute for real Git integration tests.
+
+| Evidence | Result and limit |
+| --- | --- |
+| Restore / Release build / publish | Passed, zero warnings/errors and no dependency installation. Full preview script passed after fixing a duplicate helper-EXE publish item; failed staging never entered Build. |
+| Automated checks | 35 passed, 0 failed. All F0 cases plus argument preservation, simultaneous output/streaming, output cap, closed stdin, exit/start failures, timeout/cancellation/descendants, inherited pipes, queued cancellation and failed-consumer cleanup. Settings migration/backup/tab order; real missing/unsupported Git, unborn/detached/linked/bare/non-repository, conflicted merge preserved across inspections, helper suppression and external branch changes. Model tests verify trust denial/restoration, shutdown drain and obsolete-result rejection. |
+| Reproduction | `scripts/Build-Preview.ps1`; final fixture run `artifacts/foundation-checks/20261023-092921-9525076807c64317b3b9fb6aa716bc2f`. All fixture/output folders ignored. |
+| Actual published GUI | Launched `Build/0.2.0-win-x64/GitGui.App.exe` with isolated `artifacts/gui-v020` settings. Visually inspected at 1200×800 DIP: version, two restored Unicode-path tabs, disabled future actions, not-inspected/trust state and details rendered. No automatic inspection on restored tabs. User pressed Escape to stop Computer Use before interactive tab/metadata/close tests; no further UI input sent. |
+| Local preview | Framework-dependent unsigned folder, helper files, START-HERE and SHA256 checksums; Build ignored. Requires installed .NET 10 Desktop Runtime. No installer, update feed, signing keys, hosting or remote push. |
+
+**Still unverified:** manual trust/open/refresh/cancel/reorder/close/relaunch in the published GUI, more interrupted-sequence types, live authentication/network failure, crash/sleep/disk-full behavior, Windows 10, additional architectures, complete accessibility/DPI/localization and measured performance budgets. F0's idle sample does not measure 0.2.0. Cross-instance mutations and updater idle gates are deferred and must precede those features.
 
 ## Initial compatibility boundaries
 
-These are phase-1-and-later requirements; F0 opens no repositories. Detection is required even when mutation is deferred. Initially open linked worktrees with common-state coordination, show submodule gitlinks/open separately, recognize LFS pointers/missing tooling, and explain shallow/partial/sparse limits. Block operations not yet validated for these configurations. Do not recursively update submodules, implicitly fetch missing objects, deepen history, expand sparse checkout, or bypass filters.
+F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. It does not yet detect submodule/LFS/shallow/partial/sparse modes, inspect their contents, or coordinate mutations. Those compatibility gates apply before exposing relevant reads/actions. No submodule recursion, implicit object fetching, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.
 
 Phase 1 detects interrupted operations; phase 3 provides validated recovery actions. Starting advanced history operations waits for phase 4. Binary files get summaries rather than invented text diffs; hunk mutation initially covers validated text changes. Bare-repository editing, WSL repositories and network-share mutation are not promised by MVP; determine demand before adding support. ARM64 is proposed later; x86 is not currently planned.
 
@@ -57,7 +72,7 @@ Phase 1 detects interrupted operations; phase 3 provides validated recovery acti
 
 **Q1 resolved:** user confirmed C# + WPF and authorized the small foundation on 2026-10-23; .NET 10 LTS selected after tooling inspection. This does not approve all future architecture proposals or deployment work.
 
-Nonblocking details: product name/app identity must be fixed before first distributed install; screenshot must be available before claiming visual parity; exact update interval, Git floor, cache sizes and plural library should be validated when needed. English ResourceManager/.resx is implemented; the permanent data/install identity is still open.
+Nonblocking details: product name/app identity must be fixed before first distributed install; screenshot must be available before claiming visual parity; exact update interval, cache sizes and plural library should be validated when needed. Git floor is 2.47.0 for metadata reads, tested here only on 2.51.1. English ResourceManager/.resx is implemented; permanent data/install identity remains open.
 
 ## Documentation maintenance
 

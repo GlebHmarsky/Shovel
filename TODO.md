@@ -4,13 +4,14 @@ Single prioritized task list. Updated 2026-10-23. P0 = prerequisite/safety, P1 =
 
 ## Current phase
 
-Foundation F0 is complete. Stop here; further implementation needs the next user instruction. See Completed work and the roadmap's explicit verification limits.
+Read-only metadata F1a / 0.2.0 is complete. Stop after this delivery; status/history/diffs are separate increments. Roadmap owns evidence and limits. Interactive preview verification stopped when the user pressed Escape; see the next item below.
 
 ## Next priorities
 
-- [ ] **P0 — Agree the next small read-only increment.** Start with a robust asynchronous process runner and trusted Git discovery, then real repository open; no mutations. Validate structured arguments, concurrent output drains, cancellation and owned-child cleanup in disposable fixtures.
-- [ ] **P0 — Introduce operation/state ownership before Git commands.** Common-directory/worktree identity, stale-result rejection, explicit prompt states and shutdown admission control; do not reuse the settings-profile mutex as a Git lock.
-- [ ] **P1 — Add real open/status, then history and diffs in separate increments.** Persist real tab order/selection; distinguish empty, loading, missing Git, denied trust, interrupted sequences and errors. Enable controls only when their functions exist.
+- [ ] **P1 — Complete manual F1a UI checks.** Open a disposable repository, review trust, inspect metadata/error/cancel states, reorder/close tabs and verify normal exit/relaunch. Automated integration/model checks pass; the published window was visually inspected, but Computer Use was stopped before interactive checks.
+- [ ] **P0 — Add read-only status (F1b).** Parse porcelain v2 with NUL paths; distinguish staged/unstaged/untracked/ignored, rename/delete and conflict entries. Compare disposable fixtures with CLI; keep optional locks, helpers and lazy fetch controlled.
+- [ ] **P0 — Extend refresh/state coordination alongside status.** Reconcile external changes/focus/resume with bounded work and generation checks. Add more interrupted-sequence fixtures. Before mutations, coordinate by common-directory identity across instances; before prompts/tools, extend shutdown admission control.
+- [ ] **P1 — Add history, then diffs in separate increments.** Real paged data, virtualized views, exact path bytes, binary/EOL/large-content cases; enable controls only when their functions exist.
 - [ ] **P1 — Broaden shell validation.** Target Windows 10 plus Windows 11; mixed DPI, high contrast, screen reader, keyboard focus and +40%/RTL layouts at minimum size. Add dark/light theme and a plural-capable formatter before first count-dependent message. Preserve complete resource messages.
 - [ ] **P1 — Record repeatable performance baselines.** Use the requirements' fixture/hardware/sample protocol; shell startup, private bytes, idle CPU and responsiveness separately. No p95 or lightweight claim from one launch.
 
@@ -32,8 +33,13 @@ Foundation F0 is complete. Stop here; further implementation needs the next user
 ## Completed work
 
 - [x] **P0 — Confirm C# + WPF; choose .NET 10 LTS.** Existing SDK/targeting pack sufficient; no third-party packages or installations.
-- [x] **P0 — Initialize Git safely.** Existing documents preserved, `.gitignore` added; no commits or remote.
+- [x] **P0 — Initialize Git safely.** Existing documents preserved and `.gitignore` added. Foundation committed after the later user authorization; no remote/push.
 - [x] **P1 — Create solution and MVVM shell.** Separate WPF presentation from UI-independent settings/diagnostics; navigation and details are real layout interactions, Git/tool actions disabled.
 - [x] **P0 — Establish lifecycle and persistence.** Async settings load/save, profile ownership, bounded safe diagnostics, guarded error exit, invalid/newer-schema preservation, atomic replacement/last-good backup and cancellation checks.
 - [x] **P0 — Resource-back English text.** Dialogs, empty/loading/error states, tooltips and accessible labels; standard controls and named splitters. Further locale certification is not implied.
 - [x] **P1 — Verify F0 and update references.** Restore/Release build: zero warnings/errors; 17 automated checks; actual Windows 11 GUI inspection at default/minimum size, navigation, splitters, detail tabs, saved layout/relaunch and normal exit. Short idle sample recorded; full budgets unverified. See roadmap for limits.
+- [x] **P0 — Implement bounded process execution.** Structured arguments, concurrent byte streams, output/deadline limits, queued cancellation and owned-child job cleanup; no shell or invisible input.
+- [x] **P1 — Open trusted worktrees for metadata.** Standard/explicit Git discovery, unborn/detached HEAD, common-directory identity and operation markers; manual refresh, cancellation and stale-result rejection.
+- [x] **P1 — Preserve tabs safely.** Order/selection/reordering/close, schema 1-to-2 migration/backup; trust and snapshots never restored. Shutdown cancels/drains reads before save.
+- [x] **P1 — Establish versioned delivery.** Central version 0.2.0, changelog and preview script; Build stays ignored and prior version folders cannot be overwritten.
+- [x] **P0 — Verify and package F1a.** Restore/Release build/publish succeeded; 35 checks passed. Published 0.2.0 window launched and rendered on Windows 11; Build folder kept outside version control. Manual interaction coverage remains explicitly limited above.

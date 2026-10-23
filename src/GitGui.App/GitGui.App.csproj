@@ -5,9 +5,11 @@
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NeutralLanguage>en</NeutralLanguage>
-    <Version>0.1.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../GitGui.Core/GitGui.Core.csproj" />
+    <ProjectReference Include="../GitGui.ProcessHost/GitGui.ProcessHost.csproj" />
+    <!-- ProjectReference publishes the host EXE; this item supplies it for ordinary build/run. -->
+    <None Include="../GitGui.ProcessHost/bin/$(Configuration)/net10.0-windows/GitGui.ProcessHost.exe" Link="GitGui.ProcessHost.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>

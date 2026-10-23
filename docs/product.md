@@ -9,7 +9,9 @@ Build a reliable, lightweight Windows 10/11 Git desktop client for approximately
 
 English ships first; future localization is a foundational requirement. Users install once and receive in-place updates. Measured responsiveness and trustworthy Git behavior take priority over feature count.
 
-**Implemented F0:** the C#/WPF shell has an empty repository-tab region, disabled Git/tool actions, selectable navigation, empty history/details, resizable panels and saved layout. It shows startup/settings failure states and an installed build version. No repository is opened and no Git command or network request is made. Workflows below describe the target product, not implemented functionality; see [roadmap evidence](roadmap.md#foundation-verification-2026-10-23).
+**Implemented through F1a (0.2.0):** open an existing worktree after session trust; inspect branch/unborn/detached HEAD, hash, worktree/common directory and interrupted-operation markers. Tabs can be selected, reordered and closed; layout and tab order/selection survive restart. Restored tabs require trust again and run no commands automatically. Trust / Refresh reinspects external changes; Cancel stops the read, clears its snapshot and leaves refresh available. Failures show an explanation and original Git error output in memory. The Git executable can be selected explicitly when standard discovery fails.
+
+History, file status, diffs, mutation/tool buttons and sequence recovery actions are unavailable and clearly marked. No network requests are made. The remaining workflows below describe the target product; [roadmap](roadmap.md) owns delivery evidence.
 
 ## Interface
 

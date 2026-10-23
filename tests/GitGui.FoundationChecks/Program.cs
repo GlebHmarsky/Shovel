@@ -12,7 +12,7 @@ using GitGui.Core.Settings;
 namespace GitGui.FoundationChecks;
 
 /// <summary>Dependency-free checks; all disk writes use disposable fixture directories.</summary>
-internal static class Program
+internal static partial class Program
 {
     private static int _passed;
     private static int _failed;
@@ -21,11 +21,15 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
+        if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
         _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() ?? "artifacts/foundation-checks"),
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         RunCoreChecksAsync().GetAwaiter().GetResult();
+        RunProcessChecksAsync().GetAwaiter().GetResult();
         RunWpfChecks();
+        RunViewModelChecks();
         Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}");
         return _failed == 0 ? 0 : 1;
     }
@@ -178,8 +182,10 @@ internal static class Program
             Expect(!model.IsReady, "Loading state must be explicit");
             Expect(window.Title == UiText.Get("AppTitle"), "Window title must resolve from English resources");
             var buttons = Descendants<Button>(window).ToArray();
-            Expect(buttons.Length == 8 && buttons.All(button => !button.IsEnabled), "Future Git/tool buttons must stay disabled");
-            var navigation = Descendants<ListBox>(window).Single();
+            var disabledLabels = new[] { "Fetch", "Pull", "Push", "Stash", "Explorer", "Terminal", "Editor", "Tools" }.Select(UiText.Get).ToArray();
+            var futureButtons = buttons.Where(button => disabledLabels.Contains(button.Content as string)).ToArray();
+            Expect(futureButtons.Length == 8 && futureButtons.All(button => !button.IsEnabled), "Future Git/tool buttons must stay disabled");
+            var navigation = Descendants<ListBox>(window).Single(list => AutomationProperties.GetAutomationId(list) == "Navigation");
             var firstItem = navigation.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
             Expect(firstItem is not null && AutomationProperties.GetName(firstItem) == UiText.Get("LocalChanges"),
                 "Accessible navigation names must use localized labels, not model ToString values");

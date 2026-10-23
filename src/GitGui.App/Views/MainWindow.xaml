@@ -16,10 +16,21 @@
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
-    <Border Padding="16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
+    <Border Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
       <DockPanel>
-        <TextBlock Text="{loc:Text Key=RepositoryTabs}" FontWeight="SemiBold" Margin="0,0,24,0" />
-        <TextBlock Text="{loc:Text Key=NoRepositories}" AutomationProperties.AutomationId="RepositoryTabsEmpty" />
+        <Button DockPanel.Dock="Left" Content="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" AutomationProperties.AutomationId="OpenRepository" />
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <Button Content="{loc:Text Key=MoveLeft}" Command="{Binding MoveLeftCommand}" ToolTip="{loc:Text Key=MoveLeft}" />
+          <Button Content="{loc:Text Key=MoveRight}" Command="{Binding MoveRightCommand}" ToolTip="{loc:Text Key=MoveRight}" />
+          <Button Content="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
+        </StackPanel>
+        <ListBox ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}" IsEnabled="{Binding CanNavigate}"
+                 BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                 AutomationProperties.Name="{loc:Text Key=RepositoryTabs}" AutomationProperties.AutomationId="RepositoryTabs">
+          <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+          <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="8,5" ToolTip="{Binding Directory}" FlowDirection="LeftToRight" /></DataTemplate></ListBox.ItemTemplate>
+          <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="AutomationProperties.Name" Value="{Binding Label}" /></Style></ListBox.ItemContainerStyle>
+        </ListBox>
       </DockPanel>
     </Border>
     <Grid Grid.Row="1" Margin="12,10">
@@ -31,8 +42,8 @@
         <Button Content="{loc:Text Key=Stash}" IsEnabled="False" />
       </StackPanel>
       <StackPanel Grid.Column="1" HorizontalAlignment="Center" Margin="12,0">
-        <TextBlock Text="{loc:Text Key=NoRepositorySelected}" FontWeight="SemiBold" TextAlignment="Center" />
-        <TextBlock Text="{loc:Text Key=NoActiveOperation}" FontSize="11" TextAlignment="Center" />
+        <TextBlock Text="{Binding RepositoryTitle}" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding OperationStatus}" FontSize="11" TextAlignment="Center" AutomationProperties.LiveSetting="Polite" />
       </StackPanel>
       <StackPanel Grid.Column="2" Orientation="Horizontal" ToolTip="{loc:Text Key=ToolsUnavailable}" ToolTipService.ShowOnDisabled="True">
         <Button Content="{loc:Text Key=Explorer}" IsEnabled="False" />
@@ -53,7 +64,7 @@
       <DockPanel Margin="10,14">
         <TextBlock DockPanel.Dock="Top" Text="{loc:Text Key=Navigation}" FontWeight="SemiBold" Margin="8,0,0,12" />
         <ListBox ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection, Mode=TwoWay}"
-                 DisplayMemberPath="Label" BorderThickness="0" IsEnabled="{Binding IsReady}"
+                 DisplayMemberPath="Label" BorderThickness="0" IsEnabled="{Binding CanNavigate}"
                  AutomationProperties.Name="{loc:Text Key=Navigation}" AutomationProperties.AutomationId="Navigation">
           <ListBox.ItemContainerStyle>
             <Style TargetType="ListBoxItem">
@@ -73,18 +84,39 @@
           <RowDefinition x:Name="DetailsRow" Height="240" MinHeight="140" MaxHeight="360" />
         </Grid.RowDefinitions>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-        <DockPanel Margin="20,16">
-          <TextBlock DockPanel.Dock="Top" Text="{Binding AreaTitle}" FontSize="18" FontWeight="SemiBold" />
-          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="460" Margin="16">
-            <TextBlock Text="{loc:Text Key=HistoryEmptyTitle}" FontSize="20" FontWeight="SemiBold" TextAlignment="Center" Margin="0,0,0,10" />
-            <TextBlock Text="{loc:Text Key=HistoryEmptyBody}" TextAlignment="Center" TextWrapping="Wrap" />
-          </StackPanel>
-        </DockPanel>
+        <StackPanel Margin="20,16">
+          <TextBlock Text="{Binding AreaTitle}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+          <WrapPanel>
+            <Button Content="{loc:Text Key=InspectRepository}" Command="{Binding RefreshRepositoryCommand}" AutomationProperties.AutomationId="RefreshRepository" />
+            <Button Content="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" AutomationProperties.AutomationId="CancelOperation" />
+            <Button Content="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
+            <TextBlock Text="{Binding GitStatus}" VerticalAlignment="Center" Margin="6,0" />
+          </WrapPanel>
+          <TextBlock Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" FontWeight="SemiBold" Margin="0,12,0,4" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding SelectedRepository.State}" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding SelectedRepository.ReadAt}" TextWrapping="Wrap" Margin="0,4,0,12" />
+          <TextBlock Text="{loc:Text Key=HistoryEmptyBody}" TextWrapping="Wrap" />
+        </StackPanel>
         </ScrollViewer>
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows"
                       Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
                       AutomationProperties.Name="{loc:Text Key=ResizeDetails}" AutomationProperties.AutomationId="DetailsSplitter" />
         <TabControl Grid.Row="2" Margin="12,8" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
+          <TabItem Header="{loc:Text Key=RepositoryDetails}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Margin="16">
+                <TextBlock Text="{loc:Text Key=RepositoryPath}" FontWeight="SemiBold" />
+                <TextBox Text="{Binding SelectedRepository.Directory, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=RepositoryPath}" />
+                <TextBlock Text="{loc:Text Key=WorktreePath}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding SelectedRepository.Snapshot.Worktree, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=WorktreePath}" />
+                <TextBlock Text="{loc:Text Key=CommonDirectory}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding SelectedRepository.Snapshot.CommonDirectory, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=CommonDirectory}" />
+                <TextBlock Text="{loc:Text Key=HeadCommit}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding SelectedRepository.Snapshot.Commit, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=HeadCommit}" />
+              </StackPanel>
+            </ScrollViewer>
+          </TabItem>
+          <TabItem Header="{loc:Text Key=RawOutput}"><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RawOutput}" /></TabItem>
           <TabItem Header="{loc:Text Key=Commit}"><TextBlock Text="{loc:Text Key=CommitEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
           <TabItem Header="{loc:Text Key=ChangedFiles}"><TextBlock Text="{loc:Text Key=FilesEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
           <TabItem Header="{loc:Text Key=Diff}"><TextBlock Text="{loc:Text Key=DiffEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
@@ -95,7 +127,10 @@
     <Border Grid.Row="4" Padding="14,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
       <DockPanel>
         <TextBlock DockPanel.Dock="Right" Text="{Binding Version}" Margin="16,0,0,0" FlowDirection="LeftToRight" />
-        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="Status" />
+        <StackPanel>
+          <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="Status" />
+          <TextBlock Text="{Binding SettingsNotice}" TextWrapping="Wrap" />
+        </StackPanel>
       </DockPanel>
     </Border>
   </Grid>
