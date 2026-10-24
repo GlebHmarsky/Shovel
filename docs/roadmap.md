@@ -1,12 +1,12 @@
 # Roadmap and decision register
 
-Updated 2026-10-24. [Product](product.md) owns experience; [requirements](requirements.md) owns scope/safety/tests; [architecture](architecture.md) separates implemented choices from proposals. [TODO.md](../TODO.md) is the single prioritized implementation checklist; this file owns milestones, decisions and verification evidence.
+Updated 2026-10-25. [Product](product.md) owns experience; [requirements](requirements.md) owns scope/safety/tests; [architecture](architecture.md) separates implemented choices from proposals. [TODO.md](../TODO.md) is the single prioritized implementation checklist; this file owns milestones, decisions and verification evidence.
 
 ## Current status
 
 - **All Commits / F1c / 0.4.0 is complete.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
 - Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
-- Official Fork screenshots/animations were inspected previously; user's attachment unavailable. X media could not be reviewed without login. Historical observations are not current runtime verification.
+- Official Fork screenshots/animations were inspected previously; the original attachment was unavailable. A new user screenshot was inspected on 2026-10-25 for the headerless history refinement. X media could not be reviewed without login. Historical observations are not current runtime verification.
 - Git CLI is implemented for repository metadata, all-branch/tag and HEAD ancestry. No individual-ref selection/search/filter, status/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
 - New startup updater requirement supersedes old research advice to disable update checks. Other network privacy restrictions remain.
 
@@ -91,6 +91,12 @@ Same Windows 11 x64 build 26200 / SDK 10.0.401 / Desktop Runtime 10.0.12 / Git 2
 
 No interactive launch occurred. Actual keyboard/scrolling/splitter use, mixed DPI/high contrast/screen readers, Windows 10, full performance budgets and installed-update behavior still need verification. The 2,005 fixture is a pagination regression, not a large-repository benchmark; deep offset walks/cursor growth remain known limits. No new Git mutations, network operations or dependencies.
 
+## Headerless history refinement 2026-10-25
+
+Version 0.4.1 removes visible column headings based on the newly supplied Fork screenshot. Column resources remain as cell automation help; row descriptions remain named. Header drag resizing is unavailable, while description width adapts to the window. Scope, status and paging remain visible; no Git behavior changes.
+
+Restore/Release build/publish succeeded with zero warnings/errors; all 49 checks passed. Reviewed normal/minimum offscreen renders in `artifacts/foundation-checks/20261024-222743-b5427f8ca010488182df81cd412f74b3` (fixture names use UTC). Preview: `Build/0.4.1-win-x64/Shovel.exe`; earlier previews retained. No interactive launch, desktop control or screen-reader test; the existing runtime/accessibility limits remain.
+
 ## Initial compatibility boundaries
 
 F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. F1c reads named-ref/HEAD ancestry and recognizes shallow boundaries. Submodule/LFS/partial/sparse modes and file content are not comprehensively validated; missing commit objects fail without fetching. No submodule recursion, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.
@@ -107,7 +113,7 @@ Phase 1 detects interrupted operations; phase 3 provides validated recovery acti
 
 **Q1 resolved:** user confirmed C# + WPF and authorized the small foundation on 2026-10-23; .NET 10 LTS selected after tooling inspection. This does not approve all future architecture proposals or deployment work.
 
-Nonblocking details: product name Shovel is confirmed; publisher/install identity must be fixed before first distributed install; screenshot must be available before claiming visual parity; exact update interval, cache sizes and plural library should be validated when needed. Git floor is 2.47.0 for metadata reads, tested here only on 2.51.1. English ResourceManager/.resx is implemented; permanent data/install identity remains open.
+Nonblocking details: product name Shovel is confirmed; publisher/install identity must be fixed before first distributed install; the supplied screenshot informs the headerless layout, without a broader visual-parity claim; exact update interval, cache sizes and plural library should be validated when needed. Git floor is 2.47.0 for metadata reads, tested here only on 2.51.1. English ResourceManager/.resx is implemented; permanent data/install identity remains open.
 
 ## Documentation maintenance
 

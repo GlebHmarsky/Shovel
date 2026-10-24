@@ -1,6 +1,6 @@
 # Shovel
 
-A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.4.0** defaults to All Commits across local branches, remote-tracking branches and tags, with branch/tag labels, a connected graph and complete selected-commit details. Older/newer pages replace the previous 2,000-commit ceiling. File status, diffs, mutations, network access, installer and updater are not implemented. The product name is confirmed; publisher and permanent installation identity remain open.
+A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.4.1** defaults to All Commits across local branches, remote-tracking branches and tags, with branch/tag labels, a connected graph and complete selected-commit details. Older/newer pages replace the previous 2,000-commit ceiling. File status, diffs, mutations, network access, installer and updater are not implemented. The product name is confirmed; publisher and permanent installation identity remain open.
 
 Start with [AGENTS.md](AGENTS.md), [TODO.md](TODO.md) and the [roadmap](docs/roadmap.md). [Architecture](docs/architecture.md) describes implemented boundaries and future proposals separately.
 
@@ -49,7 +49,7 @@ dotnet run --project src/GitGui.App -c Release --no-build -- --data-directory "C
 
 Choose **Open…**, select a folder and review session trust. **All Commits** is the default scope; it includes local branch, remote-tracking branch and tag ancestry. Reflog-only, unreachable, stash-only and detached-only commits are outside this view. Choose **Current branch / HEAD** for the inspected HEAD's ancestry, including detached HEAD. The scope selector's tooltip/accessibility help explains these boundaries; changing scope never checks out a branch. No filters are active.
 
-The table shows graph nodes, ref labels, description, author, local date and short hash. Select a row for its complete message, author/committer, dates, hash, parents and full labels below. **Load older commits** / **Newer commits** navigate 200-row pages with the visible range shown; there is no total commit-count ceiling. Only the current page is held as rows/messages. Long row labels have full text in details/tooltips.
+The table has no visible column-heading row and shows graph nodes, ref labels, description, author, local date and short hash. Select a row for its complete message, author/committer, dates, hash, parents and full labels below. **Load older commits** / **Newer commits** navigate 200-row pages with the visible range shown; there is no total commit-count ceiling. Only the current page is held as rows/messages. Long row labels have full text in details/tooltips.
 
 Use **Trust / Refresh** after external changes, switching tabs or restarting; restored tabs run no automatic reads. Paging checks observed refs and history boundaries before/after Git reads. If they change, refresh is required. A failed/cancelled page read retains the previous page. Original Git stderr remains in **Git output** for the session. Shallow/missing-object boundaries are explicit; nothing is fetched or repaired automatically.
 
@@ -59,7 +59,7 @@ Use **Trust / Refresh** after external changes, switching tabs or restarting; re
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-The script restores/builds/runs checks and publishes to `Build/0.4.0-win-x64/`. Double-click **Shovel.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
+The script restores/builds/runs checks and publishes to `Build/0.4.1-win-x64/`. Double-click **Shovel.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
 
 `Build/` is ignored and must never be committed. On 2026-10-24, the user requested removal of the old Build previews before rebuilding 0.3.1; those old package paths no longer exist. Cleanup is not automatic on subsequent builds. The script refuses to replace an existing version folder and keeps incomplete publishes in ignored `artifacts/`. Set the next delivery version in `Directory.Build.props` and update `CHANGELOG.md` once per delivery; see AGENTS.md for bump rules. The folder includes launch notes and SHA256 checksums. It is an unsigned local preview, not an installer or automatic update package. No hosting, keys or remote push are configured by packaging.
 

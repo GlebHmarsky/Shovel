@@ -115,15 +115,14 @@
                     Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}"
                     AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
                     CanUserReorderColumns="False" CanUserResizeRows="False" SelectionMode="Single" SelectionUnit="FullRow"
-                    HeadersVisibility="Column" RowHeight="28" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="1"
+                    HeadersVisibility="None" RowHeight="28" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="1"
                     BorderBrush="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"
                     EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.IsVirtualizing="True"
                     VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True"
                     ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"
                     AutomationProperties.Name="{loc:Text Key=CommitHistoryTable}" AutomationProperties.AutomationId="CommitHistory">
             <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="AutomationProperties.Name" Value="{Binding AccessibilityLabel}" /></Style></DataGrid.RowStyle>
-            <DataGrid.CellStyle><Style TargetType="DataGridCell"><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/></Style></DataGrid.CellStyle>
-            <DataGrid.ColumnHeaderStyle><Style TargetType="DataGridColumnHeader"><Setter Property="Padding" Value="8,6"/><Setter Property="FontWeight" Value="SemiBold"/></Style></DataGrid.ColumnHeaderStyle>
+            <DataGrid.CellStyle><Style TargetType="DataGridCell"><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="AutomationProperties.HelpText" Value="{Binding Column.Header, RelativeSource={RelativeSource Self}}"/></Style></DataGrid.CellStyle>
             <DataGrid.Columns>
               <DataGridTemplateColumn Header="{loc:Text Key=HistoryGraph}" Width="Auto" CanUserResize="False">
                 <DataGridTemplateColumn.CellTemplate><DataTemplate>

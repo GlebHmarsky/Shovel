@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 — 2026-10-25
+
+- Remove the history column-heading row following the supplied Fork screenshot; keep aligned commit columns, localized cell accessibility help and row descriptions. Scope, paging and loading indicators remain visible.
+- Header drag resizing is no longer exposed; description width continues to adapt to the window. Git behavior is unchanged.
+
 ## 0.4.0 — 2026-10-24
 
 - Default to All Commits: local branches, remote-tracking branches and tags, with branch/tag labels. Current branch / HEAD remains a separate read-only scope, including detached HEAD.

@@ -1,10 +1,10 @@
 # Implementation checklist
 
-Single prioritized task list. Updated 2026-10-24. P0 = prerequisite/safety, P1 = next delivery, P2 = later. [Roadmap](docs/roadmap.md) owns milestone scope and evidence; [requirements](docs/requirements.md) owns acceptance obligations. Check items only when their stated scope is verified.
+Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 = next delivery, P2 = later. [Roadmap](docs/roadmap.md) owns milestone scope and evidence; [requirements](docs/requirements.md) owns acceptance obligations. Check items only when their stated scope is verified.
 
 ## Current phase
 
-All Commits / F1c / 0.4.0 is complete. The user prioritized complete named-ref history before other features; no interactive launch is authorized. Stop after this history delivery.
+All Commits / F1c / 0.4.0 is complete. The user prioritized complete named-ref history before other features; no interactive launch is authorized. The 0.4.1 follow-up removes visible column headings based on user screenshot feedback; 49 headless checks and normal/minimum render review passed.
 
 ## Next priorities
 
@@ -32,6 +32,8 @@ All Commits / F1c / 0.4.0 is complete. The user prioritized complete named-ref h
 - [ ] **P1 before first installer — Identity:** product name Shovel is confirmed; finalize publisher and permanent settings/install identity; plan migration from the provisional Foundation profile.
 
 ## Completed work
+
+- [x] **P1 — Simplify history headings / 0.4.1.** Hide visible column headings per supplied screenshot; retain localized cell help and row descriptions. Restore/build/publish and all 49 checks passed; reviewed two offscreen layouts. No interactive launch or screen-reader verification.
 
 - [x] **P0 — Confirm C# + WPF; choose .NET 10 LTS.** Existing SDK/targeting pack sufficient; no third-party packages or installations.
 - [x] **P0 — Initialize Git safely.** Existing documents preserved and `.gitignore` added. Foundation committed after the later user authorization; no remote/push.
