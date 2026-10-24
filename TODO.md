@@ -4,12 +4,12 @@ Single prioritized task list. Updated 2026-10-24. P0 = prerequisite/safety, P1 =
 
 ## Current phase
 
-Shovel naming / 0.3.1 is complete and verified after the requested Build cleanup. Git scope remains F1b history. Stop after this maintenance delivery; the next capability increment should take one bounded item below.
+All Commits / F1c / 0.4.0 is complete. The user prioritized complete named-ref history before other features; no interactive launch is authorized. Stop after this history delivery.
 
 ## Next priorities
 
 - [ ] **P1 — Manual preview review when the user is ready.** Inspect trust/open/refresh/cancel, history selection/scrolling, tab reorder/close and normal exit/relaunch. Headless checks are separate evidence; no desktop control in the current delivery.
-- [ ] **P1 — Extend history after this increment.** All-branch/ref selection and badges, search/filter with truthful graph ancestry and bounded loading; preserve selection/scroll position through refresh.
+- [ ] **P1 — Refine history after this increment.** Individual ref selection and search/filter with truthful graph ancestry; preserve per-page selection/scroll through navigation. Profile deep offset walks and compact page-cursor growth before large-repository claims.
 - [ ] **P0 — Add read-only status.** Parse porcelain v2 with NUL paths; distinguish staged/unstaged/untracked/ignored, rename/delete and conflict entries. Compare disposable fixtures with CLI; keep optional locks, helpers and lazy fetch controlled.
 - [ ] **P0 — Extend refresh/state coordination alongside status.** Reconcile external changes/focus/resume with bounded work and generation checks. Add more interrupted-sequence fixtures. Before mutations, coordinate by common-directory identity across instances; before prompts/tools, extend shutdown admission control.
 - [ ] **P1 — Add selected-commit file list, then diffs.** Real bounded data, exact path bytes, binary/EOL/large-content cases; enable controls only when their functions exist.
@@ -47,3 +47,5 @@ Shovel naming / 0.3.1 is complete and verified after the requested Build cleanup
 - [x] **P1 — Deliver F1b history / 0.3.0.** Real HEAD ancestry with connected graph nodes, description/author/date/hash columns, selected-commit details and bounded older-history loading. Restore/Release build/publish passed with zero warnings/errors; 45 checks passed, including real disposable histories, stale results and headless row virtualization. Reviewed two offscreen renders; interactive GUI remains unverified. Ignored preview checksums and tested/published assemblies match; prior preview preserved.
 
 - [x] **P1 — Name and rebuild Shovel / 0.3.1.** Resource-backed title, executable and product metadata updated; existing profile preserved. Old Build packages removed on request; clean Release build, all 45 checks and publish passed. Checksums/tested assemblies verified; no interactive launch.
+
+- [x] **P0 — Deliver All Commits / F1c / 0.4.0.** Default local/remote/tag ancestry and explicit current-HEAD scope; ref labels, 200-row older/newer pages beyond 2,000, full selected details and preserved rows on paging failures. Restore/Release build/publish and 49 checks passed; offscreen normal/minimum renders reviewed. Ignored preview checksums/tested assemblies match. No interactive launch; visual keyboard/DPI review remains open.

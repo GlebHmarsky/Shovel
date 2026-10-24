@@ -1,6 +1,6 @@
 # Requirements and acceptance
 
-Updated 2026-10-23. **Confirmed** unless marked proposed. Feature delivery boundaries are owned by [roadmap](roadmap.md); [product](product.md) owns presentation and workflows. IDs below are stable references, not implementation classes.
+Updated 2026-10-24. **Confirmed** unless marked proposed. Feature delivery boundaries are owned by [roadmap](roadmap.md); [product](product.md) owns presentation and workflows. IDs below are stable references, not implementation classes.
 
 ## Git functionality and compatibility
 
@@ -11,6 +11,8 @@ Updated 2026-10-23. **Confirmed** unless marked proposed. Feature delivery bound
 - **G5:** Handle multiple remotes, missing/deleted upstreams, ahead/behind/divergence, rejected/non-fast-forward pushes, rewritten history, and branches checked out in other worktrees.
 - **G6:** Detect submodules, linked worktrees, LFS, shallow/partial clones, sparse checkouts, and large repositories. Show unsupported operations explicitly; never silently expand sparse contents, fetch missing objects, bypass LFS, or recursively mutate submodules.
 - **G7:** Preserve exact path identity across Unicode, spaces, leading dashes, unusual valid filenames, long paths, and case-only renames. Display unsupported Windows tree names without promising checkout. Handle permissions, locks, encoding, and external changes without data loss.
+
+- **G8:** All Commits defaults to ancestry of local branches, remote-tracking branches and tags; distinguish current-HEAD history, including detached HEAD. Exclude reflog-only/unreachable history. Show ref labels, scope, active filters (or none), page range, loading and limits; older/newer navigation must not silently truncate. Selected details expose full message/metadata within explicit read limits.
 
 ## Execution, safety, and privacy
 
@@ -52,6 +54,7 @@ Run meaningful parser/unit and disposable-repository integration tests, followed
 | Foundation F0 | Restore/build cleanly; real resizable shell, clear unavailable Git controls, English resources, async profile I/O, safe diagnostic fields; corrupt/newer settings and failed/cancelled saves preserve existing bytes. Verify actual launch, layout changes, close and relaunch separately from headless checks. |
 | Metadata F1a | Structured arguments round-trip; both output streams drain within caps; timeouts/cancellation stop owned descendants, including inherited-pipe cases. Trusted discovery rejects missing/older Git. Disposable unborn/detached/linked/conflicted worktrees produce correct metadata. Denied trust and restored tabs run no commands; shutdown cancels/drains reads; stale completions cannot populate another selection. Verify published helper files and launch separately. |
 | History F1b | Real topologically ordered rows match CLI fixtures; left graph nodes connect actual parents and right columns show description/author/date/hash. Selection exposes corresponding message/metadata. Bounded expansion pins the tip and preserves selection; shallow/empty/failure states are explicit. Malformed output fails safely; signature helpers never run; stale history cannot enter a new tab. Offscreen WPF checks prove columns, graph cells and limited realized rows; interactive runtime remains a separate gate. |
+| History F1c | Default All Commits matches CLI across local/remote/tag-only ancestors, merges, annotated/nested tags and packed refs. All 2,005 fixture commits remain accessible across bounded pages, without duplicates or broken graph boundaries. Detached/unborn/empty scopes are distinct; scope changes never checkout. Ref changes require refresh; failed/cancelled pages preserve visible rows. Labels, full selected details and paging controls bind headlessly; actual visual/keyboard verification remains separate. |
 | Git reads | Status/index/worktree and commit/diff results match CLI fixtures, including empty, detached, binary, renamed, deleted, ignored, EOL and unusual paths. |
 | Mutations | Expected refs/index/files change and unrelated data stays intact; stale hunk and external-edit races fail safely. |
 | Recovery | Conflicts and interrupted sequences survive restart; only valid actions enabled; cancellation owns the correct children and refreshes state. |

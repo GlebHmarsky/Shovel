@@ -4,18 +4,27 @@ namespace GitGui.Core.Git;
 public sealed record GraphLine(int FromLane, double FromY, int ToLane, double ToY, int Color);
 public sealed record GraphRow(int NodeLane, int NodeColor, int LaneCount, bool IsMerge, IReadOnlyList<GraphLine> Lines);
 
+public sealed record GraphLane(string Hash, int Color);
+public sealed record GraphCursor(IReadOnlyList<GraphLane> Lanes, int NextColor)
+{
+    public static GraphCursor Start { get; } = new([], 0);
+}
+public sealed record GraphPage(IReadOnlyList<GraphRow> Rows, GraphCursor Next);
+
 /// <summary>Deterministic lane layout for child-before-parent history, independent of WPF.</summary>
 public static class CommitGraph
 {
     public const int MaximumLanes = 64;
-    private sealed record Lane(string Hash, int Color);
 
     public static IReadOnlyList<GraphRow> Build(IReadOnlyList<CommitRecord> commits, CancellationToken token = default)
+        => BuildPage(commits, GraphCursor.Start, token).Rows;
+
+    public static GraphPage BuildPage(IReadOnlyList<CommitRecord> commits, GraphCursor cursor, CancellationToken token = default)
     {
-        var lanes = new List<Lane>();
+        var lanes = cursor.Lanes.ToList();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var rows = new List<GraphRow>(commits.Count);
-        var nextColor = 0;
+        var nextColor = cursor.NextColor;
         foreach (var commit in commits)
         {
             token.ThrowIfCancellationRequested();
@@ -28,7 +37,7 @@ public static class CommitGraph
             var before = lanes.ToArray();
             var color = before[node].Color;
             lanes.RemoveAt(node);
-            var parentLanes = new List<Lane>();
+            var parentLanes = new List<GraphLane>();
             foreach (var parent in commit.Parents.Distinct(StringComparer.Ordinal))
             {
                 var lane = lanes.Find(item => item.Hash == parent);
@@ -50,6 +59,6 @@ public static class CommitGraph
             foreach (var parent in parentLanes) lines.Add(new(node, .5, lanes.IndexOf(parent), 1, parent.Color));
             rows.Add(new(node, color, width, commit.Parents.Count > 1, lines.ToArray()));
         }
-        return rows;
+        return new(rows, new(lanes.ToArray(), nextColor));
     }
 }

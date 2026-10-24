@@ -8,6 +8,7 @@ using GitGui.Core.Settings;
 
 namespace GitGui.App.ViewModels;
 
+public sealed record HistoryScopeItem(HistoryScope Scope, string Label);
 public sealed record NavigationItem(NavigationSection Section, string Label);
 
 public sealed class ShellViewModel : ObservableObject
@@ -41,6 +42,26 @@ public sealed class ShellViewModel : ObservableObject
     public string SettingsNotice { get => _settingsNotice; private set => Set(ref _settingsNotice, value); }
     public string GitStatus => _git is null ? UiText.Get("GitNotChecked") : UiText.Format("GitVersionFormat", _git.Version);
     private CommitHistory? _history;
+    private readonly List<HistoryCursor> _pageCursors = [];
+    private int _pageIndex;
+    private bool _historyNeedsRefresh;
+    public IReadOnlyList<HistoryScopeItem> HistoryScopes { get; } = [new(HistoryScope.AllCommits, UiText.Get("AllCommits")), new(HistoryScope.CurrentHead, UiText.Get("CurrentHeadHistory"))];
+    private HistoryScopeItem? _selectedHistoryScope;
+    public HistoryScopeItem SelectedHistoryScope
+    {
+        get => _selectedHistoryScope ?? HistoryScopes[0];
+        set
+        {
+            if (value is null || IsBusy || !Set(ref _selectedHistoryScope, value)) return;
+            Changed(nameof(HistoryScopeDescription)); Changed(nameof(HistoryScopeHelp));
+            ClearHistory();
+            if (CanNavigate && SelectedRepository is not null && _reader is not null) BeginInspection(SelectedRepository);
+        }
+    }
+    public string HistoryScopeDescription => UiText.Get(SelectedHistoryScope.Scope == HistoryScope.AllCommits ? "AllCommitsScope" : "CurrentHeadScope");
+    public string HistoryScopeHelp => UiText.Get(SelectedHistoryScope.Scope == HistoryScope.AllCommits ? "AllCommitsHelp" : "CurrentHeadHelp");
+    public string HistoryRange => _history is null || Commits.Count == 0 ? "" : UiText.Format("HistoryRange", _history.Cursor.Offset + 1, _history.Cursor.Offset + Commits.Count);
+
     private IReadOnlyList<CommitRow> _commits = [];
     public IReadOnlyList<CommitRow> Commits { get => _commits; private set { Set(ref _commits, value); Changed(nameof(GraphWidth)); } }
     public double GraphWidth => Views.CommitGraphCell.WidthFor(Commits.Count == 0 ? 1 : Commits.Max(row => row.Graph.LaneCount));
@@ -72,6 +93,7 @@ public sealed class ShellViewModel : ObservableObject
     public RelayCommand MoveLeftCommand { get; }
     public RelayCommand MoveRightCommand { get; }
     public RelayCommand LoadMoreHistoryCommand { get; }
+    public RelayCommand NewerHistoryCommand { get; }
 
     public ShellViewModel(RepositoryReader? reader = null, IUserInteraction? interaction = null)
     {
@@ -93,8 +115,10 @@ public sealed class ShellViewModel : ObservableObject
             BeginInspection(tab);
         }, () => CanNavigate && _reader is not null);
         RefreshRepositoryCommand = new(() => BeginInspection(SelectedRepository!), () => CanNavigate && SelectedRepository is not null && _reader is not null);
-        LoadMoreHistoryCommand = new(() => _activeOperation = InspectAsync(SelectedRepository!, more: true),
-            () => CanNavigate && _git is not null && SelectedRepository is not null && _history?.HasMore == true && Commits.Count < RepositoryReader.MaximumHistoryCommits);
+        LoadMoreHistoryCommand = new(() => _activeOperation = InspectAsync(SelectedRepository!, direction: 1),
+            () => CanNavigate && _git is not null && SelectedRepository is not null && _history?.HasMore == true && !_historyNeedsRefresh);
+        NewerHistoryCommand = new(() => _activeOperation = InspectAsync(SelectedRepository!, direction: -1),
+            () => CanNavigate && _git is not null && _history is not null && _pageIndex > 0 && !_historyNeedsRefresh);
         CancelCommand = new(() => _operationCancellation?.Cancel(), () => IsBusy);
         ChooseGitCommand = new(() =>
         {
@@ -142,52 +166,57 @@ public sealed class ShellViewModel : ObservableObject
         _activeOperation = InspectAsync(tab);
     }
 
-    private async Task InspectAsync(RepositoryTab tab, bool more = false)
+    private async Task InspectAsync(RepositoryTab tab, int direction = 0)
     {
         var generation = ++_generation;
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         _operationCancellation = cancellation;
         _elapsed.Restart(); IsBusy = true; _timer.Start(); RawOutput = "";
-        var previous = more ? _history : null;
-        if (!more) { tab.Invalidate(); ClearHistory(); }
+        var previous = direction != 0 ? _history : null;
+        var selectedHash = SelectedCommit?.Commit.Hash;
+        if (direction == 0) { tab.Invalidate(); ClearHistory(); }
         HistoryNotice = UiText.Get("HistoryLoading");
         Status = UiText.Get("InspectingRepository");
         try
         {
             _git ??= await _reader!.DiscoverAsync(_explicitGit, cancellation.Token);
             Changed(nameof(GitStatus));
-            if (!more)
+            if (direction == 0)
             {
                 var snapshot = await _reader!.InspectAsync(_git, tab.Directory, cancellation.Token);
                 if (Obsolete()) return;
                 tab.Apply(snapshot);
             }
-            var history = await _reader!.ReadHistoryAsync(_git, tab.Directory, previous?.Anchor ?? tab.Snapshot?.Commit,
-                Math.Min(RepositoryReader.MaximumHistoryCommits, (previous?.Entries.Count ?? 0) + RepositoryReader.HistoryPageSize), cancellation.Token);
-            var rows = await Task.Run(() =>
-            {
-                // Replacements/shallow-boundary edits can alter the walk even when the tip hash is pinned.
-                if (previous is not null && !previous.Entries.Select(row => (row.Commit.Hash, Parents: string.Join(" ", row.Commit.Parents)))
-                    .SequenceEqual(history.Entries.Take(previous.Entries.Count).Select(row => (row.Commit.Hash, Parents: string.Join(" ", row.Commit.Parents)))))
-                    throw new GitReadException(GitFailure.ChangedDuringRead);
-                return history.Entries.Select(entry => new CommitRow(entry)).ToArray();
-            }, cancellation.Token);
+            var session = previous?.Session ?? await _reader!.OpenHistoryAsync(_git, tab.Snapshot!, SelectedHistoryScope.Scope, cancellation.Token);
+            var cursor = direction > 0 ? previous!.Next! : direction < 0 ? _pageCursors[_pageIndex - 1] : HistoryCursor.Start;
+            var history = await _reader!.ReadHistoryPageAsync(_git, session, cursor, cancellation.Token);
+            var rows = await Task.Run(() => history.Entries.Select(entry => new CommitRow(entry)).ToArray(), cancellation.Token);
             if (Obsolete()) return;
-            var selectedHash = more ? SelectedCommit?.Commit.Hash : null;
+            if (direction == 0) { _pageCursors.Clear(); _pageCursors.Add(cursor); _pageIndex = 0; }
+            else
+            {
+                _pageIndex += direction;
+                if (_pageCursors.Count == _pageIndex) _pageCursors.Add(cursor);
+            }
             _history = history; Commits = rows;
             SelectedCommit = rows.FirstOrDefault(row => row.Commit.Hash == selectedHash) ?? rows.FirstOrDefault();
-            HistoryNotice = UiText.Get(rows.Length == 0 ? "HistoryUnborn" : history.HasMore
-                ? rows.Length >= RepositoryReader.MaximumHistoryCommits ? "HistoryLimit" : "HistoryMore"
-                : history.IsShallow ? "HistoryShallowEnd" : "HistoryEnd");
+            Changed(nameof(HistoryRange));
+            HistoryNotice = UiText.Get(rows.Length == 0
+                ? session.Scope == HistoryScope.AllCommits ? "HistoryEmptyAll" : "HistoryUnborn"
+                : history.HasMore ? "HistoryMore" : history.IsShallow ? "HistoryShallowEnd" : "HistoryEnd");
             Status = UiText.Get("HistoryLoaded");
         }
         catch (GitReadException exception)
         {
             if (!_stopping && generation == _generation)
-            { ClearHistory(); HistoryNotice = UiText.Get("HistoryFailed"); Status = UiText.Get("GitError" + exception.Failure); RawOutput = exception.RawOutput; }
+            {
+                _historyNeedsRefresh = exception.Failure == GitFailure.ChangedDuringRead;
+                HistoryNotice = UiText.Get(previous is null ? "HistoryFailed" : "HistoryPageFailed");
+                Status = UiText.Get("GitError" + exception.Failure); RawOutput = exception.RawOutput;
+            }
         }
-        catch (OperationCanceledException) { if (!Obsolete()) { ClearHistory(); Status = UiText.Get("GitErrorCancelled"); } }
-        catch (Exception) { if (!Obsolete()) { ClearHistory(); HistoryNotice = UiText.Get("HistoryFailed"); Status = UiText.Get("GitErrorUnexpected"); } }
+        catch (OperationCanceledException) { if (!Obsolete()) { HistoryNotice = UiText.Get("HistoryCancelled"); Status = UiText.Get("GitErrorCancelled"); } }
+        catch (Exception) { if (!Obsolete()) { HistoryNotice = UiText.Get("HistoryFailed"); Status = UiText.Get("GitErrorUnexpected"); } }
         finally
         {
             _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
@@ -198,8 +227,8 @@ public sealed class ShellViewModel : ObservableObject
 
     private void ClearHistory()
     {
-        _history = null; Commits = []; SelectedCommit = null; HistoryNotice = UiText.Get("HistoryNotLoaded");
-        LoadMoreHistoryCommand?.Refresh();
+        _history = null; _pageCursors.Clear(); _pageIndex = 0; _historyNeedsRefresh = false; Commits = []; SelectedCommit = null; Changed(nameof(HistoryRange)); HistoryNotice = UiText.Get("HistoryNotLoaded");
+        LoadMoreHistoryCommand?.Refresh(); NewerHistoryCommand?.Refresh();
     }
 
     private void MoveTab(int offset)
@@ -214,7 +243,7 @@ public sealed class ShellViewModel : ObservableObject
     {
         OpenRepositoryCommand?.Refresh(); RefreshRepositoryCommand?.Refresh(); CancelCommand?.Refresh();
         ChooseGitCommand?.Refresh(); CloseRepositoryCommand?.Refresh(); MoveLeftCommand?.Refresh(); MoveRightCommand?.Refresh();
-        LoadMoreHistoryCommand?.Refresh();
+        LoadMoreHistoryCommand?.Refresh(); NewerHistoryCommand?.Refresh();
     }
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {

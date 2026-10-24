@@ -4,22 +4,23 @@ Updated 2026-10-24. [Product](product.md) owns experience; [requirements](requir
 
 ## Current status
 
-- **Shovel naming / 0.3.1 and F1b history are complete.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
+- **All Commits / F1c / 0.4.0 is complete.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
 - Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
 - Official Fork screenshots/animations were inspected previously; user's attachment unavailable. X media could not be reviewed without login. Historical observations are not current runtime verification.
-- Git CLI is implemented for repository metadata and HEAD ancestry. No all-ref history/search/filter, status/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
+- Git CLI is implemented for repository metadata, all-branch/tag and HEAD ancestry. No individual-ref selection/search/filter, status/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
 - New startup updater requirement supersedes old research advice to disable update checks. Other network privacy restrictions remain.
 
 ## Proposed delivery sequence
 
-Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The 2026-10-24 request adds the Shovel name and a clean preview rebuild only; stop after this maintenance delivery. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
+Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The latest request prioritizes All Commits visibility, ref labels, complete details and pagination before other features; stop after this history delivery. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
 
 | Phase | Deliverable and boundary | Dependency / exit gate |
 | --- | --- | --- |
 | F0: Application foundation — complete | C#/WPF solution, MVVM empty shell, settings/resources/logging, startup/shutdown and checks | Build + 17 checks + Windows 11 GUI smoke verification below; no Git integration |
 | 1a: Metadata preview — delivered | Runner, real open, session trust/Git detection, persistent tabs, HEAD/common-directory identity and interrupted markers | Build/publish + 35 checks + published-window inspection; manual interaction gates remain open; local package only |
 | 1b: History preview — delivered | Real HEAD ancestry, graph/description table, selected-commit metadata, bounded older-history loading | Build/publish + 45 automated checks and headless render review; no desktop control or interactive launch |
-| 1c onward: Read-only Git — next | Expand history/ref selection/search; status and changed-file/tree/diff reads in bounded increments; external reconciliation | F1b; G2-G7 read cases, E/S/L/A gates; baseline performance measurements |
+| 1c: All Commits — delivered | Local/remote/tag history, scope/labels, bounded older/newer pages without a total count ceiling | Headless multi-ref/pagination/failure checks and preview; manual visual confirmation remains open |
+| 1d onward: Read-only Git — next | Individual ref selection/search; status and changed-file/tree/diff reads in bounded increments; external reconciliation | F1c; G2-G8 read cases, E/S/L/A gates; baseline performance measurements |
 | 2: Local MVP | Init, file/text-hunk staging, commit/amend, branch create/switch/delete/tracking, stash operations | Phase 1; mutation safety, hooks/signing, stale hunk tests |
 | 3: Network MVP | Clone, remotes, fetch, push, upstream setup, proposed fast-forward-only pull default; external conflict resolution and valid continue/skip/abort for existing sequences | Phase 2; explicit interactive/auth routes, failures, external races and recovery |
 | 3R: Pilot distribution | Install once/update in place, stable/test feeds, version/status UI, settings migration and bad-release repair procedure | Updater/IT/signing selection + phase 3; all U/D acceptance tests on actual standard-user Windows installs before initial 30-user rollout |
@@ -78,9 +79,21 @@ The user confirmed the product name **Shovel** and requested cleanup of old Buil
 
 Verification: Release clean, restore/build and publish succeeded with zero warnings/errors; all 45 disposable/headless checks passed. Fixture: `artifacts/foundation-checks/20261024-185313-4fe1042215ed4fb985c8d7266b9dc1a7`. Preview: `Build/0.3.1-win-x64/Shovel.exe`; 14 checksums verified, published assemblies match tested assemblies, executable product/description is Shovel and file version is 0.3.1.0. Build contains only the new version and remains ignored/untracked. No desktop control or interactive app launch occurred; earlier runtime/Windows 10/accessibility/performance limitations remain.
 
+## All Commits verification 2026-10-24
+
+Diagnosis: 0.3.x showed only HEAD ancestry, initially 200 rows and at most 2,000; no active filters caused the missing branch/tag commits. F1c adds default All Commits, explicit current-HEAD scope, ref labels, older/newer paging and full selected details. A first headless check caught the new controls crowding the table at minimum size; layout was adjusted before delivery.
+
+Same Windows 11 x64 build 26200 / SDK 10.0.401 / Desktop Runtime 10.0.12 / Git 2.51.1 host. Restore, Release build and publish passed with zero warnings/errors; **49 checks passed, 0 failed**. Final fixture: `artifacts/foundation-checks/20261024-202512-c208c14830e249aeb7988d350675a7f1`.
+
+- Real disposable Git: all 2,005 commits traversed in bounded pages, CLI ordering equality/no duplicates, parent-line continuity across page boundaries; multiple branches, merges, remote-only/tag-only ancestry, lightweight/annotated/nested/non-commit tags and packed refs. Reflog/stash/detached-only exclusions, current detached history, empty/unborn, shallow and external ref deletion/movement covered.
+- Headless WPF: default/switchable scope, real ref labels and full 100,000-character-plus message selection; older/newer ranges and virtualized rows. Controlled output-limit/cancellation/timeout/ref-change failures retain the prior page. Reviewed `all-commits.png` (1200×760) and `all-commits-minimum.png` (900×580); history now reserves space for several rows at minimum size. These are offscreen renders, not desktop interaction.
+- Preview: `Build/0.4.0-win-x64/Shovel.exe`; all 14 checksums verified, published App/Core/ProcessHost assemblies match tested assemblies, product/version metadata verified. Build remains ignored/untracked. Initial pre-layout-review 0.4.0 package retained under ignored `artifacts/preview-0.4.0-before-layout-review`; 0.3.1 remains available.
+
+No interactive launch occurred. Actual keyboard/scrolling/splitter use, mixed DPI/high contrast/screen readers, Windows 10, full performance budgets and installed-update behavior still need verification. The 2,005 fixture is a pagination regression, not a large-repository benchmark; deep offset walks/cursor growth remain known limits. No new Git mutations, network operations or dependencies.
+
 ## Initial compatibility boundaries
 
-F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. F1b reads commit ancestry and recognizes shallow boundaries. Submodule/LFS/partial/sparse modes and file content are not comprehensively validated; missing commit objects fail without fetching. No submodule recursion, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.
+F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. F1c reads named-ref/HEAD ancestry and recognizes shallow boundaries. Submodule/LFS/partial/sparse modes and file content are not comprehensively validated; missing commit objects fail without fetching. No submodule recursion, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.
 
 Phase 1 detects interrupted operations; phase 3 provides validated recovery actions. Starting advanced history operations waits for phase 4. Binary files get summaries rather than invented text diffs; hunk mutation initially covers validated text changes. Bare-repository editing, WSL repositories and network-share mutation are not promised by MVP; determine demand before adding support. ARM64 is proposed later; x86 is not currently planned.
 

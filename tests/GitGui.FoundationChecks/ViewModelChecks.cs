@@ -112,13 +112,13 @@ internal static partial class Program
             });
             if (_historyRepository is not null && _historyExecutable is not null)
             {
-                await Check("Long commit display text is bounded without discarding the parsed message", () =>
+                await Check("Long row previews are bounded while selected details retain the full message", () =>
                 {
                     var commit = new CommitRecord("abcdef", [], new string('a', 1000), "a@example.invalid", DateTimeOffset.UnixEpoch,
                         "C", "c@example.invalid", DateTimeOffset.UnixEpoch, new string('x', 100000));
                     var row = new CommitRow(new(commit, CommitGraph.Build([commit])[0]));
-                    Expect(row.Description.Length <= 513 && row.Author.Length <= 257 && row.MessagePreview.Length == 65536 &&
-                        row.MessageNotice.Length > 0 && row.Commit.Message.Length == 100000, "Bound visible text and retain original message in memory");
+                    Expect(row.Description.Length <= 513 && row.Author.Length <= 257 && row.MessagePreview.Length == 100000 &&
+                        row.MessageNotice.Length == 0 && row.Commit.Message.Length == 100000, "Bound visible text and retain original message in memory");
                     return Task.CompletedTask;
                 });
                 await Check("Real history binds graph/description columns and commit details without showing a window", async () =>
@@ -143,11 +143,57 @@ internal static partial class Program
                         Arrange(content, 900, 580);
                         await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                         content.UpdateLayout();
-                        Expect(table.ActualHeight > 50 && table.ActualWidth > 300, "History remains allocated at minimum shell size");
+                        Expect(table.ActualHeight >= 120 && table.ActualWidth > 300, "History remains allocated at minimum shell size");
                         Expect(table.Columns[0].ActualWidth >= model.GraphWidth && table.Columns[3].ActualWidth >= 150, "Narrow windows scroll instead of clipping graph lanes or date columns");
                         SaveRender(content, "history-minimum.png", 900, 580);
                     }
                     finally { window.Close(); }
+                });
+                await Check("All Commits is the default, labels render, and switching scope changes real history only", async () =>
+                {
+                    var model = await LoadRealModel(_allHistoryRepository!);
+                    Expect(model.SelectedHistoryScope.Scope == HistoryScope.AllCommits && model.Commits.Count == 7, "Default must include every branch and tag tip");
+                    Expect(model.Commits.Any(row => row.RefLabels.Contains("feature-日本語")) && model.Commits.Any(row => row.RefLabels.Contains("origin/remote-only")), "Local and remote labels are visible text");
+                    model.SelectedCommit = model.Commits.Single(row => row.Commit.Subject == "Tag-only work");
+                    Expect(model.SelectedCommit.MessagePreview.Length > 100000 && model.SelectedCommit.RefLabels.Contains("release"), "Selected tag commit exposes full message and labels");
+                    var window = new MainWindow(model);
+                    try
+                    {
+                        var content = (FrameworkElement)window.Content;
+                        Arrange(content, 1200, 760);
+                        await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                        Expect(VisualDescendants<ComboBox>(content).Any(combo => Equals(combo.SelectedItem, model.SelectedHistoryScope)), "Scope selector is discoverable and bound");
+                        SaveRender(content, "all-commits.png", 1200, 760);
+                        Arrange(content, 900, 580);
+                        await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                        SaveRender(content, "all-commits-minimum.png", 900, 580);
+                    }
+                    finally { window.Close(); }
+                    model.SelectedHistoryScope = model.HistoryScopes.Single(item => item.Scope == HistoryScope.CurrentHead);
+                    await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                    Expect(model.Commits.Count == 4 && model.SelectedRepository?.Snapshot?.Branch == "main", "Scope changes are read-only and current HEAD excludes other tips");
+                    model.SelectedHistoryScope = model.HistoryScopes[0];
+                    await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                    Expect(model.Commits.Count == 7, "All Commits restores the complete named-ref scope");
+                });
+                await Check("Failed, cancelled and changed next-page reads retain existing rows", async () =>
+                {
+                    var runner = new PageFailureRunner();
+                    var model = new ShellViewModel(new(runner), new ModelInteraction(_longHistoryRepository!) { Trust = true, Executable = _historyExecutable });
+                    model.CompleteStartup(new(new(), SettingsLoadStatus.Defaults)); model.ChooseGitCommand.Execute(null); model.OpenRepositoryCommand.Execute(null);
+                    await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                    var firstHash = model.Commits.First().Commit.Hash;
+                    foreach (var outcome in new[] { ProcessOutcome.OutputLimit, ProcessOutcome.Cancelled, ProcessOutcome.TimedOut })
+                    {
+                        runner.Failure = outcome;
+                        model.LoadMoreHistoryCommand.Execute(null);
+                        await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                        Expect(model.Commits.Count == 200 && model.Commits.First().Commit.Hash == firstHash && model.LoadMoreHistoryCommand.CanExecute(null), "Failure must not erase rows or claim completion");
+                    }
+                    runner.Failure = null; runner.ChangeRefs = true;
+                    model.LoadMoreHistoryCommand.Execute(null);
+                    await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                    Expect(model.Commits.Count == 200 && !model.LoadMoreHistoryCommand.CanExecute(null) && model.Status == UiText.Get("GitErrorChangedDuringRead"), "Changed ref snapshot blocks navigation until refresh");
                 });
                 await Check("History expands incrementally and WPF realizes only visible rows", async () =>
                 {
@@ -157,7 +203,10 @@ internal static partial class Program
                     model.SelectedCommit = model.Commits[4];
                     model.LoadMoreHistoryCommand.Execute(null);
                     await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
-                    Expect(model.Commits.Count == 400 && model.SelectedCommit?.Commit.Hash == selection, "Expansion retains selection by hash");
+                    Expect(model.Commits.Count == 200 && model.Commits.All(row => row.Commit.Hash != selection) && model.HistoryRange.Contains("400"), "Older navigation replaces the page and reports its range");
+                    model.NewerHistoryCommand.Execute(null);
+                    await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                    Expect(model.Commits.Any(row => row.Commit.Hash == selection) && !model.NewerHistoryCommand.CanExecute(null), "Newer navigation returns to the first page");
                     var window = new MainWindow(model);
                     try
                     {
@@ -222,6 +271,22 @@ internal static partial class Program
         public bool ConfirmTrust(string _) { TrustRequests++; return Trust; }
     }
 
+    private sealed class PageFailureRunner : IProcessRunner
+    {
+        private readonly IProcessRunner _inner = new GitGui.ProcessHost.WindowsProcessRunner();
+        public ProcessOutcome? Failure { get; set; }
+        public bool ChangeRefs { get; set; }
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
+        {
+            if (request.Arguments.Contains("--skip=200") && Failure is { } failure)
+                return new(failure, null, [], Encoding.UTF8.GetBytes("fixture failure"), TimeSpan.Zero);
+            var result = await _inner.RunAsync(request, token, output);
+            if (ChangeRefs && request.Arguments.Contains("for-each-ref"))
+                return result with { StandardOutput = [.. result.StandardOutput, (byte)'x'] };
+            return result;
+        }
+    }
+
     // Test-only transport: real Git semantics are covered separately in disposable-repository checks.
     private sealed class ModelRunner(string directory) : IProcessRunner
     {
@@ -246,6 +311,8 @@ internal static partial class Program
                 var row = string.Join('\0', "abcdef", "", "A", "a@example.invalid", "2026-10-23T10:00:00+00:00", "C", "c@example.invalid", "2026-10-23T10:00:00+00:00", "Subject\n") + '\0';
                 return new(ProcessOutcome.Exited, 0, Encoding.UTF8.GetBytes(row), [], TimeSpan.Zero);
             }
+            if (args.Contains("for-each-ref")) return new(ProcessOutcome.Exited, 0,
+                Encoding.UTF8.GetBytes("refs/heads/main\0abcdef\0commit\0\0\n"), [], TimeSpan.Zero);
             var value = args.Contains("--version") ? "git version 2.51.1" :
                 args.Contains("--is-shallow-repository") ? "false" :
                 args.Contains("--is-inside-work-tree") ? "true" :

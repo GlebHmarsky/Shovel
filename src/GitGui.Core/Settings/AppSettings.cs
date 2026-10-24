@@ -13,7 +13,7 @@ public sealed record AppSettings
     public double WindowHeight { get; init; } = 800;
     public bool IsMaximized { get; init; }
     public double SidebarWidth { get; init; } = 210;
-    public double DetailsHeight { get; init; } = 240;
+    public double DetailsHeight { get; init; } = 180;
     public NavigationSection SelectedSection { get; init; } = NavigationSection.History;
     public string[] RepositoryPaths { get; init; } = [];
     public string? SelectedRepositoryPath { get; init; }
@@ -23,7 +23,7 @@ public sealed record AppSettings
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),
         WindowHeight = Clamp(WindowHeight, 800, 620, 2160),
         SidebarWidth = Clamp(SidebarWidth, 210, 160, 320),
-        DetailsHeight = Clamp(DetailsHeight, 240, 140, 360),
+        DetailsHeight = Clamp(DetailsHeight, 180, 80, 360),
         SelectedSection = Enum.IsDefined(SelectedSection) ? SelectedSection : NavigationSection.History,
         RepositoryPaths = (RepositoryPaths ?? []).Where(path => !string.IsNullOrWhiteSpace(path) &&
             !path.Contains('\0') && Path.IsPathFullyQualified(path)).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray()

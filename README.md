@@ -1,6 +1,6 @@
 # Shovel
 
-A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.3.1** names the app Shovel and retains the real commit history introduced in 0.3.0: connected graph nodes with descriptions to the right, author/date/hash columns, and selected-commit details below. File status, diffs, mutations, network access, installer and updater are not implemented. The product name is confirmed; publisher and permanent installation identity remain open.
+A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.4.0** defaults to All Commits across local branches, remote-tracking branches and tags, with branch/tag labels, a connected graph and complete selected-commit details. Older/newer pages replace the previous 2,000-commit ceiling. File status, diffs, mutations, network access, installer and updater are not implemented. The product name is confirmed; publisher and permanent installation identity remain open.
 
 Start with [AGENTS.md](AGENTS.md), [TODO.md](TODO.md) and the [roadmap](docs/roadmap.md). [Architecture](docs/architecture.md) describes implemented boundaries and future proposals separately.
 
@@ -31,7 +31,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 These environment variables affect only this shell. Single-process MSBuild and disabled compiler sharing avoid restrictions observed in the Codex execution environment. WPF needs no optional .NET workload here. Check each command's exit code; there are no third-party NuGet packages. The console checks return a nonzero exit code on failure; they do not use `dotnet test` or a test-framework package.
 
-Checks write inspectable, isolated fixtures under ignored `artifacts/foundation-checks/`; one empty non-repository fixture uses the temporary directory. Git mutations use disposable repositories and isolated configuration, never working repositories. Headless WPF checks also save history-table PNGs without opening a window or controlling the desktop. [Roadmap evidence](docs/roadmap.md#shovel-preview-verification-2026-10-24) distinguishes these checks from interactive GUI verification.
+Checks write inspectable, isolated fixtures under ignored `artifacts/foundation-checks/`; one empty non-repository fixture uses the temporary directory. Git mutations use disposable repositories and isolated configuration, never working repositories. Headless WPF checks also save history-table PNGs without opening a window or controlling the desktop. [Roadmap evidence](docs/roadmap.md#all-commits-verification-2026-10-24) distinguishes these checks from interactive GUI verification.
 
 ## Run
 
@@ -47,9 +47,11 @@ dotnet run --project src/GitGui.App -c Release --no-build -- --data-directory "C
 
 `--data-directory` accepts an absolute path; omit it for normal use. Default data remains `%LOCALAPPDATA%\GitGui\Foundation`, separate from binaries, so the Shovel rename preserves existing tabs/layout and profile locking. Internal `GitGui` solution/project names are retained; no data migration is needed. Closing cancels/drains read-only inspection, then saves layout/tabs; there is no tray or autostart. One instance may own a profile at a time. Different test profiles are independent.
 
-Choose **Open…**, select a folder and review the session-trust prompt. The History table displays the inspected HEAD's ancestry, including merged branches. Select a row for its message and metadata below; **Load older commits** expands from 200 rows up to 2,000. Branch tips outside that ancestry, ref badges, searching and filtering are deferred. Open **Repository** details for worktree/common-directory identity and last-inspection time; interrupted-operation notices also appear above the table.
+Choose **Open…**, select a folder and review session trust. **All Commits** is the default scope; it includes local branch, remote-tracking branch and tag ancestry. Reflog-only, unreachable, stash-only and detached-only commits are outside this view. Choose **Current branch / HEAD** for the inspected HEAD's ancestry, including detached HEAD. The scope selector's tooltip/accessibility help explains these boundaries; changing scope never checks out a branch. No filters are active.
 
-Use **Trust / Refresh** after external changes, switching repository tabs or restarting; restored tabs perform no automatic reads. Refresh replaces the observed history; loading older commits keeps the original tip. Errors retain original Git stderr in **Git output** for this session. The app does not repair, continue or abort interrupted Git operations.
+The table shows graph nodes, ref labels, description, author, local date and short hash. Select a row for its complete message, author/committer, dates, hash, parents and full labels below. **Load older commits** / **Newer commits** navigate 200-row pages with the visible range shown; there is no total commit-count ceiling. Only the current page is held as rows/messages. Long row labels have full text in details/tooltips.
+
+Use **Trust / Refresh** after external changes, switching tabs or restarting; restored tabs run no automatic reads. Paging checks observed refs and history boundaries before/after Git reads. If they change, refresh is required. A failed/cancelled page read retains the previous page. Original Git stderr remains in **Git output** for the session. Shallow/missing-object boundaries are explicit; nothing is fetched or repaired automatically.
 
 ## Build a local preview
 
@@ -57,7 +59,7 @@ Use **Trust / Refresh** after external changes, switching repository tabs or res
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-The script restores/builds/runs checks and publishes to `Build/0.3.1-win-x64/`. Double-click **Shovel.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
+The script restores/builds/runs checks and publishes to `Build/0.4.0-win-x64/`. Double-click **Shovel.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
 
 `Build/` is ignored and must never be committed. On 2026-10-24, the user requested removal of the old Build previews before rebuilding 0.3.1; those old package paths no longer exist. Cleanup is not automatic on subsequent builds. The script refuses to replace an existing version folder and keeps incomplete publishes in ignored `artifacts/`. Set the next delivery version in `Directory.Build.props` and update `CHANGELOG.md` once per delivery; see AGENTS.md for bump rules. The folder includes launch notes and SHA256 checksums. It is an unsigned local preview, not an installer or automatic update package. No hosting, keys or remote push are configured by packaging.
 
@@ -70,6 +72,6 @@ The script restores/builds/runs checks and publishes to `Build/0.3.1-win-x64/`. 
 
 ## Current limits
 
-Tabs support selection, left/right movement and closing. Inspection is bounded and cancellable; one runs at a time, with no background refresh. Failed/cancelled history loads clear rows and retain any already-inspected repository metadata. Bare repositories are rejected; linked worktree identity is read but no shared-state mutation coordinator exists. Shallow history stops at local boundaries; missing partial-clone objects fail without fetching. Marker detection is observational, not a validated recovery workflow.
+Tabs support selection, left/right movement and closing. Inspection is bounded and cancellable; one runs at a time, with no background refresh. Initial/refresh failures leave no rows; failed/cancelled paging retains the prior page and any already-inspected repository metadata. Bare repositories are rejected; linked worktree identity is read but no shared-state mutation coordinator exists. Shallow history stops at local boundaries; missing partial-clone objects fail without fetching. Marker detection is observational, not a validated recovery workflow.
 
-History limits: 4 MiB Git output, 2,000 displayed commits, 64 concurrent graph lanes, 65,536 characters in a message preview (explicit truncation notice). Descriptions and identities have bounded display prefixes; original parsed text remains in memory. Graph continuations at the bottom are not invented parent rows. Additional locales, plural messages, RTL certification, dark theme, full accessibility/DPI testing and measured performance budgets remain in [TODO.md](TODO.md).
+History limits: 4 MiB per Git/ref/boundary read, 64 concurrent graph lanes, 15 seconds per command and 45 seconds per operation. These limits cause explicit errors, not silent truncation or a false end-of-history. Pages re-walk the unchanged ref snapshot with an offset; very deep walks may time out. Small navigation cursors grow with visited pages. Full large-repository performance budgets are unverified. Descriptions/labels use bounded row previews; selected details keep complete parsed values. Additional locales, RTL/accessibility/DPI, dark theme and performance work remain in [TODO.md](TODO.md).

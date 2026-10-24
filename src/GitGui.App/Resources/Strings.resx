@@ -19,7 +19,7 @@
   <data name="ToolsUnavailable" xml:space="preserve"><value>Repository tools will become available in a later phase.</value></data>
   <data name="NoRepositorySelected" xml:space="preserve"><value>No repository selected</value></data>
   <data name="NoActiveOperation" xml:space="preserve"><value>No active operation</value></data>
-  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview · History follows the inspected HEAD. File status, diffs and Git mutations are not available yet.</value></data>
+  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview · Choose All Commits or Current branch / HEAD. File status, diffs and Git mutations are not available yet.</value></data>
   <data name="Navigation" xml:space="preserve"><value>Repository navigation</value></data>
   <data name="LocalChanges" xml:space="preserve"><value>Local changes</value></data>
   <data name="History" xml:space="preserve"><value>History</value></data>
@@ -104,7 +104,7 @@ Git reads repository configuration and commit objects. This version requests no 
   <data name="GitErrorOutputLimit" xml:space="preserve"><value>Git produced more output than this reader permits. Inspection was stopped; unusually large commit messages may require another Git tool.</value></data>
   <data name="GitErrorNotWorktree" xml:space="preserve"><value>This folder is not an accessible Git working tree. Bare repositories are not supported in this preview.</value></data>
   <data name="GitErrorInvalidOutput" xml:space="preserve"><value>Git returned metadata this version cannot interpret. No repository changes were requested.</value></data>
-  <data name="GitErrorChangedDuringRead" xml:space="preserve"><value>Repository state changed during inspection. Refresh to obtain a new snapshot.</value></data>
+  <data name="GitErrorChangedDuringRead" xml:space="preserve"><value>Repository references or history boundaries changed. Choose Trust / Refresh before continuing.</value></data>
   <data name="GitErrorUnexpected" xml:space="preserve"><value>Repository inspection failed unexpectedly. Check the folder and Git installation, then retry.</value></data>
   <data name="RepositoryDetails" xml:space="preserve"><value>Repository</value></data>
   <data name="RawOutput" xml:space="preserve"><value>Git output</value></data>
@@ -119,7 +119,6 @@ Git reads repository configuration and commit objects. This version requests no 
   <data name="HistoryDate" xml:space="preserve"><value>Committed (local)</value></data>
   <data name="HistoryHash" xml:space="preserve"><value>Commit hash</value></data>
   <data name="CommitMessage" xml:space="preserve"><value>Message</value></data>
-  <data name="CommitMessageTruncated" xml:space="preserve"><value>Message preview truncated to 65,536 characters. Use another Git tool to inspect the complete message.</value></data>
   <data name="TruncatedCommitText" xml:space="preserve"><value>{0}…</value><comment>{0} is a bounded prefix of a long commit subject, name or email.</comment></data>
   <data name="Committer" xml:space="preserve"><value>Committer</value></data>
   <data name="CommitParents" xml:space="preserve"><value>Parents</value></data>
@@ -127,17 +126,35 @@ Git reads repository configuration and commit objects. This version requests no 
   <data name="RootCommit" xml:space="preserve"><value>Root commit — no parents</value></data>
   <data name="SelectCommit" xml:space="preserve"><value>Select a commit to inspect its message and metadata</value></data>
   <data name="CommitIdentity" xml:space="preserve"><value>{0} &lt;{1}&gt; · {2} (UTC{3})</value><comment>{0} name, {1} email, {2} date in original commit offset, {3} UTC offset.</comment></data>
-  <data name="CommitRowAccessible" xml:space="preserve"><value>{0}. Author: {1}. Commit: {2}. Parents: {3}</value><comment>{0} subject, {1} author name, {2} abbreviated hash, {3} full parent hashes or localized root label.</comment></data>
+  <data name="CommitRowAccessible" xml:space="preserve"><value>{0}; {1}; commit {2}; parents: {3}; references: {4}</value><comment>{0} subject, {1} author name, {2} abbreviated hash, {3} full parent hashes or localized root label, {4} reference labels.</comment></data>
   <data name="LoadOlderCommits" xml:space="preserve"><value>Load older commits</value></data>
   <data name="HistoryNotLoaded" xml:space="preserve"><value>Open a repository or choose Trust / Refresh to load history.</value></data>
   <data name="HistoryLoading" xml:space="preserve"><value>Loading history…</value></data>
   <data name="HistoryUnborn" xml:space="preserve"><value>This branch has no commits yet.</value></data>
-  <data name="HistoryMore" xml:space="preserve"><value>Inspected HEAD ancestry · More history is available below. Refresh to observe external changes.</value></data>
-  <data name="HistoryEnd" xml:space="preserve"><value>End of available HEAD ancestry. Refresh to observe external changes.</value></data>
+  <data name="HistoryMore" xml:space="preserve"><value>More history is available. Load older commits to see the next page.</value></data>
+  <data name="HistoryEnd" xml:space="preserve"><value>End of available history for this scope. Refresh to observe external changes.</value></data>
   <data name="HistoryShallowEnd" xml:space="preserve"><value>End of locally available history in this shallow clone. No additional objects were fetched.</value></data>
-  <data name="HistoryLimit" xml:space="preserve"><value>This preview displays up to 2,000 commits from the inspected HEAD. Older history remains available in your other Git tools.</value></data>
   <data name="HistoryFailed" xml:space="preserve"><value>History is unavailable. See the status and Git output, then refresh to retry.</value></data>
   <data name="HistoryLoaded" xml:space="preserve"><value>History loaded — select a commit to inspect it</value></data>
   <data name="SectionUnavailable" xml:space="preserve"><value>This workspace is not implemented yet. Choose History to inspect commits.</value></data>
-  <data name="GitErrorHistoryTooWide" xml:space="preserve"><value>This history exceeds the preview's graph lane limit. Use another Git tool to inspect it.</value></data>
+  <data name="GitErrorHistoryTooWide" xml:space="preserve"><value>This page exceeds the 64-lane graph limit. The history was not truncated; try Current branch / HEAD or inspect it in another Git tool.</value></data>
+  <data name="AllCommits" xml:space="preserve"><value>All Commits</value></data>
+  <data name="CurrentHeadHistory" xml:space="preserve"><value>Current branch / HEAD</value></data>
+  <data name="HistoryScope" xml:space="preserve"><value>History scope</value></data>
+  <data name="AllCommitsScope" xml:space="preserve"><value>Scope: local branches, remotes and tags · Filters: none</value></data>
+  <data name="CurrentHeadScope" xml:space="preserve"><value>Scope: current HEAD ancestry (including detached) · Filters: none</value></data>
+  <data name="HistoryLimits" xml:space="preserve"><value>Pages: 200 rows · Read: 4 MiB / 15 s · Graph limit: 64 lanes · No total commit-count limit</value></data>
+  <data name="HistoryRange" xml:space="preserve"><value>Showing {0:N0}–{1:N0}</value></data>
+  <data name="NewerCommits" xml:space="preserve"><value>Newer commits</value></data>
+  <data name="HistoryEmptyAll" xml:space="preserve"><value>No commits are reachable from local branches, remote-tracking branches or tags. For a detached HEAD, choose Current branch / HEAD.</value></data>
+  <data name="HistoryPageFailed" xml:space="preserve"><value>The next page could not be loaded. The previous page is retained; see the status and Git output. Retry or refresh.</value></data>
+  <data name="HistoryCancelled" xml:space="preserve"><value>History loading cancelled. Existing rows, if any, are retained; retry or refresh.</value></data>
+  <data name="HeadLabel" xml:space="preserve"><value>HEAD</value></data>
+  <data name="LocalRefLabel" xml:space="preserve"><value>Branch: {0}</value></data>
+  <data name="RemoteRefLabel" xml:space="preserve"><value>Remote: {0}</value></data>
+  <data name="TagRefLabel" xml:space="preserve"><value>Tag: {0}</value></data>
+  <data name="RefSeparator" xml:space="preserve"><value> · </value></data>
+  <data name="CommitReferences" xml:space="preserve"><value>Branches and tags</value></data>
+  <data name="AllCommitsHelp" xml:space="preserve"><value>Commits reachable from local branches, remote-tracking branches and tags. Reflog-only, unreachable, stash-only and detached-only commits are excluded. Switch to Current branch / HEAD to inspect detached history. This does not check out a branch.</value></data>
+  <data name="CurrentHeadHelp" xml:space="preserve"><value>Ancestors of the inspected HEAD, including detached HEAD. Commits exclusive to other branches or tags are outside this scope. This does not check out a branch.</value></data>
 </root>

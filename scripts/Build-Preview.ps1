@@ -38,9 +38,11 @@ Double-click Shovel.exe. Keep all files in this folder together.
 Requires the .NET 10 Desktop Runtime and Git for Windows 2.47.0 or newer.
 Open a folder, approve session trust, then inspect the commit-history table and graph.
 Select a row for its message, author/committer, dates, hash and parents below.
-Load older commits expands HEAD ancestry in batches of 200, up to 2,000 commits.
+All Commits includes local branches, remote-tracking branches and tags; Current branch / HEAD is separate.
+Use Load older commits / Newer commits to navigate 200-row pages without a total commit-count limit.
+The view shows its scope, row range, filters and read/graph limits. Detached-only history is in Current branch / HEAD.
 Use Trust / Refresh after external changes. Tabs are saved; trust is not saved.
-All-branch history, search/filter, file status, diffs, mutations, installer and automatic updates are not implemented.
+Search/filter, file status, diffs, mutations, installer and automatic updates are not implemented.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.
 Settings are outside this folder: %LOCALAPPDATA%\GitGui\Foundation.

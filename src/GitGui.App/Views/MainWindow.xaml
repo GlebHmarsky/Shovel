@@ -88,14 +88,17 @@
                     AutomationProperties.Name="{loc:Text Key=ResizeSidebar}" AutomationProperties.AutomationId="SidebarSplitter" />
       <Grid x:Name="WorkspacePanel" Grid.Column="2" SizeChanged="OnWorkspaceSizeChanged">
         <Grid.RowDefinitions>
-          <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="240" />
+          <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="300" />
           <RowDefinition Height="5" />
-          <RowDefinition x:Name="DetailsRow" Height="240" MinHeight="140" MaxHeight="360" />
+          <RowDefinition x:Name="DetailsRow" Height="180" MinHeight="80" MaxHeight="360" />
         </Grid.RowDefinitions>
         <Grid Margin="12,10,12,0">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <WrapPanel Margin="0,0,0,8">
-            <TextBlock Text="{Binding AreaTitle}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,18,0" />
+            <ComboBox ItemsSource="{Binding HistoryScopes}" SelectedItem="{Binding SelectedHistoryScope}" DisplayMemberPath="Label"
+                      IsEnabled="{Binding CanNavigate}" MinWidth="190" Margin="4,0,8,0" VerticalContentAlignment="Center"
+                      ToolTip="{Binding HistoryScopeHelp}" AutomationProperties.HelpText="{Binding HistoryScopeHelp}"
+                      AutomationProperties.Name="{loc:Text Key=HistoryScope}" AutomationProperties.AutomationId="HistoryScope" />
             <Button Content="{loc:Text Key=InspectRepository}" Command="{Binding RefreshRepositoryCommand}" AutomationProperties.AutomationId="RefreshRepository" />
             <Button Content="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" AutomationProperties.AutomationId="CancelOperation" />
             <Button Content="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
@@ -103,6 +106,7 @@
           <DockPanel Grid.Row="1" Margin="4,0,4,8">
             <TextBlock DockPanel.Dock="Right" Text="{Binding GitStatus}" Margin="10,0,0,0" FontSize="11" VerticalAlignment="Center" />
             <StackPanel>
+              <TextBlock Text="{Binding HistoryScopeDescription}" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,5" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}" />
               <TextBlock Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedRepository.ReadAt}" />
               <TextBlock Text="{Binding SelectedRepository.State}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding SelectedRepository.HasOperation, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
@@ -127,7 +131,14 @@
                                          IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" FlowDirection="LeftToRight" />
                 </DataTemplate></DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTextColumn Header="{loc:Text Key=HistoryDescription}" Binding="{Binding Description}" Width="*" MinWidth="240" ElementStyle="{StaticResource HistoryText}" />
+              <DataGridTemplateColumn Header="{loc:Text Key=HistoryDescription}" Width="*" MinWidth="300">
+                <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                  <DockPanel Margin="8,0" VerticalAlignment="Center">
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding RefPreview}" ToolTip="{Binding RefLabels}" FontWeight="SemiBold" MaxWidth="200" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+                    <TextBlock Text="{Binding Description}" TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
+                </DataTemplate></DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
               <DataGridTextColumn Header="{loc:Text Key=HistoryAuthor}" Binding="{Binding Author}" Width="140" MinWidth="100" ElementStyle="{StaticResource HistoryText}" />
               <DataGridTextColumn Header="{loc:Text Key=HistoryDate}" Binding="{Binding Date}" Width="150" MinWidth="150" ElementStyle="{StaticResource HistoryText}" />
               <DataGridTextColumn Header="{loc:Text Key=HistoryHash}" Binding="{Binding ShortHash}" Width="115" MinWidth="115" ElementStyle="{StaticResource HistoryText}" />
@@ -136,10 +147,17 @@
           <TextBlock Grid.Row="2" Text="{loc:Text Key=SectionUnavailable}" Margin="8,12" TextWrapping="Wrap">
             <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding IsHistory}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
           </TextBlock>
-          <DockPanel Grid.Row="3" Margin="4,6" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}">
-            <Button DockPanel.Dock="Right" Content="{loc:Text Key=LoadOlderCommits}" Command="{Binding LoadMoreHistoryCommand}" Margin="12,0,0,0" />
-            <TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11" AutomationProperties.LiveSetting="Polite" />
-          </DockPanel>
+          <StackPanel Grid.Row="3" Margin="4,6" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="{loc:Text Key=NewerCommits}" Command="{Binding NewerHistoryCommand}" Margin="8,0,0,0" />
+                <Button Content="{loc:Text Key=LoadOlderCommits}" Command="{Binding LoadMoreHistoryCommand}" Margin="8,0,0,0" />
+              </StackPanel>
+              <TextBlock Text="{Binding HistoryRange}" VerticalAlignment="Center" FontWeight="SemiBold" />
+            </DockPanel>
+            <TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap" FontSize="11" AutomationProperties.LiveSetting="Polite" />
+            <TextBlock Text="{loc:Text Key=HistoryLimits}" TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0" />
+          </StackPanel>
         </Grid>
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows"
                       Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
@@ -149,8 +167,11 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="14,10">
                 <TextBlock Text="{Binding SelectedCommit.Description, TargetNullValue={loc:Text Key=SelectCommit}}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10" />
+                <TextBlock Text="{Binding SelectedCommit.RefLabels}" TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.Name="{loc:Text Key=CommitReferences}">
+                  <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding SelectedCommit.RefLabels}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                </TextBlock>
                 <TextBlock Text="{loc:Text Key=CommitMessage}" FontWeight="SemiBold" />
-                <TextBox Text="{Binding SelectedCommit.MessagePreview, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AcceptsReturn="True" AutomationProperties.Name="{loc:Text Key=CommitMessage}" />
+                <TextBox Text="{Binding SelectedCommit.MessagePreview, Mode=OneWay}" MaxHeight="220" VerticalScrollBarVisibility="Auto" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AcceptsReturn="True" AutomationProperties.Name="{loc:Text Key=CommitMessage}" />
                 <TextBlock Text="{Binding SelectedCommit.MessageNotice}" TextWrapping="Wrap" />
                 <TextBlock Text="{loc:Text Key=HistoryAuthor}" FontWeight="SemiBold" Margin="0,8,0,0" />
                 <TextBox Text="{Binding SelectedCommit.AuthorDetails, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=HistoryAuthor}" />

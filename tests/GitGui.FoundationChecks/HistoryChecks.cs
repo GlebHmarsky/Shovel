@@ -13,6 +13,7 @@ internal static partial class Program
     private static string? _historyRepository;
     private static string? _historyExecutable;
     private static string? _longHistoryRepository;
+    private static string? _allHistoryRepository;
 
     private static async Task RunHistoryChecksAsync(RepositoryReader reader, GitInstallation git,
         Func<string, string[], Task<ProcessResult>> runGit)
@@ -30,7 +31,7 @@ internal static partial class Program
 
         await Check("Real merge history preserves messages/identities/dates and graph parent connections", async () =>
         {
-            var history = await reader.ReadHistoryAsync(git, repo, merge, 200, default);
+            var history = await ReadHead( merge, 200, default);
             var cli = await runGit(repo, ["rev-list", "--topo-order", merge, "--"]);
             Expect(history.Entries.Select(entry => entry.Commit.Hash).SequenceEqual(Encoding.UTF8.GetString(cli.StandardOutput).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(hash => hash.TrimEnd('\r'))), "Order must match Git's topological walk");
             Expect(history.Entries.Count == 4 && !history.HasMore && history.Entries[0].Commit.Parents.SequenceEqual([left, right]), "Merge must retain both parents");
@@ -46,24 +47,23 @@ internal static partial class Program
             await File.WriteAllTextAsync(verifier, "#!/bin/sh\nprintf unsafe > '" + marker.Replace('\\', '/') + "'\n");
             await runGit(repo, ["config", "log.showSignature", "true"]);
             await runGit(repo, ["config", "gpg.program", verifier.Replace('\\', '/')]);
-            Expect((await reader.ReadHistoryAsync(git, repo, merge, 200, default)).Entries.Count == 4 && !File.Exists(marker), "Do not invoke gpg for configured signed history");
-            Expect((await reader.ReadHistoryAsync(git, repo, null, 200, default)).Entries.Count == 0, "Unborn history must be empty");
-            await ExpectGitFailure(GitFailure.CommandFailed, () => reader.ReadHistoryAsync(git, repo, new string('f', 40), 200, default));
+            Expect((await ReadHead( merge, 200, default)).Entries.Count == 4 && !File.Exists(marker), "Do not invoke gpg for configured signed history");
+            Expect((await ReadHead( null, 200, default)).Entries.Count == 0, "Unborn history must be empty");
+            await ExpectGitFailure(GitFailure.CommandFailed, () => ReadHead( new string('f', 40), 200, default));
             using var stop = new CancellationTokenSource(); stop.Cancel();
-            await ExpectException<OperationCanceledException>(() => reader.ReadHistoryAsync(git, repo, merge, 200, stop.Token));
+            await ExpectException<OperationCanceledException>(() => ReadHead( merge, 200, stop.Token));
         });
-        await Check("Pinned incremental history survives external branch movement and exposes shallow limits", async () =>
+        await Check("Ref movement requires refresh and shallow history exposes local boundaries", async () =>
         {
-            var page = await reader.ReadHistoryAsync(git, repo, merge, 2, default);
+            var page = await ReadHead( merge, 2, default);
             Expect(page.Entries.Count == 2 && page.HasMore, "Use lookahead to offer more history");
             var newer = Commit(repo, tree, [merge], "New external commit\n");
             await runGit(repo, ["update-ref", "refs/heads/main", newer]);
-            var expanded = await reader.ReadHistoryAsync(git, repo, page.Anchor, 4, default);
-            Expect(expanded.Entries.Count == 4 && expanded.Entries[0].Commit.Hash == merge && expanded.Entries.Take(2).Select(entry => entry.Graph.NodeLane).SequenceEqual(page.Entries.Select(entry => entry.Graph.NodeLane)), "Pinned rows and lanes remain stable");
-            Expect((await reader.ReadHistoryAsync(git, repo, newer, 200, default)).Entries.Count == 5, "Explicit refresh can observe new tip");
+            await ExpectGitFailure(GitFailure.ChangedDuringRead, () => reader.ReadHistoryPageAsync(git, page.Session, page.Next!, default));
+            Expect((await ReadHead( newer, 200, default)).Entries.Count == 5, "Explicit refresh can observe new tip");
             // Only the disposable fixture gets a shallow boundary; no transport/network is used.
             await File.WriteAllTextAsync(Path.Combine(repo, ".git", "shallow"), merge + "\n");
-            var shallow = await reader.ReadHistoryAsync(git, repo, newer, 200, default);
+            var shallow = await ReadHead( newer, 200, default);
             Expect(shallow.IsShallow && shallow.Entries.Count == 2 && !shallow.HasMore, "Shallow end is distinct from complete ancestry");
             File.Delete(Path.Combine(repo, ".git", "shallow"));
             await runGit(repo, ["update-ref", "refs/heads/main", merge]);
@@ -77,10 +77,38 @@ internal static partial class Program
             for (var i = 0; i < 2005; i++) parent = Commit(large, emptyTree, parent is null ? [] : [parent], "History fixture " + i + "\n");
             await runGit(large, ["update-ref", "refs/heads/main", parent!]);
             _longHistoryRepository = large;
-            var first = await reader.ReadHistoryAsync(git, large, parent, 200, default);
-            var full = await reader.ReadHistoryAsync(git, large, parent, 2000, default);
-            Expect(first.Entries.Count == 200 && full.Entries.Count == 2000 && full.HasMore && full.Entries.Select(entry => entry.Commit.Hash).Distinct().Count() == 2000, "Respect row cap without claiming history is complete");
-            Expect(first.Entries.Select(entry => entry.Commit.Hash).SequenceEqual(full.Entries.Take(200).Select(entry => entry.Commit.Hash)), "Expansion preserves the prefix");
+            var session = await reader.OpenHistoryAsync(git, await reader.InspectAsync(git, large, default), HistoryScope.AllCommits, default);
+            var rows = new List<HistoryEntry>();
+            var cursor = HistoryCursor.Start;
+            do
+            {
+                var page = await reader.ReadHistoryPageAsync(git, session, cursor, default);
+                Expect(page.Entries.Count <= 200, "Bound each page without a total commit-count limit");
+                rows.AddRange(page.Entries);
+                if (page.Next is null) break;
+                cursor = page.Next;
+            } while (true);
+            Expect(rows.Count == 2005 && rows.Select(entry => entry.Commit.Hash).Distinct().Count() == 2005, "Every commit beyond the old 2,000 ceiling is reachable through pagination");
+            AssertGraphConnections(rows);
+            var cli = await runGit(large, ["rev-list", "--topo-order", "--branches", "--remotes", "--tags", "--"]);
+            Expect(rows.Select(row => row.Commit.Hash).SequenceEqual(TextLines(cli)), "No missing, duplicate or reordered commits across pages");
+        });
+        await RunAllRefChecksAsync(reader, git, runGit);
+        await Check("Empty and unborn HEAD repositories retain truthful all-ref history", async () =>
+        {
+            var empty = Fixture("empty history"); await runGit(empty, ["init", "--initial-branch=main"]);
+            var snapshot = await reader.InspectAsync(git, empty, default);
+            foreach (var scope in Enum.GetValues<HistoryScope>())
+            {
+                var session = await reader.OpenHistoryAsync(git, snapshot, scope, default);
+                var page = await reader.ReadHistoryPageAsync(git, session, HistoryCursor.Start, default);
+                Expect(page.Entries.Count == 0 && !page.HasMore, "No fallback to HEAD in an empty All Commits view");
+            }
+            await runGit(repo, ["symbolic-ref", "HEAD", "refs/heads/unborn"]);
+            var unborn = await reader.InspectAsync(git, repo, default);
+            var all = await reader.OpenHistoryAsync(git, unborn, HistoryScope.AllCommits, default);
+            Expect((await reader.ReadHistoryPageAsync(git, all, HistoryCursor.Start, default)).Entries.Count == 4, "Unborn current branch must not hide other branch history");
+            await runGit(repo, ["symbolic-ref", "HEAD", "refs/heads/main"]);
         });
         await Check("History parser rejects malformed boundaries and supports variable hash widths", async () =>
         {
@@ -101,7 +129,15 @@ internal static partial class Program
             await ExpectGitFailure(GitFailure.InvalidOutput, () => Task.FromResult(CommitGraph.Build([Node("aa", "aa")])));
             await ExpectGitFailure(GitFailure.HistoryTooWide, () => Task.FromResult(CommitGraph.Build([Node("tip", Enumerable.Range(0, 65).Select(value => "p" + value).ToArray())])));
         });
+        async Task<CommitHistory> ReadHead(string? hash, int count, CancellationToken token)
+        {
+            var snapshot = await reader.InspectAsync(git, repo, token);
+            var session = await reader.OpenHistoryAsync(git, snapshot with { Commit = hash }, HistoryScope.CurrentHead, token);
+            return await reader.ReadHistoryPageAsync(git, session, HistoryCursor.Start, token, count);
+        }
     }
+
+    private static string[] TextLines(ProcessResult result) => Encoding.UTF8.GetString(result.StandardOutput).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')).ToArray();
 
     private static void AssertGraphConnections(IReadOnlyList<HistoryEntry> rows)
     {

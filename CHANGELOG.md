@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-10-24
+
+- Default to All Commits: local branches, remote-tracking branches and tags, with branch/tag labels. Current branch / HEAD remains a separate read-only scope, including detached HEAD.
+- Replace the 2,000-commit ceiling with older/newer pages of 200 rows, visible row range, scope, filter state and resource limits. Keep graph lanes connected across pages without retaining old messages.
+- Reserve more space for history at minimum window size; keep the bottom details panel resizable and scrollable.
+- Show complete selected messages and metadata within the bounded read; retain the current page on paging errors/cancellation. Require refresh when refs or traversal boundaries change.
+- Verify disposable multi-branch, merge, annotated/nested tag, packed-ref, shallow, detached/unborn and 2,005-commit histories headlessly. No interactive app launch, Git mutations or network features added.
+
 ## 0.3.1 — 2026-10-24
 
 - Name the application Shovel: localized window/dialog title, executable and product metadata.

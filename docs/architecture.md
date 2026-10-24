@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-24. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1b:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
+Updated 2026-10-24. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1c:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
 
 ## Product identity
 
@@ -25,7 +25,7 @@ The following are **future logical boundaries**, not six projects already create
 
 Keep one primary language, minimal dependencies, pinned SDK/packages, reproducible build/test/publish commands. No embedded web server, plugin framework, or database initially.
 
-### Implemented structure (F0 + F1a/F1b)
+### Implemented structure (F0 + F1a/F1b/F1c)
 
 ```text
 GitGui.slnx / global.json / Directory.Build.props
@@ -41,8 +41,8 @@ src/GitGui.Core/                UI-independent net10.0 library
   Settings/                    Schema-2 layout/tab model and bounded JSON store
   Diagnostics/                 Allowlisted events and bounded asynchronous log writer
   Git/RepositoryReader.cs      Discovery, audited metadata commands and typed snapshots
-  Git/CommitHistory.cs         Bounded HEAD history reader and NUL-field parser
-  Git/CommitGraph.cs           UI-independent deterministic parent-lane layout
+  Git/CommitHistory.cs         Ref snapshot, paged history reader and NUL-field parser
+  Git/CommitGraph.cs           UI-independent parent-lane layout and page cursor
   Processes/                   Requests/results and asynchronous runner contract
 src/GitGui.ProcessHost/         Windows runner/job ownership and gated child-launch helper
 tests/GitGui.FoundationChecks/  Disposable-file/Git, process, view-model and headless WPF checks
@@ -65,17 +65,21 @@ The Windows runner uses ArgumentList, no shell, explicit cwd/environment, closed
 
 An owned helper waits for a bounded JSON request on stdin. The parent assigns it to a kill-on-close Windows Job Object **before** sending the request, so Git cannot spawn before ownership is established. The helper launches the child and relays both output streams; exit 125 is reserved for host/protocol failure. Closing the job stops only its owned descendants. Timeout also bounds descendants retaining pipe handles after their direct parent exits. The helper EXE/DLL/runtime files must ship together with the app. This small separate executable avoids a custom suspended-process/native pipe launcher. Job assignment failure fails closed. [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects), [assignment semantics](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject).
 
-UI generation checks discard obsolete results; beginning a refresh clears the old snapshot/history. Cancel/failed history reads clear rows and preserve any already-inspected metadata; retry is explicit. Cancellation is not rollback. Manual refresh is the external-change mechanism. No polling/watchers, cross-instance repository locks or mutation coordination exist yet.
+UI generation checks discard obsolete results; beginning a refresh clears the old snapshot/history. Initial/refresh failures leave no rows; failed/cancelled older/newer reads retain the prior page and already-inspected metadata; retry is explicit. Cancellation is not rollback. Manual refresh is the external-change mechanism. No polling/watchers, cross-instance repository locks or mutation coordination exist yet.
 
-### Commit history and graph (F1b, 0.3.0)
+### Commit history and graph (F1c, 0.4.0)
 
-The user prioritized history before status. Read `git log --topo-order` from the inspected HEAD hash, with NUL-delimited fields/records, UTF-8 output, no patches, external diff, textconv, notes, mailmap, decoration or signature verification. Git's configured `log.showSignature` must not launch gpg. Parse complete commit identities, original-offset dates (including UTC `Z`), parent hashes and messages on workers. Hash widths are validated without assuming SHA-1. [Git log options](https://git-scm.com/docs/git-log), [pretty-format placeholders/terminators](https://git-scm.com/docs/pretty-formats) (official documentation rechecked 2026-10-23).
+**Diagnosis:** 0.3.x walked only the inspected HEAD and capped expansion at 2,000 commits. No filtering code hid commits. F1c defaults to All Commits using `git log --topo-order --branches --remotes --tags`; current-HEAD ancestry is a separate scope using the observed hash. Do not substitute `--all`, which would include additional refs/HEAD beyond the specified scope. No reflog traversal, stash-only or unreachable tips are included. [Git log scope and paging options](https://git-scm.com/docs/git-log) (official documentation rechecked 2026-10-24).
 
-Load a 200-row prefix with one-row lookahead, increasing by 200 up to 2,000; each expansion re-reads that bounded prefix from the same hash. Compare prior hashes/parents before replacing rows, retain selection by hash and reject obsolete tab generations. This trades repeated bounded traversal for simpler stable loading; deeper cursor-based history remains deferred. Shallow state is queried, but missing objects fail without lazy fetch. Per-command output is capped at 4 MiB; pathological history fails visibly rather than allocating without bounds. Only the active tab holds history; switching tabs clears it and requires explicit refresh. Nothing is persisted or automatically fetched.
+`OpenHistoryAsync` captures sorted heads/remotes/tags/replacement refs with `for-each-ref` and fingerprints that output plus bounded shallow/graft boundary files. Lightweight and peeled annotated tags map to commits; nested tags are recursively resolved with validated object hashes. Tags pointing to non-commits have no graph row. Ref names remain data; local/remote/tag/HEAD labels are localized, with full labels in details/tooltips. [Git for-each-ref formatting](https://git-scm.com/docs/git-for-each-ref).
 
-`CommitGraph` maintains pending-parent lanes in topological order, merges shared destinations, and produces per-row line segments plus a node. It validates order/duplicates, caps at 64 lanes and does no drawing. WPF uses a fixed-order, read-only DataGrid with row recycling and finite viewport; only visible graph cells draw curves/nodes. Merge nodes have an outer ring; accessible row text includes parent hashes. Graph column minimum width follows computed lanes, allowing horizontal scrolling. Dates use local culture; bottom details preserve original offsets. Message display is capped at 65,536 characters with notice, and long subject/identity prefixes are bounded. Full parsed text stays in memory within the read cap. [WPF virtualization guidance](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/optimizing-performance-controls).
+`ReadHistoryPageAsync` reads 200 rows plus one-row lookahead with `--skip`, checking the fingerprint before/after each read and the expected first hash at each page boundary. A changed snapshot requires explicit refresh; it does not silently combine histories. These checks detect observed changes, not an atomic lock against external clients (an ABA change remains possible). The current-HEAD hash stays pinned; labels are those observed at refresh. All Git, boundary I/O, parsing, graph layout and display formatting run on workers.
 
-The graph shows actual ancestry, including merges, from one observed HEAD. All-ref selection, ref badges, search/filter, continuous cursor loading, diff/file lists and more complete accessibility/RTL certification remain deferred. No fake rows or simulated Git interactions ship.
+There is no total commit-count cap. Only one page of rows/messages is retained; back navigation stores compact offset/lane cursors, which grow with visited pages rather than retaining all commit data. Each page re-walks earlier commits, so deep offsets cost more CPU and can hit the 15-second command/45-second operation deadline. Output/ref/boundary reads are capped at 4 MiB; graph width at 64 lanes. Limits and page range are visible; failures retain the current page and raw Git errors where available, never masquerading as end-of-history. Missing objects fail without fetching; shallow ends are distinct. Large-history performance/cursor compaction remain future measured work.
+
+NUL-delimited UTF-8 metadata retains full messages, parents and original-offset dates. Patches, external diff/textconv, notes, mailmap, decoration and signature helpers remain disabled for these reads. `CommitGraph.BuildPage` carries pending-parent lanes/colors between pages and validates each batch. The fixed-order WPF DataGrid recycles visible rows; graph cells only draw computed segments. Long row subjects/ref labels use bounded prefixes, while selected messages and identities remain complete within the read limit. The message textbox has its own finite scroll viewport. History reserves 300 DIP vertically; the details panel defaults to 180 DIP and can shrink to 80 DIP so small windows retain several commit rows. Existing layout values remain valid in schema 2. Scope/filters, accessible labels and limits use English resources. Complete keyboard/DPI/RTL/high-contrast certification remains deferred.
+
+Refresh resets paging and attempts to retain selection if the commit is on the first page. Page changes select a matching hash if present, otherwise the first row. Tab changes clear history and require refresh; only session scope selection is retained. Individual ref selection, search/filter, changed-file/diff views and mutations remain deferred.
 
 ### Deferred execution boundaries
 

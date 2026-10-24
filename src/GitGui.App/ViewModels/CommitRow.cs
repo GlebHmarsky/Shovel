@@ -12,6 +12,8 @@ public sealed class CommitRow
     public string Description { get; }
     public string Author { get; }
     public string MessagePreview { get; }
+    public string RefLabels { get; }
+    public string RefPreview { get; }
     public string MessageNotice { get; }
     public string ShortHash { get; }
     public string Date { get; }
@@ -26,14 +28,19 @@ public sealed class CommitRow
         var subject = Commit.Subject;
         Description = subject.Length == 0 ? UiText.Get("EmptyCommitSubject") : Limit(subject, 512);
         Author = Limit(Commit.Author, 256);
-        MessagePreview = Commit.Message.Length > 64 * 1024 ? Commit.Message[..(64 * 1024)] : Commit.Message;
-        MessageNotice = Commit.Message.Length > MessagePreview.Length ? UiText.Get("CommitMessageTruncated") : "";
+        MessagePreview = Commit.Message;
+        MessageNotice = "";
+        RefLabels = string.Join(UiText.Get("RefSeparator"), (entry.References ?? []).Select(reference => reference.Name == "HEAD" ? UiText.Get("HeadLabel") :
+            UiText.Format(reference.Name.StartsWith("refs/heads/", StringComparison.Ordinal) ? "LocalRefLabel" :
+                reference.Name.StartsWith("refs/remotes/", StringComparison.Ordinal) ? "RemoteRefLabel" : "TagRefLabel",
+                reference.Name[(reference.Name.IndexOf('/', 5) + 1)..])));
+        RefPreview = Limit(RefLabels, 512);
         ShortHash = Commit.Hash[..Math.Min(12, Commit.Hash.Length)];
         Date = Commit.CommittedAt.LocalDateTime.ToString("g", CultureInfo.CurrentCulture);
-        AuthorDetails = UiText.Format("CommitIdentity", Author, Limit(Commit.AuthorEmail, 512), Commit.AuthoredAt.ToString("G", CultureInfo.CurrentCulture), Commit.AuthoredAt.ToString("zzz", CultureInfo.InvariantCulture));
-        CommitterDetails = UiText.Format("CommitIdentity", Limit(Commit.Committer, 256), Limit(Commit.CommitterEmail, 512), Commit.CommittedAt.ToString("G", CultureInfo.CurrentCulture), Commit.CommittedAt.ToString("zzz", CultureInfo.InvariantCulture));
+        AuthorDetails = UiText.Format("CommitIdentity", Commit.Author, Commit.AuthorEmail, Commit.AuthoredAt.ToString("G", CultureInfo.CurrentCulture), Commit.AuthoredAt.ToString("zzz", CultureInfo.InvariantCulture));
+        CommitterDetails = UiText.Format("CommitIdentity", Commit.Committer, Commit.CommitterEmail, Commit.CommittedAt.ToString("G", CultureInfo.CurrentCulture), Commit.CommittedAt.ToString("zzz", CultureInfo.InvariantCulture));
         Parents = Commit.Parents.Count == 0 ? UiText.Get("RootCommit") : string.Join(Environment.NewLine, Commit.Parents);
-        AccessibilityLabel = UiText.Format("CommitRowAccessible", Description, Author, ShortHash, Parents);
+        AccessibilityLabel = UiText.Format("CommitRowAccessible", Description, Author, ShortHash, Parents, RefLabels);
     }
     private static string Limit(string value, int length) => value.Length > length ? UiText.Format("TruncatedCommitText", value[..length]) : value;
 }
