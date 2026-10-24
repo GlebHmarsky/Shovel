@@ -1,11 +1,11 @@
 # Product
 
-Status: confirmed intent with explicitly marked UX proposals. Updated 2026-10-23.
+Status: confirmed intent with explicitly marked UX proposals. Updated 2026-10-24.
 Read [requirements](requirements.md) for obligations/tests, [architecture](architecture.md) for mechanisms, and [roadmap](roadmap.md) for phase scope.
 
 ## Purpose and audience
 
-Build a reliable, lightweight Windows 10/11 Git desktop client for approximately 30 initial users working with development repositories, including TypeScript and C++. Combine Fork's restrained interface with Git Extensions' practical capabilities, using original assets and branding. AI will maintain the implementation; personal familiarity with a language does not determine the stack. The application itself does not require AI services.
+**Shovel** is the confirmed product name (2026-10-24). Build a reliable, lightweight Windows 10/11 Git desktop client for approximately 30 initial users working with development repositories, including TypeScript and C++. Combine Fork's restrained interface with Git Extensions' practical capabilities, using original assets and branding. AI will maintain the implementation; personal familiarity with a language does not determine the stack. The application itself does not require AI services.
 
 English ships first; future localization is a foundational requirement. Users install once and receive in-place updates. Measured responsiveness and trustworthy Git behavior take priority over feature count.
 

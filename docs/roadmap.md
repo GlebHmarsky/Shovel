@@ -1,10 +1,10 @@
 # Roadmap and decision register
 
-Updated 2026-10-23. [Product](product.md) owns experience; [requirements](requirements.md) owns scope/safety/tests; [architecture](architecture.md) separates implemented choices from proposals. [TODO.md](../TODO.md) is the single prioritized implementation checklist; this file owns milestones, decisions and verification evidence.
+Updated 2026-10-24. [Product](product.md) owns experience; [requirements](requirements.md) owns scope/safety/tests; [architecture](architecture.md) separates implemented choices from proposals. [TODO.md](../TODO.md) is the single prioritized implementation checklist; this file owns milestones, decisions and verification evidence.
 
 ## Current status
 
-- **F1b history / 0.3.0 is complete.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
+- **Shovel naming / 0.3.1 and F1b history are complete.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
 - Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
 - Official Fork screenshots/animations were inspected previously; user's attachment unavailable. X media could not be reviewed without login. Historical observations are not current runtime verification.
 - Git CLI is implemented for repository metadata and HEAD ancestry. No all-ref history/search/filter, status/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
@@ -12,7 +12,7 @@ Updated 2026-10-23. [Product](product.md) owns experience; [requirements](requir
 
 ## Proposed delivery sequence
 
-Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. Stop after F1b delivery. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
+Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The 2026-10-24 request adds the Shovel name and a clean preview rebuild only; stop after this maintenance delivery. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
 
 | Phase | Deliverable and boundary | Dependency / exit gate |
 | --- | --- | --- |
@@ -72,6 +72,12 @@ Host remains Windows 11 x64 build 26200, SDK 10.0.401, Desktop Runtime 10.0.12 a
 
 **Limits:** the 2,005-commit fixture is a bounded-loading regression, not a large-repository performance benchmark. No interactive scrolling/keyboard/screen-reader, mixed DPI, high contrast, Windows 10 or published-GUI launch verification. Only HEAD ancestry is shown; all-ref history, search/filter, file status/diffs and all mutations remain deferred. Settings remain schema 2. No installation/update/hosting/signing work.
 
+## Shovel preview verification 2026-10-24
+
+The user confirmed the product name **Shovel** and requested cleanup of old Build outputs before a new preview. Removed the old 0.2.0/0.3.0 Build packages and cleaned Release outputs; historical package links above document earlier verification and no longer point to retained previews. Settings, source and ignored test evidence were preserved. Version 0.3.1 changes title/executable/product metadata only; Git capabilities and settings schema are unchanged.
+
+Verification: Release clean, restore/build and publish succeeded with zero warnings/errors; all 45 disposable/headless checks passed. Fixture: `artifacts/foundation-checks/20261024-185313-4fe1042215ed4fb985c8d7266b9dc1a7`. Preview: `Build/0.3.1-win-x64/Shovel.exe`; 14 checksums verified, published assemblies match tested assemblies, executable product/description is Shovel and file version is 0.3.1.0. Build contains only the new version and remains ignored/untracked. No desktop control or interactive app launch occurred; earlier runtime/Windows 10/accessibility/performance limitations remain.
+
 ## Initial compatibility boundaries
 
 F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. F1b reads commit ancestry and recognizes shallow boundaries. Submodule/LFS/partial/sparse modes and file content are not comprehensively validated; missing commit objects fail without fetching. No submodule recursion, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.
@@ -88,7 +94,7 @@ Phase 1 detects interrupted operations; phase 3 provides validated recovery acti
 
 **Q1 resolved:** user confirmed C# + WPF and authorized the small foundation on 2026-10-23; .NET 10 LTS selected after tooling inspection. This does not approve all future architecture proposals or deployment work.
 
-Nonblocking details: product name/app identity must be fixed before first distributed install; screenshot must be available before claiming visual parity; exact update interval, cache sizes and plural library should be validated when needed. Git floor is 2.47.0 for metadata reads, tested here only on 2.51.1. English ResourceManager/.resx is implemented; permanent data/install identity remains open.
+Nonblocking details: product name Shovel is confirmed; publisher/install identity must be fixed before first distributed install; screenshot must be available before claiming visual parity; exact update interval, cache sizes and plural library should be validated when needed. Git floor is 2.47.0 for metadata reads, tested here only on 2.51.1. English ResourceManager/.resx is implemented; permanent data/install identity remains open.
 
 ## Documentation maintenance
 

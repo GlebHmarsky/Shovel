@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 — 2026-10-24
+
+- Name the application Shovel: localized window/dialog title, executable and product metadata.
+- Preserve the existing settings location and profile mutex so saved layout/tabs remain compatible; internal project names stay unchanged.
+- Refresh project documentation and rebuild the local preview after the user-requested cleanup of old Build packages. Git capabilities are unchanged from 0.3.0.
+
 ## 0.3.0 — 2026-10-23
 
 - Show real HEAD history in a virtualized table: connected graph nodes on the left, then description, author, local commit date and abbreviated hash. Merge nodes have a second ring.

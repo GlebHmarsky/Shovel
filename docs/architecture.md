@@ -1,6 +1,10 @@
 # Architecture and distribution
 
-Updated 2026-10-23. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1b:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
+Updated 2026-10-24. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1b:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
+
+## Product identity
+
+**Confirmed:** Shovel (2026-10-24). Version 0.3.1 uses `Shovel.exe` / `Shovel.dll`, Shovel product metadata and the resource-backed title. Source folders, solution, namespaces, resource base name, helper executable and manifest identity retain their internal `GitGui` names. The existing settings path and profile mutex remain unchanged to preserve tabs/layout and exclude simultaneous writers across old/new previews. Publisher and permanent installer/data identity remain open; this rename does not add an installer or migrate data.
 
 ## Stack and boundaries
 
@@ -85,7 +89,7 @@ Diagnostics accept only typed event/failure codes and UTC timestamps, through a 
 
 **Deferred settings fields:** drafts, tool definitions, persistent trust, update preferences and redacted recovery markers. No credentials. Future caches must be bounded and rebuildable. On restart rediscover Git state before enabling mutations; no automatic command replay.
 
-**Migration policy:** validate before writing; preserve pre-migration bytes as the backup during atomic replacement. Never overwrite a newer/invalid schema. Only schema 1-to-2 migration exists; no general migration engine or in-app recovery/export UI. Version 0.1.0 opens schema 2 read-only; reverting binaries does not restore data automatically. Separate channel profiles if pilot schemas diverge. Installation identity/product name and the permanent data path remain undecided; the current Foundation profile is provisional.
+**Migration policy:** validate before writing; preserve pre-migration bytes as the backup during atomic replacement. Never overwrite a newer/invalid schema. Only schema 1-to-2 migration exists; no general migration engine or in-app recovery/export UI. Version 0.1.0 opens schema 2 read-only; reverting binaries does not restore data automatically. Separate channel profiles if pilot schemas diverge. The product name is Shovel; publisher, installation identity and the permanent data path remain undecided; the current Foundation profile is provisional.
 
 **Implemented localization:** neutral English `.resx` messages, ResourceManager lookup, `{loc:Text Key=...}` in XAML and UiText lookup/formatting in view models/lifecycle. Whole messages replace concatenation; formatting uses the user's CurrentCulture while UI language is currently English. Window flow direction derives from UI culture; the version is direction-isolated. Accessibility names use localized labels, not model ToString output. Built-in OS dialog button captions are supplied by Windows.
 
@@ -93,7 +97,7 @@ Diagnostics accept only typed event/failure codes and UTC timestamps, through a 
 
 ## Local preview delivery (implemented)
 
-Version comes from Directory.Build.props; each delivered update gets one CHANGELOG entry and a commit. Minor versions add capabilities, patches fix behavior/docs; incompatible released contracts require a deliberate major bump. Build-Preview.ps1 restores/builds/checks, publishes a framework-dependent x64-host preview to unique staging, verifies required helper files, then moves it into ignored Build/<version>-win-x64 without replacing older versions. SHA256SUMS detects accidental changes only. This is an unsigned local folder requiring the Desktop Runtime, with no install/update service or distribution trust guarantee; signed per-user distribution remains deferred below.
+Version comes from Directory.Build.props; each delivered update gets one CHANGELOG entry and a commit. Minor versions add capabilities, patches fix behavior/docs; incompatible released contracts require a deliberate major bump. Build-Preview.ps1 restores/builds/checks, publishes a framework-dependent x64-host preview to unique staging, verifies required helper files, then moves it into ignored Build/<version>-win-x64 without replacing older versions. The user explicitly requested cleanup of existing Build packages for 0.3.1; this one-time cleanup does not change the script's no-overwrite default. SHA256SUMS detects accidental changes only. This is an unsigned local folder requiring the Desktop Runtime, with no install/update service or distribution trust guarantee; signed per-user distribution remains deferred below.
 
 ## Updater comparison: current official evidence
 

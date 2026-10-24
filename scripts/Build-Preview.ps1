@@ -26,15 +26,15 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Verification failed; preview was not produced.' }
     dotnet publish src/GitGui.App --no-restore -c Release --self-contained false -o $staging -m:1 -p:UseSharedCompilation=false -nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed. The partial output is not a usable preview.' }
-    $required = @('GitGui.App.exe', 'GitGui.App.dll', 'GitGui.App.runtimeconfig.json', 'GitGui.Core.dll',
+    $required = @('Shovel.exe', 'Shovel.dll', 'Shovel.runtimeconfig.json', 'GitGui.Core.dll',
         'GitGui.ProcessHost.exe', 'GitGui.ProcessHost.dll', 'GitGui.ProcessHost.deps.json', 'GitGui.ProcessHost.runtimeconfig.json')
     foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $staging $file))) { throw ('Missing preview file: ' + $file) }
     }
     $instructions = @"
-Git GUI $version - local Windows x64 preview
+Shovel $version - local Windows x64 preview
 
-Double-click GitGui.App.exe. Keep all files in this folder together.
+Double-click Shovel.exe. Keep all files in this folder together.
 Requires the .NET 10 Desktop Runtime and Git for Windows 2.47.0 or newer.
 Open a folder, approve session trust, then inspect the commit-history table and graph.
 Select a row for its message, author/committer, dates, hash and parents below.
@@ -63,6 +63,6 @@ Checksums detect accidental changes; they are NOT signatures or proof of authent
     New-Item -ItemType Directory -Path (Split-Path -Parent $output) -Force | Out-Null
     if (Test-Path -LiteralPath $output) { throw 'A preview with this version was created during the build.' }
     [IO.Directory]::Move($staging, $output)
-    Write-Output ('Preview: ' + (Join-Path $output 'GitGui.App.exe'))
+    Write-Output ('Preview: ' + (Join-Path $output 'Shovel.exe'))
 }
 finally { Pop-Location }

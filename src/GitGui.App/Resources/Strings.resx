@@ -4,7 +4,7 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
-  <data name="AppTitle" xml:space="preserve"><value>Git GUI — Preview</value></data>
+  <data name="AppTitle" xml:space="preserve"><value>Shovel — Preview</value></data>
   <data name="RepositoryTabs" xml:space="preserve"><value>Repositories</value></data>
   <data name="NoRepositories" xml:space="preserve"><value>No repositories open</value></data>
   <data name="Fetch" xml:space="preserve"><value>Fetch</value></data>

@@ -1,10 +1,10 @@
 # Implementation checklist
 
-Single prioritized task list. Updated 2026-10-23. P0 = prerequisite/safety, P1 = next delivery, P2 = later. [Roadmap](docs/roadmap.md) owns milestone scope and evidence; [requirements](docs/requirements.md) owns acceptance obligations. Check items only when their stated scope is verified.
+Single prioritized task list. Updated 2026-10-24. P0 = prerequisite/safety, P1 = next delivery, P2 = later. [Roadmap](docs/roadmap.md) owns milestone scope and evidence; [requirements](docs/requirements.md) owns acceptance obligations. Check items only when their stated scope is verified.
 
 ## Current phase
 
-History F1b / 0.3.0 is complete. The user prioritized the main history table ahead of status. Disposable Git and headless WPF checks passed; no desktop control or interactive app launch was performed. Stop after this increment; the next delivery should take one bounded item below.
+Shovel naming / 0.3.1 is complete and verified after the requested Build cleanup. Git scope remains F1b history. Stop after this maintenance delivery; the next capability increment should take one bounded item below.
 
 ## Next priorities
 
@@ -29,7 +29,7 @@ History F1b / 0.3.0 is complete. The user prioritized the main history table ahe
 - [ ] **P0 before supported rollout — Q2:** confirm coworkers' Windows editions/builds, CPU architectures and IT/proxy/no-admin constraints. No missing SDK prerequisite blocks local development on this machine.
 - [ ] **P0 before distribution — Q3/Q4:** decide private/offsite/VPN access, hosting, signing owner/certificate/key custody and updater/installer. Preserve the architecture's comparison; no provider is selected.
 - [ ] **P1 before distribution — Toolchain servicing:** refresh the pinned SDK/runtime to the then-current supported .NET 10 patch and reverify. No software installation was performed in F0.
-- [ ] **P1 before first installer — Identity:** finalize product name, publisher and permanent settings/install identity; plan migration from the provisional Foundation profile.
+- [ ] **P1 before first installer — Identity:** product name Shovel is confirmed; finalize publisher and permanent settings/install identity; plan migration from the provisional Foundation profile.
 
 ## Completed work
 
@@ -45,3 +45,5 @@ History F1b / 0.3.0 is complete. The user prioritized the main history table ahe
 - [x] **P1 — Establish versioned delivery.** Central version 0.2.0, changelog and preview script; Build stays ignored and prior version folders cannot be overwritten.
 - [x] **P0 — Verify and package F1a.** Restore/Release build/publish succeeded; 35 checks passed. Published 0.2.0 window launched and rendered on Windows 11; Build folder kept outside version control. Manual interaction coverage remains explicitly limited above.
 - [x] **P1 — Deliver F1b history / 0.3.0.** Real HEAD ancestry with connected graph nodes, description/author/date/hash columns, selected-commit details and bounded older-history loading. Restore/Release build/publish passed with zero warnings/errors; 45 checks passed, including real disposable histories, stale results and headless row virtualization. Reviewed two offscreen renders; interactive GUI remains unverified. Ignored preview checksums and tested/published assemblies match; prior preview preserved.
+
+- [x] **P1 — Name and rebuild Shovel / 0.3.1.** Resource-backed title, executable and product metadata updated; existing profile preserved. Old Build packages removed on request; clean Release build, all 45 checks and publish passed. Checksums/tested assemblies verified; no interactive launch.
