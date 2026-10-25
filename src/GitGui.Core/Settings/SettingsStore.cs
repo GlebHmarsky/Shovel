@@ -34,10 +34,11 @@ public sealed class SettingsStore(string directory)
                 return Complete(new(), SettingsLoadStatus.Invalid);
             if (schema > AppSettings.CurrentSchemaVersion)
                 return Complete(new(), SettingsLoadStatus.NewerSchema);
-            if (schema is not (1 or AppSettings.CurrentSchemaVersion))
+            if (schema is not (1 or 2 or AppSettings.CurrentSchemaVersion))
                 return Complete(new(), SettingsLoadStatus.UnsupportedSchema);
 
             var settings = JsonSerializer.Deserialize<AppSettings>(_loadedBytes, JsonOptions);
+            if (schema < 3 && settings is not null) settings = settings with { Approvals = [], RepositoryPreferences = [] };
             return settings is null ? Complete(new(), SettingsLoadStatus.Invalid) :
                 Complete(settings.Normalize() with { SchemaVersion = AppSettings.CurrentSchemaVersion },
                     schema == AppSettings.CurrentSchemaVersion ? SettingsLoadStatus.Loaded : SettingsLoadStatus.Migrated);

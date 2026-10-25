@@ -6,6 +6,7 @@ namespace GitGui.App.ViewModels;
 
 public sealed class RepositoryTab(string directory) : ObservableObject
 {
+    internal HistoryViewState History { get; } = new();
     public string Directory { get; } = directory;
     public string Label => Path.GetFileName(Path.TrimEndingDirectorySeparator(Directory)) is { Length: > 0 } label ? label : Directory;
     public RepositorySnapshot? Snapshot { get; private set; }
@@ -29,5 +30,33 @@ public sealed class RepositoryTab(string directory) : ObservableObject
     {
         Snapshot = null;
         Changed(nameof(Snapshot)); Changed(nameof(Head)); Changed(nameof(State)); Changed(nameof(ReadAt)); Changed(nameof(HasOperation));
+    }
+}
+
+/// <summary>One bounded page per cached tab. UI-only state, never persisted repository content.</summary>
+internal sealed record PageView(string? SelectedHash, double Vertical, double Horizontal);
+internal sealed class HistoryViewState
+{
+    public Dictionary<long, PageView> PageViews { get; } = [];
+    public HistoryScope Scope { get; set; }
+    public CommitHistory? Page { get; set; }
+    public IReadOnlyList<CommitRow> Rows { get; set; } = [];
+    public CommitRow? Selected { get; set; }
+    public List<HistoryCursor> Cursors { get; } = [];
+    public int PageIndex { get; set; }
+    public double VerticalOffset { get; set; }
+    public double HorizontalOffset { get; set; }
+    public DateTimeOffset ValidatedAt { get; set; }
+    public long LastUse { get; set; }
+    public long EstimatedBytes { get; set; }
+    public bool NeedsRefresh { get; set; }
+    public string Notice { get; set; } = UiText.Get("HistoryNotLoaded");
+    public string Error { get; set; } = "";
+    public string RawOutput { get; set; } = "";
+    public void Clear()
+    {
+        Page = null; Rows = []; Selected = null; PageViews.Clear(); EstimatedBytes = 0; Cursors.Clear(); PageIndex = 0;
+        VerticalOffset = HorizontalOffset = 0; NeedsRefresh = false; ValidatedAt = default;
+        Notice = UiText.Get("HistoryNotLoaded"); Error = RawOutput = "";
     }
 }

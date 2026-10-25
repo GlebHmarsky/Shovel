@@ -20,7 +20,7 @@ internal static class Program
                 if (payload.Length + read > 128 * 1024) return 125;
                 payload.Write(buffer, 0, read);
             }
-            var request = JsonSerializer.Deserialize<ProcessRequest>(payload.ToArray());
+            var request = JsonSerializer.Deserialize(payload.ToArray(), RequestJson.Default.ProcessRequest);
             if (request is null || !Path.IsPathFullyQualified(request.Executable) ||
                 !request.Executable.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
                 !Path.IsPathFullyQualified(request.WorkingDirectory)) return 125;

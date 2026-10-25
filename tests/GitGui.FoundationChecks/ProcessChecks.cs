@@ -102,7 +102,7 @@ internal static partial class Program
             Expect(failed.Outcome == ProcessOutcome.StartFailed, "Consumer failure must not leak a job/slot");
             Expect((await runner.RunAsync(Probe("stdin"), default)).ExitCode == 0, "Runner remains usable");
         });
-        await Check("Schema 1 migrates with backup; schema 2 preserves ordered tabs", async () =>
+        await Check("Schema 1 migrates with backup; current schema preserves ordered tabs", async () =>
         {
             var store = new SettingsStore(Fixture("migration"));
             const string old = "{\"SchemaVersion\":1,\"WindowWidth\":1250}";

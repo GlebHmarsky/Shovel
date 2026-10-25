@@ -1,4 +1,8 @@
+using GitGui.Core.Git;
+
 namespace GitGui.Core.Settings;
+
+public sealed record RepositoryPreference(string Path, HistoryScope Scope);
 
 public enum NavigationSection
 {
@@ -7,7 +11,7 @@ public enum NavigationSection
 
 public sealed record AppSettings
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public double WindowWidth { get; init; } = 1200;
     public double WindowHeight { get; init; } = 800;
@@ -16,6 +20,8 @@ public sealed record AppSettings
     public double DetailsHeight { get; init; } = 180;
     public NavigationSection SelectedSection { get; init; } = NavigationSection.History;
     public string[] RepositoryPaths { get; init; } = [];
+    public RepositoryApproval[] Approvals { get; init; } = [];
+    public RepositoryPreference[] RepositoryPreferences { get; init; } = [];
     public string? SelectedRepositoryPath { get; init; }
 
     public AppSettings Normalize() => this with
@@ -25,6 +31,9 @@ public sealed record AppSettings
         SidebarWidth = Clamp(SidebarWidth, 210, 160, 320),
         DetailsHeight = Clamp(DetailsHeight, 180, 80, 360),
         SelectedSection = Enum.IsDefined(SelectedSection) ? SelectedSection : NavigationSection.History,
+        Approvals = (Approvals ?? []).Where(item => item is not null && !string.IsNullOrWhiteSpace(item.Path) && Path.IsPathFullyQualified(item.Path) &&
+            item.Fingerprint is { Length: 64 } && item.Fingerprint.All(char.IsAsciiHexDigit)).DistinctBy(item => item.Path, StringComparer.OrdinalIgnoreCase).Take(20).ToArray(),
+        RepositoryPreferences = (RepositoryPreferences ?? []).Where(item => item is not null && !string.IsNullOrWhiteSpace(item.Path) && Path.IsPathFullyQualified(item.Path) && Enum.IsDefined(item.Scope)).Take(20).ToArray(),
         RepositoryPaths = (RepositoryPaths ?? []).Where(path => !string.IsNullOrWhiteSpace(path) &&
             !path.Contains('\0') && Path.IsPathFullyQualified(path)).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray()
     };

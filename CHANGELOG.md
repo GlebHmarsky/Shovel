@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 — 2026-10-25
+
+- Automatically load the selected approved repository at startup and restore cached history on tab switches. Preserve per-tab scope, page, selection and scroll in a bounded session cache; refresh asynchronously without clearing useful rows.
+- Remember revocable approval tied to filesystem identity; migrate old settings without silently approving saved paths. Check identity before automatic Git work and stop on replacement/missing paths.
+- Reduce repeated Git/helper startup with combined metadata queries, bounded parallel HEAD reads, fewer ref queries and source-generated process protocol serialization. Add repeatable headless timing evidence and bounded in-memory diagnostics.
+- Move implemented secondary actions into Repository; remove prototype toolbar/sidebar/details controls. Highlight same-author peer text in light yellow with explicit accessible semantics and high-contrast fallback.
+- Keep Git functionality read-only. Status, diffs, mutations, network and updater remain deferred; no interactive launch or desktop control.
+
 ## 0.4.2 — 2026-10-25
 
 - Add the user-selected front-facing silver shovel on a blue circle as the executable and main-window icon. Include transparent source artwork and a multi-size Windows icon.

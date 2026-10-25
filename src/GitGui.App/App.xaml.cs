@@ -28,6 +28,8 @@ public partial class App : Application
     private bool _closing;
     private bool _allowClose;
     private bool _fatal;
+    private readonly PerformanceTrace _trace = new();
+    private readonly SemaphoreSlim _settingsWrites = new(1, 1);
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -53,8 +55,10 @@ public partial class App : Application
             _log = new DiagnosticLog(directory);
             _log.Record(DiagnosticEvent.Started);
             _settings = new SettingsStore(directory);
-            _shell = new ShellViewModel(new RepositoryReader(new WindowsProcessRunner()), new UserInteraction());
-            var window = new MainWindow(_shell);
+            _shell = new ShellViewModel(new RepositoryReader(new WindowsProcessRunner(), _trace), new UserInteraction(),
+                persist: SaveApprovalSettingsAsync, trace: _trace);
+            MainWindow window;
+            using (_trace.Measure(TimingStage.Shell)) window = new MainWindow(_shell);
             MainWindow = window;
             window.Closing += OnWindowClosing;
             window.Show();
@@ -68,7 +72,8 @@ public partial class App : Application
         try
         {
             // File opening, JSON parsing and directory work must also stay off the dispatcher.
-            var result = await Task.Run(() => _settings!.LoadAsync(cancellationToken), cancellationToken);
+            SettingsLoadResult result;
+            using (_trace.Measure(TimingStage.Settings)) result = await Task.Run(() => _settings!.LoadAsync(cancellationToken), cancellationToken);
             if (_closing || _fatal) return;
             window.RestoreLayout(result.Settings);
             _shell!.CompleteStartup(result);
@@ -76,6 +81,20 @@ public partial class App : Application
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception exception) { FailAndExit(exception); }
+    }
+
+    private async Task SaveApprovalSettingsAsync(AppSettings session)
+    {
+        if (MainWindow is not MainWindow window || _shell?.LoadedSettings?.CanSave != true)
+            throw new IOException("SettingsNotWritable");
+        var snapshot = _shell.CaptureSession(window.CaptureLayout());
+        await _settingsWrites.WaitAsync();
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await Task.Run(() => _settings!.SaveAsync(snapshot, timeout.Token), timeout.Token);
+        }
+        finally { _settingsWrites.Release(); }
     }
 
     private async void OnWindowClosing(object? sender, CancelEventArgs e)

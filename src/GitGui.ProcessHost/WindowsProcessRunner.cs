@@ -41,7 +41,7 @@ public sealed class WindowsProcessRunner : IProcessRunner
         try
         {
             stop.Token.ThrowIfCancellationRequested();
-            var payload = JsonSerializer.SerializeToUtf8Bytes(request);
+            var payload = JsonSerializer.SerializeToUtf8Bytes(request, RequestJson.Default.ProcessRequest);
             if (payload.Length > 128 * 1024) throw new ArgumentException("RequestTooLarge");
             job = new ProcessJob();
             started = host.Start();

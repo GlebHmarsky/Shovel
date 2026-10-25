@@ -11,8 +11,20 @@
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True"
         AutomationProperties.AutomationId="MainWindow">
   <Window.Resources>
+    <Style x:Key="AuthorHighlightText" TargetType="TextBlock">
+      <Style.Triggers>
+        <MultiDataTrigger>
+          <MultiDataTrigger.Conditions>
+            <Condition Binding="{Binding IsSameAuthor}" Value="True" />
+            <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="False" />
+            <Condition Binding="{Binding HighContrast, RelativeSource={RelativeSource AncestorType=Window}}" Value="False" />
+          </MultiDataTrigger.Conditions>
+          <Setter Property="Foreground" Value="#FFF2A8" />
+        </MultiDataTrigger>
+      </Style.Triggers>
+    </Style>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-    <Style x:Key="HistoryText" TargetType="TextBlock">
+    <Style x:Key="HistoryText" TargetType="TextBlock" BasedOn="{StaticResource AuthorHighlightText}">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="8,0" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -26,45 +38,36 @@
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
-    <Border Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
-      <DockPanel>
-        <Button DockPanel.Dock="Left" Content="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" AutomationProperties.AutomationId="OpenRepository" />
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-          <Button Content="{loc:Text Key=MoveLeft}" Command="{Binding MoveLeftCommand}" ToolTip="{loc:Text Key=MoveLeft}" />
-          <Button Content="{loc:Text Key=MoveRight}" Command="{Binding MoveRightCommand}" ToolTip="{loc:Text Key=MoveRight}" />
-          <Button Content="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
-        </StackPanel>
-        <ListBox ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}" IsEnabled="{Binding CanNavigate}"
-                 BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                 AutomationProperties.Name="{loc:Text Key=RepositoryTabs}" AutomationProperties.AutomationId="RepositoryTabs">
-          <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
-          <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="8,5" ToolTip="{Binding Directory}" FlowDirection="LeftToRight" /></DataTemplate></ListBox.ItemTemplate>
-          <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="AutomationProperties.Name" Value="{Binding Label}" /></Style></ListBox.ItemContainerStyle>
-        </ListBox>
-      </DockPanel>
-    </Border>
-    <Grid Grid.Row="1" Margin="12,10">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <StackPanel Orientation="Horizontal" ToolTip="{loc:Text Key=GitUnavailable}" ToolTipService.ShowOnDisabled="True">
-        <Button Content="{loc:Text Key=Fetch}" IsEnabled="False" AutomationProperties.AutomationId="Fetch" />
-        <Button Content="{loc:Text Key=Pull}" IsEnabled="False" />
-        <Button Content="{loc:Text Key=Push}" IsEnabled="False" />
-        <Button Content="{loc:Text Key=Stash}" IsEnabled="False" />
-      </StackPanel>
-      <StackPanel Grid.Column="1" HorizontalAlignment="Center" Margin="12,0">
-        <TextBlock Text="{Binding RepositoryTitle}" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
-        <TextBlock Text="{Binding OperationStatus}" FontSize="11" TextAlignment="Center" AutomationProperties.LiveSetting="Polite" />
-      </StackPanel>
-      <StackPanel Grid.Column="2" Orientation="Horizontal" ToolTip="{loc:Text Key=ToolsUnavailable}" ToolTipService.ShowOnDisabled="True">
-        <Button Content="{loc:Text Key=Explorer}" IsEnabled="False" />
-        <Button Content="{loc:Text Key=Terminal}" IsEnabled="False" />
-        <Button Content="{loc:Text Key=Editor}" IsEnabled="False" />
-        <Button Content="{loc:Text Key=Tools}" IsEnabled="False" />
-      </StackPanel>
-    </Grid>
-    <Border Grid.Row="2" Padding="16,8" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
-      <TextBlock Text="{loc:Text Key=FoundationNotice}" TextWrapping="Wrap" />
-    </Border>
+    <Menu AutomationProperties.Name="{loc:Text Key=MainMenu}">
+      <MenuItem Header="{loc:Text Key=RepositoryMenu}">
+        <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
+        <MenuItem Header="{loc:Text Key=RefreshRepository}" Command="{Binding RefreshRepositoryCommand}" />
+        <MenuItem Header="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" />
+        <MenuItem Header="{loc:Text Key=FirstHistoryPage}" Command="{Binding FirstHistoryCommand}" />
+        <Separator />
+        <MenuItem Header="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
+        <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
+        <MenuItem Header="{loc:Text Key=RepositoryApprovalMenu}">
+          <MenuItem Header="{loc:Text Key=ApproveAutomaticHistory}" Command="{Binding ApproveRepositoryCommand}" />
+          <MenuItem Header="{loc:Text Key=RevokeApproval}" Command="{Binding RevokeApprovalCommand}" />
+        </MenuItem>
+        <Separator />
+        <MenuItem Header="{loc:Text Key=MoveLeft}" Command="{Binding MoveLeftCommand}" />
+        <MenuItem Header="{loc:Text Key=MoveRight}" Command="{Binding MoveRightCommand}" />
+        <MenuItem Header="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
+      </MenuItem>
+    </Menu>
+    <ListBox Grid.Row="1" ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}" IsEnabled="{Binding CanNavigate}"
+             BorderThickness="0,0,0,1" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+             AutomationProperties.Name="{loc:Text Key=RepositoryTabs}" AutomationProperties.AutomationId="RepositoryTabs">
+      <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+      <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="12,8" ToolTip="{Binding Directory}" FlowDirection="LeftToRight" /></DataTemplate></ListBox.ItemTemplate>
+      <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="AutomationProperties.Name" Value="{Binding Label}" /></Style></ListBox.ItemContainerStyle>
+    </ListBox>
+    <DockPanel Grid.Row="2" Margin="16,6">
+      <TextBlock DockPanel.Dock="Right" Text="{Binding OperationStatus}" FontSize="11" AutomationProperties.LiveSetting="Polite" />
+      <TextBlock Text="{Binding RepositoryTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+    </DockPanel>
     <Grid Grid.Row="3">
       <Grid.ColumnDefinitions>
         <ColumnDefinition x:Name="SidebarColumn" Width="210" MinWidth="160" MaxWidth="320" />
@@ -100,9 +103,6 @@
                       IsEnabled="{Binding CanNavigate}" MinWidth="190" Margin="4,0,8,0" VerticalContentAlignment="Center"
                       ToolTip="{Binding HistoryScopeHelp}" AutomationProperties.HelpText="{Binding HistoryScopeHelp}"
                       AutomationProperties.Name="{loc:Text Key=HistoryScope}" AutomationProperties.AutomationId="HistoryScope" />
-            <Button Content="{loc:Text Key=InspectRepository}" Command="{Binding RefreshRepositoryCommand}" AutomationProperties.AutomationId="RefreshRepository" />
-            <Button Content="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" AutomationProperties.AutomationId="CancelOperation" />
-            <Button Content="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
           </WrapPanel>
           <DockPanel Grid.Row="1" Margin="4,0,4,8">
             <TextBlock DockPanel.Dock="Right" Text="{Binding GitStatus}" Margin="10,0,0,0" FontSize="11" VerticalAlignment="Center" />
@@ -122,6 +122,18 @@
                     VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True"
                     ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"
                     AutomationProperties.Name="{loc:Text Key=CommitHistoryTable}" AutomationProperties.AutomationId="CommitHistory">
+            <DataGrid.Style>
+              <Style TargetType="DataGrid">
+                <Setter Property="Background" Value="#242424" />
+                <Setter Property="Foreground" Value="White" />
+                <Setter Property="RowBackground" Value="#242424" />
+                <Style.Triggers><DataTrigger Binding="{Binding HighContrast, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                  <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+                  <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+                  <Setter Property="RowBackground" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+                </DataTrigger></Style.Triggers>
+              </Style>
+            </DataGrid.Style>
             <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="AutomationProperties.Name" Value="{Binding AccessibilityLabel}" /></Style></DataGrid.RowStyle>
             <DataGrid.CellStyle><Style TargetType="DataGridCell"><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="AutomationProperties.HelpText" Value="{Binding Column.Header, RelativeSource={RelativeSource Self}}"/></Style></DataGrid.CellStyle>
             <DataGrid.Columns>
@@ -135,7 +147,7 @@
                 <DataGridTemplateColumn.CellTemplate><DataTemplate>
                   <DockPanel Margin="8,0" VerticalAlignment="Center">
                     <TextBlock DockPanel.Dock="Left" Text="{Binding RefPreview}" ToolTip="{Binding RefLabels}" FontWeight="SemiBold" MaxWidth="200" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
-                    <TextBlock Text="{Binding Description}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Description}" TextTrimming="CharacterEllipsis" Style="{StaticResource AuthorHighlightText}" />
                   </DockPanel>
                 </DataTemplate></DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
@@ -162,7 +174,7 @@
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows"
                       Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
                       AutomationProperties.Name="{loc:Text Key=ResizeDetails}" AutomationProperties.AutomationId="DetailsSplitter" />
-        <TabControl Grid.Row="2" Margin="12,8" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
+        <TabControl SelectedIndex="{Binding DetailsIndex}" Grid.Row="2" Margin="12,8" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
           <TabItem Header="{loc:Text Key=Commit}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="14,10">
@@ -200,10 +212,15 @@
               </StackPanel>
             </ScrollViewer>
           </TabItem>
-          <TabItem Header="{loc:Text Key=RawOutput}"><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RawOutput}" /></TabItem>
-          <TabItem Header="{loc:Text Key=ChangedFiles}"><TextBlock Text="{loc:Text Key=FilesEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
-          <TabItem Header="{loc:Text Key=Diff}"><TextBlock Text="{loc:Text Key=DiffEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
-          <TabItem Header="{loc:Text Key=FileTree}"><TextBlock Text="{loc:Text Key=TreeEmpty}" Margin="16" TextWrapping="Wrap" /></TabItem>
+          <TabItem Header="{loc:Text Key=Diagnostics}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12">
+              <TextBlock Text="{Binding GitStatus}" />
+              <TextBlock Text="{loc:Text Key=RawOutput}" FontWeight="SemiBold" />
+              <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="160" VerticalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RawOutput}" />
+              <TextBlock Text="{loc:Text Key=TimingNotice}" TextWrapping="Wrap" />
+              <TextBox Text="{Binding TimingDetails, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MaxHeight="160" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=TimingNotice}" />
+            </StackPanel></ScrollViewer>
+          </TabItem>
         </TabControl>
       </Grid>
     </Grid>

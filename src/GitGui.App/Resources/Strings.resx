@@ -43,7 +43,7 @@
   <data name="TreeEmpty" xml:space="preserve"><value>The selected commit’s file tree will be shown here when repository reading is implemented.</value></data>
   <data name="VersionFormat" xml:space="preserve"><value>Version {0}</value><comment>{0} is the installed application version, for example 0.1.0.</comment></data>
   <data name="LoadingSettings" xml:space="preserve"><value>Loading local settings…</value></data>
-  <data name="FoundationReady" xml:space="preserve"><value>Ready — open a trusted local repository</value></data>
+  <data name="FoundationReady" xml:space="preserve"><value>Ready — open a repository from the Repository menu.</value></data>
   <data name="SavingSettings" xml:space="preserve"><value>Saving layout and closing…</value></data>
   <data name="SettingsNewer" xml:space="preserve"><value>Settings were created by a newer version. Defaults are in use; the existing file will be preserved.</value></data>
   <data name="SettingsUnsupported" xml:space="preserve"><value>This settings format is unsupported. Defaults are in use; the existing file will be preserved.</value></data>
@@ -68,14 +68,16 @@
 {0}
 
 Choose only an installation you trust. This choice is not saved.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
-  <data name="TrustRepositoryQuestion" xml:space="preserve"><value>Trust this folder and its containing repository for metadata and commit-history inspection during this session?
+  <data name="TrustRepositoryQuestion" xml:space="preserve"><value>Allow automatic read-only history for this repository?
 
 {0}
 
-Git reads repository configuration and commit objects. This version requests no hooks, filters, signature checks or network operations. Reopened tabs require trust again.</value><comment>{0} is the selected absolute folder path.</comment></data>
+Shovel remembers this approval on this computer and checks the worktree and Git-directory identities before reading. History reads do not run hooks, filters, external diff tools, signers or network requests. This approval does not authorize future Git mutations. Revoke it from Repository → Repository approval.
+
+Only approve repositories you recognize; this is not a sandbox against malicious local software.</value><comment>{0} is the selected absolute folder path.</comment></data>
   <data name="TrustDeclined" xml:space="preserve"><value>Repository inspection was not authorized. No Git command was run for this folder.</value></data>
   <data name="TooManyRepositories" xml:space="preserve"><value>This preview supports up to 20 repository tabs. Close a tab before opening another.</value></data>
-  <data name="GitSelected" xml:space="preserve"><value>Git executable selected for this session. Refresh a trusted repository to validate it.</value></data>
+  <data name="GitSelected" xml:space="preserve"><value>Git executable selected; automatic history will retry.</value></data>
   <data name="GitNotChecked" xml:space="preserve"><value>Git has not been checked</value></data>
   <data name="GitVersionFormat" xml:space="preserve"><value>Git {0}</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
   <data name="NotInspected" xml:space="preserve"><value>Not inspected</value></data>
@@ -91,7 +93,7 @@ Git reads repository configuration and commit objects. This version requests no 
   <data name="OperationRevert" xml:space="preserve"><value>Revert</value></data>
   <data name="OperationSequencer" xml:space="preserve"><value>Sequencer</value></data>
   <data name="SnapshotTime" xml:space="preserve"><value>Last inspected: {0:G}. Use Refresh after external changes.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
-  <data name="TrustRequired" xml:space="preserve"><value>This tab is restored without reading the repository. Choose Trust / Refresh to inspect it.</value></data>
+  <data name="TrustRequired" xml:space="preserve"><value>Repository has not been read.</value></data>
   <data name="InspectingDuration" xml:space="preserve"><value>Reading repository · {0:F1} s</value><comment>{0} is elapsed seconds.</comment></data>
   <data name="InspectingRepository" xml:space="preserve"><value>Reading repository and commit history…</value></data>
   <data name="RepositoryInspected" xml:space="preserve"><value>Repository metadata loaded. File status, history and diffs are not implemented yet.</value></data>
@@ -128,11 +130,11 @@ Git reads repository configuration and commit objects. This version requests no 
   <data name="CommitIdentity" xml:space="preserve"><value>{0} &lt;{1}&gt; · {2} (UTC{3})</value><comment>{0} name, {1} email, {2} date in original commit offset, {3} UTC offset.</comment></data>
   <data name="CommitRowAccessible" xml:space="preserve"><value>{0}; {1}; commit {2}; parents: {3}; references: {4}</value><comment>{0} subject, {1} author name, {2} abbreviated hash, {3} full parent hashes or localized root label, {4} reference labels.</comment></data>
   <data name="LoadOlderCommits" xml:space="preserve"><value>Load older commits</value></data>
-  <data name="HistoryNotLoaded" xml:space="preserve"><value>Open a repository or choose Trust / Refresh to load history.</value></data>
+  <data name="HistoryNotLoaded" xml:space="preserve"><value>Open a repository from the Repository menu to view its history.</value></data>
   <data name="HistoryLoading" xml:space="preserve"><value>Loading history…</value></data>
   <data name="HistoryUnborn" xml:space="preserve"><value>This branch has no commits yet.</value></data>
   <data name="HistoryMore" xml:space="preserve"><value>More history is available. Load older commits to see the next page.</value></data>
-  <data name="HistoryEnd" xml:space="preserve"><value>End of available history for this scope. Refresh to observe external changes.</value></data>
+  <data name="HistoryEnd" xml:space="preserve"><value>End of available history for this scope. Tab activation checks for refresh when the snapshot is older than 30 seconds.</value></data>
   <data name="HistoryShallowEnd" xml:space="preserve"><value>End of locally available history in this shallow clone. No additional objects were fetched.</value></data>
   <data name="HistoryFailed" xml:space="preserve"><value>History is unavailable. See the status and Git output, then refresh to retry.</value></data>
   <data name="HistoryLoaded" xml:space="preserve"><value>History loaded — select a commit to inspect it</value></data>
@@ -143,7 +145,7 @@ Git reads repository configuration and commit objects. This version requests no 
   <data name="HistoryScope" xml:space="preserve"><value>History scope</value></data>
   <data name="AllCommitsScope" xml:space="preserve"><value>Scope: local branches, remotes and tags · Filters: none</value></data>
   <data name="CurrentHeadScope" xml:space="preserve"><value>Scope: current HEAD ancestry (including detached) · Filters: none</value></data>
-  <data name="HistoryLimits" xml:space="preserve"><value>Pages: 200 rows · Read: 4 MiB / 15 s · Graph limit: 64 lanes · No total commit-count limit</value></data>
+  <data name="HistoryLimits" xml:space="preserve"><value>Page: 200 rows · Read: 4 MiB / 15 s · Graph: 64 lanes · Back navigation: 128 pages; First page in Repository · No total count limit</value></data>
   <data name="HistoryRange" xml:space="preserve"><value>Showing {0:N0}–{1:N0}</value></data>
   <data name="NewerCommits" xml:space="preserve"><value>Newer commits</value></data>
   <data name="HistoryEmptyAll" xml:space="preserve"><value>No commits are reachable from local branches, remote-tracking branches or tags. For a detached HEAD, choose Current branch / HEAD.</value></data>
@@ -157,4 +159,36 @@ Git reads repository configuration and commit objects. This version requests no 
   <data name="CommitReferences" xml:space="preserve"><value>Branches and tags</value></data>
   <data name="AllCommitsHelp" xml:space="preserve"><value>Commits reachable from local branches, remote-tracking branches and tags. Reflog-only, unreachable, stash-only and detached-only commits are excluded. Switch to Current branch / HEAD to inspect detached history. This does not check out a branch.</value></data>
   <data name="CurrentHeadHelp" xml:space="preserve"><value>Ancestors of the inspected HEAD, including detached HEAD. Commits exclusive to other branches or tags are outside this scope. This does not check out a branch.</value></data>
+  <data name="MainMenu" xml:space="preserve"><value>Main menu</value></data>
+  <data name="RepositoryMenu" xml:space="preserve"><value>_Repository</value></data>
+  <data name="RefreshRepository" xml:space="preserve"><value>_Refresh history</value></data>
+  <data name="FirstHistoryPage" xml:space="preserve"><value>First history page</value></data>
+  <data name="Diagnostics" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="RepositoryApprovalMenu" xml:space="preserve"><value>Repository approval</value></data>
+  <data name="ApproveAutomaticHistory" xml:space="preserve"><value>Approve automatic history…</value></data>
+  <data name="RevokeApproval" xml:space="preserve"><value>Revoke automatic history approval</value></data>
+  <data name="ApprovalRequired" xml:space="preserve"><value>Automatic history is not approved for this repository. Choose Repository → Repository approval to approve it once.</value></data>
+  <data name="ApprovalChanged" xml:space="preserve"><value>This repository’s identity changed. Automatic reading has stopped. Reopen and approve the repository to continue.</value></data>
+  <data name="ApprovalIdentityUnavailable" xml:space="preserve"><value>The repository cannot be identified safely. Open an accessible worktree root on a local fixed drive; moved, missing or redirected paths require new approval.</value></data>
+  <data name="ApprovalRevoked" xml:space="preserve"><value>Automatic history approval revoked. Cached history was cleared.</value></data>
+  <data name="ApprovalSaveFailed" xml:space="preserve"><value>The approval change could not be saved. Revocation applies in this session only until settings can be saved; no new approval was granted. Check settings access before exiting.</value></data>
+  <data name="HistoryCheckingCached" xml:space="preserve"><value>Showing cached history while checking repository identity…</value></data>
+  <data name="HistoryRefreshing" xml:space="preserve"><value>Refreshing asynchronously; the previous page remains visible and may be stale.</value></data>
+  <data name="HistoryRefreshFailed" xml:space="preserve"><value>Refresh failed. The previous page remains visible and may be stale. See Repository → Diagnostics; retry with Refresh.</value></data>
+  <data name="HistoryRefreshCancelled" xml:space="preserve"><value>Read cancelled. The previous page remains visible and may be stale.</value></data>
+  <data name="HistoryCached" xml:space="preserve"><value>Cached history shown. Refresh checks external changes.</value></data>
+  <data name="SameAuthorAccessible" xml:space="preserve"><value>{0}. Same author as the selected commit.</value></data>
+  <data name="TimingSample" xml:space="preserve"><value>{0}: {1:N1} ms</value></data>
+  <data name="TimingNotice" xml:space="preserve"><value>Recent in-memory stage durations (nested stages overlap). No paths or repository content are recorded.</value></data>
+  <data name="TimingShell" xml:space="preserve"><value>Shell creation</value></data>
+  <data name="TimingSettings" xml:space="preserve"><value>Settings restoration</value></data>
+  <data name="TimingIdentity" xml:space="preserve"><value>Repository identity</value></data>
+  <data name="TimingDiscovery" xml:space="preserve"><value>Git discovery</value></data>
+  <data name="TimingInspection" xml:space="preserve"><value>Repository inspection</value></data>
+  <data name="TimingReferences" xml:space="preserve"><value>Reference enumeration</value></data>
+  <data name="TimingHistory" xml:space="preserve"><value>History read</value></data>
+  <data name="TimingParsing" xml:space="preserve"><value>History parsing</value></data>
+  <data name="TimingGraph" xml:space="preserve"><value>Graph construction</value></data>
+  <data name="TimingFormatting" xml:space="preserve"><value>Row formatting</value></data>
+  <data name="TimingBinding" xml:space="preserve"><value>UI binding</value></data>
 </root>

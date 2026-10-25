@@ -52,7 +52,7 @@ internal static partial class Program
             {
                 var runner = new ModelRunner(first);
                 var interaction = new ModelInteraction(first);
-                var model = new ShellViewModel(new(runner), interaction);
+                var model = new ShellViewModel(new(runner), interaction, new ModelIdentities());
                 model.CompleteStartup(new(new() { RepositoryPaths = [first, second], SelectedRepositoryPath = second }, SettingsLoadStatus.Loaded));
                 Expect(runner.Calls == 0 && interaction.TrustRequests == 0 && model.SelectedRepository?.Directory == second, "Restoring a profile must not execute Git");
                 model.MoveLeftCommand.Execute(null);
@@ -62,16 +62,17 @@ internal static partial class Program
                 Expect(model.SelectedRepository?.Directory == first, "Closing a tab selects an existing tab");
                 return Task.CompletedTask;
             });
-            await Check("Declining repository trust performs no executable discovery or repository read", () =>
+            await Check("Declining repository trust performs no executable discovery or repository read", async () =>
             {
                 var runner = new ModelRunner(first);
                 var interaction = new ModelInteraction(first);
-                var model = new ShellViewModel(new(runner), interaction);
+                var model = new ShellViewModel(new(runner), interaction, new ModelIdentities());
                 model.CompleteStartup(new(new(), SettingsLoadStatus.Defaults));
                 model.OpenRepositoryCommand.Execute(null);
+                await model.WaitForIdleAsync();
                 model.RefreshRepositoryCommand.Execute(null);
-                Expect(interaction.TrustRequests == 2 && runner.Calls == 0 && !model.IsBusy && model.SelectedRepository?.Snapshot is null, "Denied trust must not be remembered as consent");
-                return Task.CompletedTask;
+                await model.WaitForIdleAsync();
+                Expect(interaction.TrustRequests == 1 && runner.Calls == 0 && !model.IsBusy && model.SelectedRepository?.Snapshot is null, "Denied trust must not be remembered as consent");
             });
             await Check("Shutdown cancels active reads and rejects new work before saving", async () =>
             {
@@ -100,7 +101,7 @@ internal static partial class Program
             });
             await Check("Late history completion cannot leak rows into another repository tab", async () =>
             {
-                var runner = new ModelRunner(first) { HoldHistory = true };
+                var runner = new ModelRunner(first) { HoldHistory = true, IgnoreHistoryCancellation = true };
                 runner.Release.TrySetResult();
                 var model = CreateModel(runner, first);
                 model.OpenRepositoryCommand.Execute(null);
@@ -206,7 +207,7 @@ internal static partial class Program
                     Expect(model.Commits.Count == 200 && model.Commits.All(row => row.Commit.Hash != selection) && model.HistoryRange.Contains("400"), "Older navigation replaces the page and reports its range");
                     model.NewerHistoryCommand.Execute(null);
                     await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
-                    Expect(model.Commits.Any(row => row.Commit.Hash == selection) && !model.NewerHistoryCommand.CanExecute(null), "Newer navigation returns to the first page");
+                    Expect(model.SelectedCommit?.Commit.Hash == selection && !model.NewerHistoryCommand.CanExecute(null), "Newer navigation returns to the first page");
                     var window = new MainWindow(model);
                     try
                     {
@@ -218,6 +219,8 @@ internal static partial class Program
                     finally { window.Close(); }
                 });
             }
+
+            await RunAutomaticHistoryChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)
             {
@@ -255,12 +258,16 @@ internal static partial class Program
 
     private static ShellViewModel CreateModel(ModelRunner runner, string directory)
     {
-        var model = new ShellViewModel(new(runner), new ModelInteraction(directory) { Trust = true });
+        var model = new ShellViewModel(new(runner), new ModelInteraction(directory) { Trust = true }, new ModelIdentities());
         model.CompleteStartup(new(new(), SettingsLoadStatus.Defaults));
         model.ChooseGitCommand.Execute(null);
         return model;
     }
 
+    private sealed class ModelIdentities : IRepositoryIdentityProvider
+    {
+        public Task<RepositoryIdentity> ReadAsync(string path, CancellationToken token) => Task.FromResult(new RepositoryIdentity(path, path, path, new string('A', 64)));
+    }
     private sealed class ModelInteraction(string directory) : IUserInteraction
     {
         public bool Trust { get; init; }
@@ -295,6 +302,8 @@ internal static partial class Program
         public TaskCompletionSource HistoryStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReleaseHistory { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool HoldHistory { get; init; }
+        public bool UseRequestDirectory { get; set; }
+        public bool IgnoreHistoryCancellation { get; init; }
         public int Calls;
         public bool Cancelled;
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken, Action<ProcessOutput>? output = null)
@@ -307,15 +316,16 @@ internal static partial class Program
             if (args.Contains("log"))
             {
                 HistoryStarted.TrySetResult();
-                if (HoldHistory) await ReleaseHistory.Task.WaitAsync(cancellationToken);
+                if (HoldHistory) await ReleaseHistory.Task.WaitAsync(IgnoreHistoryCancellation ? CancellationToken.None : cancellationToken);
                 var row = string.Join('\0', "abcdef", "", "A", "a@example.invalid", "2026-10-23T10:00:00+00:00", "C", "c@example.invalid", "2026-10-23T10:00:00+00:00", "Subject\n") + '\0';
                 return new(ProcessOutcome.Exited, 0, Encoding.UTF8.GetBytes(row), [], TimeSpan.Zero);
             }
             if (args.Contains("for-each-ref")) return new(ProcessOutcome.Exited, 0,
                 Encoding.UTF8.GetBytes("refs/heads/main\0abcdef\0commit\0\0\n"), [], TimeSpan.Zero);
+            var location = UseRequestDirectory ? request.WorkingDirectory : directory;
             var value = args.Contains("--version") ? "git version 2.51.1" :
                 args.Contains("--is-shallow-repository") ? "false" :
-                args.Contains("--is-inside-work-tree") ? "true" :
+                args.Contains("--is-inside-work-tree") ? "true\n" + location + "\n" + location + "\n" + location :
                 args.Contains("symbolic-ref") ? "main" : args.Contains("--verify") ? "abcdef" : directory;
             return new(ProcessOutcome.Exited, 0, Encoding.UTF8.GetBytes(value + "\n"), [], TimeSpan.Zero);
         }

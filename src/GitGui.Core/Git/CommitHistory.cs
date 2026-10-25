@@ -1,4 +1,5 @@
 using System.Globalization;
+using GitGui.Core.Diagnostics;
 using System.Text;
 
 namespace GitGui.Core.Git;
@@ -32,6 +33,7 @@ public sealed partial class RepositoryReader
     public Task<HistorySession> OpenHistoryAsync(GitInstallation git, RepositorySnapshot repository,
         HistoryScope scope, CancellationToken token) => Task.Run(async () =>
     {
+        using var timing = trace?.Measure(TimingStage.References);
         var state = await ReadHistoryStateAsync(git, repository, token).ConfigureAwait(false);
         var refs = new List<CommitRef>();
         foreach (var record in state.Refs.Split('\n', StringSplitOptions.RemoveEmptyEntries))
@@ -57,20 +59,37 @@ public sealed partial class RepositoryReader
             refs.Add(new(name, hash));
         }
         if (repository.Commit is not null) refs.Add(new("HEAD", repository.Commit));
-        var after = await ReadHistoryStateAsync(git, repository, token).ConfigureAwait(false);
-        if (after.Fingerprint != state.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
         return new HistorySession(repository, scope, state.Fingerprint, refs.ToArray(), state.IsShallow);
     }, token);
 
+    public async Task<CommitHistory> ReadInitialHistoryAsync(GitInstallation git, RepositorySnapshot repository,
+        HistoryScope scope, CancellationToken token)
+    {
+        var session = await OpenHistoryAsync(git, repository, scope, token).ConfigureAwait(false);
+        return await ReadPageAsync(git, session, HistoryCursor.Start, token, HistoryPageSize, freshSession: true).ConfigureAwait(false);
+    }
+
     public Task<CommitHistory> ReadHistoryPageAsync(GitInstallation git, HistorySession session,
-        HistoryCursor cursor, CancellationToken token, int pageSize = HistoryPageSize) => Task.Run(async () =>
+        HistoryCursor cursor, CancellationToken token, int pageSize = HistoryPageSize) => ReadPageAsync(git, session, cursor, token, pageSize, freshSession: false);
+
+    private Task<CommitHistory> ReadPageAsync(GitInstallation git, HistorySession session,
+        HistoryCursor cursor, CancellationToken token, int pageSize, bool freshSession) => Task.Run(async () =>
     {
         if (pageSize is < 1 or > HistoryPageSize || cursor.Offset < 0) throw new ArgumentOutOfRangeException(nameof(pageSize));
-        var before = await ReadHistoryStateAsync(git, session.Repository, token).ConfigureAwait(false);
-        if (before.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
+        using var timing = trace?.Measure(TimingStage.History);
+        if (!freshSession)
+        {
+            var before = await ReadHistoryStateAsync(git, session.Repository, token).ConfigureAwait(false);
+            if (before.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
+        }
         var empty = session.Scope == HistoryScope.CurrentHead ? session.Repository.Commit is null :
             !session.References.Any(reference => reference.Name != "HEAD");
-        if (empty) return new CommitHistory(session, cursor, null, []);
+        if (empty)
+        {
+            var emptyState = await ReadHistoryStateAsync(git, session.Repository, token).ConfigureAwait(false);
+            if (emptyState.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
+            return new CommitHistory(session, cursor, null, []);
+        }
         string[] roots = session.Scope == HistoryScope.AllCommits ? ["--branches", "--remotes", "--tags"] : [session.Repository.Commit!];
         // Re-walk an unchanged ref snapshot with --skip. Retain only one page of messages/rows.
         // Deep walks can hit the process deadline; they report a retryable error, never 'end'.
@@ -84,11 +103,13 @@ public sealed partial class RepositoryReader
         RequireSuccess(result);
         var after = await ReadHistoryStateAsync(git, session.Repository, token).ConfigureAwait(false);
         if (after.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
-        var commits = ParseHistory(result.StandardOutput);
+        IReadOnlyList<CommitRecord> commits;
+        using (trace?.Measure(TimingStage.Parsing)) commits = ParseHistory(result.StandardOutput);
         if (commits.Count > pageSize + 1 || (cursor.ExpectedFirst is not null &&
             (commits.Count == 0 || commits[0].Hash != cursor.ExpectedFirst))) throw new GitReadException(GitFailure.ChangedDuringRead);
         var shown = commits.Take(pageSize).ToArray();
-        var graph = CommitGraph.BuildPage(shown, cursor.Graph, token);
+        GraphPage graph;
+        using (trace?.Measure(TimingStage.Graph)) graph = CommitGraph.BuildPage(shown, cursor.Graph, token);
         var labels = session.References.ToLookup(reference => reference.Hash, StringComparer.Ordinal);
         return new CommitHistory(session, cursor, commits.Count > pageSize
             ? new HistoryCursor(checked(cursor.Offset + shown.Length), graph.Next, commits[pageSize].Hash) : null,

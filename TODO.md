@@ -4,17 +4,22 @@ Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 =
 
 ## Current phase
 
-All Commits / F1c / 0.4.0 is complete. The user prioritized complete named-ref history before other features; no interactive launch is authorized. The 0.4.1 follow-up removes visible column headings based on user screenshot feedback; 49 headless checks and normal/minimum render review passed.
+**Delivered: automatic history and responsiveness / 0.5.0.** Prioritized by the user before further Git features. No interactive launch or desktop control. Next work starts with the validation priorities below.
+
+- [x] **P0 — Measure first.** Repeated headless settings/discovery/inspection/refs/history/graph/UI timings; separate first load, cached tab switches and refresh. Evidence and limits in roadmap.
+- [x] **P0 — Remember revocable repository approval safely.** Audited automatic reads, identity checks before commands, migration without granting old paths consent.
+- [x] **P1 — Automatic selected-tab history.** Startup/selection loading, bounded per-tab rows/page/scope/selection/scroll; retained rows on refresh/failure and rejected obsolete work.
+- [x] **P1 — Simplify history controls and highlight matching authors.** Implemented Repository menu, accessible same-author indication and headless high-contrast fallback checks.
+- [x] **P0 — Verify and deliver.** Restore/build/publish, 58 disposable/headless checks, before/after report, normal/minimum offscreen render review and matching ignored 0.5.0 preview. Commit recorded in Git history.
 
 ## Next priorities
 
-- [ ] **P1 — Manual preview review when the user is ready.** Inspect trust/open/refresh/cancel, history selection/scrolling, tab reorder/close and normal exit/relaunch. Headless checks are separate evidence; no desktop control in the current delivery.
-- [ ] **P1 — Refine history after this increment.** Individual ref selection and search/filter with truthful graph ancestry; preserve per-page selection/scroll through navigation. Profile deep offset walks and compact page-cursor growth before large-repository claims.
-- [ ] **P0 — Add read-only status.** Parse porcelain v2 with NUL paths; distinguish staged/unstaged/untracked/ignored, rename/delete and conflict entries. Compare disposable fixtures with CLI; keep optional locks, helpers and lazy fetch controlled.
-- [ ] **P0 — Extend refresh/state coordination alongside status.** Reconcile external changes/focus/resume with bounded work and generation checks. Add more interrupted-sequence fixtures. Before mutations, coordinate by common-directory identity across instances; before prompts/tools, extend shutdown admission control.
-- [ ] **P1 — Add selected-commit file list, then diffs.** Real bounded data, exact path bytes, binary/EOL/large-content cases; enable controls only when their functions exist.
-- [ ] **P1 — Broaden shell validation.** Target Windows 10 plus Windows 11; mixed DPI, high contrast, screen reader, keyboard focus and +40%/RTL layouts at minimum size. Add dark/light theme and a plural-capable formatter before first count-dependent message. Preserve complete resource messages.
-- [ ] **P1 — Record repeatable performance baselines.** Use the requirements' fixture/hardware/sample protocol; shell startup, private bytes, idle CPU and responsiveness separately. No p95 or lightweight claim from one launch.
+- [ ] **P0 — Validate startup on representative repositories before more features.** With separate authorization, measure actual cold/warm launch, first visible rows and keyboard/tab responsiveness on Windows 10/11; no interactive launch is authorized now. Include custom Git installations and real profile restart/revocation.
+- [ ] **P1 — Extend performance fixtures.** Packed 100,000-commit/many-ref histories, deep-offset paging, cancellation under load, app/child peak memory and five-minute idle CPU; compare the measured F1d baseline before changing the runner further.
+- [ ] **P1 — Broaden accessibility/layout validation.** Mixed DPI, actual high contrast/screen reader, keyboard focus, +40%/RTL layouts and full theme selection. Headless high-contrast color fallback is not an OS accessibility pass.
+- [ ] **P2 — Resume history improvements after responsiveness review.** Individual ref selection/search with truthful ancestry; keep scope, selected hash and scroll preservation.
+- [ ] **P2 — Selected-commit file list, then diffs.** Bounded real data, exact paths and binary/EOL/large-content cases; no placeholders.
+- [ ] **P2 — Read-only status and reconciliation.** Porcelain-v2/NUL parser, staged/unstaged/untracked/ignored/conflict distinctions; extend focus/resume state handling before any mutation or external-tool work.
 
 ## Backlog
 
@@ -32,6 +37,8 @@ All Commits / F1c / 0.4.0 is complete. The user prioritized complete named-ref h
 - [ ] **P1 before first installer — Identity:** product name Shovel is confirmed; finalize publisher and permanent settings/install identity; plan migration from the provisional Foundation profile.
 
 ## Completed work
+
+- [x] **P1 — Automatic history / 0.5.0.** Completed the current-phase scope above on 2026-10-25. Paired first-page median 3.89 → 2.29 seconds; warm cached switches issue no Git commands. Actual desktop launch/input, Windows 10, larger histories and memory/idle budgets remain unverified.
 
 - [x] **P1 — Add selected application icon / 0.4.2.** Embed the front-facing shovel artwork in the executable and main window; preserve source PNG and nine ICO sizes. Release build/publish and all 49 headless checks passed on 2026-10-25. No interactive launch; desktop/taskbar cache behavior remains unverified.
 

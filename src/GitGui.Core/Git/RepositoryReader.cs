@@ -1,4 +1,5 @@
 using System.Text;
+using GitGui.Core.Diagnostics;
 using System.Text.RegularExpressions;
 using GitGui.Core.Processes;
 
@@ -18,13 +19,14 @@ public enum RepositoryOperation { None = 0, Merge = 1, Rebase = 2, ApplyMailbox 
 public sealed record RepositorySnapshot(string Worktree, string GitDirectory, string CommonDirectory,
     string? Branch, string? Commit, HeadKind HeadKind, RepositoryOperation Operation, DateTimeOffset ReadAt);
 
-/// <summary>Read-only metadata commands. Caller must obtain session trust before InspectAsync.</summary>
-public sealed partial class RepositoryReader(IProcessRunner runner)
+/// <summary>Read-only metadata commands. Caller must validate remembered repository approval before automatic reads.</summary>
+public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceTrace? trace = null)
 {
     public static Version MinimumVersion { get; } = new(2, 47, 0);
 
     public Task<GitInstallation> DiscoverAsync(string? explicitExecutable, CancellationToken token) => Task.Run(async () =>
     {
+        using var timing = trace?.Measure(TimingStage.Discovery);
         var candidates = explicitExecutable is not null ? [explicitExecutable] : new[]
         {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "cmd", "git.exe"),
@@ -43,14 +45,18 @@ public sealed partial class RepositoryReader(IProcessRunner runner)
 
     public Task<RepositorySnapshot> InspectAsync(GitInstallation git, string approvedPath, CancellationToken token) => Task.Run(async () =>
     {
+        using var timing = trace?.Measure(TimingStage.Inspection);
         token.ThrowIfCancellationRequested();
         if (!Path.IsPathFullyQualified(approvedPath) || !Directory.Exists(approvedPath))
             throw new GitReadException(GitFailure.NotWorktree);
-        var inside = await Command("rev-parse", "--is-inside-work-tree");
-        if (Line(inside.StandardOutput) != "true") throw new GitReadException(GitFailure.NotWorktree);
-        var worktree = Path.GetFullPath(Line((await Command("rev-parse", "--show-toplevel")).StandardOutput));
-        var gitDirectory = Path.GetFullPath(Line((await Command("rev-parse", "--absolute-git-dir")).StandardOutput));
-        var common = Path.GetFullPath(Line((await Command("rev-parse", "--path-format=absolute", "--git-common-dir")).StandardOutput));
+        var locations = await Command("rev-parse", "--path-format=absolute", "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir", "--git-common-dir");
+        var lines = Text(locations.StandardOutput).TrimEnd('\r', '\n').Split('\n').Select(value => value.TrimEnd('\r')).ToArray();
+        if (lines.Length > 0 && lines[0] == "false") throw new GitReadException(GitFailure.NotWorktree);
+        if (lines.Length != 4 || lines[0] != "true" || lines.Skip(1).Any(value => !Path.IsPathFullyQualified(value) || value.Contains('\0')))
+            throw new GitReadException(GitFailure.InvalidOutput);
+        var worktree = Path.GetFullPath(lines[1]);
+        var gitDirectory = Path.GetFullPath(lines[2]);
+        var common = Path.GetFullPath(lines[3]);
         var before = await HeadAsync();
         var operation = ReadOperation(gitDirectory);
         var after = await HeadAsync();
@@ -62,8 +68,10 @@ public sealed partial class RepositoryReader(IProcessRunner runner)
 
         async Task<(string? Branch, string? Commit)> HeadAsync()
         {
-            var branch = await CommandAllowOne("symbolic-ref", "--quiet", "--short", "HEAD");
-            var commit = await CommandAllowOne("rev-parse", "--verify", "--quiet", "HEAD");
+            var branchRead = CommandAllowOne("symbolic-ref", "--quiet", "--short", "HEAD");
+            var commitRead = CommandAllowOne("rev-parse", "--verify", "--quiet", "HEAD");
+            await Task.WhenAll(branchRead, commitRead).ConfigureAwait(false);
+            var branch = await branchRead; var commit = await commitRead;
             var hash = commit.ExitCode == 0 ? Line(commit.StandardOutput) : null;
             if (hash is not null && (hash.Length == 0 || !hash.All(char.IsAsciiHexDigit))) throw new GitReadException(GitFailure.InvalidOutput);
             return (branch.ExitCode == 0 ? Line(branch.StandardOutput) : null, hash);
@@ -72,6 +80,8 @@ public sealed partial class RepositoryReader(IProcessRunner runner)
         async Task<ProcessResult> Command(params string[] args)
         {
             var result = await RunAsync(git.Executable, approvedPath, ReadArguments(args), token).ConfigureAwait(false);
+            if (args.Contains("--is-inside-work-tree") && Text(result.StandardOutput).StartsWith("false", StringComparison.Ordinal))
+                throw new GitReadException(GitFailure.NotWorktree);
             RequireSuccess(result);
             return result;
         }

@@ -1,4 +1,7 @@
 using System.Windows;
+using System.ComponentModel;
+using System.Windows.Media;
+using System.Windows.Threading;
 using System.Windows.Controls;
 using System.Windows.Data;
 using GitGui.App.ViewModels;
@@ -8,15 +11,62 @@ namespace GitGui.App.Views;
 
 public partial class MainWindow : Window
 {
+    public static readonly DependencyProperty HighContrastProperty = DependencyProperty.Register(nameof(HighContrast), typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
+    public bool HighContrast { get => (bool)GetValue(HighContrastProperty); set => SetValue(HighContrastProperty, value); }
+    private bool _restoringScroll;
+    private int _viewGeneration;
     public ShellViewModel ViewModel { get; }
     public MainWindow(ShellViewModel viewModel)
     {
         InitializeComponent();
         DataContext = ViewModel = viewModel;
+        HighContrast = SystemParameters.HighContrast;
+        SystemParameters.StaticPropertyChanged += OnSystemPropertyChanged;
+        viewModel.HistoryViewChanging += CaptureHistoryScroll;
+        viewModel.HistoryViewChanged += RestoreHistoryScroll;
+        Activated += (_, _) => viewModel.RefreshIfStale();
+        Closed += (_, _) =>
+        {
+            SystemParameters.StaticPropertyChanged -= OnSystemPropertyChanged;
+            viewModel.HistoryViewChanging -= CaptureHistoryScroll;
+            viewModel.HistoryViewChanged -= RestoreHistoryScroll;
+        };
         // Columns are outside the visual tree. Keep every computed graph lane visible when
         // the viewport narrows; the table can scroll horizontally instead of clipping edges.
         BindingOperations.SetBinding(HistoryTable.Columns[0], DataGridColumn.MinWidthProperty,
             new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
+    }
+
+    private void OnSystemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    { if (e.PropertyName == nameof(SystemParameters.HighContrast)) Dispatcher.InvokeAsync(() => HighContrast = SystemParameters.HighContrast); }
+    private void CaptureHistoryScroll(object? sender, EventArgs e)
+    {
+        if (!_restoringScroll && FindScroll(HistoryTable) is { } scroll)
+            ViewModel.SaveHistoryScroll(scroll.VerticalOffset, scroll.HorizontalOffset);
+    }
+    private void RestoreHistoryScroll(object? sender, EventArgs e)
+    {
+        var version = ++_viewGeneration;
+        var offsets = ViewModel.HistoryScroll;
+        _restoringScroll = true;
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (version != _viewGeneration) return;
+            HistoryTable.UpdateLayout();
+            if (FindScroll(HistoryTable) is { } scroll)
+            { scroll.ScrollToVerticalOffset(offsets.Vertical); scroll.ScrollToHorizontalOffset(offsets.Horizontal); }
+            _restoringScroll = false;
+        }, DispatcherPriority.Loaded);
+    }
+    private static ScrollViewer? FindScroll(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is ScrollViewer scroll) return scroll;
+            if (FindScroll(child) is { } descendant) return descendant;
+        }
+        return null;
     }
 
     // Read WPF geometry here; the settings model stores only plain values.

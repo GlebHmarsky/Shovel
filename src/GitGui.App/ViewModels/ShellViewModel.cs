@@ -3,8 +3,10 @@ using System.Diagnostics;
 using System.Windows.Threading;
 using GitGui.App.Localization;
 using GitGui.App.Services;
+using GitGui.Core.Diagnostics;
 using GitGui.Core.Git;
 using GitGui.Core.Settings;
+using GitGui.ProcessHost;
 
 namespace GitGui.App.ViewModels;
 
@@ -15,91 +17,113 @@ public sealed class ShellViewModel : ObservableObject
 {
     private readonly RepositoryReader? _reader;
     private readonly IUserInteraction? _interaction;
-    private readonly HashSet<string> _trustedPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IRepositoryIdentityProvider _identities;
+    private readonly Func<AppSettings, Task>? _persist;
+    private readonly PerformanceTrace _trace;
+    private readonly Dictionary<string, RepositoryApproval> _approvals = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Stopwatch _elapsed = new();
     private CancellationTokenSource? _operationCancellation;
     private Task _activeOperation = Task.CompletedTask;
     private GitInstallation? _git;
     private string? _explicitGit;
-    private long _generation;
-    private bool _stopping;
-    public IReadOnlyList<NavigationItem> Sections { get; } = Enum.GetValues<NavigationSection>()
-        .Select(section => new NavigationItem(section, UiText.Get(section.ToString()))).ToArray();
+    private long _generation, _useCounter;
+    private bool _stopping, _publishingState;
+    public static TimeSpan RefreshAge { get; } = TimeSpan.FromSeconds(30);
+    public const int CachedTabLimit = 3;
+    private HistoryViewState? State => SelectedRepository?.History;
+    public IReadOnlyList<NavigationItem> Sections { get; } = [new(NavigationSection.History, UiText.Get("History"))];
     public ObservableCollection<RepositoryTab> Repositories { get; } = [];
     public string Version => UiText.Format("VersionFormat", typeof(ShellViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
     private bool _isReady;
     public bool IsReady { get => _isReady; private set { if (Set(ref _isReady, value)) { RefreshCommands(); Changed(nameof(CanNavigate)); } } }
     private bool _isBusy;
-    public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(CanNavigate)); Changed(nameof(OperationStatus)); } } }
-    public bool CanNavigate => IsReady && !IsBusy;
+    public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(OperationStatus)); } } }
+    public bool CanNavigate => IsReady && !_stopping;
     public string OperationStatus => IsBusy ? UiText.Format("InspectingDuration", _elapsed.Elapsed.TotalSeconds) : UiText.Get("NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
     public string Status { get => _status; private set => Set(ref _status, value); }
-    private string _rawOutput = "";
-    public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
+    public string RawOutput => State?.RawOutput ?? "";
     private string _settingsNotice = "";
     public string SettingsNotice { get => _settingsNotice; private set => Set(ref _settingsNotice, value); }
     public string GitStatus => _git is null ? UiText.Get("GitNotChecked") : UiText.Format("GitVersionFormat", _git.Version);
-    private CommitHistory? _history;
-    private readonly List<HistoryCursor> _pageCursors = [];
-    private int _pageIndex;
-    private bool _historyNeedsRefresh;
+    public string TimingDetails => string.Join(Environment.NewLine, _trace.Snapshot().Select(sample => UiText.Format("TimingSample", UiText.Get("Timing" + sample.Stage), sample.Milliseconds)));
     public IReadOnlyList<HistoryScopeItem> HistoryScopes { get; } = [new(HistoryScope.AllCommits, UiText.Get("AllCommits")), new(HistoryScope.CurrentHead, UiText.Get("CurrentHeadHistory"))];
-    private HistoryScopeItem? _selectedHistoryScope;
     public HistoryScopeItem SelectedHistoryScope
     {
-        get => _selectedHistoryScope ?? HistoryScopes[0];
+        get => HistoryScopes.Single(item => item.Scope == (State?.Scope ?? HistoryScope.AllCommits));
         set
         {
-            if (value is null || IsBusy || !Set(ref _selectedHistoryScope, value)) return;
-            Changed(nameof(HistoryScopeDescription)); Changed(nameof(HistoryScopeHelp));
-            ClearHistory();
-            if (CanNavigate && SelectedRepository is not null && _reader is not null) BeginInspection(SelectedRepository);
+            if (value is null || State is not { } state || state.Scope == value.Scope) return;
+            state.Scope = value.Scope;
+            // A new scope must not mislabel rows from the preceding scope.
+            state.Clear(); PublishState();
+            if (CanNavigate) BeginInspection(SelectedRepository!, force: true);
         }
     }
     public string HistoryScopeDescription => UiText.Get(SelectedHistoryScope.Scope == HistoryScope.AllCommits ? "AllCommitsScope" : "CurrentHeadScope");
     public string HistoryScopeHelp => UiText.Get(SelectedHistoryScope.Scope == HistoryScope.AllCommits ? "AllCommitsHelp" : "CurrentHeadHelp");
-    public string HistoryRange => _history is null || Commits.Count == 0 ? "" : UiText.Format("HistoryRange", _history.Cursor.Offset + 1, _history.Cursor.Offset + Commits.Count);
-
-    private IReadOnlyList<CommitRow> _commits = [];
-    public IReadOnlyList<CommitRow> Commits { get => _commits; private set { Set(ref _commits, value); Changed(nameof(GraphWidth)); } }
+    public string HistoryRange => State?.Page is not { } page || Commits.Count == 0 ? "" : UiText.Format("HistoryRange", page.Cursor.Offset + 1, page.Cursor.Offset + Commits.Count);
+    public IReadOnlyList<CommitRow> Commits => State?.Rows ?? [];
     public double GraphWidth => Views.CommitGraphCell.WidthFor(Commits.Count == 0 ? 1 : Commits.Max(row => row.Graph.LaneCount));
-    private CommitRow? _selectedCommit;
-    public CommitRow? SelectedCommit { get => _selectedCommit; set => Set(ref _selectedCommit, value); }
-    private string _historyNotice = UiText.Get("HistoryNotLoaded");
-    public string HistoryNotice { get => _historyNotice; private set => Set(ref _historyNotice, value); }
-    public bool IsHistory => SelectedSection.Section == NavigationSection.History;
-    private NavigationItem _selectedSection;
-    public NavigationItem SelectedSection
+    public CommitRow? SelectedCommit
     {
-        get => _selectedSection;
-        set { if (value is not null && Set(ref _selectedSection, value)) { Changed(nameof(AreaTitle)); Changed(nameof(IsHistory)); } }
+        get => State?.Selected;
+        set
+        {
+            if (_publishingState || State is not { } state || state.Selected == value || (value is not null && !state.Rows.Contains(value))) return;
+            state.Selected = value; HighlightAuthors(); Changed();
+        }
     }
+    public string HistoryNotice => State?.Notice ?? UiText.Get("HistoryNotLoaded");
+    public bool IsHistory => true;
+    public NavigationItem SelectedSection { get => Sections[0]; set { } }
     private RepositoryTab? _selectedRepository;
     public RepositoryTab? SelectedRepository
     {
         get => _selectedRepository;
-        set { if (Set(ref _selectedRepository, value)) { _generation++; RawOutput = ""; ClearHistory(); RefreshCommands(); Changed(nameof(RepositoryTitle)); } }
+        set
+        {
+            if (_selectedRepository == value) return;
+            HistoryViewChanging?.Invoke(this, EventArgs.Empty);
+            _operationCancellation?.Cancel(); _generation++;
+            _selectedRepository = value;
+            if (value is not null) value.History.LastUse = ++_useCounter;
+            Status = value?.History.Error is { Length: > 0 } error ? error : UiText.Get(value?.History.Page is null ? "HistoryNotLoaded" : "HistoryCheckingCached");
+            Changed(); Changed(nameof(RepositoryTitle)); PublishState();
+            if (CanNavigate && value is not null) BeginInspection(value);
+        }
     }
+    // View-only scroll offsets are captured/restored by code-behind; no filesystem/UI coupling.
+    public event EventHandler? HistoryViewChanging;
+    public event EventHandler? HistoryViewChanged;
+    public (double Vertical, double Horizontal) HistoryScroll => (State?.VerticalOffset ?? 0, State?.HorizontalOffset ?? 0);
+    public void SaveHistoryScroll(double vertical, double horizontal)
+    { if (State is { } state) { state.VerticalOffset = vertical; state.HorizontalOffset = horizontal; } }
     public string RepositoryTitle => SelectedRepository?.Label ?? UiText.Get("NoRepositorySelected");
     public string AreaTitle => SelectedSection.Label;
     public SettingsLoadResult? LoadedSettings { get; private set; }
+    private int _detailsIndex;
+    public int DetailsIndex { get => _detailsIndex; set => Set(ref _detailsIndex, value); }
     public RelayCommand OpenRepositoryCommand { get; }
     public RelayCommand RefreshRepositoryCommand { get; }
     public RelayCommand CancelCommand { get; }
     public RelayCommand ChooseGitCommand { get; }
+    public RelayCommand ApproveRepositoryCommand { get; }
+    public RelayCommand RevokeApprovalCommand { get; }
+    public RelayCommand DiagnosticsCommand { get; }
     public RelayCommand CloseRepositoryCommand { get; }
     public RelayCommand MoveLeftCommand { get; }
     public RelayCommand MoveRightCommand { get; }
     public RelayCommand LoadMoreHistoryCommand { get; }
     public RelayCommand NewerHistoryCommand { get; }
+    public RelayCommand FirstHistoryCommand { get; }
 
-    public ShellViewModel(RepositoryReader? reader = null, IUserInteraction? interaction = null)
+    public ShellViewModel(RepositoryReader? reader = null, IUserInteraction? interaction = null,
+        IRepositoryIdentityProvider? identities = null, Func<AppSettings, Task>? persist = null, PerformanceTrace? trace = null)
     {
-        _reader = reader;
-        _interaction = interaction;
-        _selectedSection = Sections.Single(item => item.Section == NavigationSection.History);
+        _reader = reader; _interaction = interaction; _identities = identities ?? new WindowsRepositoryIdentity();
+        _persist = persist; _trace = trace ?? new();
         OpenRepositoryCommand = new(() =>
         {
             var path = _interaction!.ChooseRepository();
@@ -111,145 +135,275 @@ public sealed class ShellViewModel : ObservableObject
                 tab = new(path); Repositories.Add(tab);
             }
             SelectedRepository = tab;
-            SelectedSection = Sections.Single(item => item.Section == NavigationSection.History);
-            BeginInspection(tab);
-        }, () => CanNavigate && _reader is not null);
-        RefreshRepositoryCommand = new(() => BeginInspection(SelectedRepository!), () => CanNavigate && SelectedRepository is not null && _reader is not null);
-        LoadMoreHistoryCommand = new(() => _activeOperation = InspectAsync(SelectedRepository!, direction: 1),
-            () => CanNavigate && _git is not null && SelectedRepository is not null && _history?.HasMore == true && !_historyNeedsRefresh);
-        NewerHistoryCommand = new(() => _activeOperation = InspectAsync(SelectedRepository!, direction: -1),
-            () => CanNavigate && _git is not null && _history is not null && _pageIndex > 0 && !_historyNeedsRefresh);
-        CancelCommand = new(() => _operationCancellation?.Cancel(), () => IsBusy);
+            BeginInspection(tab, approve: true);
+        }, () => CanNavigate && !IsBusy && _reader is not null && _interaction is not null);
+        RefreshRepositoryCommand = new(() => BeginInspection(SelectedRepository!, force: true), () => CanRead && !IsBusy);
+        ApproveRepositoryCommand = new(() => BeginInspection(SelectedRepository!, approve: true, force: true), () => CanRead && !IsBusy && _interaction is not null);
+        RevokeApprovalCommand = new(RevokeApproval, () => CanNavigate && SelectedRepository is not null && _approvals.ContainsKey(SelectedRepository.Directory));
+        LoadMoreHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: 1), () => CanRead && !IsBusy && State?.Page?.HasMore == true && State.NeedsRefresh == false);
+        NewerHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: -1), () => CanRead && !IsBusy && State?.PageIndex > 0 && State.NeedsRefresh == false);
+        FirstHistoryCommand = new(() => BeginInspection(SelectedRepository!, force: true, firstPage: true), () => CanRead && !IsBusy && State?.Page?.Cursor.Offset > 0);
+        CancelCommand = new(() => { _operationCancellation?.Cancel(); }, () => IsBusy);
         ChooseGitCommand = new(() =>
         {
-            var path = _interaction!.ChooseGit();
-            if (path is null) return;
-            _explicitGit = path; _git = null; ClearHistory(); RefreshCommands(); Changed(nameof(GitStatus));
-            Status = UiText.Get("GitSelected");
-        }, () => CanNavigate && _interaction is not null);
+            var path = _interaction!.ChooseGit(); if (path is null) return;
+            _explicitGit = path; _git = null; Changed(nameof(GitStatus));
+            foreach (var tab in Repositories) tab.History.ValidatedAt = default;
+            if (SelectedRepository is not null) BeginInspection(SelectedRepository!, force: true);
+        }, () => CanNavigate && !IsBusy && _interaction is not null);
+        DiagnosticsCommand = new(() => { Changed(nameof(TimingDetails)); DetailsIndex = 2; }, () => CanNavigate);
         CloseRepositoryCommand = new(() =>
         {
-            var tab = SelectedRepository!;
-            Repositories.Remove(tab); _trustedPaths.Remove(tab.Directory);
+            var tab = SelectedRepository!; _operationCancellation?.Cancel();
+            Repositories.Remove(tab); _approvals.Remove(tab.Directory);
             SelectedRepository = Repositories.FirstOrDefault();
-        }, () => CanNavigate && SelectedRepository is not null);
+        }, () => CanNavigate && !IsBusy && SelectedRepository is not null);
         MoveLeftCommand = new(() => MoveTab(-1), () => CanNavigate && SelectedRepository is not null && Repositories.IndexOf(SelectedRepository) > 0);
         MoveRightCommand = new(() => MoveTab(1), () => CanNavigate && SelectedRepository is not null && Repositories.IndexOf(SelectedRepository) < Repositories.Count - 1);
         _timer.Tick += (_, _) => Changed(nameof(OperationStatus));
     }
+    private bool CanRead => CanNavigate && SelectedRepository is not null && _reader is not null;
 
     public void CompleteStartup(SettingsLoadResult result)
     {
         LoadedSettings = result;
-        SelectedSection = Sections.Single(item => item.Section == result.Settings.SelectedSection);
-        Repositories.Clear();
-        foreach (var path in result.Settings.RepositoryPaths) Repositories.Add(new(path));
+        Repositories.Clear(); _approvals.Clear();
+        foreach (var path in result.Settings.RepositoryPaths)
+        {
+            var tab = new RepositoryTab(path);
+            tab.History.Scope = result.Settings.RepositoryPreferences.FirstOrDefault(item => item.Path.Equals(path, StringComparison.OrdinalIgnoreCase))?.Scope ?? HistoryScope.AllCommits;
+            Repositories.Add(tab);
+        }
+        foreach (var approval in result.Settings.Approvals)
+            if (Repositories.Any(tab => tab.Directory.Equals(approval.Path, StringComparison.OrdinalIgnoreCase))) _approvals[approval.Path] = approval;
         SelectedRepository = Repositories.FirstOrDefault(item => string.Equals(item.Directory, result.Settings.SelectedRepositoryPath, StringComparison.OrdinalIgnoreCase)) ?? Repositories.FirstOrDefault();
         SettingsNotice = result.CanSave ? "" : UiText.Get(result.Status switch
         {
-            SettingsLoadStatus.NewerSchema => "SettingsNewer",
-            SettingsLoadStatus.UnsupportedSchema => "SettingsUnsupported",
-            SettingsLoadStatus.Invalid => "SettingsInvalid",
-            _ => "SettingsUnavailable"
+            SettingsLoadStatus.NewerSchema => "SettingsNewer", SettingsLoadStatus.UnsupportedSchema => "SettingsUnsupported",
+            SettingsLoadStatus.Invalid => "SettingsInvalid", _ => "SettingsUnavailable"
         });
-        IsReady = true;
-        Status = result.CanSave ? UiText.Get("FoundationReady") : SettingsNotice;
+        IsReady = true; Status = result.CanSave ? UiText.Get("FoundationReady") : SettingsNotice;
+        if (SelectedRepository is not null) BeginInspection(SelectedRepository);
     }
 
-    private void BeginInspection(RepositoryTab tab)
+    public void RefreshIfStale()
     {
-        if (!_trustedPaths.Contains(tab.Directory))
-        {
-            if (!_interaction!.ConfirmTrust(tab.Directory)) { Status = UiText.Get("TrustDeclined"); return; }
-            _trustedPaths.Add(tab.Directory);
-        }
-        _activeOperation = InspectAsync(tab);
+        if (CanRead && !IsBusy && State?.Page is not null && DateTimeOffset.UtcNow - State.ValidatedAt >= RefreshAge)
+            BeginInspection(SelectedRepository!);
     }
 
-    private async Task InspectAsync(RepositoryTab tab, int direction = 0)
+    private void BeginInspection(RepositoryTab tab, bool approve = false, bool force = false, int direction = 0, bool firstPage = false)
     {
+        if (_reader is null || !CanNavigate) return;
+        _operationCancellation?.Cancel();
+        var prior = _activeOperation;
         var generation = ++_generation;
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         _operationCancellation = cancellation;
-        _elapsed.Restart(); IsBusy = true; _timer.Start(); RawOutput = "";
-        var previous = direction != 0 ? _history : null;
-        var selectedHash = SelectedCommit?.Commit.Hash;
-        if (direction == 0) { tab.Invalidate(); ClearHistory(); }
-        HistoryNotice = UiText.Get("HistoryLoading");
-        Status = UiText.Get("InspectingRepository");
-        try
+        _elapsed.Restart(); IsBusy = true; _timer.Start();
+        _activeOperation = InspectAsync();
+
+        async Task InspectAsync()
         {
-            _git ??= await _reader!.DiscoverAsync(_explicitGit, cancellation.Token);
-            Changed(nameof(GitStatus));
-            if (direction == 0)
+            var state = tab.History;
+            try
             {
-                var snapshot = await _reader!.InspectAsync(_git, tab.Directory, cancellation.Token);
+                await prior; // Drain owned cancelled work before admitting the next read.
                 if (Obsolete()) return;
-                tab.Apply(snapshot);
+                if (!approve && !_approvals.ContainsKey(tab.Directory)) { state.Notice = UiText.Get("ApprovalRequired"); Status = state.Notice; return; }
+                state.Notice = UiText.Get(state.Page is null ? "HistoryLoading" : "HistoryCheckingCached"); Changed(nameof(HistoryNotice));
+                RepositoryIdentity identity;
+                try
+                {
+                    using (_trace.Measure(TimingStage.Identity)) identity = await _identities.ReadAsync(tab.Directory, cancellation.Token);
+                }
+                catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException or ArgumentException or System.ComponentModel.Win32Exception)
+                {
+                    if (Obsolete()) return;
+                    state.Clear(); tab.Invalidate(); _approvals.Remove(tab.Directory);
+                    state.Notice = UiText.Get("ApprovalIdentityUnavailable"); Status = state.Notice;
+                    await PersistApprovalsAsync(); return;
+                }
+                if (Obsolete()) return;
+                if (!_approvals.TryGetValue(tab.Directory, out var approval) || approval.Fingerprint != identity.Fingerprint)
+                {
+                    state.Clear(); tab.Invalidate(); _approvals.Remove(tab.Directory);
+                    if (!approve)
+                    {
+                        state.Notice = UiText.Get("ApprovalChanged"); Status = state.Notice;
+                        await PersistApprovalsAsync(); return;
+                    }
+                    if (!_interaction!.ConfirmTrust(tab.Directory)) { state.Notice = UiText.Get("TrustDeclined"); Status = state.Notice; return; }
+                    _approvals[tab.Directory] = new(tab.Directory, identity.Fingerprint);
+                    if (!await PersistApprovalsAsync()) { _approvals.Remove(tab.Directory); state.Notice = UiText.Get("ApprovalRequired"); Status = SettingsNotice; return; }
+                    if (Obsolete()) return;
+                    // Recheck after a user prompt or settings write; never grant a different target consent.
+                    if ((await _identities.ReadAsync(tab.Directory, cancellation.Token)).Fingerprint != identity.Fingerprint)
+                    { await RevokeChangedIdentityAsync(); return; }
+                }
+                if (!force && direction == 0 && state.Page is not null && !state.NeedsRefresh && DateTimeOffset.UtcNow - state.ValidatedAt < RefreshAge)
+                { state.Notice = LoadedNotice(state.Page); Status = UiText.Get("HistoryCached"); return; }
+                state.Notice = UiText.Get(state.Page is null ? "HistoryLoading" : "HistoryRefreshing"); Changed(nameof(HistoryNotice));
+                state.ValidatedAt = default; // A failed/cancelled refresh cannot later masquerade as fresh cached data.
+                Status = UiText.Get("InspectingRepository");
+                _git ??= await _reader.DiscoverAsync(_explicitGit, cancellation.Token); Changed(nameof(GitStatus));
+                var previous = state.Page;
+                var snapshot = direction == 0 ? await _reader.InspectAsync(_git, tab.Directory, cancellation.Token) : tab.Snapshot!;
+                if (Obsolete()) return;
+                if (!string.Equals(snapshot.Worktree, identity.Worktree, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(snapshot.GitDirectory, identity.GitDirectory, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(snapshot.CommonDirectory, identity.CommonDirectory, StringComparison.OrdinalIgnoreCase))
+                { await RevokeChangedIdentityAsync(); return; }
+                CommitHistory history;
+                var keepPage = false;
+                if (direction != 0)
+                    history = await _reader.ReadHistoryPageAsync(_git, previous!.Session, direction > 0 ? previous.Next! : state.Cursors[state.PageIndex - 1], cancellation.Token);
+                else if (!firstPage && previous is not null && previous.Session.Scope == state.Scope)
+                {
+                    var session = await _reader.OpenHistoryAsync(_git, snapshot, state.Scope, cancellation.Token);
+                    keepPage = session.Fingerprint == previous.Session.Fingerprint && snapshot.Commit == previous.Session.Repository.Commit;
+                    history = await _reader.ReadHistoryPageAsync(_git, session, keepPage ? previous.Cursor : HistoryCursor.Start, cancellation.Token);
+                }
+                else history = await _reader.ReadInitialHistoryAsync(_git, snapshot, state.Scope, cancellation.Token);
+                RepositoryIdentity currentIdentity;
+                try { currentIdentity = await _identities.ReadAsync(tab.Directory, cancellation.Token); }
+                catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException or ArgumentException or System.ComponentModel.Win32Exception)
+                { await RevokeChangedIdentityAsync(); return; }
+                if (currentIdentity.Fingerprint != identity.Fingerprint) { await RevokeChangedIdentityAsync(); return; }
+                (CommitRow[] Rows, long Bytes) prepared;
+                using (_trace.Measure(TimingStage.Formatting)) prepared = await Task.Run(() =>
+                {
+                    var formatted = history.Entries.Select(entry => new CommitRow(entry)).ToArray();
+                    var bytes = formatted.Sum(row => 2L * (row.Commit.Message.Length + row.RefLabels.Length + row.AuthorDetails.Length + row.CommitterDetails.Length) + 4096) +
+                        history.Session.References.Sum(reference => 2L * (reference.Name.Length + reference.Hash.Length) + 128);
+                    return (formatted, bytes);
+                }, cancellation.Token);
+                var rows = prepared.Rows;
+                if (Obsolete()) return;
+                HistoryViewChanging?.Invoke(this, EventArgs.Empty);
+                var selectedHash = state.Selected?.Commit.Hash;
+                if (previous is not null)
+                {
+                    state.PageViews[previous.Cursor.Offset] = new(selectedHash, state.VerticalOffset, state.HorizontalOffset);
+                    while (state.PageViews.Count > 128) state.PageViews.Remove(state.PageViews.Keys.Min());
+                }
+                if (direction == 0 && !keepPage) { state.Cursors.Clear(); state.Cursors.Add(history.Cursor); state.PageIndex = 0; }
+                else if (direction != 0)
+                {
+                    state.PageIndex += direction;
+                    if (state.Cursors.Count == state.PageIndex) state.Cursors.Add(history.Cursor);
+                    // Bounded backwards window; First page is always available without a total history limit.
+                    if (state.Cursors.Count > 128) { state.Cursors.RemoveAt(0); state.PageIndex--; }
+                }
+                if (!keepPage)
+                {
+                    state.PageViews.TryGetValue(history.Cursor.Offset, out var savedView);
+                    selectedHash = savedView?.SelectedHash ?? selectedHash;
+                    state.VerticalOffset = savedView?.Vertical ?? 0; state.HorizontalOffset = savedView?.Horizontal ?? 0;
+                }
+                state.Page = history; state.Rows = rows; state.EstimatedBytes = prepared.Bytes;
+                state.Selected = rows.FirstOrDefault(row => row.Commit.Hash == selectedHash) ?? rows.FirstOrDefault();
+                state.ValidatedAt = DateTimeOffset.UtcNow; state.NeedsRefresh = false;
+                state.Notice = LoadedNotice(history); state.Error = state.RawOutput = "";
+                tab.Apply(snapshot); EvictCaches(tab); Status = UiText.Get("HistoryLoaded");
             }
-            var session = previous?.Session ?? await _reader!.OpenHistoryAsync(_git, tab.Snapshot!, SelectedHistoryScope.Scope, cancellation.Token);
-            var cursor = direction > 0 ? previous!.Next! : direction < 0 ? _pageCursors[_pageIndex - 1] : HistoryCursor.Start;
-            var history = await _reader!.ReadHistoryPageAsync(_git, session, cursor, cancellation.Token);
-            var rows = await Task.Run(() => history.Entries.Select(entry => new CommitRow(entry)).ToArray(), cancellation.Token);
-            if (Obsolete()) return;
-            if (direction == 0) { _pageCursors.Clear(); _pageCursors.Add(cursor); _pageIndex = 0; }
-            else
+            catch (GitReadException exception)
             {
-                _pageIndex += direction;
-                if (_pageCursors.Count == _pageIndex) _pageCursors.Add(cursor);
+                if (!Obsolete())
+                {
+                    state.NeedsRefresh = exception.Failure == GitFailure.ChangedDuringRead;
+                    state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryFailed" : "HistoryRefreshFailed");
+                    state.Error = UiText.Get("GitError" + exception.Failure); state.RawOutput = exception.RawOutput; Status = state.Error;
+                }
             }
-            _history = history; Commits = rows;
-            SelectedCommit = rows.FirstOrDefault(row => row.Commit.Hash == selectedHash) ?? rows.FirstOrDefault();
-            Changed(nameof(HistoryRange));
-            HistoryNotice = UiText.Get(rows.Length == 0
-                ? session.Scope == HistoryScope.AllCommits ? "HistoryEmptyAll" : "HistoryUnborn"
-                : history.HasMore ? "HistoryMore" : history.IsShallow ? "HistoryShallowEnd" : "HistoryEnd");
-            Status = UiText.Get("HistoryLoaded");
-        }
-        catch (GitReadException exception)
-        {
-            if (!_stopping && generation == _generation)
+            catch (OperationCanceledException)
+            { if (!Obsolete(ignoreCancellation: true)) { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); } }
+            catch (Exception)
+            { if (!Obsolete()) { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryFailed" : "HistoryRefreshFailed"); Status = UiText.Get("GitErrorUnexpected"); } }
+            finally
             {
-                _historyNeedsRefresh = exception.Failure == GitFailure.ChangedDuringRead;
-                HistoryNotice = UiText.Get(previous is null ? "HistoryFailed" : "HistoryPageFailed");
-                Status = UiText.Get("GitError" + exception.Failure); RawOutput = exception.RawOutput;
+                if (ReferenceEquals(_operationCancellation, cancellation)) _operationCancellation = null;
+                cancellation.Dispose();
+                if (generation == _generation)
+                {
+                    if (cancellation.IsCancellationRequested && !_stopping)
+                    { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); }
+                    _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
+                    Changed(nameof(OperationStatus)); PublishState();
+                }
             }
+            async Task RevokeChangedIdentityAsync()
+            {
+                if (Obsolete()) return;
+                state.Clear(); tab.Invalidate(); _approvals.Remove(tab.Directory);
+                state.Notice = UiText.Get("ApprovalChanged"); Status = state.Notice;
+                await PersistApprovalsAsync();
+            }
+            bool Obsolete(bool ignoreCancellation = false) => _stopping || generation != _generation || !Repositories.Contains(tab) || (!ignoreCancellation && cancellation.IsCancellationRequested);
         }
-        catch (OperationCanceledException) { if (!Obsolete()) { HistoryNotice = UiText.Get("HistoryCancelled"); Status = UiText.Get("GitErrorCancelled"); } }
-        catch (Exception) { if (!Obsolete()) { HistoryNotice = UiText.Get("HistoryFailed"); Status = UiText.Get("GitErrorUnexpected"); } }
-        finally
-        {
-            _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
-            Changed(nameof(OperationStatus));
-        }
-        bool Obsolete() => _stopping || generation != _generation || !Repositories.Contains(tab);
     }
-
-    private void ClearHistory()
+    private static string LoadedNotice(CommitHistory history) => UiText.Get(history.Entries.Count == 0
+        ? history.Session.Scope == HistoryScope.AllCommits ? "HistoryEmptyAll" : "HistoryUnborn"
+        : history.HasMore ? "HistoryMore" : history.IsShallow ? "HistoryShallowEnd" : "HistoryEnd");
+    private void EvictCaches(RepositoryTab active)
     {
-        _history = null; _pageCursors.Clear(); _pageIndex = 0; _historyNeedsRefresh = false; Commits = []; SelectedCommit = null; Changed(nameof(HistoryRange)); HistoryNotice = UiText.Get("HistoryNotLoaded");
-        LoadMoreHistoryCommand?.Refresh(); NewerHistoryCommand?.Refresh();
+        // At most three pages AND a conservative 32 MiB character-data estimate across them.
+        var cached = Repositories.Where(tab => tab.History.Page is not null).OrderBy(tab => tab.History.LastUse).ToList();
+        while (cached.Count > CachedTabLimit || (cached.Count > 1 && cached.Sum(tab => tab.History.EstimatedBytes) > 32 * 1024 * 1024))
+        {
+            var oldest = cached.First(tab => tab != active); oldest.History.Clear(); cached.Remove(oldest);
+        }
     }
-
+    private async Task<bool> PersistApprovalsAsync()
+    {
+        if (_persist is null) return true; // Tests can observe CaptureSession instead of touching a real profile.
+        try { await _persist(CaptureSession(LoadedSettings?.Settings ?? new())); return true; }
+        catch (Exception) { SettingsNotice = UiText.Get("ApprovalSaveFailed"); return false; }
+    }
+    private void RevokeApproval()
+    {
+        var tab = SelectedRepository!; _operationCancellation?.Cancel(); _generation++;
+        var generation = _generation; IsBusy = true;
+        _approvals.Remove(tab.Directory); tab.History.Clear(); tab.Invalidate();
+        tab.History.Notice = UiText.Get("ApprovalRevoked"); Status = tab.History.Notice; PublishState();
+        var prior = _activeOperation;
+        _activeOperation = SaveAsync();
+        async Task SaveAsync()
+        {
+            await prior; await PersistApprovalsAsync();
+            if (generation == _generation) { _operationCancellation = null; _timer.Stop(); _elapsed.Stop(); IsBusy = false; RefreshCommands(); }
+        }
+    }
+    private void HighlightAuthors()
+    { foreach (var row in Commits) row.IsSameAuthor = row != SelectedCommit && row.HasSameAuthor(SelectedCommit); }
+    private void PublishState()
+    {
+        using (_trace.Measure(TimingStage.Binding))
+        {
+            _publishingState = true;
+            try
+            {
+                HighlightAuthors();
+                foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(SelectedHistoryScope), nameof(HistoryScopeDescription), nameof(HistoryScopeHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
+                RefreshCommands(); HistoryViewChanged?.Invoke(this, EventArgs.Empty);
+            } finally { _publishingState = false; }
+        }
+    }
     private void MoveTab(int offset)
-    {
-        var tab = SelectedRepository!;
-        var index = Repositories.IndexOf(tab);
-        Repositories.Move(index, index + offset);
-        SelectedRepository = tab;
-        RefreshCommands();
-    }
+    { var tab = SelectedRepository!; var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); }
     private void RefreshCommands()
     {
-        OpenRepositoryCommand?.Refresh(); RefreshRepositoryCommand?.Refresh(); CancelCommand?.Refresh();
-        ChooseGitCommand?.Refresh(); CloseRepositoryCommand?.Refresh(); MoveLeftCommand?.Refresh(); MoveRightCommand?.Refresh();
-        LoadMoreHistoryCommand?.Refresh(); NewerHistoryCommand?.Refresh();
+        OpenRepositoryCommand?.Refresh(); RefreshRepositoryCommand?.Refresh(); CancelCommand?.Refresh(); ChooseGitCommand?.Refresh();
+        ApproveRepositoryCommand?.Refresh(); RevokeApprovalCommand?.Refresh(); DiagnosticsCommand?.Refresh();
+        CloseRepositoryCommand?.Refresh(); MoveLeftCommand?.Refresh(); MoveRightCommand?.Refresh();
+        LoadMoreHistoryCommand?.Refresh(); NewerHistoryCommand?.Refresh(); FirstHistoryCommand?.Refresh();
     }
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
-        RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory
+        RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
+        Approvals = _approvals.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
-    public void BeginShutdown() { _stopping = true; _generation++; IsReady = false; _operationCancellation?.Cancel(); Status = UiText.Get("SavingSettings"); }
-    public Task WaitForIdleAsync() => _activeOperation;
+    public void BeginShutdown() { _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
+    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); }
     public void ResumeAfterSaveFailure() { _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }
