@@ -31,17 +31,17 @@ internal static partial class Program
         var settings = new AppSettings
         {
             RepositoryPaths = [first, second], SelectedRepositoryPath = second,
-            Approvals = [new(first, firstIdentity.Fingerprint), new(second, secondIdentity.Fingerprint)],
+            RepositoryIdentities = [new(first, firstIdentity.Fingerprint), new(second, secondIdentity.Fingerprint)],
             RepositoryPreferences = [new(second, HistoryScope.CurrentHead)]
         };
         var trace = new PerformanceTrace();
         var runner = new AutomaticRunner();
-        var interaction = new ModelInteraction(first) { Trust = true, Executable = _historyExecutable };
+        var interaction = new ModelInteraction(first) { Executable = _historyExecutable };
         var timings = new List<object>();
         var profile = new SettingsStore(Fixture("automatic-profile"));
         await profile.LoadAsync(default); await profile.SaveAsync(settings, default);
         var model = new ShellViewModel(new(runner, trace), interaction, identities, value => profile.SaveAsync(value, default), trace);
-        await Check("Remembered approval restores selected scope and automatically loads only the selected repository", async () =>
+        await Check("Saved tabs restore selected scope and automatically load without permission", async () =>
         {
             var watch = Stopwatch.StartNew();
             var restored = await profile.LoadAsync(default);
@@ -50,7 +50,7 @@ internal static partial class Program
             await model.WaitForIdleAsync();
             timings.Add(new { scenario = "restored first repository", settingsMs, milliseconds = watch.Elapsed.TotalMilliseconds, stages = trace.Snapshot() });
             Expect(model.SelectedRepository?.Directory == second && model.Commits.Count == 200 && model.SelectedHistoryScope.Scope == HistoryScope.CurrentHead, "Startup needs no trust/refresh click");
-            Expect(interaction.TrustRequests == 0 && model.Repositories[0].Snapshot is null, "Only selected approved repository loads; no preloading");
+            Expect(model.Repositories[0].Snapshot is null, "Only selected repository loads; no preloading");
         });
         await Check("Warm tab switching retains page, scope, selection and scroll without repeated Git", async () =>
         {
@@ -99,14 +99,14 @@ internal static partial class Program
             Expect(ReferenceEquals(model.Commits, original) && model.HistoryNotice == UiText.Get("HistoryRefreshCancelled"), "Cancellation retains prior rows");
             runner.HoldLog = false;
         });
-        await Check("Approval save failure cannot enable automatic reads", async () =>
+        await Check("Settings save failure does not block local history", async () =>
         {
             var transport = new ModelRunner(first); transport.Release.TrySetResult();
-            var failedSave = new ShellViewModel(new(transport), new ModelInteraction(first) { Trust = true }, new ModelIdentities(),
+            var failedSave = new ShellViewModel(new(transport), new ModelInteraction(first), new ModelIdentities(),
                 _ => Task.FromException(new IOException("fixture failure")));
             failedSave.CompleteStartup(new(new(), SettingsLoadStatus.Defaults));
             failedSave.OpenRepositoryCommand.Execute(null); await failedSave.WaitForIdleAsync();
-            Expect(transport.Calls == 0 && failedSave.CaptureSession(new()).Approvals.Length == 0 && failedSave.SettingsNotice == UiText.Get("ApprovalSaveFailed"), "Failed persistence grants no approval or Git execution");
+            Expect(transport.Calls > 0 && failedSave.Commits.Count == 1 && failedSave.SettingsNotice == UiText.Get("IdentitySaveFailed"), "Read-only history remains available if identity persistence fails");
         });
         await Check("Cached tab pages are bounded and evicted tabs reload automatically", async () =>
         {
@@ -114,9 +114,9 @@ internal static partial class Program
             var transport = new ModelRunner(paths[0]); transport.Release.TrySetResult();
             // ModelRunner returns its working directory for locations so each fixture has distinct state.
             transport.UseRequestDirectory = true;
-            var cached = new ShellViewModel(new(transport), new ModelInteraction(paths[0]) { Trust = true }, new ModelIdentities());
+            var cached = new ShellViewModel(new(transport), new ModelInteraction(paths[0]), new ModelIdentities());
             cached.CompleteStartup(new(new() { RepositoryPaths = paths, SelectedRepositoryPath = paths[0],
-                Approvals = paths.Select(path => new RepositoryApproval(path, new string('A', 64))).ToArray() }, SettingsLoadStatus.Loaded));
+                RepositoryIdentities = paths.Select(path => new RepositoryIdentityStamp(path, new string('A', 64))).ToArray() }, SettingsLoadStatus.Loaded));
             await cached.WaitForIdleAsync();
             foreach (var tab in cached.Repositories.Skip(1)) { cached.SelectedRepository = tab; await cached.WaitForIdleAsync(); }
             var calls = transport.Calls;
@@ -125,16 +125,7 @@ internal static partial class Program
             await cached.WaitForIdleAsync();
             Expect(cached.Commits.Count == 1 && transport.Calls > calls, "Evicted approved tab reloads without a click");
         });
-        await Check("Trust revocation persists, clears cache and blocks restart reads", async () =>
-        {
-            model.RevokeApprovalCommand.Execute(null); await model.WaitForIdleAsync();
-            Expect(model.Commits.Count == 0 && !model.CaptureSession(new()).Approvals.Any(item => item.Path == first), "Revocation clears data and consent");
-            var calls = runner.Calls;
-            var reopened = new ShellViewModel(new(runner), interaction, identities);
-            reopened.CompleteStartup(await profile.LoadAsync(default)); await reopened.WaitForIdleAsync();
-            Expect(reopened.Commits.Count == 0 && runner.Calls == calls && interaction.TrustRequests == 0, "Revoked startup cannot run Git or prompt implicitly");
-        });
-        await Check("Missing and replaced worktree identities never inherit approval", async () =>
+        await Check("Missing and replaced worktree identities stop reads without a consent prompt", async () =>
         {
             var path = Fixture("replacement");
             Directory.CreateDirectory(Path.Combine(path, ".git"));
@@ -148,20 +139,25 @@ internal static partial class Program
             foreach (var target in new[] { path, Path.Combine(_root, "missing") })
             {
                 var changed = new ShellViewModel(new(runner), interaction, identities);
-                changed.CompleteStartup(new(new() { RepositoryPaths = [target], SelectedRepositoryPath = target, Approvals = [new(target, identity.Fingerprint)] }, SettingsLoadStatus.Loaded));
+                changed.CompleteStartup(new(new() { RepositoryPaths = [target], SelectedRepositoryPath = target, RepositoryIdentities = [new(target, identity.Fingerprint)] }, SettingsLoadStatus.Loaded));
                 await changed.WaitForIdleAsync();
-                Expect(changed.Commits.Count == 0 && changed.CaptureSession(new()).Approvals.Length == 0, "Changed/missing targets lose approval");
+                Expect(changed.Commits.Count == 0 && changed.HistoryNotice == UiText.Get(target == path ? "IdentityChanged" : "IdentityUnavailable"), "Changed/missing targets show a concrete error");
             }
             Expect(runner.Calls == calls, "Filesystem validation rejects changes before Git starts");
         });
-        await Check("Schema 2 migration never promotes saved paths or injected approvals to trust", async () =>
+        await Check("Schema 2/3 migration preserves tabs and replacement stamps, without read permissions", async () =>
         {
             var store = new SettingsStore(Fixture("approval-migration"));
             await File.WriteAllTextAsync(store.FilePath, JsonSerializer.Serialize(settings with { SchemaVersion = 2 }));
             var result = await store.LoadAsync(default);
-            Expect(result.Status == SettingsLoadStatus.Migrated && result.Settings.Approvals.Length == 0 && result.Settings.RepositoryPaths.Length == 2, "Migration preserves tabs but grants no approval");
+            Expect(result.Status == SettingsLoadStatus.Migrated && result.Settings.RepositoryIdentities.Length == 0 && result.Settings.RepositoryPaths.Length == 2, "Migration preserves tabs but grants no approval");
             await store.SaveAsync(result.Settings, default);
-            Expect((await new SettingsStore(Path.GetDirectoryName(store.FilePath)!).LoadAsync(default)).Settings.SchemaVersion == 3 && File.Exists(store.FilePath + ".bak"), "Schema 3 save retains pre-migration backup");
+            Expect((await new SettingsStore(Path.GetDirectoryName(store.FilePath)!).LoadAsync(default)).Settings.SchemaVersion == 4 && File.Exists(store.FilePath + ".bak"), "Schema 4 save retains pre-migration backup");
+            var legacy = JsonSerializer.Serialize(settings with { SchemaVersion = 3 }).Replace("RepositoryIdentities", "Approvals");
+            await File.WriteAllTextAsync(store.FilePath, legacy);
+            var migrated = await new SettingsStore(Path.GetDirectoryName(store.FilePath)!).LoadAsync(default);
+            Expect(migrated.Settings.RepositoryIdentities.SequenceEqual(settings.RepositoryIdentities), "Old fingerprints survive as replacement stamps only");
+
         });
         await Check("Same-author highlighting uses author identity and accessible non-color semantics", async () =>
         {
@@ -183,7 +179,7 @@ internal static partial class Program
             var authorIdentity = await identities.ReadAsync(authorRepo, default);
             var rendered = new ShellViewModel(new(new WindowsProcessRunner()), interaction, identities);
             rendered.CompleteStartup(new(new() { RepositoryPaths = [authorRepo], SelectedRepositoryPath = authorRepo,
-                Approvals = [new(authorRepo, authorIdentity.Fingerprint)] }, SettingsLoadStatus.Loaded)); await rendered.WaitForIdleAsync();
+                RepositoryIdentities = [new(authorRepo, authorIdentity.Fingerprint)] }, SettingsLoadStatus.Loaded)); await rendered.WaitForIdleAsync();
             rendered.SelectedCommit = rendered.Commits[2];
             Expect(!rendered.SelectedCommit.IsSameAuthor && rendered.Commits[0].IsSameAuthor && !rendered.Commits[1].IsSameAuthor && rendered.Commits[3].IsSameAuthor, "Selected and unrelated rows remain normal; author peers match");
             Expect(rendered.Commits[0].AccessibilityLabel.Contains("Same author"), "Accessible relation is explicit");
@@ -194,7 +190,7 @@ internal static partial class Program
                 watch.Restart(); Arrange(content, 1200, 760); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 timings.Add(new { scenario = "offscreen window creation and first layout", creationMs, layoutMs = watch.Elapsed.TotalMilliseconds });
                 var table = VisualDescendants<DataGrid>(content).Single();
-                Expect(VisualDescendants<Menu>(content).Any() && !VisualDescendants<Button>(content).Any(button => Equals(button.Content, UiText.Get("InspectRepository"))), "No inspection toolbar; a real menu exists");
+                Expect(VisualDescendants<Menu>(content).Any() && !VisualDescendants<Button>(content).Any(button => button.Command == rendered.RefreshRepositoryCommand), "No inspection toolbar; a real menu exists");
                 var normalPeer = VisualDescendants<TextBlock>(table).First(text => text.Text == rendered.Commits[0].Description);
                 var unrelatedText = VisualDescendants<TextBlock>(table).First(text => text.Text == rendered.Commits[1].Description);
                 Expect(normalPeer.Foreground is SolidColorBrush yellow && yellow.Color == Color.FromRgb(255, 242, 168) &&

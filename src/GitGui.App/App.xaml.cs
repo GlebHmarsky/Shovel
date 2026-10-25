@@ -56,7 +56,7 @@ public partial class App : Application
             _log.Record(DiagnosticEvent.Started);
             _settings = new SettingsStore(directory);
             _shell = new ShellViewModel(new RepositoryReader(new WindowsProcessRunner(), _trace), new UserInteraction(),
-                persist: SaveApprovalSettingsAsync, trace: _trace);
+                persist: SaveIdentitySettingsAsync, trace: _trace);
             MainWindow window;
             using (_trace.Measure(TimingStage.Shell)) window = new MainWindow(_shell);
             MainWindow = window;
@@ -83,7 +83,7 @@ public partial class App : Application
         catch (Exception exception) { FailAndExit(exception); }
     }
 
-    private async Task SaveApprovalSettingsAsync(AppSettings session)
+    private async Task SaveIdentitySettingsAsync(AppSettings session)
     {
         if (MainWindow is not MainWindow window || _shell?.LoadedSettings?.CanSave != true)
             throw new IOException("SettingsNotWritable");

@@ -8,7 +8,6 @@ public interface IUserInteraction
 {
     string? ChooseRepository();
     string? ChooseGit();
-    bool ConfirmTrust(string directory);
 }
 
 public sealed class UserInteraction : IUserInteraction
@@ -26,6 +25,4 @@ public sealed class UserInteraction : IUserInteraction
         return MessageBox.Show(Owner, UiText.Format("ConfirmGitExecutable", dialog.FileName), UiText.Get("AppTitle"),
             MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes ? dialog.FileName : null;
     }
-    public bool ConfirmTrust(string directory) => MessageBox.Show(Owner, UiText.Format("TrustRepositoryQuestion", directory),
-        UiText.Get("AppTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
 }

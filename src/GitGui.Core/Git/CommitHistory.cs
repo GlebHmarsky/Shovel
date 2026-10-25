@@ -25,6 +25,8 @@ public sealed record CommitHistory(HistorySession Session, HistoryCursor Cursor,
     public bool IsShallow => Session.IsShallow;
 }
 
+internal sealed record HistoryState(string Refs, string Fingerprint, bool IsShallow, string? Branch, string? Commit);
+
 public sealed partial class RepositoryReader
 {
     public const int HistoryPageSize = 200;
@@ -32,15 +34,18 @@ public sealed partial class RepositoryReader
 
     public Task<HistorySession> OpenHistoryAsync(GitInstallation git, RepositorySnapshot repository,
         HistoryScope scope, CancellationToken token) => Task.Run(async () =>
+        await CreateHistorySessionAsync(git, repository, scope, await ReadHistoryStateAsync(git, repository, token).ConfigureAwait(false), token).ConfigureAwait(false), token);
+
+    private async Task<HistorySession> CreateHistorySessionAsync(GitInstallation git, RepositorySnapshot repository,
+        HistoryScope scope, HistoryState state, CancellationToken token)
     {
-        using var timing = trace?.Measure(TimingStage.References);
-        var state = await ReadHistoryStateAsync(git, repository, token).ConfigureAwait(false);
+        if (repository.Commit != state.Commit || repository.Branch != state.Branch) throw new GitReadException(GitFailure.ChangedDuringRead);
         var refs = new List<CommitRef>();
         foreach (var record in state.Refs.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             token.ThrowIfCancellationRequested();
             var fields = record.Split('\0');
-            if (fields.Length != 5 || !IsObjectId(fields[1])) throw new GitReadException(GitFailure.InvalidOutput);
+            if (fields.Length != 6 || !IsObjectId(fields[1])) throw new GitReadException(GitFailure.InvalidOutput);
             var name = fields[0];
             if (!name.StartsWith("refs/heads/", StringComparison.Ordinal) &&
                 !name.StartsWith("refs/remotes/", StringComparison.Ordinal) &&
@@ -59,15 +64,29 @@ public sealed partial class RepositoryReader
             refs.Add(new(name, hash));
         }
         if (repository.Commit is not null) refs.Add(new("HEAD", repository.Commit));
-        return new HistorySession(repository, scope, state.Fingerprint, refs.ToArray(), state.IsShallow);
-    }, token);
+        return new HistorySession(repository with { InitialHistoryState = null }, scope, state.Fingerprint, refs.ToArray(), state.IsShallow);
+    }
 
     public async Task<CommitHistory> ReadInitialHistoryAsync(GitInstallation git, RepositorySnapshot repository,
         HistoryScope scope, CancellationToken token)
     {
-        var session = await OpenHistoryAsync(git, repository, scope, token).ConfigureAwait(false);
+        var session = await OpenInspectedHistoryAsync(git, repository, scope, token).ConfigureAwait(false);
         return await ReadPageAsync(git, session, HistoryCursor.Start, token, HistoryPageSize, freshSession: true).ConfigureAwait(false);
     }
+
+    public async Task<CommitHistory> ReadRefreshedHistoryAsync(GitInstallation git, RepositorySnapshot repository,
+        CommitHistory previous, CancellationToken token)
+    {
+        var session = await OpenInspectedHistoryAsync(git, repository, previous.Session.Scope, token).ConfigureAwait(false);
+        var cursor = session.Fingerprint == previous.Session.Fingerprint && repository.Commit == previous.Session.Repository.Commit ? previous.Cursor : HistoryCursor.Start;
+        return await ReadPageAsync(git, session, cursor, token, HistoryPageSize, freshSession: true).ConfigureAwait(false);
+    }
+
+    private Task<HistorySession> OpenInspectedHistoryAsync(GitInstallation git, RepositorySnapshot repository, HistoryScope scope, CancellationToken token) =>
+        // Inspection already read HEAD/refs together. Reuse once, with post-log validation.
+        // Parsing/peeling also runs off-thread when no fresh enumeration is needed.
+        Task.Run(async () => await CreateHistorySessionAsync(git, repository, scope,
+            repository.InitialHistoryState ?? await ReadHistoryStateAsync(git, repository, token).ConfigureAwait(false), token).ConfigureAwait(false), token);
 
     public Task<CommitHistory> ReadHistoryPageAsync(GitInstallation git, HistorySession session,
         HistoryCursor cursor, CancellationToken token, int pageSize = HistoryPageSize) => ReadPageAsync(git, session, cursor, token, pageSize, freshSession: false);
@@ -116,21 +135,38 @@ public sealed partial class RepositoryReader
             shown.Select((commit, index) => new HistoryEntry(commit, graph.Rows[index], labels[commit.Hash].ToArray())).ToArray());
     }, token);
 
-    private async Task<(string Refs, string Fingerprint, bool IsShallow)> ReadHistoryStateAsync(
+    private async Task<HistoryState> ReadHistoryStateAsync(
         GitInstallation git, RepositorySnapshot repository, CancellationToken token)
     {
+        using var timing = trace?.Measure(TimingStage.References);
         var result = await RunAsync(git.Executable, repository.Worktree, ReadArguments([
-            "for-each-ref", "--sort=refname", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)",
-            "refs/heads/", "refs/remotes/", "refs/tags/", "refs/replace/"
+            "for-each-ref", "--include-root-refs", "--sort=refname", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref:short)",
+            "HEAD", "refs/heads/", "refs/remotes/", "refs/tags/", "refs/replace/"
         ]), token, MaximumHistoryBytes).ConfigureAwait(false);
         RequireSuccess(result);
-        // Ref tips, replacement refs and traversal boundary files must remain unchanged while paging.
+        string? branch = null, commit = null;
+        var refs = Text(result.StandardOutput);
+        foreach (var record in refs.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = record.Split('\0');
+            if (fields.Length != 6 || !IsObjectId(fields[1])) throw new GitReadException(GitFailure.InvalidOutput);
+            if (fields[0] != "HEAD") continue;
+            if (commit is not null || fields[2] != "commit") throw new GitReadException(GitFailure.InvalidOutput);
+            commit = fields[1]; branch = fields[5].Length == 0 ? null : fields[5];
+        }
+        if (commit is null)
+        {
+            // for-each-ref omits unborn HEAD. Ask Git rather than decoding loose/packed/reftable storage.
+            var unborn = await RunAsync(git.Executable, repository.Worktree, ReadArguments(["symbolic-ref", "--quiet", "--short", "HEAD"]), token).ConfigureAwait(false);
+            RequireSuccess(unborn); branch = Line(unborn.StandardOutput);
+        }
+        // Ref tips (including HEAD), replacement refs and traversal boundaries must remain unchanged.
         var shallow = ReadBoundary("shallow");
         var grafts = ReadBoundary(Path.Combine("info", "grafts"));
         using var fingerprint = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
-        foreach (var part in new[] { result.StandardOutput, shallow, grafts })
+        foreach (var part in new[] { result.StandardOutput, shallow, grafts, Encoding.UTF8.GetBytes(branch ?? ""), BitConverter.GetBytes((int)ReadOperation(repository.GitDirectory)) })
         { fingerprint.AppendData(BitConverter.GetBytes(part.Length)); fingerprint.AppendData(part); }
-        return (Text(result.StandardOutput), Convert.ToHexString(fingerprint.GetHashAndReset()), shallow.Length != 0);
+        return new(refs, Convert.ToHexString(fingerprint.GetHashAndReset()), shallow.Length != 0, branch, commit);
 
         byte[] ReadBoundary(string relative)
         {

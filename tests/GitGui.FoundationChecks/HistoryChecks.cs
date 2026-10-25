@@ -40,7 +40,7 @@ internal static partial class Program
             Expect(first.Commit.Message.Contains("Second body line.") && first.Commit.Author == "Author 日本語" && first.Commit.Committer == "Committer שלום" && first.Commit.AuthoredAt.Offset == TimeSpan.FromHours(2), "Keep original identity, body and date offset");
             AssertGraphConnections(history.Entries);
         });
-        await Check("History disables configured signature verification and does not depend on unborn HEAD", async () =>
+        await Check("History disables signature helpers and rejects stale HEAD metadata", async () =>
         {
             var marker = Path.Combine(repo, "verifier-ran");
             var verifier = Path.Combine(repo, "verifier.sh");
@@ -48,8 +48,8 @@ internal static partial class Program
             await runGit(repo, ["config", "log.showSignature", "true"]);
             await runGit(repo, ["config", "gpg.program", verifier.Replace('\\', '/')]);
             Expect((await ReadHead( merge, 200, default)).Entries.Count == 4 && !File.Exists(marker), "Do not invoke gpg for configured signed history");
-            Expect((await ReadHead( null, 200, default)).Entries.Count == 0, "Unborn history must be empty");
-            await ExpectGitFailure(GitFailure.CommandFailed, () => ReadHead( new string('f', 40), 200, default));
+            await ExpectGitFailure(GitFailure.ChangedDuringRead, () => ReadHead(null, 200, default));
+            await ExpectGitFailure(GitFailure.ChangedDuringRead, () => ReadHead( new string('f', 40), 200, default));
             using var stop = new CancellationTokenSource(); stop.Cancel();
             await ExpectException<OperationCanceledException>(() => ReadHead( merge, 200, stop.Token));
         });

@@ -47,10 +47,6 @@
         <Separator />
         <MenuItem Header="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
         <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
-        <MenuItem Header="{loc:Text Key=RepositoryApprovalMenu}">
-          <MenuItem Header="{loc:Text Key=ApproveAutomaticHistory}" Command="{Binding ApproveRepositoryCommand}" />
-          <MenuItem Header="{loc:Text Key=RevokeApproval}" Command="{Binding RevokeApprovalCommand}" />
-        </MenuItem>
         <Separator />
         <MenuItem Header="{loc:Text Key=MoveLeft}" Command="{Binding MoveLeftCommand}" />
         <MenuItem Header="{loc:Text Key=MoveRight}" Command="{Binding MoveRightCommand}" />
@@ -62,7 +58,27 @@
              AutomationProperties.Name="{loc:Text Key=RepositoryTabs}" AutomationProperties.AutomationId="RepositoryTabs">
       <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
       <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="12,8" ToolTip="{Binding Directory}" FlowDirection="LeftToRight" /></DataTemplate></ListBox.ItemTemplate>
-      <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="AutomationProperties.Name" Value="{Binding Label}" /></Style></ListBox.ItemContainerStyle>
+      <ListBox.ItemContainerStyle>
+        <Style TargetType="ListBoxItem">
+          <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+          <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" />
+          <EventSetter Event="PreviewMouseDown" Handler="OnRepositoryTabMouseDown" />
+          <Setter Property="ContextMenu">
+            <Setter.Value>
+              <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}"
+                           AutomationProperties.Name="{loc:Text Key=RepositoryTabMenu}">
+                <MenuItem Header="{loc:Text Key=RefreshRepository}" Command="{Binding RefreshTabCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                <Separator />
+                <MenuItem Header="{loc:Text Key=MoveLeft}" Command="{Binding MoveTabLeftCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                <MenuItem Header="{loc:Text Key=MoveRight}" Command="{Binding MoveTabRightCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                <Separator />
+                <MenuItem Header="{loc:Text Key=CloseTab}" Command="{Binding CloseTabCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                <MenuItem Header="{loc:Text Key=CloseOtherTabs}" Command="{Binding CloseOtherTabsCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+              </ContextMenu>
+            </Setter.Value>
+          </Setter>
+        </Style>
+      </ListBox.ItemContainerStyle>
     </ListBox>
     <DockPanel Grid.Row="2" Margin="16,6">
       <TextBlock DockPanel.Dock="Right" Text="{Binding OperationStatus}" FontSize="11" AutomationProperties.LiveSetting="Polite" />

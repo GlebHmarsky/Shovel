@@ -7,7 +7,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace GitGui.ProcessHost;
 
-/// <summary>Approval identity for local, non-reparse worktree roots. Not a hostile-filesystem sandbox.</summary>
+/// <summary>Replacement identity for local, non-reparse worktree roots. Not a hostile-filesystem sandbox.</summary>
 public sealed class WindowsRepositoryIdentity : IRepositoryIdentityProvider
 {
     public Task<RepositoryIdentity> ReadAsync(string path, CancellationToken token) => Task.Run(() =>

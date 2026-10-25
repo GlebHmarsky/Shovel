@@ -17,9 +17,12 @@ public enum HeadKind { Branch, Unborn, Detached }
 [Flags]
 public enum RepositoryOperation { None = 0, Merge = 1, Rebase = 2, ApplyMailbox = 4, CherryPick = 8, Revert = 16, Sequencer = 32 }
 public sealed record RepositorySnapshot(string Worktree, string GitDirectory, string CommonDirectory,
-    string? Branch, string? Commit, HeadKind HeadKind, RepositoryOperation Operation, DateTimeOffset ReadAt);
+    string? Branch, string? Commit, HeadKind HeadKind, RepositoryOperation Operation, DateTimeOffset ReadAt)
+{
+    internal HistoryState? InitialHistoryState { get; init; }
+}
 
-/// <summary>Read-only metadata commands. Caller must validate remembered repository approval before automatic reads.</summary>
+/// <summary>Read-only metadata commands. Caller validates repository identity before automatic reads; no helper/script permission is implied.</summary>
 public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceTrace? trace = null)
 {
     public static Version MinimumVersion { get; } = new(2, 47, 0);
@@ -27,11 +30,13 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
     public Task<GitInstallation> DiscoverAsync(string? explicitExecutable, CancellationToken token) => Task.Run(async () =>
     {
         using var timing = trace?.Measure(TimingStage.Discovery);
-        var candidates = explicitExecutable is not null ? [explicitExecutable] : new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "cmd", "git.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Git", "cmd", "git.exe")
-        };
+        // Git for Windows supports direct absolute-path invocation of its native binary.
+        // Newer installs use ucrt64; keep the stable cmd entry point as a discovery fallback.
+        // An explicitly selected executable is always honored exactly.
+        var roots = new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Git") };
+        var candidates = explicitExecutable is not null ? [explicitExecutable] : roots.SelectMany(root =>
+            new[] { "ucrt64/bin/git.exe", "mingw64/bin/git.exe", "mingw32/bin/git.exe", "cmd/git.exe" }.Select(relative => Path.Combine(root, relative))).ToArray();
         var executable = candidates.FirstOrDefault(path => Path.IsPathFullyQualified(path) &&
             path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(path));
         if (executable is null) throw new GitReadException(GitFailure.MissingGit);
@@ -43,11 +48,11 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         return new GitInstallation(executable, match.Groups[1].Value);
     }, token);
 
-    public Task<RepositorySnapshot> InspectAsync(GitInstallation git, string approvedPath, CancellationToken token) => Task.Run(async () =>
+    public Task<RepositorySnapshot> InspectAsync(GitInstallation git, string repositoryPath, CancellationToken token) => Task.Run(async () =>
     {
         using var timing = trace?.Measure(TimingStage.Inspection);
         token.ThrowIfCancellationRequested();
-        if (!Path.IsPathFullyQualified(approvedPath) || !Directory.Exists(approvedPath))
+        if (!Path.IsPathFullyQualified(repositoryPath) || !Directory.Exists(repositoryPath))
             throw new GitReadException(GitFailure.NotWorktree);
         var locations = await Command("rev-parse", "--path-format=absolute", "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir", "--git-common-dir");
         var lines = Text(locations.StandardOutput).TrimEnd('\r', '\n').Split('\n').Select(value => value.TrimEnd('\r')).ToArray();
@@ -57,38 +62,20 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         var worktree = Path.GetFullPath(lines[1]);
         var gitDirectory = Path.GetFullPath(lines[2]);
         var common = Path.GetFullPath(lines[3]);
-        var before = await HeadAsync();
         var operation = ReadOperation(gitDirectory);
-        var after = await HeadAsync();
-        if (before != after || operation != ReadOperation(gitDirectory)) throw new GitReadException(GitFailure.ChangedDuringRead);
-        if (after.Branch is null && after.Commit is null) throw new GitReadException(GitFailure.InvalidOutput);
-        return new RepositorySnapshot(worktree, gitDirectory, common, after.Branch, after.Commit,
-            after.Branch is null ? HeadKind.Detached : after.Commit is null ? HeadKind.Unborn : HeadKind.Branch,
-            operation, DateTimeOffset.Now);
-
-        async Task<(string? Branch, string? Commit)> HeadAsync()
-        {
-            var branchRead = CommandAllowOne("symbolic-ref", "--quiet", "--short", "HEAD");
-            var commitRead = CommandAllowOne("rev-parse", "--verify", "--quiet", "HEAD");
-            await Task.WhenAll(branchRead, commitRead).ConfigureAwait(false);
-            var branch = await branchRead; var commit = await commitRead;
-            var hash = commit.ExitCode == 0 ? Line(commit.StandardOutput) : null;
-            if (hash is not null && (hash.Length == 0 || !hash.All(char.IsAsciiHexDigit))) throw new GitReadException(GitFailure.InvalidOutput);
-            return (branch.ExitCode == 0 ? Line(branch.StandardOutput) : null, hash);
-        }
+        var location = new RepositorySnapshot(worktree, gitDirectory, common, null, null, HeadKind.Unborn, operation, DateTimeOffset.Now);
+        var state = await ReadHistoryStateAsync(git, location, token).ConfigureAwait(false);
+        if (operation != ReadOperation(gitDirectory)) throw new GitReadException(GitFailure.ChangedDuringRead);
+        return location with { Branch = state.Branch, Commit = state.Commit,
+            HeadKind = state.Branch is null ? HeadKind.Detached : state.Commit is null ? HeadKind.Unborn : HeadKind.Branch,
+            InitialHistoryState = state };
 
         async Task<ProcessResult> Command(params string[] args)
         {
-            var result = await RunAsync(git.Executable, approvedPath, ReadArguments(args), token).ConfigureAwait(false);
+            var result = await RunAsync(git.Executable, repositoryPath, ReadArguments(args), token).ConfigureAwait(false);
             if (args.Contains("--is-inside-work-tree") && Text(result.StandardOutput).StartsWith("false", StringComparison.Ordinal))
                 throw new GitReadException(GitFailure.NotWorktree);
             RequireSuccess(result);
-            return result;
-        }
-        async Task<ProcessResult> CommandAllowOne(params string[] args)
-        {
-            var result = await RunAsync(git.Executable, approvedPath, ReadArguments(args), token).ConfigureAwait(false);
-            RequireSuccess(result, allowOne: true);
             return result;
         }
     }, token);

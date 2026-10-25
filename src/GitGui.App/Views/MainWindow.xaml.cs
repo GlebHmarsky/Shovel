@@ -39,6 +39,11 @@ public partial class MainWindow : Window
 
     private void OnSystemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     { if (e.PropertyName == nameof(SystemParameters.HighContrast)) Dispatcher.InvokeAsync(() => HighContrast = SystemParameters.HighContrast); }
+    private void OnRepositoryTabMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == System.Windows.Input.MouseButton.Middle && sender is ListBoxItem { DataContext: RepositoryTab tab })
+        { e.Handled = true; ViewModel.CloseTab(tab); }
+    }
     private void CaptureHistoryScroll(object? sender, EventArgs e)
     {
         if (!_restoringScroll && FindScroll(HistoryTable) is { } scroll)

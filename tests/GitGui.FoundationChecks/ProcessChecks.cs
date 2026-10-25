@@ -39,6 +39,8 @@ internal static partial class Program
                     return 0;
                 }
             case "failure": return 17;
+            case "exit125": return 125;
+            case "environment": Console.Write(JsonSerializer.Serialize(Environment.GetEnvironmentVariable("SHOVEL_PROBE_VALUE") ?? "<absent>")); return 0;
             default: return 99;
         }
     }
@@ -55,6 +57,20 @@ internal static partial class Program
             var result = await runner.RunAsync(Probe("arguments", arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5]), default);
             Expect(result.Outcome == ProcessOutcome.Exited && result.ExitCode == 0, "Probe must run");
             Expect(JsonSerializer.Deserialize<string[]>(result.StandardOutput)!.SequenceEqual(arguments), "Argument boundaries must survive without a shell");
+        });
+        await Check("Direct launch preserves difficult argv, environment overrides and exit 125", async () =>
+        {
+            string[] arguments = ["a\\\"b", "space \\", "\\\\\"", "line\nnext", "tab\tvalue", "\"", "", new string('\\', 20) + "\""];
+            var result = await runner.RunAsync(new(ProbeExecutable, directory, ["--probe", "arguments", .. arguments]), default);
+            Expect(result.Outcome == ProcessOutcome.Exited && JsonSerializer.Deserialize<string[]>(result.StandardOutput)!.SequenceEqual(arguments), "Native Windows quoting must preserve argument boundaries");
+            var environment = Probe("environment") with { Environment = new() { ["SHOVEL_PROBE_VALUE"] = "日本語 value=one" } };
+            Expect(JsonSerializer.Deserialize<string>((await runner.RunAsync(environment, default)).StandardOutput) == "日本語 value=one", "Unicode environment block survives");
+            var prior = Environment.GetEnvironmentVariable("SHOVEL_PROBE_VALUE");
+            Environment.SetEnvironmentVariable("SHOVEL_PROBE_VALUE", "parent");
+            try { Expect(JsonSerializer.Deserialize<string>((await runner.RunAsync(environment with { Environment = new() { ["SHOVEL_PROBE_VALUE"] = null } }, default)).StandardOutput) == "<absent>", "Explicit environment removal survives"); }
+            finally { Environment.SetEnvironmentVariable("SHOVEL_PROBE_VALUE", prior); }
+            var exit = await runner.RunAsync(Probe("exit125"), default);
+            Expect(exit.Outcome == ProcessOutcome.Exited && exit.ExitCode == 125, "No helper-reserved exit code remains");
         });
         await Check("Both output streams drain concurrently and stream bytes", async () =>
         {
@@ -134,6 +150,17 @@ internal static partial class Program
                 await ExpectGitFailure(GitFailure.UnsupportedGit, () => reader.DiscoverAsync(ProbeExecutable, default));
             });
             if (git is null) return;
+            await Check("Native and explicit wrapper Git retain isolated configuration compatibility", async () =>
+            {
+                var wrapper = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "cmd", "git.exe");
+                Expect(File.Exists(wrapper), "Fixture requires installed Git for Windows wrapper");
+                var explicitGit = await reader.DiscoverAsync(wrapper, default);
+                Expect(explicitGit.Executable == wrapper && explicitGit.Version == git.Version, "Explicit executable honored exactly");
+                await File.WriteAllTextAsync(emptyConfig, "[shovel]\n  fixture = isolated-value\n");
+                var native = await runner.RunAsync(new(git.Executable, directory, ["config", "--global", "--get", "shovel.fixture"]), default);
+                var wrapped = await runner.RunAsync(new(wrapper, directory, ["config", "--global", "--get", "shovel.fixture"]), default);
+                Expect(native.ExitCode == 0 && wrapped.ExitCode == 0 && native.StandardOutput.SequenceEqual(wrapped.StandardOutput), "Wrapper avoidance preserves explicit global configuration");
+            });
             async Task<ProcessResult> Git(string folder, params string[] args)
             {
                 var environment = new Dictionary<string, string?>();

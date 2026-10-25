@@ -23,10 +23,11 @@ internal static partial class Program
     {
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
-        _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() == "--measure-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
+        _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() is "--measure-history" or "--measure-large-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         if (args.FirstOrDefault() == "--measure-history") { MeasureShellConstruction(); RunHistoryBenchmarkAsync().GetAwaiter().GetResult(); return 0; }
+        if (args.FirstOrDefault() == "--measure-large-history") { RunLargeHistoryBenchmarkAsync().GetAwaiter().GetResult(); return 0; }
         RunCoreChecksAsync().GetAwaiter().GetResult();
         RunProcessChecksAsync().GetAwaiter().GetResult();
         RunWpfChecks();

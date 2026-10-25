@@ -57,7 +57,6 @@
   <data name="MoveLeft" xml:space="preserve"><value>Move left</value></data>
   <data name="MoveRight" xml:space="preserve"><value>Move right</value></data>
   <data name="CloseTab" xml:space="preserve"><value>Close tab</value></data>
-  <data name="InspectRepository" xml:space="preserve"><value>Trust / Refresh</value></data>
   <data name="CancelOperation" xml:space="preserve"><value>Cancel</value></data>
   <data name="ChooseGit" xml:space="preserve"><value>Git executable…</value></data>
   <data name="ChooseRepositoryTitle" xml:space="preserve"><value>Open a local Git repository</value></data>
@@ -68,14 +67,6 @@
 {0}
 
 Choose only an installation you trust. This choice is not saved.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
-  <data name="TrustRepositoryQuestion" xml:space="preserve"><value>Allow automatic read-only history for this repository?
-
-{0}
-
-Shovel remembers this approval on this computer and checks the worktree and Git-directory identities before reading. History reads do not run hooks, filters, external diff tools, signers or network requests. This approval does not authorize future Git mutations. Revoke it from Repository → Repository approval.
-
-Only approve repositories you recognize; this is not a sandbox against malicious local software.</value><comment>{0} is the selected absolute folder path.</comment></data>
-  <data name="TrustDeclined" xml:space="preserve"><value>Repository inspection was not authorized. No Git command was run for this folder.</value></data>
   <data name="TooManyRepositories" xml:space="preserve"><value>This preview supports up to 20 repository tabs. Close a tab before opening another.</value></data>
   <data name="GitSelected" xml:space="preserve"><value>Git executable selected; automatic history will retry.</value></data>
   <data name="GitNotChecked" xml:space="preserve"><value>Git has not been checked</value></data>
@@ -106,7 +97,7 @@ Only approve repositories you recognize; this is not a sandbox against malicious
   <data name="GitErrorOutputLimit" xml:space="preserve"><value>Git produced more output than this reader permits. Inspection was stopped; unusually large commit messages may require another Git tool.</value></data>
   <data name="GitErrorNotWorktree" xml:space="preserve"><value>This folder is not an accessible Git working tree. Bare repositories are not supported in this preview.</value></data>
   <data name="GitErrorInvalidOutput" xml:space="preserve"><value>Git returned metadata this version cannot interpret. No repository changes were requested.</value></data>
-  <data name="GitErrorChangedDuringRead" xml:space="preserve"><value>Repository references or history boundaries changed. Choose Trust / Refresh before continuing.</value></data>
+  <data name="GitErrorChangedDuringRead" xml:space="preserve"><value>Repository references or history boundaries changed. Choose Repository → Refresh history before continuing.</value></data>
   <data name="GitErrorUnexpected" xml:space="preserve"><value>Repository inspection failed unexpectedly. Check the folder and Git installation, then retry.</value></data>
   <data name="RepositoryDetails" xml:space="preserve"><value>Repository</value></data>
   <data name="RawOutput" xml:space="preserve"><value>Git output</value></data>
@@ -164,14 +155,9 @@ Only approve repositories you recognize; this is not a sandbox against malicious
   <data name="RefreshRepository" xml:space="preserve"><value>_Refresh history</value></data>
   <data name="FirstHistoryPage" xml:space="preserve"><value>First history page</value></data>
   <data name="Diagnostics" xml:space="preserve"><value>Diagnostics</value></data>
-  <data name="RepositoryApprovalMenu" xml:space="preserve"><value>Repository approval</value></data>
-  <data name="ApproveAutomaticHistory" xml:space="preserve"><value>Approve automatic history…</value></data>
-  <data name="RevokeApproval" xml:space="preserve"><value>Revoke automatic history approval</value></data>
-  <data name="ApprovalRequired" xml:space="preserve"><value>Automatic history is not approved for this repository. Choose Repository → Repository approval to approve it once.</value></data>
-  <data name="ApprovalChanged" xml:space="preserve"><value>This repository’s identity changed. Automatic reading has stopped. Reopen and approve the repository to continue.</value></data>
-  <data name="ApprovalIdentityUnavailable" xml:space="preserve"><value>The repository cannot be identified safely. Open an accessible worktree root on a local fixed drive; moved, missing or redirected paths require new approval.</value></data>
-  <data name="ApprovalRevoked" xml:space="preserve"><value>Automatic history approval revoked. Cached history was cleared.</value></data>
-  <data name="ApprovalSaveFailed" xml:space="preserve"><value>The approval change could not be saved. Revocation applies in this session only until settings can be saved; no new approval was granted. Check settings access before exiting.</value></data>
+  <data name="IdentityChanged" xml:space="preserve"><value>This repository’s identity changed. Automatic reading has stopped. Reopen the repository to read the new location.</value></data>
+  <data name="IdentityUnavailable" xml:space="preserve"><value>The repository cannot be identified safely. Open an accessible worktree root on a local fixed drive; missing or redirected paths cannot be read.</value></data>
+  <data name="IdentitySaveFailed" xml:space="preserve"><value>History is available, but its repository identity could not be saved. Check settings access before exiting.</value></data>
   <data name="HistoryCheckingCached" xml:space="preserve"><value>Showing cached history while checking repository identity…</value></data>
   <data name="HistoryRefreshing" xml:space="preserve"><value>Refreshing asynchronously; the previous page remains visible and may be stale.</value></data>
   <data name="HistoryRefreshFailed" xml:space="preserve"><value>Refresh failed. The previous page remains visible and may be stale. See Repository → Diagnostics; retry with Refresh.</value></data>
@@ -191,4 +177,6 @@ Only approve repositories you recognize; this is not a sandbox against malicious
   <data name="TimingGraph" xml:space="preserve"><value>Graph construction</value></data>
   <data name="TimingFormatting" xml:space="preserve"><value>Row formatting</value></data>
   <data name="TimingBinding" xml:space="preserve"><value>UI binding</value></data>
+  <data name="CloseOtherTabs" xml:space="preserve"><value>Close other tabs</value></data>
+  <data name="RepositoryTabMenu" xml:space="preserve"><value>Repository tab actions</value></data>
 </root>

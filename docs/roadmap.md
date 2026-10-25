@@ -4,7 +4,7 @@ Updated 2026-10-25. [Product](product.md) owns experience; [requirements](requir
 
 ## Current status
 
-- **Automatic history / F1d / 0.5.0 is delivered.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
+- **Fast local history / F1e / 0.6.0 is delivered.** The user prioritized the main history table/graph ahead of status and requested no desktop control. C# + WPF / .NET 10 LTS is confirmed. Verification limits are below; build/run/package instructions are in [README](../README.md).
 - Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
 - Official Fork screenshots/animations were inspected previously; the original attachment was unavailable. A new user screenshot was inspected on 2026-10-25 for the headerless history refinement. X media could not be reviewed without login. Historical observations are not current runtime verification.
 - Git CLI is implemented for repository metadata, all-branch/tag and HEAD ancestry. No individual-ref selection/search/filter, status/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
@@ -12,7 +12,7 @@ Updated 2026-10-25. [Product](product.md) owns experience; [requirements](requir
 
 ## Proposed delivery sequence
 
-Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The latest request prioritizes automatic startup history, bounded tab caching, responsiveness, approval revision, menu cleanup and same-author highlighting. Stop after this increment; new Git features remain deferred. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
+Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The latest request prioritizes automatic startup history, bounded tab caching, responsiveness, prompt-free history, lower read latency and tab context/middle-click actions. Stop after this increment; new Git features remain deferred. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
 
 | Phase | Deliverable and boundary | Dependency / exit gate |
 | --- | --- | --- |
@@ -21,7 +21,8 @@ Each phase is a working increment with evidence and limitations. The user author
 | 1b: History preview — delivered | Real HEAD ancestry, graph/description table, selected-commit metadata, bounded older-history loading | Build/publish + 45 automated checks and headless render review; no desktop control or interactive launch |
 | 1c: All Commits — delivered | Local/remote/tag history, scope/labels, bounded older/newer pages without a total count ceiling | Headless multi-ref/pagination/failure checks and preview; manual visual confirmation remains open |
 | 1d: Automatic history — delivered | Remembered approval, startup/activation reads, bounded tab caches, menu cleanup, author highlighting and measured startup path | Restore/build/publish, 58 checks, headless timing and render evidence below; no interactive launch |
-| 1e onward: Read-only Git — deferred until responsiveness review | Individual ref selection/search; status and changed-file/tree/diff reads in bounded increments; external reconciliation | F1c; G2-G8 read cases, E/S/L/A gates; baseline performance measurements |
+| 1e: Fast local history — delivered | Direct job-contained Git, native entry point, combined HEAD/refs, no consent question, tab menus/middle-click | Build/publish, 61 checks, measured 0.5.0 comparison and packed 100k fixture; no interactive launch |
+| 1f onward: Read-only Git — deferred until responsiveness review | Individual ref selection/search; status and changed-file/tree/diff reads in bounded increments; external reconciliation | F1c; G2-G8 read cases, E/S/L/A gates; baseline performance measurements |
 | 2: Local MVP | Init, file/text-hunk staging, commit/amend, branch create/switch/delete/tracking, stash operations | Phase 1; mutation safety, hooks/signing, stale hunk tests |
 | 3: Network MVP | Clone, remotes, fetch, push, upstream setup, proposed fast-forward-only pull default; external conflict resolution and valid continue/skip/abort for existing sequences | Phase 2; explicit interactive/auth routes, failures, external races and recovery |
 | 3R: Pilot distribution | Install once/update in place, stable/test feeds, version/status UI, settings migration and bad-release repair procedure | Updater/IT/signing selection + phase 3; all U/D acceptance tests on actual standard-user Windows installs before initial 30-user rollout |
@@ -139,6 +140,43 @@ A final independent benchmark in `artifacts/history-benchmarks/20261025-022634-0
 Preview: `Build/0.5.0-win-x64/Shovel.exe`, framework-dependent and unsigned; earlier version folders retained. All 14 package checksums verified; published App/Core/ProcessHost assemblies match the tested assemblies, and product/file version is Shovel / 0.5.0.0. Build/artifacts stay ignored and untracked. No new dependency, installer, updater, hosting, signing or network operation was introduced. Actual scroll restoration/keyboard input, profile restart in a desktop session, Windows 10, mixed DPI/accessibility, larger packed/many-ref repositories and memory/idle budgets remain open.
 
 **Proposed developer-fixture gates:** first 200 rows <=3 s, retained-cache binding <=100 ms and identity validation <=100 ms, background refresh <=3 s while preserving rows, first offscreen empty shell <=750 ms. These are local regression targets grounded in the small fixture, not fleet guarantees or replacements for the broader performance budgets in requirements. Deep paging/packed many-ref fixtures and actual cold/warm desktop validation are the next priorities before more Git features.
+
+## Fast local history verification 2026-10-25
+
+**Diagnosis and change:** the remaining startup cost was dominated by repeated process launches, including a .NET helper and Git for Windows' wrapper, plus repeated HEAD/ref observations. Graph construction and formatting were already below a few milliseconds. Version 0.6.0 uses direct, atomically job-contained native Git launches and one combined HEAD/ref observation reused by the page read. First load uses five Git calls instead of nine; refresh uses four. Post-read validation, 200 rows, All Commits scope, output/time limits and bounded tab caches remain unchanged. No preload, polling, repository maintenance or new dependency.
+
+The user explicitly removed local-history approval questions/settings. Schema 4 migrates prior fingerprints into replacement-detection stamps; opened/restored tabs load without a consent question. Ownership checks and helper suppression remain. Missing/replaced roots stop safely; explicit reopen binds the new identity. The [read audit and identity limits](architecture.md#automatic-local-history) define this policy; it grants no permission for network access or future executable Git workflows. Tab context menus now target the clicked tab for Refresh, Move and Close/Close others; middle click closes it, including during a read.
+
+**Repeated small-fixture measurements:** same Windows 11 host/toolchain and isolated 2,500-commit loose-object protocol as F1d; three samples per run, caches not flushed. Fresh 0.5.0 baseline: `artifacts/history-benchmarks/20261025-024208-59b7aa7069334f23817c73f9efa6883e`. Final 0.6.0: `artifacts/history-benchmarks/20261025-150553-4a92143ed38f4ba8a9a812ebe10c713a`.
+
+| Headless stage | 0.5.0 | 0.6.0 |
+| --- | --- | --- |
+| Discovery through 200 formatted rows | **1.98–2.23 s; median 2.14 s** | **0.53–0.55 s; median 0.54 s** |
+| Git discovery/version | 225–253 ms | 42–48 ms |
+| Repository inspection | 758–904 ms | 108–123 ms, including initial refs |
+| Remaining refs/page read and validation | 982–1,155 ms | 361–394 ms |
+| Independent graph construction / formatting | Negligible relative to launch cost | 0.07–0.20 ms / 0.22–1.10 ms |
+| Git command count | 9 | 5 |
+
+The final median is about 75% lower. An earlier 0.6.0 run measured 0.54–0.68 s (median 0.58 s), showing host variation rather than an instant-load guarantee. Stage accounting changed: initial ref enumeration is now inside inspection; `refsMs` in the benchmark is subsequent validation. Do not double-count nested stage timings. Raw native Git startup and the contained runner both measured about 42–51 ms in the final no-op comparison (`hostedMs` retains its old JSON field name). First offscreen application/window construction/layout was 440 ms, then 24–28 ms warm; this is not actual process startup or desktop presentation time.
+
+**Packed large fixture:** `artifacts/history-benchmarks/20261025-150610-b4fc11569bed4f3ebad70224a8e4af50` contains 100,000 linear commits in packed objects and 1,201 local/remote/tag refs. Three samples per storage variant check the first 200 rows and final page at offset 99,800, including true end-of-history. Only this disposable fixture receives maintenance commands.
+
+| Fixture state | Discovery/inspection/first page | Final page |
+| --- | --- | --- |
+| Loose refs, no commit-graph file | 1.08–1.31 s | 1.01–1.12 s |
+| Loose refs, commit-graph file | 0.90–1.09 s | 0.78–0.89 s |
+| Packed refs and commit-graph file | 0.38–0.43 s | 0.25–0.32 s |
+
+Many loose refs remain a material cost; the app does not rewrite them to improve a timing claim. This is a synthetic linear history, not a merge-heavy/million-commit or cold-cache certification. Deep `--skip`/topological traversal can still cost more on other repositories.
+
+**Final verification:** clean Release restore/build/publish succeeded; preview creation passed all checks. A separately captured final run reports **61 passed, 0 failed** in `artifacts/verification-0.6.0.txt`, fixtures `artifacts/foundation-checks/20261025-150655-7ee35d2d9bef46aea8e968dfe5cf9f24`. It covers native argument/environment/exit-code fidelity, descendant cleanup, timeout/cancellation, explicit wrapper compatibility, automatic startup and settings migration, stale results, failed refresh retaining rows, replacement detection, cache bounds, author highlighting and tab menu/middle-click behavior. These include real disposable Git reads and headless routed-event/command checks, not desktop mouse input.
+
+That run measured settings restoration at 2.54 ms, the first small selected repository at 543 ms, warm cached model publication at 0.050–0.057 ms with zero Git calls, identity validation at 4.98–5.45 ms, and background refresh at 213–244 ms. Warm populated offscreen construction/layout took 30 ms. The preceding preview check run measured 479 ms first repository and 271–312 ms refresh. Reviewed its version-0.6.0 normal/minimum history renders and tab menu in `artifacts/foundation-checks/20261025-150158-3798953ca10245468da39fb7fda581d2`; labels and details remain readable, with horizontal scrolling for trailing columns at minimum width.
+
+Preview: `Build/0.6.0-win-x64/Shovel.exe`. All 11 checksums verified; published App/Core/ProcessHost assemblies match the tested assemblies, version is 0.6.0, and the legacy helper EXE is absent. Previous versions remain intact; Build/artifacts stay ignored and untracked. No interactive launch, desktop control, install, signing, updater or network work occurred. Actual cold/warm app startup-to-visible-rows, input responsiveness, Windows 10, custom/newer Git variants, accessibility/DPI and memory/idle budgets remain unverified.
+
+**Proposed local regression targets:** first 200 formatted rows within 1 s on the 2,500-commit fixture; within 1.5 s on the 100k/1,201-loose-ref fixture; small-fixture refresh within 1 s while retaining rows; cached binding/identity validation each within 100 ms; first offscreen shell within 750 ms. These replace F1d's developer-fixture targets, not broader fleet acceptance budgets. Next priority is representative startup validation with launch authorization and merge-heavy performance/memory fixtures before further Git features.
 
 ## Initial compatibility boundaries
 

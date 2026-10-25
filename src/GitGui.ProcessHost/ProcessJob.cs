@@ -1,14 +1,14 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
 namespace GitGui.ProcessHost;
 
-/// <summary>Owns only the host and descendants it creates, not shared agents/browsers.</summary>
+/// <summary>Owns only the requested process and its descendants, not shared agents/browsers.</summary>
 internal sealed class ProcessJob : IDisposable
 {
     private readonly SafeFileHandle _handle;
+    public IntPtr Handle => _handle.DangerousGetHandle();
     public ProcessJob()
     {
         _handle = CreateJobObject(IntPtr.Zero, null);
@@ -20,12 +20,6 @@ internal sealed class ProcessJob : IDisposable
             _handle.Dispose();
             throw new Win32Exception(error);
         }
-    }
-
-    public void Attach(Process process)
-    {
-        if (!AssignProcessToJobObject(_handle, process.SafeHandle))
-            throw new Win32Exception(Marshal.GetLastWin32Error());
     }
 
     public void Dispose() => _handle.Dispose();
@@ -55,7 +49,5 @@ internal sealed class ProcessJob : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetInformationJobObject(SafeFileHandle job, int infoClass, ref ExtendedLimits info, uint size);
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool AssignProcessToJobObject(SafeFileHandle job, SafeProcessHandle process);
+
 }

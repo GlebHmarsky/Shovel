@@ -65,7 +65,7 @@ internal static partial class Program
             watch.Restart(); git = await reader.DiscoverAsync(null, default); var discoveryMs = watch.Elapsed.TotalMilliseconds;
             watch.Restart(); var snapshot = await reader.InspectAsync(git, repo, default); var inspectMs = watch.Elapsed.TotalMilliseconds;
             watch.Restart(); var page = await reader.ReadInitialHistoryAsync(git, snapshot, HistoryScope.AllCommits, default);
-            var refsMs = trace.Snapshot().Last(sample => sample.Stage == GitGui.Core.Diagnostics.TimingStage.References).Milliseconds;
+            var refsMs = trace.Snapshot().Last(sample => sample.Stage == GitGui.Core.Diagnostics.TimingStage.References).Milliseconds; // Post-log validation; inspection now includes initial refs.
             var pageMs = watch.Elapsed.TotalMilliseconds - refsMs;
             watch.Restart(); CommitGraph.Build(page.Entries.Select(entry => entry.Commit).ToArray()); var graphMs = watch.Elapsed.TotalMilliseconds;
             watch.Restart(); var rows = page.Entries.Select(entry => new GitGui.App.ViewModels.CommitRow(entry)).ToArray(); var formattingMs = watch.Elapsed.TotalMilliseconds;

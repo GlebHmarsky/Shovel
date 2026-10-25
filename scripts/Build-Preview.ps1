@@ -27,7 +27,7 @@ try {
     dotnet publish src/GitGui.App --no-restore -c Release --self-contained false -o $staging -m:1 -p:UseSharedCompilation=false -nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed. The partial output is not a usable preview.' }
     $required = @('Shovel.exe', 'Shovel.dll', 'Shovel.runtimeconfig.json', 'GitGui.Core.dll',
-        'GitGui.ProcessHost.exe', 'GitGui.ProcessHost.dll', 'GitGui.ProcessHost.deps.json', 'GitGui.ProcessHost.runtimeconfig.json')
+        'GitGui.ProcessHost.dll')
     foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $staging $file))) { throw ('Missing preview file: ' + $file) }
     }
@@ -36,14 +36,14 @@ Shovel $version - local Windows x64 preview
 
 Double-click Shovel.exe. Keep all files in this folder together.
 Requires the .NET 10 Desktop Runtime and Git for Windows 2.47.0 or newer.
-Use Repository > Open to select a local worktree root and approve automatic history once.
-The selected approved tab loads automatically at startup; switching tabs reuses bounded cached pages.
+Use Repository > Open to select a local worktree root; history loads without an approval prompt.
+The selected saved tab loads automatically at startup; switching tabs reuses bounded cached pages.
 Select a row for its message, author/committer, dates, hash and parents below.
 All Commits includes local branches, remote-tracking branches and tags; Current branch / HEAD is separate.
 Use Load older commits / Newer commits to navigate 200-row pages without a total commit-count limit.
 The view shows its scope, row range, filters and read/graph limits. Detached-only history is in Current branch / HEAD.
-Use Repository > Refresh after external changes, Cancel for a read, or Repository approval to revoke remembered approval.
-Activation refreshes cached snapshots older than 30 seconds. Old settings migrate without granting approval.
+Use Repository > Refresh after external changes, or Cancel for a read.
+Activation refreshes cached snapshots older than 30 seconds. Right-click a tab for Refresh, Move, Close or Close others; middle click closes it.
 Search/filter, file status, diffs, mutations, installer and automatic updates are not implemented.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.

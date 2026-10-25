@@ -34,11 +34,14 @@ public sealed class SettingsStore(string directory)
                 return Complete(new(), SettingsLoadStatus.Invalid);
             if (schema > AppSettings.CurrentSchemaVersion)
                 return Complete(new(), SettingsLoadStatus.NewerSchema);
-            if (schema is not (1 or 2 or AppSettings.CurrentSchemaVersion))
+            if (schema is not (1 or 2 or 3 or AppSettings.CurrentSchemaVersion))
                 return Complete(new(), SettingsLoadStatus.UnsupportedSchema);
 
             var settings = JsonSerializer.Deserialize<AppSettings>(_loadedBytes, JsonOptions);
-            if (schema < 3 && settings is not null) settings = settings with { Approvals = [], RepositoryPreferences = [] };
+            // Former approval fingerprints remain useful as replacement-detection stamps, not consent.
+            if (schema == 3 && settings is not null && document.RootElement.TryGetProperty("Approvals", out var legacy))
+                settings = settings with { RepositoryIdentities = legacy.Deserialize<GitGui.Core.Git.RepositoryIdentityStamp[]>(JsonOptions) ?? [] };
+            if (schema < 3 && settings is not null) settings = settings with { RepositoryIdentities = [], RepositoryPreferences = [] };
             return settings is null ? Complete(new(), SettingsLoadStatus.Invalid) :
                 Complete(settings.Normalize() with { SchemaVersion = AppSettings.CurrentSchemaVersion },
                     schema == AppSettings.CurrentSchemaVersion ? SettingsLoadStatus.Loaded : SettingsLoadStatus.Migrated);

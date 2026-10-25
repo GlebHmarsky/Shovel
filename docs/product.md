@@ -9,9 +9,9 @@ Read [requirements](requirements.md) for obligations/tests, [architecture](archi
 
 English ships first; future localization is a foundational requirement. Users install once and receive in-place updates. Measured responsiveness and trustworthy Git behavior take priority over feature count.
 
-**Implemented in 0.5.0:** automatic read-only history for the selected previously approved repository at startup. Explicit Open explains and remembers approval once; older saved paths receive no implicit approval. Repository → Repository approval can approve or revoke. Approval is for audited reads only, not future mutations. Missing/replaced/inaccessible identities stop automatic reading; [architecture](architecture.md#remembered-read-approval) owns the exact identity and limitations.
+**Implemented in 0.6.0:** opening a repository or restoring its tab automatically reads local history, with no approval question or read-consent setting. This is the purpose of the history workspace, not an optional feature. “Read history” does not mean network `git fetch`. Remembered filesystem identity detects ordinary replacement; missing/inaccessible/changed targets show a concrete error, with explicit reopen for replacement. [Architecture](architecture.md#automatic-local-history) owns the limits. Future hooks/scripts/mutations still need separate safeguards.
 
-Tabs select immediately and display their cached page, then validate identity off-thread. A snapshot older than 30 seconds refreshes on tab/window activation; manual Repository → Refresh is always available. No polling or preload of every repository. Refresh and failures keep useful rows with a loading/stale/error notice; identity failure or revocation clears the cache. Original Git stderr remains in the Diagnostics tab for the session.
+Tabs select immediately and display their cached page, then validate identity off-thread. A snapshot older than 30 seconds refreshes on tab/window activation; manual Repository → Refresh is always available. No polling or preload of every repository. Refresh and failures keep useful rows with a loading/stale/error notice; identity failure clears the cache. Original Git stderr remains in the Diagnostics tab for the session.
 
 **History workflow:** default to a clearly labeled **All Commits** selector: ancestry reachable from local branches, remote-tracking branches and tags. It excludes reflog-only/unreachable commits, stash-only history and detached-only tips. **Current branch / HEAD** separately follows the inspected HEAD, including detached HEAD; changing scope never checks out a branch. An unborn HEAD does not hide other branches from All Commits. No filters are active; that is stated beside the scope.
 
@@ -28,11 +28,11 @@ The application icon is the user-selected front-facing silver shovel head on a b
 ## Interface
 
 Confirmed target layout (future Git/tool actions remain absent until implemented):
-- Repository tabs across the top, preserving order and selection.
+- Repository tabs across the top, preserving order and selection. Right-click a tab for Refresh, Move left/right, Close tab and Close other tabs; actions target that tab. Middle-click closes the clicked tab. Closing the selected tab cancels its read and selects its neighbor; closing an inactive tab leaves current work alone. Closing never deletes repository files.
 - Fetch, Pull, Push, Stash at top left; repository, branch, and active operation near the center.
 - Explorer, terminal, editor, and configured external-tool actions at top right.
 - Sidebar: local changes, history, branches, remotes, tags, stashes, submodules.
-- Main history area: readable graph; search/filter deferred. A standard top-left Repository menu owns Open, Refresh, Cancel read, Git selection, Diagnostics, approval management, tab movement/closing and First history page. No inspection toolbar or prominent Trust button.
+- Main history area: readable graph; search/filter deferred. A standard top-left Repository menu owns Open, Refresh, Cancel read, Git selection, Diagnostics, tab movement/closing and First history page. No inspection toolbar or prominent Trust button.
 - Resizable lower details: message, author/committer, dates, hashes, parents, changed files, diffs, file tree.
 - Restrained context menus, themes, keyboard access, scalable layout, accessible statuses.
 
@@ -44,7 +44,7 @@ Reference boundary: the original attachment was unavailable. A Fork screenshot s
 
 | Workflow | Normal interaction | Loading, empty, failure, and recovery |
 | --- | --- | --- |
-| Open/init/clone | Choose path or remote; establish trust and Git availability; open tab | Startup shell remains usable; clone progress/cancel. No tabs, invalid directory, missing Git, or cancelled/partial clone have distinct messages; never delete partial destination automatically. |
+| Open/init/clone | Choose path or remote; validate location/Git availability; open tab. Future executable workflows have separate trust gates | Startup shell remains usable; clone progress/cancel. No tabs, invalid directory, missing Git, or cancelled/partial clone have distinct messages; never delete partial destination automatically. |
 | Inspect history | Select commit/file, filter graph, inspect metadata/tree/diff | Incremental results; distinguish empty repository, no matches, missing shallow/partial objects, binary preview, and truncated large content from errors. |
 | Prepare commit | Review unstaged/staged differences; stage file/hunk; enter message; commit or explicit amend | Preserve draft/selection through refresh. Show stale-hunk, locked-index, hook/signing failure with Git output and current state. |
 | Branch/network/stash | Select concrete refs/remotes and scope; preview consequences; execute | Show missing upstream, divergence, rejected push, authentication request, connection failure, and conflicts. No implicit destructive retry. |

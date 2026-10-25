@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — 2026-10-25
+
+- Remove local-history approval questions and approval management. Opened and restored repositories load automatically; remembered identity detects replacements, with no permission to run hooks, scripts or remote fetches.
+- Launch Git directly inside a Windows Job Object, removing per-command .NET helpers. Prefer Git for Windows’ documented native entry point; combine HEAD/ref inspection and reuse its snapshot for initial/refresh reads. Preserve bounded output, cancellation, ownership checks and post-read validation.
+- Add repository-tab context menus for refresh, move left/right, close and close others, plus middle-click closing. Active-tab close cancels its read; inactive-tab close preserves active work.
+- Migrate settings to schema 4; retain previous fingerprints as replacement stamps. Add headless tab/process checks and a packed 100,000-commit benchmark. No installer, updater, network features or interactive launch.
+
 ## 0.5.0 — 2026-10-25
 
 - Automatically load the selected approved repository at startup and restore cached history on tab switches. Preserve per-tab scope, page, selection and scroll in a bounded session cache; refresh asynchronously without clearing useful rows.
