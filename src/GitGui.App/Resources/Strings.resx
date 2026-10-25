@@ -19,7 +19,7 @@
   <data name="ToolsUnavailable" xml:space="preserve"><value>Repository tools will become available in a later phase.</value></data>
   <data name="NoRepositorySelected" xml:space="preserve"><value>No repository selected</value></data>
   <data name="NoActiveOperation" xml:space="preserve"><value>No active operation</value></data>
-  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview · Choose All Commits or Current branch / HEAD. File status, diffs and Git mutations are not available yet.</value></data>
+  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview · All Commits. Dimmed actions are prototypes; file status, diffs and Git mutations are not available yet.</value></data>
   <data name="Navigation" xml:space="preserve"><value>Repository navigation</value></data>
   <data name="LocalChanges" xml:space="preserve"><value>Local changes</value></data>
   <data name="History" xml:space="preserve"><value>History</value></data>
@@ -139,7 +139,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="HistoryLimits" xml:space="preserve"><value>Page: 200 rows · Read: 4 MiB / 15 s · Graph: 64 lanes · Back navigation: 128 pages; First page in Repository · No total count limit</value></data>
   <data name="HistoryRange" xml:space="preserve"><value>Showing {0:N0}–{1:N0}</value></data>
   <data name="NewerCommits" xml:space="preserve"><value>Newer commits</value></data>
-  <data name="HistoryEmptyAll" xml:space="preserve"><value>No commits are reachable from local branches, remote-tracking branches or tags. For a detached HEAD, choose Current branch / HEAD.</value></data>
+  <data name="HistoryEmptyAll" xml:space="preserve"><value>No commits are reachable from local branches, remote-tracking branches, tags or HEAD.</value></data>
   <data name="HistoryPageFailed" xml:space="preserve"><value>The next page could not be loaded. The previous page is retained; see the status and Git output. Retry or refresh.</value></data>
   <data name="HistoryCancelled" xml:space="preserve"><value>History loading cancelled. Existing rows, if any, are retained; retry or refresh.</value></data>
   <data name="HeadLabel" xml:space="preserve"><value>HEAD</value></data>
@@ -148,7 +148,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="TagRefLabel" xml:space="preserve"><value>Tag: {0}</value></data>
   <data name="RefSeparator" xml:space="preserve"><value> · </value></data>
   <data name="CommitReferences" xml:space="preserve"><value>Branches and tags</value></data>
-  <data name="AllCommitsHelp" xml:space="preserve"><value>Commits reachable from local branches, remote-tracking branches and tags. Reflog-only, unreachable, stash-only and detached-only commits are excluded. Switch to Current branch / HEAD to inspect detached history. This does not check out a branch.</value></data>
+  <data name="AllCommitsHelp" xml:space="preserve"><value>All Commits: history reachable from local branches, remote-tracking branches, tags and HEAD, including detached HEAD. Reflog-only, unreachable and stash-only commits are excluded. No filters are active.</value></data>
   <data name="CurrentHeadHelp" xml:space="preserve"><value>Ancestors of the inspected HEAD, including detached HEAD. Commits exclusive to other branches or tags are outside this scope. This does not check out a branch.</value></data>
   <data name="MainMenu" xml:space="preserve"><value>Main menu</value></data>
   <data name="RepositoryMenu" xml:space="preserve"><value>_Repository</value></data>
@@ -179,4 +179,25 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="TimingBinding" xml:space="preserve"><value>UI binding</value></data>
   <data name="CloseOtherTabs" xml:space="preserve"><value>Close other tabs</value></data>
   <data name="RepositoryTabMenu" xml:space="preserve"><value>Repository tab actions</value></data>
+  <data name="FileMenu" xml:space="preserve"><value>_File</value></data>
+  <data name="ViewMenu" xml:space="preserve"><value>_View</value></data>
+  <data name="WindowMenu" xml:space="preserve"><value>_Window</value></data>
+  <data name="HelpMenu" xml:space="preserve"><value>_Help</value></data>
+  <data name="RepositoryActions" xml:space="preserve"><value>Repository actions</value></data>
+  <data name="PrototypeUnavailable" xml:space="preserve"><value>Planned action — not implemented in this preview.</value></data>
+  <data name="CountUnavailable" xml:space="preserve"><value>—</value><comment>Unavailable ahead/behind count, never a guessed zero.</comment></data>
+  <data name="AheadCount" xml:space="preserve"><value>Commits ahead of upstream</value></data>
+  <data name="BehindCount" xml:space="preserve"><value>Commits behind upstream</value></data>
+  <data name="DivergenceAvailable" xml:space="preserve"><value>Ahead: {0}; behind: {1}. Upstream: {2}. Local snapshot: {3:g}. No remote contact; the server may have newer commits. Both counts compare this upstream, which can differ from a configured push destination. Pull and Push are not implemented.</value><comment>{0}/{1} counts, {2} full upstream ref, {3} local snapshot date/time. Label form avoids plural sentences.</comment></data>
+  <data name="DivergenceStale" xml:space="preserve"><value>Previous comparison, possibly stale. Ahead: {0}; behind: {1}. Upstream: {2}. Local snapshot: {3:g}. No remote contact. Pull and Push are not implemented.</value><comment>{0}/{1} counts, {2} full upstream ref, {3} local snapshot date/time.</comment></data>
+  <data name="DivergencePending" xml:space="preserve"><value>Comparison not available yet. Counts use locally recorded upstream history; Pull and Push are not implemented.</value></data>
+  <data name="DivergenceNoUpstream" xml:space="preserve"><value>No upstream is configured for this branch. Pull and Push are not implemented.</value></data>
+  <data name="DivergenceMissingUpstream" xml:space="preserve"><value>The configured upstream ref is missing locally. No remote request was made. Pull and Push are not implemented.</value></data>
+  <data name="DivergenceDetached" xml:space="preserve"><value>Detached HEAD has no branch upstream to compare. Pull and Push are not implemented.</value></data>
+  <data name="DivergenceUnborn" xml:space="preserve"><value>This branch has no commits to compare. Pull and Push are not implemented.</value></data>
+  <data name="DivergenceShallow" xml:space="preserve"><value>This shallow repository may lack ancestry needed for complete counts. No counts are claimed. Pull and Push are not implemented.</value></data>
+  <data name="DivergenceFailed" xml:space="preserve"><value>Comparison failed or was cancelled. History remains available; refresh to retry. Git output, if available, is in Diagnostics. Pull and Push are not implemented.</value></data>
+  <data name="NewerShort" xml:space="preserve"><value>Newer</value></data>
+  <data name="ComparingDuration" xml:space="preserve"><value>Reading ahead/behind · {0:0.0} s</value><comment>{0} is elapsed local-read time in seconds, including history reading.</comment></data>
+  <data name="OlderShort" xml:space="preserve"><value>Older</value></data>
 </root>

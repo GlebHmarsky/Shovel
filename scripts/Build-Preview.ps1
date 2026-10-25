@@ -39,11 +39,14 @@ Requires the .NET 10 Desktop Runtime and Git for Windows 2.47.0 or newer.
 Use Repository > Open to select a local worktree root; history loads without an approval prompt.
 The selected saved tab loads automatically at startup; switching tabs reuses bounded cached pages.
 Select a row for its message, author/committer, dates, hash and parents below.
-All Commits includes local branches, remote-tracking branches and tags; Current branch / HEAD is separate.
-Use Load older commits / Newer commits to navigate 200-row pages without a total commit-count limit.
-The view shows its scope, row range, filters and read/graph limits. Detached-only history is in Current branch / HEAD.
+All Commits includes local branches, remote-tracking branches, tags and current HEAD. No scope/filter selector.
+Use Older / Newer to navigate 200-row pages without a total commit-count limit.
+The footer shows row range/status; tooltips expose read/graph limits. Detached HEAD is included.
 Use Repository > Refresh after external changes, or Cancel for a read.
 Activation refreshes cached snapshots older than 30 seconds. Right-click a tab for Refresh, Move, Close or Close others; middle click closes it.
+Pull shows behind and Push shows ahead of the configured upstream's local snapshot; no remote request is made.
+A dash means counts are pending/unavailable/failed; tooltips explain. Pull/Push do not execute yet.
+Menus, top toolbar and sidebar prototypes are restored; unavailable actions are disabled.
 Search/filter, file status, diffs, mutations, installer and automatic updates are not implemented.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.

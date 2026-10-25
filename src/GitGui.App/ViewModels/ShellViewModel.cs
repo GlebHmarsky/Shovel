@@ -10,8 +10,7 @@ using GitGui.ProcessHost;
 
 namespace GitGui.App.ViewModels;
 
-public sealed record HistoryScopeItem(HistoryScope Scope, string Label);
-public sealed record NavigationItem(NavigationSection Section, string Label);
+public sealed record NavigationItem(NavigationSection Section, string Label, bool IsAvailable = false);
 
 public sealed class ShellViewModel : ObservableObject
 {
@@ -28,11 +27,12 @@ public sealed class ShellViewModel : ObservableObject
     private GitInstallation? _git;
     private string? _explicitGit;
     private long _generation, _useCounter;
-    private bool _stopping, _publishingState;
+    private bool _stopping, _publishingState, _readingDivergence;
     public static TimeSpan RefreshAge { get; } = TimeSpan.FromSeconds(30);
     public const int CachedTabLimit = 3;
     private HistoryViewState? State => SelectedRepository?.History;
-    public IReadOnlyList<NavigationItem> Sections { get; } = [new(NavigationSection.History, UiText.Get("History"))];
+    public IReadOnlyList<NavigationItem> Sections { get; } = Enum.GetValues<NavigationSection>()
+        .Select(section => new NavigationItem(section, UiText.Get(section == NavigationSection.History ? "AllCommits" : section.ToString()), section == NavigationSection.History)).ToArray();
     public ObservableCollection<RepositoryTab> Repositories { get; } = [];
     public string Version => UiText.Format("VersionFormat", typeof(ShellViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
     private bool _isReady;
@@ -40,7 +40,7 @@ public sealed class ShellViewModel : ObservableObject
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(OperationStatus)); } } }
     public bool CanNavigate => IsReady && !_stopping;
-    public string OperationStatus => IsBusy ? UiText.Format("InspectingDuration", _elapsed.Elapsed.TotalSeconds) : UiText.Get("NoActiveOperation");
+    public string OperationStatus => IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) : UiText.Get("NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput => State?.RawOutput ?? "";
@@ -48,21 +48,14 @@ public sealed class ShellViewModel : ObservableObject
     public string SettingsNotice { get => _settingsNotice; private set => Set(ref _settingsNotice, value); }
     public string GitStatus => _git is null ? UiText.Get("GitNotChecked") : UiText.Format("GitVersionFormat", _git.Version);
     public string TimingDetails => string.Join(Environment.NewLine, _trace.Snapshot().Select(sample => UiText.Format("TimingSample", UiText.Get("Timing" + sample.Stage), sample.Milliseconds)));
-    public IReadOnlyList<HistoryScopeItem> HistoryScopes { get; } = [new(HistoryScope.AllCommits, UiText.Get("AllCommits")), new(HistoryScope.CurrentHead, UiText.Get("CurrentHeadHistory"))];
-    public HistoryScopeItem SelectedHistoryScope
-    {
-        get => HistoryScopes.Single(item => item.Scope == (State?.Scope ?? HistoryScope.AllCommits));
-        set
-        {
-            if (value is null || State is not { } state || state.Scope == value.Scope) return;
-            state.Scope = value.Scope;
-            // A new scope must not mislabel rows from the preceding scope.
-            state.Clear(); PublishState();
-            if (CanNavigate) BeginInspection(SelectedRepository!, force: true);
-        }
-    }
-    public string HistoryScopeDescription => UiText.Get(SelectedHistoryScope.Scope == HistoryScope.AllCommits ? "AllCommitsScope" : "CurrentHeadScope");
-    public string HistoryScopeHelp => UiText.Get(SelectedHistoryScope.Scope == HistoryScope.AllCommits ? "AllCommitsHelp" : "CurrentHeadHelp");
+    public string PullCount => Count(ahead: false);
+    public string PushCount => Count(ahead: true);
+    private string Count(bool ahead) => State?.Divergence is { State: DivergenceState.Available } value
+        ? (ahead ? value.Ahead : value.Behind).ToString(System.Globalization.CultureInfo.CurrentCulture) : UiText.Get("CountUnavailable");
+    public string DivergenceHelp => State?.Divergence is { State: DivergenceState.Available } value && SelectedRepository?.Snapshot is { } snapshot
+        ? UiText.Format(State.ValidatedAt == default ? "DivergenceStale" : "DivergenceAvailable", value.Ahead, value.Behind,
+            snapshot.UpstreamRef ?? "", snapshot.ReadAt.LocalDateTime)
+        : UiText.Get("Divergence" + (State?.Divergence.State ?? DivergenceState.Pending));
     public string HistoryRange => State?.Page is not { } page || Commits.Count == 0 ? "" : UiText.Format("HistoryRange", page.Cursor.Offset + 1, page.Cursor.Offset + Commits.Count);
     public IReadOnlyList<CommitRow> Commits => State?.Rows ?? [];
     public double GraphWidth => Views.CommitGraphCell.WidthFor(Commits.Count == 0 ? 1 : Commits.Max(row => row.Graph.LaneCount));
@@ -77,7 +70,7 @@ public sealed class ShellViewModel : ObservableObject
     }
     public string HistoryNotice => State?.Notice ?? UiText.Get("HistoryNotLoaded");
     public bool IsHistory => true;
-    public NavigationItem SelectedSection { get => Sections[0]; set { } }
+    public NavigationItem SelectedSection { get => Sections.Single(item => item.IsAvailable); set { } }
     private RepositoryTab? _selectedRepository;
     public RepositoryTab? SelectedRepository
     {
@@ -178,7 +171,8 @@ public sealed class ShellViewModel : ObservableObject
         foreach (var path in result.Settings.RepositoryPaths)
         {
             var tab = new RepositoryTab(path);
-            tab.History.Scope = result.Settings.RepositoryPreferences.FirstOrDefault(item => item.Path.Equals(path, StringComparison.OrdinalIgnoreCase))?.Scope ?? HistoryScope.AllCommits;
+            // The user requested one unfiltered view; ignore legacy current-branch preferences.
+            tab.History.Scope = HistoryScope.AllCommits;
             Repositories.Add(tab);
         }
         foreach (var identity in result.Settings.RepositoryIdentities)
@@ -207,12 +201,13 @@ public sealed class ShellViewModel : ObservableObject
         var generation = ++_generation;
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         _operationCancellation = cancellation;
-        _elapsed.Restart(); IsBusy = true; _timer.Start();
+        _readingDivergence = false; _elapsed.Restart(); IsBusy = true; _timer.Start();
         _activeOperation = InspectAsync();
 
         async Task InspectAsync()
         {
             var state = tab.History;
+            var historyPublished = false;
             try
             {
                 await prior; // Drain owned cancelled work before admitting the next read.
@@ -243,6 +238,7 @@ public sealed class ShellViewModel : ObservableObject
                 { state.Notice = LoadedNotice(state.Page); Status = UiText.Get("HistoryCached"); return; }
                 state.Notice = UiText.Get(state.Page is null ? "HistoryLoading" : "HistoryRefreshing"); Changed(nameof(HistoryNotice));
                 state.ValidatedAt = default; // A failed/cancelled refresh cannot later masquerade as fresh cached data.
+                Changed(nameof(DivergenceHelp));
                 Status = UiText.Get("InspectingRepository");
                 _git ??= await _reader.DiscoverAsync(_explicitGit, cancellation.Token); Changed(nameof(GitStatus));
                 var previous = state.Page;
@@ -303,12 +299,27 @@ public sealed class ShellViewModel : ObservableObject
                 state.ValidatedAt = DateTimeOffset.UtcNow; state.NeedsRefresh = false;
                 state.Notice = LoadedNotice(history); state.Error = state.RawOutput = "";
                 tab.Apply(history.Session.Repository); EvictCaches(tab); Status = UiText.Get("HistoryLoaded");
+                historyPublished = true;
+                if (direction == 0) state.Divergence = new(DivergenceState.Pending);
+                PublishState(); // Rows are usable before optional ahead/behind traversal or a profile write.
                 if (identityChanged)
                 {
                     _knownIdentities[tab.Directory] = new(tab.Directory, identity.Fingerprint);
-                    PublishState(); // Do not delay first rows for a profile write.
                     await PersistRepositoryIdentitiesAsync();
                 }
+                if (direction != 0) return; // The page uses the same immutable tips and cached comparison.
+                _readingDivergence = true; Changed(nameof(OperationStatus));
+                try
+                {
+                    var divergence = await _reader.ReadDivergenceAsync(_git, history.Session, cancellation.Token);
+                    if (!Obsolete()) state.Divergence = divergence;
+                }
+                catch (GitReadException exception)
+                {
+                    if (!Obsolete()) { state.Divergence = new(DivergenceState.Failed); state.RawOutput = exception.RawOutput; }
+                }
+                catch (OperationCanceledException) { if (!Obsolete(ignoreCancellation: true)) state.Divergence = new(DivergenceState.Failed); }
+                catch (Exception) { if (!Obsolete()) state.Divergence = new(DivergenceState.Failed); }
             }
             catch (GitReadException exception)
             {
@@ -325,13 +336,14 @@ public sealed class ShellViewModel : ObservableObject
             { if (!Obsolete()) { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryFailed" : "HistoryRefreshFailed"); Status = UiText.Get("GitErrorUnexpected"); } }
             finally
             {
+                if (historyPublished && cancellation.IsCancellationRequested) state.Divergence = new(DivergenceState.Failed);
                 if (ReferenceEquals(_operationCancellation, cancellation)) _operationCancellation = null;
                 cancellation.Dispose();
                 if (generation == _generation)
                 {
-                    if (cancellation.IsCancellationRequested && !_stopping)
+                    if (cancellation.IsCancellationRequested && !_stopping && !historyPublished)
                     { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); }
-                    _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
+                    _readingDivergence = false; _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
                     Changed(nameof(OperationStatus)); PublishState();
                 }
             }
@@ -372,7 +384,7 @@ public sealed class ShellViewModel : ObservableObject
             try
             {
                 HighlightAuthors();
-                foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(SelectedHistoryScope), nameof(HistoryScopeDescription), nameof(HistoryScopeHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
+                foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(PullCount), nameof(PushCount), nameof(DivergenceHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
                 RefreshCommands(); HistoryViewChanged?.Invoke(this, EventArgs.Empty);
             } finally { _publishingState = false; }
         }

@@ -37,6 +37,7 @@ public sealed class RepositoryTab(string directory) : ObservableObject
 internal sealed record PageView(string? SelectedHash, double Vertical, double Horizontal);
 internal sealed class HistoryViewState
 {
+    public BranchDivergence Divergence { get; set; } = new(DivergenceState.Pending);
     public Dictionary<long, PageView> PageViews { get; } = [];
     public HistoryScope Scope { get; set; }
     public CommitHistory? Page { get; set; }
@@ -58,5 +59,6 @@ internal sealed class HistoryViewState
         Page = null; Rows = []; Selected = null; PageViews.Clear(); EstimatedBytes = 0; Cursors.Clear(); PageIndex = 0;
         VerticalOffset = HorizontalOffset = 0; NeedsRefresh = false; ValidatedAt = default;
         Notice = UiText.Get("HistoryNotLoaded"); Error = RawOutput = "";
+        Divergence = new(DivergenceState.Pending);
     }
 }

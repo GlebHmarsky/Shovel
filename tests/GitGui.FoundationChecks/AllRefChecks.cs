@@ -9,7 +9,7 @@ internal static partial class Program
     private static async Task RunAllRefChecksAsync(RepositoryReader reader, GitInstallation git,
         Func<string, string[], Task<ProcessResult>> runGit)
     {
-        await Check("All Commits includes branch, remote and tag ancestry but excludes detached/reflog-only commits", async () =>
+        await Check("All Commits includes branch, remote and tag ancestry and current HEAD but excludes reflog-only commits", async () =>
         {
             var all = Fixture("all refs — 日本語");
             await runGit(all, ["init", "--initial-branch=main", "--object-format=sha1"]);
@@ -56,7 +56,7 @@ internal static partial class Program
             var current = await reader.OpenHistoryAsync(git, detached, HistoryScope.CurrentHead, default);
             Expect((await reader.ReadHistoryPageAsync(git, current, HistoryCursor.Start, default)).Entries.First().Commit.Hash == ghost, "Detached ancestry belongs to Current branch / HEAD");
             var allDetached = await reader.OpenHistoryAsync(git, detached, HistoryScope.AllCommits, default);
-            Expect(!(await reader.ReadHistoryPageAsync(git, allDetached, HistoryCursor.Start, default)).Entries.Any(row => row.Commit.Hash == ghost), "Detached-only commits stay outside All Commits");
+            Expect((await reader.ReadHistoryPageAsync(git, allDetached, HistoryCursor.Start, default)).Entries.Any(row => row.Commit.Hash == ghost), "All Commits includes the current detached HEAD without requiring a filter");
             await runGit(all, ["checkout", "main"]);
             await runGit(all, ["update-ref", "-d", "refs/heads/feature-日本語"]);
             await ExpectGitFailure(GitFailure.ChangedDuringRead, () => reader.ReadHistoryPageAsync(git, session, first.Next!, default));

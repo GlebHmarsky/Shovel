@@ -20,6 +20,7 @@ public sealed record RepositorySnapshot(string Worktree, string GitDirectory, st
     string? Branch, string? Commit, HeadKind HeadKind, RepositoryOperation Operation, DateTimeOffset ReadAt)
 {
     internal HistoryState? InitialHistoryState { get; init; }
+    public string? UpstreamRef { get; init; }
 }
 
 /// <summary>Read-only metadata commands. Caller validates repository identity before automatic reads; no helper/script permission is implied.</summary>
@@ -68,7 +69,7 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         if (operation != ReadOperation(gitDirectory)) throw new GitReadException(GitFailure.ChangedDuringRead);
         return location with { Branch = state.Branch, Commit = state.Commit,
             HeadKind = state.Branch is null ? HeadKind.Detached : state.Commit is null ? HeadKind.Unborn : HeadKind.Branch,
-            InitialHistoryState = state };
+            InitialHistoryState = state, UpstreamRef = state.UpstreamRef };
 
         async Task<ProcessResult> Command(params string[] args)
         {

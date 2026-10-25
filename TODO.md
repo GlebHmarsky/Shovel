@@ -4,21 +4,21 @@ Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 =
 
 ## Current phase
 
-**Current: fast local history and repository-tab actions / 0.6.0.** The user explicitly removed approval prompts for audited local history reads. No interactive launch or desktop control.
+**Current: full-height history workspace and upstream counts / 0.7.0.** Restore the requested prototype navigation/toolbar, with all history directly below the repository tabs. No interactive launch or desktop control.
 
-- [x] **P0 — Eliminate measured startup overhead.** Five Git calls instead of nine; first 200 formatted rows measured 2.14 → 0.54 s median. Packed 100k first/last pages and runner safety verified; see roadmap for measurement limits.
-- [x] **P1 — Always load local history without a consent question.** Open/restored tabs load automatically; retain identity/ownership/helper suppression and clear replacement errors. No remote fetch.
-- [x] **P1 — Repository-tab actions.** Context menu targets the clicked tab; middle click and menu close it safely, including during an active read. Verified headlessly.
-- [x] **P0 — Verify and deliver.** 61 checks, repeated timings, offscreen layout/menu review, docs/version/changelog and matching ignored 0.6.0 preview verified; intended changes committed with this delivery.
+- [x] **P1 — Give history the workspace.** Removed scope/filter controls and heading rows; fixed All Commits includes current HEAD. Restored sidebar/menus/actions and centered repository/branch/timer. Disabled prototypes remain clearly identified.
+- [x] **P1 — Real ahead/behind indicators.** Compare local snapshot tips against the configured upstream after rows appear; missing/detached/unborn/shallow/error states use a dash, with no network request. Disposable and controlled failure checks passed.
+- [x] **P0 — Verify and deliver.** 65 checks, normal/minimum offscreen renders, 0.51–0.55 s first-page fixture, docs/version/changelog and matching ignored 0.7.0 preview verified; intended changes committed with this delivery.
 
 ## Next priorities
 
+- [ ] **P1 — Implement Local Changes/status after workspace review.** Replace that prototype with real porcelain-v2/NUL data: staged, unstaged, untracked, ignored and conflicted states. Retain automatic history responsiveness and test only disposable repositories; no mutations yet.
 - [ ] **P0 — Validate startup on representative repositories before more features.** With separate authorization, measure actual cold/warm launch, first visible rows and keyboard/tab responsiveness on Windows 10/11; no interactive launch is authorized now. Include custom Git installations and real profile restart/replacement detection.
 - [ ] **P1 — Extend performance fixtures.** Extend the measured packed 100,000-commit/1,201-ref fixture to merge-heavy/million-commit repositories, cancellation under load, app/child peak memory and five-minute idle CPU. Use the F1e baseline before more runner changes.
 - [ ] **P1 — Broaden accessibility/layout validation.** Mixed DPI, actual high contrast/screen reader, keyboard focus, +40%/RTL layouts and full theme selection. Headless high-contrast color fallback is not an OS accessibility pass.
-- [ ] **P2 — Resume history improvements after responsiveness review.** Individual ref selection/search with truthful ancestry; keep scope, selected hash and scroll preservation.
+- [ ] **P2 — Revisit filtering only when requested.** Individual ref selection/search with truthful ancestry; preserve the default All Commits view, selected hash and scroll.
 - [ ] **P2 — Selected-commit file list, then diffs.** Bounded real data, exact paths and binary/EOL/large-content cases; no placeholders.
-- [ ] **P2 — Read-only status and reconciliation.** Porcelain-v2/NUL parser, staged/unstaged/untracked/ignored/conflict distinctions; extend focus/resume state handling before any mutation or external-tool work.
+- [ ] **P2 — External reconciliation.** Extend focus/resume state handling before any mutation or external-tool work.
 
 ## Backlog
 
@@ -37,7 +37,9 @@ Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 =
 
 ## Completed work
 
-- [x] **P1 — Fast local history and tab actions / 0.6.0.** Current-phase scope above completed on 2026-10-25; detailed evidence and remaining performance/desktop limits are in roadmap F1e.
+- [x] **P1 — Workspace and upstream counts / 0.7.0.** Current-phase scope completed on 2026-10-25; roadmap F1f records evidence and limits. No interactive launch or actual pull/push.
+
+- [x] **P1 — Fast local history and tab actions / 0.6.0.** F1e completed on 2026-10-25; detailed evidence and remaining performance/desktop limits are in roadmap F1e.
 
 - [x] **P1 — Automatic history / 0.5.0.** Completed F1d on 2026-10-25. Paired first-page median 3.89 → 2.29 seconds; warm cached switches issue no Git commands. Actual desktop launch/input, Windows 10 and memory/idle budgets remain unverified; F1e adds larger synthetic histories.
 

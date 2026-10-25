@@ -94,6 +94,7 @@ internal static partial class Program
             Expect(rows.Select(row => row.Commit.Hash).SequenceEqual(TextLines(cli)), "No missing, duplicate or reordered commits across pages");
         });
         await RunAllRefChecksAsync(reader, git, runGit);
+        await RunDivergenceChecksAsync(reader, git, runGit);
         await Check("Empty and unborn HEAD repositories retain truthful all-ref history", async () =>
         {
             var empty = Fixture("empty history"); await runGit(empty, ["init", "--initial-branch=main"]);

@@ -185,14 +185,14 @@ internal static partial class Program
             Expect(window.Title == UiText.Get("AppTitle"), "Window title must resolve from English resources");
             var buttons = Descendants<Button>(window).ToArray();
             var disabledLabels = new[] { "Fetch", "Pull", "Push", "Stash", "Explorer", "Terminal", "Editor", "Tools" }.Select(UiText.Get).ToArray();
-            var futureButtons = buttons.Where(button => disabledLabels.Contains(button.Content as string)).ToArray();
-            Expect(futureButtons.Length == 0, "Unimplemented Git/tool buttons must be absent");
+            var futureButtons = buttons.Where(button => disabledLabels.Contains(AutomationProperties.GetName(button))).ToArray();
+            Expect(futureButtons.Length == 8 && futureButtons.All(button => !button.IsEnabled && button.Command is null), "Requested prototype actions are visible, disabled and cannot execute Git or tools");
             var navigation = Descendants<ListBox>(window).Single(list => AutomationProperties.GetAutomationId(list) == "Navigation");
             var firstItem = navigation.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
-            Expect(firstItem is not null && AutomationProperties.GetName(firstItem) == UiText.Get("History"),
+            Expect(firstItem is not null && AutomationProperties.GetName(firstItem) == UiText.Get("LocalChanges"),
                 "Accessible navigation names must use localized labels, not model ToString values");
             model.CompleteStartup(new(new() { SelectedSection = NavigationSection.Branches }, SettingsLoadStatus.Loaded));
-            Expect(model.IsReady && model.AreaTitle == UiText.Get("History"), "Retired prototype sections fall back to implemented history");
+            Expect(model.IsReady && model.AreaTitle == UiText.Get("AllCommits"), "Retired prototype sections fall back to implemented history");
             model.CompleteStartup(new(new(), SettingsLoadStatus.NewerSchema));
             Expect(model.Status == UiText.Get("SettingsNewer"), "Unsafe settings must be explained in UI");
             window.Close();

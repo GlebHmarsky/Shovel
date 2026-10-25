@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 — 2026-10-25
+
+- Place the history table directly below repository tabs, with compact paging/status below it. Remove scope/filter controls; All Commits always includes local branches, remote-tracking branches, tags and the current HEAD. Older current-branch preferences no longer restrict the view.
+- Restore File/View/Repository/Window/Help menus, the top action toolbar and sidebar destinations. Move repository, branch and read timer into the top-center block. Unimplemented Git/tool/sidebar actions are visible, disabled prototypes with localized explanations.
+- Show real behind/ahead counts beside Pull/Push, calculated after history appears from the configured upstream's local snapshot. No network access or actual pull/push is added; unavailable, incomplete and failed comparisons show a dash rather than a guessed zero.
+- Add disposable upstream/divergence tests, cancellation/failure checks and offscreen workspace verification. Existing tab caches, selection, author highlighting and read safety remain.
+
 ## 0.6.0 — 2026-10-25
 
 - Remove local-history approval questions and approval management. Opened and restored repositories load automatically; remembered identity detects replacements, with no permission to run hooks, scripts or remote fetches.

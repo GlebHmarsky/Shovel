@@ -49,7 +49,7 @@ internal static partial class Program
             watch.Restart(); model.CompleteStartup(restored);
             await model.WaitForIdleAsync();
             timings.Add(new { scenario = "restored first repository", settingsMs, milliseconds = watch.Elapsed.TotalMilliseconds, stages = trace.Snapshot() });
-            Expect(model.SelectedRepository?.Directory == second && model.Commits.Count == 200 && model.SelectedHistoryScope.Scope == HistoryScope.CurrentHead, "Startup needs no trust/refresh click");
+            Expect(model.SelectedRepository?.Directory == second && model.Commits.Count == 200 && model.CaptureSession(new()).RepositoryPreferences.All(item => item.Scope == HistoryScope.AllCommits), "Startup needs no click and ignores legacy current-branch filtering");
             Expect(model.Repositories[0].Snapshot is null, "Only selected repository loads; no preloading");
         });
         await Check("Warm tab switching retains page, scope, selection and scroll without repeated Git", async () =>
@@ -68,7 +68,7 @@ internal static partial class Program
                 var immediateMs = watch.Elapsed.TotalMilliseconds;
                 await model.WaitForIdleAsync();
                 timings.Add(new { scenario = "warm switch", immediateMs, validatedMs = watch.Elapsed.TotalMilliseconds });
-                Expect(model.HistoryScroll == (7d, 50d) && model.SelectedHistoryScope.Scope == HistoryScope.CurrentHead, "Scroll and scope are per tab");
+                Expect(model.HistoryScroll == (7d, 50d) && model.CaptureSession(new()).RepositoryPreferences.All(item => item.Scope == HistoryScope.AllCommits), "Scroll is per tab and all tabs show unfiltered history");
                 model.SelectedRepository = model.Repositories[0]; await model.WaitForIdleAsync();
             }
             Expect(runner.Calls == calls, "Fresh cached tabs validate identity without Git calls");

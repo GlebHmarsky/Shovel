@@ -25,7 +25,7 @@ public sealed record CommitHistory(HistorySession Session, HistoryCursor Cursor,
     public bool IsShallow => Session.IsShallow;
 }
 
-internal sealed record HistoryState(string Refs, string Fingerprint, bool IsShallow, string? Branch, string? Commit);
+internal sealed record HistoryState(string Refs, string Fingerprint, bool IsShallow, string? Branch, string? Commit, string? UpstreamRef);
 
 public sealed partial class RepositoryReader
 {
@@ -45,7 +45,7 @@ public sealed partial class RepositoryReader
         {
             token.ThrowIfCancellationRequested();
             var fields = record.Split('\0');
-            if (fields.Length != 6 || !IsObjectId(fields[1])) throw new GitReadException(GitFailure.InvalidOutput);
+            if (fields.Length != 7 || !IsObjectId(fields[1])) throw new GitReadException(GitFailure.InvalidOutput);
             var name = fields[0];
             if (!name.StartsWith("refs/heads/", StringComparison.Ordinal) &&
                 !name.StartsWith("refs/remotes/", StringComparison.Ordinal) &&
@@ -101,15 +101,16 @@ public sealed partial class RepositoryReader
             var before = await ReadHistoryStateAsync(git, session.Repository, token).ConfigureAwait(false);
             if (before.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
         }
-        var empty = session.Scope == HistoryScope.CurrentHead ? session.Repository.Commit is null :
-            !session.References.Any(reference => reference.Name != "HEAD");
+        var empty = session.Scope == HistoryScope.CurrentHead ? session.Repository.Commit is null : session.References.Count == 0;
         if (empty)
         {
             var emptyState = await ReadHistoryStateAsync(git, session.Repository, token).ConfigureAwait(false);
             if (emptyState.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
             return new CommitHistory(session, cursor, null, []);
         }
-        string[] roots = session.Scope == HistoryScope.AllCommits ? ["--branches", "--remotes", "--tags"] : [session.Repository.Commit!];
+        string[] roots = session.Scope == HistoryScope.AllCommits
+            ? ["--branches", "--remotes", "--tags", .. (session.Repository.Commit is { } head ? new[] { head } : [])]
+            : [session.Repository.Commit!];
         // Re-walk an unchanged ref snapshot with --skip. Retain only one page of messages/rows.
         // Deep walks can hit the process deadline; they report a retryable error, never 'end'.
         var result = await RunAsync(git.Executable, session.Repository.Worktree, ReadArguments([
@@ -140,19 +141,20 @@ public sealed partial class RepositoryReader
     {
         using var timing = trace?.Measure(TimingStage.References);
         var result = await RunAsync(git.Executable, repository.Worktree, ReadArguments([
-            "for-each-ref", "--include-root-refs", "--sort=refname", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref:short)",
+            "for-each-ref", "--include-root-refs", "--sort=refname", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref)%00%(upstream)",
             "HEAD", "refs/heads/", "refs/remotes/", "refs/tags/", "refs/replace/"
         ]), token, MaximumHistoryBytes).ConfigureAwait(false);
         RequireSuccess(result);
-        string? branch = null, commit = null;
+        string? branch = null, commit = null, headTarget = null;
         var refs = Text(result.StandardOutput);
         foreach (var record in refs.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var fields = record.Split('\0');
-            if (fields.Length != 6 || !IsObjectId(fields[1])) throw new GitReadException(GitFailure.InvalidOutput);
+            if (fields.Length != 7 || !IsObjectId(fields[1])) throw new GitReadException(GitFailure.InvalidOutput);
             if (fields[0] != "HEAD") continue;
             if (commit is not null || fields[2] != "commit") throw new GitReadException(GitFailure.InvalidOutput);
-            commit = fields[1]; branch = fields[5].Length == 0 ? null : fields[5];
+            commit = fields[1]; headTarget = fields[5].Length == 0 ? null : fields[5];
+            branch = headTarget?.StartsWith("refs/heads/", StringComparison.Ordinal) == true ? headTarget[11..] : headTarget;
         }
         if (commit is null)
         {
@@ -166,7 +168,10 @@ public sealed partial class RepositoryReader
         using var fingerprint = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
         foreach (var part in new[] { result.StandardOutput, shallow, grafts, Encoding.UTF8.GetBytes(branch ?? ""), BitConverter.GetBytes((int)ReadOperation(repository.GitDirectory)) })
         { fingerprint.AppendData(BitConverter.GetBytes(part.Length)); fingerprint.AppendData(part); }
-        return new(refs, Convert.ToHexString(fingerprint.GetHashAndReset()), shallow.Length != 0, branch, commit);
+        var upstream = refs.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(record => record.Split('\0'))
+            .FirstOrDefault(fields => fields[0] == headTarget)?[6];
+        return new(refs, Convert.ToHexString(fingerprint.GetHashAndReset()), shallow.Length != 0, branch, commit,
+            string.IsNullOrEmpty(upstream) ? null : upstream);
 
         byte[] ReadBoundary(string relative)
         {

@@ -147,10 +147,10 @@ internal static partial class Program
                     }
                     finally { window.Close(); }
                 });
-                await Check("All Commits is the default, labels render, and switching scope changes real history only", async () =>
+                await Check("All Commits fills the workspace without scope controls and retains real labels/details", async () =>
                 {
                     var model = await LoadRealModel(_allHistoryRepository!);
-                    Expect(model.SelectedHistoryScope.Scope == HistoryScope.AllCommits && model.Commits.Count == 7, "Default must include every branch and tag tip");
+                    Expect(model.Commits.Count == 7, "Default must include every branch and tag tip");
                     Expect(model.Commits.Any(row => row.RefLabels.Contains("feature-日本語")) && model.Commits.Any(row => row.RefLabels.Contains("origin/remote-only")), "Local and remote labels are visible text");
                     model.SelectedCommit = model.Commits.Single(row => row.Commit.Subject == "Tag-only work");
                     Expect(model.SelectedCommit.MessagePreview.Length > 100000 && model.SelectedCommit.RefLabels.Contains("release"), "Selected tag commit exposes full message and labels");
@@ -160,19 +160,18 @@ internal static partial class Program
                         var content = (FrameworkElement)window.Content;
                         Arrange(content, 1200, 760);
                         await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                        Expect(VisualDescendants<ComboBox>(content).Any(combo => Equals(combo.SelectedItem, model.SelectedHistoryScope)), "Scope selector is discoverable and bound");
+                                                Expect(!VisualDescendants<ComboBox>(content).Any(), "No prototype filter or scope selector consumes history space");
+                        var table = VisualDescendants<DataGrid>(content).Single();
+                        var tabs = VisualDescendants<ListBox>(content).Single(list => list.ItemsSource == model.Repositories);
+                        var tableTop = table.TranslatePoint(new Point(0, 0), content).Y;
+                        var tabsBottom = tabs.TranslatePoint(new Point(0, tabs.ActualHeight), content).Y;
+                        Expect(Math.Abs(tableTop - tabsBottom) <= 1, "History begins immediately below repository tabs");
                         SaveRender(content, "all-commits.png", 1200, 760);
                         Arrange(content, 900, 580);
                         await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                         SaveRender(content, "all-commits-minimum.png", 900, 580);
                     }
                     finally { window.Close(); }
-                    model.SelectedHistoryScope = model.HistoryScopes.Single(item => item.Scope == HistoryScope.CurrentHead);
-                    await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
-                    Expect(model.Commits.Count == 4 && model.SelectedRepository?.Snapshot?.Branch == "main", "Scope changes are read-only and current HEAD excludes other tips");
-                    model.SelectedHistoryScope = model.HistoryScopes[0];
-                    await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(30));
-                    Expect(model.Commits.Count == 7, "All Commits restores the complete named-ref scope");
                 });
                 await Check("Failed, cancelled and changed next-page reads retain existing rows", async () =>
                 {
@@ -219,6 +218,7 @@ internal static partial class Program
 
             await RunAutomaticHistoryChecksAsync();
             await RunTabInteractionChecksAsync();
+            await RunDivergenceViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)
             {
@@ -284,7 +284,7 @@ internal static partial class Program
                 return new(failure, null, [], Encoding.UTF8.GetBytes("fixture failure"), TimeSpan.Zero);
             var result = await _inner.RunAsync(request, token, output);
             if (ChangeRefs && request.Arguments.Contains("for-each-ref"))
-                return result with { StandardOutput = [.. result.StandardOutput, .. Encoding.UTF8.GetBytes("refs/heads/external\0abcdef\0commit\0\0\0\n")] };
+                return result with { StandardOutput = [.. result.StandardOutput, .. Encoding.UTF8.GetBytes("refs/heads/external\0abcdef\0commit\0\0\0\0\n")] };
             return result;
         }
     }
@@ -299,6 +299,12 @@ internal static partial class Program
         public bool HoldHistory { get; init; }
         public bool UseRequestDirectory { get; set; }
         public bool IgnoreHistoryCancellation { get; init; }
+        public bool HasUpstream { get; init; }
+        public bool HoldDivergence { get; init; }
+        public bool FailDivergence { get; set; }
+        public bool IgnoreDivergenceCancellation { get; init; }
+        public TaskCompletionSource DivergenceStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseDivergence { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Calls;
         public bool Cancelled;
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken, Action<ProcessOutput>? output = null)
@@ -308,6 +314,13 @@ internal static partial class Program
             try { await Release.Task.WaitAsync(cancellationToken); }
             catch (OperationCanceledException) { Cancelled = true; return new(ProcessOutcome.Cancelled, null, [], [], TimeSpan.Zero); }
             var args = request.Arguments;
+            if (args.Contains("rev-list"))
+            {
+                DivergenceStarted.TrySetResult();
+                if (HoldDivergence) await ReleaseDivergence.Task.WaitAsync(IgnoreDivergenceCancellation ? CancellationToken.None : cancellationToken);
+                return FailDivergence ? new(ProcessOutcome.Exited, 128, [], Encoding.UTF8.GetBytes("comparison fixture failure"), TimeSpan.Zero)
+                    : new(ProcessOutcome.Exited, 0, Encoding.UTF8.GetBytes("3\t2\n"), [], TimeSpan.Zero);
+            }
             if (args.Contains("log"))
             {
                 HistoryStarted.TrySetResult();
@@ -316,7 +329,8 @@ internal static partial class Program
                 return new(ProcessOutcome.Exited, 0, Encoding.UTF8.GetBytes(row), [], TimeSpan.Zero);
             }
             if (args.Contains("for-each-ref")) return new(ProcessOutcome.Exited, 0,
-                Encoding.UTF8.GetBytes("HEAD\0abcdef\0commit\0\0\0main\nrefs/heads/main\0abcdef\0commit\0\0\0\n"), [], TimeSpan.Zero);
+                Encoding.UTF8.GetBytes("HEAD\0abcdef\0commit\0\0\0refs/heads/main\0\nrefs/heads/main\0abcdef\0commit\0\0\0\0" +
+                    (HasUpstream ? "refs/remotes/origin/main\nrefs/remotes/origin/main\0bcdefa\0commit\0\0\0\0\n" : "\n")), [], TimeSpan.Zero);
             var location = UseRequestDirectory ? request.WorkingDirectory : directory;
             var value = args.Contains("--version") ? "git version 2.51.1" :
                 args.Contains("--is-shallow-repository") ? "false" :
