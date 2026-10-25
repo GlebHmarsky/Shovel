@@ -14,6 +14,7 @@ public sealed class CommitRow : ObservableObject
     public string MessagePreview { get; }
     public string RefLabels { get; }
     public string RefPreview { get; }
+    public IReadOnlyList<RefBadge> Badges { get; }
     public string MessageNotice { get; }
     public string ShortHash { get; }
     public string Date { get; }
@@ -34,7 +35,7 @@ public sealed class CommitRow : ObservableObject
         string.Equals(Commit.Author, other.Commit.Author, StringComparison.Ordinal) &&
         string.Equals(Commit.AuthorEmail, other.Commit.AuthorEmail, StringComparison.Ordinal);
 
-    public CommitRow(HistoryEntry entry)
+    public CommitRow(HistoryEntry entry, RepositorySnapshot? repository = null)
     {
         Commit = entry.Commit; Graph = entry.Graph;
         var subject = Commit.Subject;
@@ -47,12 +48,14 @@ public sealed class CommitRow : ObservableObject
                 reference.Name.StartsWith("refs/remotes/", StringComparison.Ordinal) ? "RemoteRefLabel" : "TagRefLabel",
                 reference.Name[(reference.Name.IndexOf('/', 5) + 1)..])));
         RefPreview = Limit(RefLabels, 512);
+        Badges = RefBadge.Build(entry, repository);
         ShortHash = Commit.Hash[..Math.Min(12, Commit.Hash.Length)];
         Date = Commit.CommittedAt.LocalDateTime.ToString("g", CultureInfo.CurrentCulture);
         AuthorDetails = UiText.Format("CommitIdentity", Commit.Author, Commit.AuthorEmail, Commit.AuthoredAt.ToString("G", CultureInfo.CurrentCulture), Commit.AuthoredAt.ToString("zzz", CultureInfo.InvariantCulture));
         CommitterDetails = UiText.Format("CommitIdentity", Commit.Committer, Commit.CommitterEmail, Commit.CommittedAt.ToString("G", CultureInfo.CurrentCulture), Commit.CommittedAt.ToString("zzz", CultureInfo.InvariantCulture));
         Parents = Commit.Parents.Count == 0 ? UiText.Get("RootCommit") : string.Join(Environment.NewLine, Commit.Parents);
-        _accessibilityLabel = UiText.Format("CommitRowAccessible", Description, Author, ShortHash, Parents, RefLabels);
+        _accessibilityLabel = UiText.Format("CommitRowAccessible", Description, Author, ShortHash, Parents,
+            string.Join(UiText.Get("RefSeparator"), Badges.Select(badge => badge.Help)));
     }
     private static string Limit(string value, int length) => value.Length > length ? UiText.Format("TruncatedCommitText", value[..length]) : value;
 }

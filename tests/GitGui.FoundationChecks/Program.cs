@@ -184,9 +184,9 @@ internal static partial class Program
             Expect(!model.IsReady, "Loading state must be explicit");
             Expect(window.Title == UiText.Get("AppTitle"), "Window title must resolve from English resources");
             var buttons = Descendants<Button>(window).ToArray();
-            var disabledLabels = new[] { "Fetch", "Pull", "Push", "Stash", "Explorer", "Terminal", "Editor", "Tools" }.Select(UiText.Get).ToArray();
+            var disabledLabels = new[] { "Stash", "Explorer", "Terminal", "Editor", "Tools" }.Select(UiText.Get).ToArray();
             var futureButtons = buttons.Where(button => disabledLabels.Contains(AutomationProperties.GetName(button))).ToArray();
-            Expect(futureButtons.Length == 8 && futureButtons.All(button => !button.IsEnabled && button.Command is null), "Requested prototype actions are visible, disabled and cannot execute Git or tools");
+            Expect(futureButtons.Length == 5 && futureButtons.All(button => !button.IsEnabled && button.Command is null), "Requested prototype actions are visible, disabled and cannot execute Git or tools");
             var navigation = Descendants<ListBox>(window).Single(list => AutomationProperties.GetAutomationId(list) == "Navigation");
             var firstItem = navigation.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
             Expect(firstItem is not null && AutomationProperties.GetName(firstItem) == UiText.Get("LocalChanges"),

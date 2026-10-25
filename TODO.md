@@ -4,26 +4,29 @@ Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 =
 
 ## Current phase
 
-**Current: full-height history workspace and upstream counts / 0.7.0.** Restore the requested prototype navigation/toolbar, with all history directly below the repository tabs. No interactive launch or desktop control.
+**Current: explicit branch/network actions and ref badges / 0.8.0.** User authorized this next capability increment. No interactive launch, desktop control or live authentication/network tests.
 
-- [x] **P1 — Give history the workspace.** Removed scope/filter controls and heading rows; fixed All Commits includes current HEAD. Restored sidebar/menus/actions and centered repository/branch/timer. Disabled prototypes remain clearly identified.
-- [x] **P1 — Real ahead/behind indicators.** Compare local snapshot tips against the configured upstream after rows appear; missing/detached/unborn/shallow/error states use a dash, with no network request. Disposable and controlled failure checks passed.
-- [x] **P0 — Verify and deliver.** 65 checks, normal/minimum offscreen renders, 0.51–0.55 s first-page fixture, docs/version/changelog and matching ignored 0.7.0 preview verified; intended changes committed with this delivery.
+- [x] **P1 — Add Branch split button and operation dialogs.** New/switch branch, Fetch, fast-forward-only Pull, normal Push; explicit targets, optional upstream/tags and disabled advanced options.
+- [x] **P0 — Verify execution safety.** Identity/config/ref revalidation, linked-worktree gate, dirty/sequence rejection, hook failures, cancellation and state reconciliation in disposable repositories.
+- [x] **P1 — Verify ref badges and layout.** Current branch check, branch/tag/remote icons, combined upstream badge on matching tip, accessible help and normal/minimum offscreen renders.
+- [x] **P0 — Deliver.** Restore/build/publish and 77 checks passed; docs/version/changelog updated. Ignored 0.8.0 preview has 11 verified checksums and matching tested assemblies. Intended source/docs committed with this delivery; live authentication and desktop behavior remain unverified.
 
 ## Next priorities
 
-- [ ] **P1 — Implement Local Changes/status after workspace review.** Replace that prototype with real porcelain-v2/NUL data: staged, unstaged, untracked, ignored and conflicted states. Retain automatic history responsiveness and test only disposable repositories; no mutations yet.
+- [ ] **P1 — Finish interactive authentication before broader network rollout.** Design an explicit askpass/credential-manager/SSH/signing route; test with separately authorized accounts. Current actions require noninteractive credentials and known hosts. Keep bounded cancellation and do not bypass hooks.
+
+- [ ] **P1 — Implement Local Changes/status after workspace review.** Replace that prototype with real porcelain-v2/NUL data: staged, unstaged, untracked, ignored and conflicted states. Retain automatic history responsiveness and test only disposable repositories; no staging/commit implementation yet.
 - [ ] **P0 — Validate startup on representative repositories before more features.** With separate authorization, measure actual cold/warm launch, first visible rows and keyboard/tab responsiveness on Windows 10/11; no interactive launch is authorized now. Include custom Git installations and real profile restart/replacement detection.
 - [ ] **P1 — Extend performance fixtures.** Extend the measured packed 100,000-commit/1,201-ref fixture to merge-heavy/million-commit repositories, cancellation under load, app/child peak memory and five-minute idle CPU. Use the F1e baseline before more runner changes.
 - [ ] **P1 — Broaden accessibility/layout validation.** Mixed DPI, actual high contrast/screen reader, keyboard focus, +40%/RTL layouts and full theme selection. Headless high-contrast color fallback is not an OS accessibility pass.
 - [ ] **P2 — Revisit filtering only when requested.** Individual ref selection/search with truthful ancestry; preserve the default All Commits view, selected hash and scroll.
 - [ ] **P2 — Selected-commit file list, then diffs.** Bounded real data, exact paths and binary/EOL/large-content cases; no placeholders.
-- [ ] **P2 — External reconciliation.** Extend focus/resume state handling before any mutation or external-tool work.
+- [ ] **P2 — External reconciliation.** Extend focus/resume state handling and external-client race coverage beyond the explicit-action reinspection; track external-tool sessions before enabling them.
 
 ## Backlog
 
-- [ ] **P1 — Local MVP (phase 2).** Stage/unstage, commit/amend, branches/tracking and stashes, with trust, hooks/signing, previews and failure recovery.
-- [ ] **P1 — Network MVP (phase 3).** Clone/remotes/fetch/push/pull and validated recovery actions; explicit auth/terminal routes, no invisible waits.
+- [ ] **P1 — Local MVP (phase 2).** Stage/unstage, commit/amend, branch deletion/additional tracking and stashes, with trust, hooks/signing, previews and failure recovery.
+- [ ] **P1 — Network MVP (phase 3).** Clone/remote editing, broader pull strategies and validated recovery actions; explicit auth/terminal routes, no invisible waits.
 - [ ] **P1 — Pilot distribution (3R).** Select mature updater/installer, signed manifests/packages, per-user installation, channel/pilot/recovery and localization; pass U1-U7/D1 tests before rollout. No implementation in F0.
 - [ ] **P2 — Advanced workflows (phase 4).** Start sequences, interactive rebase, reset, tags, reflog, force-with-lease and built-in conflict editor with disposable destructive tests.
 - [ ] **P2 — Extended compatibility (phase 5).** Submodule/worktree/LFS/shallow/partial/sparse management, tray lifecycle and large-repository optimization after compatibility gates.
@@ -36,6 +39,8 @@ Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 =
 - [ ] **P1 before first installer — Identity:** product name Shovel is confirmed; finalize publisher and permanent settings/install identity; plan migration from the provisional Foundation profile.
 
 ## Completed work
+
+- [x] **P1 — Branch/network actions and ref badges / 0.8.0.** F2a delivered on 2026-10-25 with 77 checks, headless dialog/workspace review and verified preview. See roadmap F2a for scope, evidence and limits.
 
 - [x] **P1 — Workspace and upstream counts / 0.7.0.** Current-phase scope completed on 2026-10-25; roadmap F1f records evidence and limits. No interactive launch or actual pull/push.
 

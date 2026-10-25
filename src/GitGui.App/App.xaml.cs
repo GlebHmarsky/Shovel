@@ -55,8 +55,11 @@ public partial class App : Application
             _log = new DiagnosticLog(directory);
             _log.Record(DiagnosticEvent.Started);
             _settings = new SettingsStore(directory);
-            _shell = new ShellViewModel(new RepositoryReader(new WindowsProcessRunner(), _trace), new UserInteraction(),
-                persist: SaveIdentitySettingsAsync, trace: _trace);
+            var runner = new WindowsProcessRunner();
+            var reader = new RepositoryReader(runner, _trace);
+            var identities = new WindowsRepositoryIdentity();
+            _shell = new ShellViewModel(reader, new UserInteraction(), identities,
+                persist: SaveIdentitySettingsAsync, trace: _trace, actions: new GitActions(runner, reader, identities));
             MainWindow window;
             using (_trace.Measure(TimingStage.Shell)) window = new MainWindow(_shell);
             MainWindow = window;
@@ -102,6 +105,7 @@ public partial class App : Application
         if (_allowClose) return;
         e.Cancel = true;
         if (_closing || sender is not MainWindow window) return;
+        if (_shell!.ActionOpen) return; // The modal must finish/cancel and reconcile before shutdown.
         _closing = true;
         _shell!.BeginShutdown();
         _startupCancellation.Cancel();

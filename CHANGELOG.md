@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 — 2026-10-25
+
+- Add Branch split button with real create/switch dialogs, original branch/tag/remote badges, checked current tip and combined local/upstream badge when both share a commit.
+- Enable explicit Fetch, fast-forward-only Pull and normal Push dialogs, with remote/branch targets, optional fetch-all, tags and upstream setup. Rebase, autostash and force-push remain visibly deferred.
+- Add per-operation approval for configured programs, identity/ref/config revalidation, shared-worktree action exclusion, guarded shutdown/tab navigation, bounded output/cancellation and history reconciliation. Automatic local history still needs no approval.
+- Preserve hooks and cached-credential integration; interactive authentication and custom SSH commands remain unsupported with explicit guidance. Add disposable local-remote, failure/cancellation and offscreen dialog checks. No interactive desktop launch, live authentication, installer or updater.
+
 ## 0.7.0 — 2026-10-25
 
 - Place the history table directly below repository tabs, with compact paging/status below it. Remove scope/filter controls; All Commits always includes local branches, remote-tracking branches, tags and the current HEAD. Older current-branch preferences no longer restrict the view.

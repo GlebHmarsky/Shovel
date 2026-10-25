@@ -1,0 +1,234 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using GitGui.Core.Processes;
+
+namespace GitGui.Core.Git;
+
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push }
+public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
+public sealed record ActionContext(GitInstallation Git, RepositoryIdentity Identity, RepositorySnapshot Repository,
+    HistorySession History, IReadOnlyList<GitRemote> Remotes, string ConfigStamp);
+public sealed record ActionOptions(GitAction Action, string Branch = "", string StartRef = "HEAD",
+    string Remote = "", string RemoteBranch = "", bool Checkout = true, bool AllRemotes = false,
+    bool AllTags = false, bool SetUpstream = false, bool AllowConfiguredPrograms = false);
+public sealed class GitActionException(string code) : Exception(code) { public string Code { get; } = code; }
+public sealed record ActionResult(ProcessOutcome Outcome, int? ExitCode, string Output)
+{ public bool Success => Outcome == ProcessOutcome.Exited && ExitCode == 0; }
+
+/// <summary>Explicit user actions. Never used by startup/history reads. No persistent raw output.</summary>
+public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, IRepositoryIdentityProvider identities)
+{
+    public Task<ActionContext> PrepareAsync(GitInstallation git, string path, CancellationToken token) => Task.Run(async () =>
+    {
+        var identity = await identities.ReadAsync(path, token).ConfigureAwait(false);
+        var initialConfig = await ConfigStamp(git, path, token);
+        var repository = await reader.InspectAsync(git, path, token).ConfigureAwait(false);
+        if (!SamePaths(identity, repository)) throw new GitActionException("ActionIdentityChanged");
+        var history = await reader.OpenHistoryAsync(git, repository, HistoryScope.AllCommits, token).ConfigureAwait(false);
+        var remotes = new List<GitRemote>();
+        var names = Decode(await Read(git, path, ["remote"], token)).TrimEnd('\r', '\n');
+        foreach (var name in names.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (remotes.Count >= 32 || name.StartsWith('-') || name.Contains('\r') || name.Any(char.IsControl))
+                throw new GitActionException("ActionUnsupportedRemote");
+            await Read(git, path, ["check-ref-format", "refs/remotes/" + name + "/check"], token);
+            var fetch = Decode(await Read(git, path, ["remote", "get-url", "--all", name], token)).TrimEnd('\r', '\n');
+            var push = Decode(await Read(git, path, ["remote", "get-url", "--push", "--all", name], token)).TrimEnd('\r', '\n');
+            // Do not expose URL credentials. Multiple push destinations need a separate scope UI.
+            if (fetch.Contains('\n') || push.Contains('\n')) throw new GitActionException("ActionUnsupportedRemote");
+            remotes.Add(new(name, Redact(fetch), Redact(push)));
+        }
+        var stamp = await ConfigStamp(git, path, token);
+        if (initialConfig != stamp) throw new GitActionException("ActionChanged");
+        if ((await identities.ReadAsync(path, token)).Fingerprint != identity.Fingerprint)
+            throw new GitActionException("ActionIdentityChanged");
+        return new ActionContext(git, identity, repository, history, remotes, stamp);
+    }, token);
+
+    public Task<ActionResult> ExecuteAsync(ActionContext context, ActionOptions options, CancellationToken token,
+        Action<ProcessOutput>? progress = null) => Task.Run(() =>
+    {
+        // Named mutex covers shared refs across linked worktrees and Shovel profiles. Acquire/release
+        // on this one worker thread: an await continuation must never release another thread's mutex.
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context.Identity.CommonDirectory.ToUpperInvariant())));
+        using var gate = new Mutex(false, @"Local\Shovel.GitAction." + key);
+        bool owned;
+        try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
+        if (!owned) throw new GitActionException("ActionOtherInstance");
+        try { return ExecuteLocked().GetAwaiter().GetResult(); }
+        finally { gate.ReleaseMutex(); }
+
+        async Task<ActionResult> ExecuteLocked()
+        {
+            token.ThrowIfCancellationRequested();
+            if (!options.AllowConfiguredPrograms) throw new GitActionException("ActionApprovalRequired");
+            var git = context.Git; var path = context.Identity.Worktree;
+            if ((await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint)
+                throw new GitActionException("ActionIdentityChanged");
+            var fresh = await reader.InspectAsync(git, path, token);
+            var history = await reader.OpenHistoryAsync(git, fresh, HistoryScope.AllCommits, token);
+            if (!SamePaths(context.Identity, fresh) || history.Fingerprint != context.History.Fingerprint ||
+                fresh.Branch != context.Repository.Branch || fresh.Commit != context.Repository.Commit ||
+                await ConfigStamp(git, path, token) != context.ConfigStamp)
+                throw new GitActionException("ActionChanged");
+            if (fresh.Operation != RepositoryOperation.None) throw new GitActionException("ActionSequence");
+            if (options.Action == GitAction.Pull && fresh.Branch is not null)
+            {
+                var mergeOptions = await Raw(git, path, ["config", "--get", "branch." + fresh.Branch + ".mergeOptions"], token);
+                if (mergeOptions.Outcome != ProcessOutcome.Exited || mergeOptions.ExitCode is not (0 or 1))
+                    throw new GitActionException("ActionReadFailed");
+                if (mergeOptions.ExitCode == 0 && !string.IsNullOrWhiteSpace(Decode(mergeOptions)))
+                    throw new GitActionException("ActionCustomMergeOptions");
+            }
+            if (options.Action is GitAction.Pull or GitAction.SwitchBranch || options.Action == GitAction.NewBranch && options.Checkout)
+            {
+                // Reject sparse checkouts and submodule worktrees until their update/recovery semantics are supported.
+                if (File.Exists(Path.Combine(path, ".gitmodules")) || File.Exists(Path.Combine(fresh.GitDirectory, "info", "sparse-checkout")))
+                    throw new GitActionException("ActionWorktreeUnsupported");
+                var status = await Read(git, path, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], token);
+                if (status.StandardOutput.Length != 0) throw new GitActionException("ActionDirty");
+            }
+            var commands = new List<string[]>();
+            if (options.Action is GitAction.NewBranch or GitAction.SwitchBranch)
+            {
+                await ValidateBranch(options.Branch);
+                if (options.Action == GitAction.NewBranch)
+                {
+                    var start = history.References.SingleOrDefault(item => item.Name == options.StartRef);
+                    if (start is null) throw new GitActionException("ActionNoStart");
+                    commands.Add(options.Checkout ? ["switch", "--no-guess", "--no-overwrite-ignore", "--no-recurse-submodules", "--no-track", "--create", options.Branch, start.Hash]
+                        : ["branch", "--no-track", "--", options.Branch, start.Hash]);
+                }
+                else
+                {
+                    if (!history.References.Any(item => item.Name == "refs/heads/" + options.Branch)) throw new GitActionException("ActionChanged");
+                    commands.Add(["switch", "--no-guess", "--no-overwrite-ignore", "--no-recurse-submodules", "--", options.Branch]);
+                }
+            }
+            else
+            {
+                var selected = context.Remotes.SingleOrDefault(item => item.Name == options.Remote);
+                if (selected is null) throw new GitActionException("ActionNoRemote");
+                if (options.Action == GitAction.Fetch)
+                {
+                    foreach (var remote in options.AllRemotes ? context.Remotes : [selected])
+                        commands.Add(["fetch", "--progress", "--no-recurse-submodules", "--no-prune", "--no-prune-tags", "--no-auto-maintenance",
+                            "--refmap=", "--", remote.Name, "+refs/heads/*:refs/remotes/" + remote.Name + "/*"]);
+                }
+                else
+                {
+                    await ValidateBranch(options.RemoteBranch);
+                    if (options.Action == GitAction.Pull)
+                    {
+                        if (fresh.HeadKind != HeadKind.Branch) throw new GitActionException("ActionAttachedRequired");
+                        // Fetch explicit scope first; merge immutable fetched tip only if local HEAD still matches.
+                        commands.Add(["fetch", "--progress", "--no-recurse-submodules", "--no-prune", "--no-prune-tags", "--no-auto-maintenance", "--refmap=",
+                            "--", selected.Name, "+refs/heads/" + options.RemoteBranch + ":refs/remotes/" + selected.Name + "/" + options.RemoteBranch]);
+                    }
+                    else
+                    {
+                        await ValidateBranch(options.Branch);
+                        if (!history.References.Any(item => item.Name == "refs/heads/" + options.Branch)) throw new GitActionException("ActionChanged");
+                        commands.Add(["-c", "remote." + selected.Name + ".mirror=false", "push", "--porcelain", "--progress", "--no-force", "--no-follow-tags",
+                            "--recurse-submodules=no", .. options.AllTags ? new[] { "--tags" } : [], .. options.SetUpstream ? new[] { "--set-upstream" } : [],
+                            "--", selected.Name, "refs/heads/" + options.Branch + ":refs/heads/" + options.RemoteBranch]);
+                    }
+                }
+            }
+            var output = new StringBuilder();
+            ActionResult? last = null;
+            foreach (var command in commands)
+            {
+                last = await Write(command);
+                if (!last.Success) return last with { Output = output.ToString() };
+            }
+            if (options.Action == GitAction.Pull)
+            {
+                token.ThrowIfCancellationRequested();
+                var afterFetch = await reader.InspectAsync(git, path, token);
+                if (afterFetch.Branch != fresh.Branch || afterFetch.Commit != fresh.Commit || afterFetch.Operation != RepositoryOperation.None ||
+                    await ConfigStamp(git, path, token) != context.ConfigStamp ||
+                    (await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint)
+                    throw new GitActionException("ActionChangedAfterFetch");
+                var tip = Decode(await Read(git, path, ["rev-parse", "--verify", "FETCH_HEAD^{commit}"], token)).Trim();
+                if (!Regex.IsMatch(tip, "^[0-9a-f]{40}([0-9a-f]{24})?$")) throw new GitActionException("ActionChangedAfterFetch");
+                var trackingTip = Decode(await Read(git, path, ["rev-parse", "--verify", "refs/remotes/" + options.Remote + "/" + options.RemoteBranch + "^{commit}"], token)).Trim();
+                if (tip != trackingTip) throw new GitActionException("ActionChangedAfterFetch");
+                if ((await Read(git, path, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], token)).StandardOutput.Length != 0)
+                    throw new GitActionException("ActionDirty");
+                last = await Write(["merge", "--ff-only", "--no-overwrite-ignore", "--no-autostash", "--no-edit", tip]);
+            }
+            return last! with { Output = output.ToString() };
+
+            async Task ValidateBranch(string name)
+            {
+                if (string.IsNullOrWhiteSpace(name) || name.StartsWith('-') || name == "HEAD" || name.Contains('@') || name.Any(char.IsControl))
+                    throw new GitActionException("ActionBranchName");
+                try { await Read(git, path, ["check-ref-format", "refs/heads/" + name], token); }
+                catch (GitReadException) { throw new GitActionException("ActionBranchName"); }
+            }
+            async Task<ActionResult> Write(string[] args)
+            {
+                var environment = EnvironmentForGit();
+                environment["GIT_OPTIONAL_LOCKS"] = null;
+                environment["GIT_MERGE_AUTOEDIT"] = "no";
+                // Only cached credentials / SSH agent with known hosts in this increment. No hidden prompt.
+                if (options.Action is GitAction.Fetch or GitAction.Pull or GitAction.Push)
+                {
+                    var sshConfig = await Raw(git, path, ["config", "--get", "core.sshCommand"], token);
+                    if (sshConfig.ExitCode == 0) throw new GitActionException("ActionCustomSsh");
+                    var root = Directory.GetParent(Path.GetDirectoryName(git.Executable)!)!;
+                    if (root.Name is "mingw64" or "mingw32" or "ucrt64") root = root.Parent!;
+                    var ssh = Path.Combine(root.FullName, "usr", "bin", "ssh.exe");
+                    if (!File.Exists(ssh)) throw new GitActionException("ActionSshMissing");
+                    environment["GIT_SSH_COMMAND"] = "'" + ssh.Replace('\\', '/').Replace("'", "'\\''") + "' -oBatchMode=yes -oStrictHostKeyChecking=yes";
+                    environment["GIT_SSH_VARIANT"] = "ssh";
+                }
+                var result = await runner.RunAsync(new(git.Executable, path,
+                    ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
+                     "-c", "protocol.allow=never", "-c", "protocol.file.allow=always", "-c", "protocol.https.allow=always",
+                     "-c", "protocol.http.allow=always", "-c", "protocol.ssh.allow=always", "-c", "protocol.git.allow=always", .. args])
+                { Environment = environment, Timeout = TimeSpan.FromMinutes(5), MaximumOutputBytes = 1024 * 1024 }, token, progress);
+                var text = Redact(Decode(result) + Encoding.UTF8.GetString(result.StandardError));
+                if (output.Length + text.Length <= 1024 * 1024) output.Append(text);
+                else throw new GitActionException("ActionOutputLimit");
+                return new(result.Outcome, result.ExitCode, text);
+            }
+        }
+    }, token);
+
+    private static bool SamePaths(RepositoryIdentity identity, RepositorySnapshot repository) =>
+        string.Equals(identity.Worktree, repository.Worktree, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(identity.GitDirectory, repository.GitDirectory, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(identity.CommonDirectory, repository.CommonDirectory, StringComparison.OrdinalIgnoreCase);
+    private async Task<string> ConfigStamp(GitInstallation git, string path, CancellationToken token) =>
+        Convert.ToHexString(SHA256.HashData((await Read(git, path, ["config", "--null", "--list"], token)).StandardOutput));
+    private async Task<ProcessResult> Read(GitInstallation git, string path, string[] args, CancellationToken token)
+    {
+        var result = await Raw(git, path, args, token);
+        if (result.Outcome != ProcessOutcome.Exited || result.ExitCode != 0)
+            throw new GitReadException(result.Outcome == ProcessOutcome.Cancelled ? GitFailure.Cancelled : GitFailure.CommandFailed, Redact(Encoding.UTF8.GetString(result.StandardError)));
+        return result;
+    }
+    private Task<ProcessResult> Raw(GitInstallation git, string path, string[] args, CancellationToken token) => runner.RunAsync(
+        new(git.Executable, path, ["--no-pager", "--no-optional-locks", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", .. args])
+        { Environment = EnvironmentForGit(), MaximumOutputBytes = 1024 * 1024 }, token);
+    private static string Decode(ProcessResult result) => Encoding.UTF8.GetString(result.StandardOutput);
+    private static Dictionary<string, string?> EnvironmentForGit()
+    {
+        var environment = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry variable in Environment.GetEnvironmentVariables())
+        {
+            var key = (string)variable.Key;
+            if (key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase) && key is not ("GIT_CONFIG_GLOBAL" or "GIT_CONFIG_SYSTEM" or "GIT_CONFIG_NOSYSTEM")) environment[key] = null;
+        }
+        environment["GIT_TERMINAL_PROMPT"] = "0"; environment["GCM_INTERACTIVE"] = "never";
+        environment["GIT_ASKPASS"] = ""; environment["SSH_ASKPASS"] = ""; environment["SSH_ASKPASS_REQUIRE"] = "never";
+        environment["GIT_OPTIONAL_LOCKS"] = "0"; environment["GIT_NO_LAZY_FETCH"] = "1";
+        return environment;
+    }
+    public static string Redact(string text) => Regex.Replace(Regex.Replace(text,
+        @"(https?://)[^\s/@]+@", "$1[redacted]@", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1)),
+        @"(https?://[^\s?#]+)[?#][^\s]*", "$1?[redacted]", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
+}

@@ -39,6 +39,11 @@ public partial class MainWindow : Window
 
     private void OnSystemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     { if (e.PropertyName == nameof(SystemParameters.HighContrast)) Dispatcher.InvokeAsync(() => HighContrast = SystemParameters.HighContrast); }
+    private void OnBranchMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu } button)
+        { menu.PlacementTarget = button; menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom; menu.IsOpen = true; }
+    }
     private void OnRepositoryTabMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (e.ChangedButton == System.Windows.Input.MouseButton.Middle && sender is ListBoxItem { DataContext: RepositoryTab tab })

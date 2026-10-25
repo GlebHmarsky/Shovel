@@ -10,7 +10,7 @@ public sealed record CommitRecord(string Hash, IReadOnlyList<string> Parents, st
     public string Subject => Message.Split('\n', 2)[0].TrimEnd('\r');
 }
 public enum HistoryScope { AllCommits, CurrentHead }
-public sealed record CommitRef(string Name, string Hash);
+public sealed record CommitRef(string Name, string Hash, string? Upstream = null);
 public sealed record HistoryEntry(CommitRecord Commit, GraphRow Graph, IReadOnlyList<CommitRef>? References = null);
 public sealed record HistorySession(RepositorySnapshot Repository, HistoryScope Scope, string Fingerprint,
     IReadOnlyList<CommitRef> References, bool IsShallow);
@@ -61,7 +61,7 @@ public sealed partial class RepositoryReader
             }
             if (hash is null) continue;
             if (!IsObjectId(hash)) throw new GitReadException(GitFailure.InvalidOutput);
-            refs.Add(new(name, hash));
+            refs.Add(new(name, hash, fields[6].Length == 0 ? null : fields[6]));
         }
         if (repository.Commit is not null) refs.Add(new("HEAD", repository.Commit));
         return new HistorySession(repository with { InitialHistoryState = null }, scope, state.Fingerprint, refs.ToArray(), state.IsShallow);

@@ -4,15 +4,15 @@ Updated 2026-10-25. [Product](product.md) owns experience; [requirements](requir
 
 ## Current status
 
-- **Workspace restoration and local upstream counts / F1f / 0.7.0 is delivered.** The user requested full-height All Commits, restored prototype toolbar/sidebar, a centered read timer and ahead/behind indicators. C# + WPF / .NET 10 LTS is confirmed. No desktop control; verification limits are below and build/run/package instructions are in [README](../README.md).
+- **Branch/network actions and ref badges / F2a / 0.8.0 is delivered.** The user requested Branch creation/switching, current/local/remote/tag badges, and real Fetch/Pull/Push dialogs; this supersedes their earlier deferral. C# + WPF / .NET 10 LTS is confirmed. No desktop control; verification limits are below and build/run/package instructions are in [README](../README.md).
 - Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
 - Official Fork screenshots/animations were inspected previously; the original attachment was unavailable. A new user screenshot was inspected on 2026-10-25 for the headerless history refinement. X media could not be reviewed without login. Historical observations are not current runtime verification.
-- Git CLI is implemented for repository metadata, all-branch/tag and HEAD ancestry. No individual-ref selection/search/filter, status/diffs, mutation, interactive credentials, installer/updater, hosting or signing is implemented. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
+- Git CLI is implemented for repository metadata, all-branch/tag and HEAD ancestry. Explicit branch creation/switching, Fetch, fast-forward Pull and normal Push are implemented in F2a. Individual-ref filtering, status/diffs, other mutations, interactive credentials, installer/updater, hosting and signing remain deferred. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
 - New startup updater requirement supersedes old research advice to disable update checks. Other network privacy restrictions remain.
 
 ## Proposed delivery sequence
 
-Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The latest request prioritizes automatic startup history, bounded tab caching, responsiveness, prompt-free history, lower read latency and tab context/middle-click actions. Stop after this increment; new Git features remain deferred. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
+Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The latest request explicitly prioritizes Branch and Fetch/Pull/Push dialogs and clearer ref badges before status/diffs. F2a is a bounded subset of phases 2/3; broader recovery, interactive authentication and advanced options remain deferred. Preserve fast prompt-free local history. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
 
 | Phase | Deliverable and boundary | Dependency / exit gate |
 | --- | --- | --- |
@@ -23,6 +23,7 @@ Each phase is a working increment with evidence and limitations. The user author
 | 1d: Automatic history — delivered | Remembered approval, startup/activation reads, bounded tab caches, menu cleanup, author highlighting and measured startup path | Restore/build/publish, 58 checks, headless timing and render evidence below; no interactive launch |
 | 1e: Fast local history — delivered | Direct job-contained Git, native entry point, combined HEAD/refs, no consent question, tab menus/middle-click | Build/publish, 61 checks, measured 0.5.0 comparison and packed 100k fixture; no interactive launch |
 | 1f: Workspace and upstream counts — delivered | Fixed All Commits directly below tabs; restored disabled prototypes/menus, centered timer, local ahead/behind after history | Build/publish + 65 checks; normal/minimum offscreen layout and timing comparison; no network/mutations |
+| 2a: Branch/network actions — delivered | Create/switch branch, Fetch, fast-forward Pull, normal Push/tags/upstream; explicit execution approval and ref badges | Disposable local-remote/safety checks and offscreen dialogs; no interactive launch/live auth |
 | 1g onward: Read-only Git — deferred | Status and changed-file/tree/diff reads in bounded increments; external reconciliation; filtering only when revisited | F1f; G2-G8 read cases, E/S/L/A gates; baseline performance measurements |
 | 2: Local MVP | Init, file/text-hunk staging, commit/amend, branch create/switch/delete/tracking, stash operations | Phase 1; mutation safety, hooks/signing, stale hunk tests |
 | 3: Network MVP | Clone, remotes, fetch, push, upstream setup, proposed fast-forward-only pull default; external conflict resolution and valid continue/skip/abort for existing sequences | Phase 2; explicit interactive/auth routes, failures, external races and recovery |
@@ -214,6 +215,21 @@ Phase 1 detects interrupted operations; phase 3 provides validated recovery acti
 **Q1 resolved:** user confirmed C# + WPF and authorized the small foundation on 2026-10-23; .NET 10 LTS selected after tooling inspection. This does not approve all future architecture proposals or deployment work.
 
 Nonblocking details: product name Shovel is confirmed; publisher/install identity must be fixed before first distributed install; the supplied screenshot informs the headerless layout, without a broader visual-parity claim; exact update interval, cache sizes and plural library should be validated when needed. Git floor is 2.47.0 for metadata reads, tested here only on 2.51.1. English ResourceManager/.resx is implemented; permanent data/install identity remains open.
+
+## Branch and network actions verification (2026-10-25)
+
+F2a / **0.8.0** adds Branch create/switch dialogs, original local/remote/tag badges with current-branch priority and same-tip upstream grouping, and explicit Fetch/Pull/Push. Pull is clean-worktree fast-forward only; normal Push supports optional tags/upstream. No automatic fetch was added. The product/architecture documents own the detailed scope and execution approval policy.
+
+Verified on Windows 11 x64 build 26200, .NET SDK 10.0.401/Desktop Runtime 10.0.12, Git for Windows 2.51.1. Restore, Release build and publish succeeded with zero warnings/errors; **77 checks passed, 0 failed**. Final log: `artifacts/preview-0.8.0-verification.txt`; fixtures: `artifacts/foundation-checks/20261025-203618-eb20b7e9232d46df85fefa0b42beb2c2`.
+
+- Actual Git integration uses disposable worktrees and local bare remotes with isolated global/system configuration: create/switch, Unicode branch names, duplicate/invalid names, fetch, push/tags/upstream, fast-forward pull, divergent pull and non-fast-forward push rejection. Custom branch merge options are rejected before fetching. Dirty/untracked/ignored collisions, active sequences, ref/config/identity changes, failed hooks, unavailable remotes and linked-worktree exclusion were exercised. A waiting fixture hook was cancelled and the gate released. Authentication failure is a controlled process result, not a real server/sign-in test.
+- Headless dispatcher checks cover modal approval/admission, branch menu command targets, post-success/failure/cancellation reconciliation, one attempt per fresh dialog, accessibility text and current/local/remote/tag distinctions. Existing history restoration, cache, stale-result, author-highlighting and virtualization checks still pass. Badge metadata reuses the existing ref query; no extra startup command is introduced. No new startup/performance claim is made.
+- Reviewed offscreen normal/minimum workspace renders (1200×760 / 900×580) and action dialogs (650×520 / 520×440 content). Fixed the modal background and kept approval/action buttons outside the scrollable options area. Long addresses/options scroll at narrow sizes; current branch badges lead crowded refs, and full ref names remain in tooltips/details. These PNGs were rendered without showing windows or controlling the desktop.
+- The restricted sandbox initially prevented Git's MSYS helper from creating its named object; the authorized headless suite was rerun with helper permission. No user repository or live remote was used. No dependency/system installation occurred.
+
+Preview: `Build/0.8.0-win-x64/Shovel.exe`. All **11 checksums** verified; App/Core/ProcessHost assemblies match the tested binaries. Product/file version is Shovel / 0.8.0.0. Build/artifacts remain ignored and untracked; existing 0.6.0/0.7.0 folders were preserved. The source/documentation increment is committed with this delivery; no remote push.
+
+**Limits:** no interactive app launch, real SSH/HTTPS/GCM/browser/signing validation, Windows 10, screen reader/mixed DPI/RTL, crash/sleep/disk-full or installed-update certification. Interactive auth, custom SSH, rebase/autostash/force-push, submodule/sparse checkout mutations and broader recovery remain deferred. Ordinary Git locks and external-client races remain relevant; cancellation and partial multi-ref operations are not rollback. Next priority is an explicit interactive authentication route before broader network rollout, followed by real Local Changes/status.
 
 ## Documentation maintenance
 

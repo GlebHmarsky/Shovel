@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-25. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1f / 0.7.0:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
+Updated 2026-10-25. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F2a / 0.8.0:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, automatic history and explicit branch/fetch/fast-forward-pull/push actions. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
 
 ## Product identity
 
@@ -27,13 +27,16 @@ The following are **future logical boundaries**, not six projects already create
 
 Keep one primary language, minimal dependencies, pinned SDK/packages, reproducible build/test/publish commands. No embedded web server, plugin framework, or database initially.
 
-### Implemented structure (F0 through F1f)
+### Implemented structure (F0 through F2a)
 
 ```text
 GitGui.slnx / global.json / Directory.Build.props
 src/GitGui.App/                 WPF executable, composition and lifetime owner
   App.xaml(.cs)                Startup/shutdown, profile mutex, guarded error handling
   Views/MainWindow.xaml(.cs)   Layout and view-only geometry handling
+  Views/GitActionWindow.xaml   Owned operation modal; close/cancel view behavior
+  ViewModels/GitActionViewModel.cs  Dialog options, progress and explicit execution
+  ViewModels/ShellActions.cs   Admission, context preparation and reconciliation
   Views/CommitGraphCell.cs     Visible-row drawing only; no Git/graph computation
   ViewModels/                  ShellViewModel, RepositoryTab, CommitRow and small command/observable bases
   Services/UserInteraction.cs  Owned folder/executable selection and executable confirmation
@@ -44,6 +47,7 @@ src/GitGui.Core/                UI-independent net10.0 library
   Diagnostics/                 Allowlisted log events and bounded in-memory stage timings
   Git/RepositoryReader.cs      Discovery, audited metadata commands and typed snapshots
   Git/CommitHistory.cs         Ref snapshot, paged history reader and NUL-field parser
+  Git/GitActions.cs           Explicit command plans, config/ref/identity gates and shared operation lock
   Git/CommitGraph.cs           UI-independent parent-lane layout and page cursor
   Processes/                   Requests/results and asynchronous runner contract
 src/GitGui.ProcessHost/         Windows runner, native launch/job ownership and filesystem identity
@@ -55,7 +59,7 @@ App references Core and ProcessHost; Core never references WPF or Windows proces
 
 App creates services explicitly, shows a loading shell, then loads settings on a worker task. Schema 4 restores identity stamps; 0.7.0 ignores saved narrower scope preferences and writes All Commits; the selected repository loads automatically without a consent question. Identity saves are serialized with the settings writer and drained before shutdown; a save failure leaves local history usable and is reported. Closing cancels startup, stops navigation, captures a plain layout snapshot on the dispatcher and saves it off-thread. Saving failure offers stay/retry or explicit exit without saving; normal exit drains diagnostics with a bounded wait. A per-profile mutex prevents two app writers. Dispatcher/startup failures show a resource-backed generic error and exit without saving potentially invalid state; fatal process logging is best effort. No tray, startup network work or background polling exists.
 
-Closing also prevents new inspections, cancels the current read and awaits owned-process cleanup before saving. This gate covers read-only metadata/history only. Replace it with the E2-E4/U3 workflow gate **before** adding mutations, prompts, tracked external tools or updates. The settings mutex is not a repository or linked-worktree lock. No updater service or fake always-idle implementation exists.
+Closing prevents new inspections, cancels the current read and awaits cleanup before saving. In 0.8.0 the entire explicit-action modal/preparation/reconciliation period blocks main-window shutdown and tab navigation. The operation modal cannot close while executing; explicit cancellation drains owned processes and reinspects before exit. A separate named common-directory mutex coordinates Shovel actions across linked worktrees/profiles. This is not yet the future updater/external-tool idle gate; no updater service exists.
 
 ## Implemented Git metadata and process execution
 
@@ -99,11 +103,27 @@ NUL-delimited UTF-8 metadata retains full messages, parents and original-offset 
 
 Tab context menus bind to their placement target, passing a `RepositoryTab` to parameterized view-model commands. Code-behind handles only the middle-button routed event and delegates closing. Active-tab close changes the read generation, cancels work and selects a neighbor; inactive close does not cancel the selected read. Empty selection clears busy state while outstanding owned work still drains before any next read/shutdown.
 
-Page navigation remembers hash/scroll for the bounded back window; tab activation restores its page immediately. A changed-history refresh starts at page one, retaining selection only if present there. Individual ref selection, search/filter, changed-file/diff views and mutations remain deferred.
+Page navigation remembers hash/scroll for the bounded back window; tab activation restores its page immediately. A changed-history refresh starts at page one, retaining selection only if present there. Individual ref filtering, search, changed-file/diff views and mutations beyond the F2a actions below remain deferred.
 
 ### Deferred execution boundaries
 
-Before status/diffs: add porcelain-v2/NUL path parsers, literal pathspecs, bounded content loading, no external diff/textconv/lazy fetch, and refresh reconciliation. Before mutations: serialize by common-directory identity across instances, recheck prerequisites and allow valid reads only; shared-state identity is already captured. External clients remain outside app coordination. Before network/hooks/tools: explicit authenticated askpass/editor or visible terminal routes, prompt/tool lifecycle, cooperative cancellation policy and recovery reinspection. The current closed-stdin/forced-stop read runner alone is insufficient for these workflows. Never disable hooks silently to fit the runner.
+Before status/diffs: add porcelain-v2/NUL path parsers, literal pathspecs, bounded content loading and no external diff/textconv/lazy fetch. F2a below implements shared-action serialization, prerequisite checks and post-attempt reconciliation for its narrow command set. Before broader network/hooks/tools: add an authenticated askpass/editor or visible terminal route and explicit prompt/tool lifecycle. F2a supports only noninteractive execution with visible limits; it does not certify interactive hooks or authentication. External clients remain outside app coordination. Never disable hooks silently to fit the runner.
+
+## Explicit Git actions (F2a, 0.8.0)
+
+`GitActions` prepares an immutable action context off-thread: filesystem identity, HEAD/ref snapshot, effective fetch/push addresses and a hash of effective configuration (not stored/logged). These extra commands run only on explicit dialog opening, never startup. Remote metadata is capped at 32 remotes and single fetch/push URL per remote; unsupported configurations fail with guidance. `GitActionViewModel` owns editable options and one attempted operation per dialog. `ShellActions` holds UI admission closed, invalidates linked-worktree caches and forces normal history inspection after success, failure or cancellation. Preparation failure does not start an action.
+
+Execution requires a per-operation approval for repository-controlled hooks/filters/credential helpers, separately from automatic history. Before commands, reread identity, paths, HEAD/refs and config hash; reject changes and in-progress sequences. A named mutex keyed by the common Git directory coordinates Shovel processes in this Windows login session. Acquire/release occur on the same worker thread; abandoned ownership triggers the same fresh validation. Different Windows sessions, external Git clients, path aliases and edits between checks/command launch remain outside this lock. Git's own locks remain authoritative; no lock files are removed. Neither identity nor config hashes attest the contents of executable hooks/helpers or protect against hostile atomic replacement.
+
+New branch uses `branch --no-track` or `switch --create --no-track`, with a validated name and immutable starting hash; duplicate branches fail. Switch uses `--no-guess` and never force/discard. Switch and Pull pass `--no-overwrite-ignore`, protecting ignored-file collisions as well as checked dirty state. Checkout and Pull reject dirty/untracked state, submodule repositories and sparse-checkout files; linked-worktree branch occupancy is enforced by Git. Fetch names its remote and explicit `+refs/heads/*:refs/remotes/<remote>/*` mapping with empty `--refmap=`, no pruning or recursive submodules. Rewritten remote tips update only their tracking refs; the dialog explains this. Pull fetches a selected branch, rechecks local HEAD/config/identity/clean state, cross-checks FETCH_HEAD against the fetched tracking tip and runs `merge --ff-only --no-autostash --no-edit`. Nonempty branch.mergeOptions are rejected before fetching because they can change the promised fast-forward behavior (for example, squash). Configuration is not edited. This is deliberately a two-command operation: a failed fast-forward can leave fetched objects/refs. External clients can race between checks; the two commands are not a transaction.
+
+Push supplies explicit source/destination refs, disables implicit mirror/follow-tags/submodule pushing, and never forces. Tags and upstream setup require explicit options. Git pre-push/checkout/merge hooks and configured filters are not bypassed. Push of multiple refs or sequential fetch-all can partially succeed; no atomic rollback is claimed. Current installed Git 2.51.1 is tested using local bare remotes. Official command semantics checked 2026-10-25: [fetch ref mappings](https://git-scm.com/docs/git-fetch), [fast-forward merges](https://git-scm.com/docs/git-merge), [push destinations/hooks/upstream](https://git-scm.com/docs/git-push), [switch/create and worktrees](https://git-scm.com/docs/git-switch). These sources describe Git, not verification of every auth provider or Git version.
+
+Writes reuse the job-contained async runner with a five-minute per-command deadline and 1 MiB output cap. Stream decoding/redaction runs off the dispatcher; output is retained only in modal memory. Userinfo/query secrets in HTTP(S) URLs are redacted; arbitrary trusted-helper output cannot be comprehensively classified as secret and must not be persisted/exported automatically. Progress reports running, duration and explicit cancellation, never guesses an input wait from silence. Cancellation kills only owned job descendants and is not undo. Partial output and state remain inspectable; no retry is automatic.
+
+**Auth limitation:** cached HTTPS credentials/noninteractive GCM and standard Git for Windows bundled OpenSSH with agent/known hosts are the supported design for this increment; live authentication is unverified. `GIT_TERMINAL_PROMPT=0`, empty askpass, `GCM_INTERACTIVE=never`, OpenSSH BatchMode and strict host-key checking suppress normal hidden prompts. Custom `core.sshCommand` and unrecognized bundled SSH layouts are rejected for network actions. Browser sign-in, interactive passphrases/host-key confirmation, signing and interactive hook protocols need a future broker/terminal route; the modal explains the existing-terminal workaround and permits cancellation of uncooperative hooks/helpers. No shared agent is killed or credential saved by Shovel. The command defaults to denying other transports while explicitly allowing file/http/https/ssh/git; Git can still honor an explicitly configured per-protocol permission, so operation approval includes trust in the repository configuration and its transport helpers; startup reads still prohibit network/helpers. No global settings are changed.
+
+`CommitRef.Upstream` reuses the existing ref query, adding no startup subprocess. `RefBadge` combines only the configured same-tip upstream; full names and current-branch meaning remain in accessible help. Original vector paths inherit row/system colors and preserve virtualization/author highlighting. No provider logos, avatars or additional network assets are used.
 
 ## Settings, storage, localization
 

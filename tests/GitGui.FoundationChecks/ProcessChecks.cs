@@ -248,6 +248,7 @@ internal static partial class Program
                 Expect((await reader.InspectAsync(git, repo, default)).Branch == "renamed", "Manual refresh sees external changes");
             });
             await RunHistoryChecksAsync(reader, git, Git);
+            await RunActionChecksAsync(reader, git, runner, Git);
         }
         finally
         {

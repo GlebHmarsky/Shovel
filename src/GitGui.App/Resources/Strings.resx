@@ -200,4 +200,74 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="NewerShort" xml:space="preserve"><value>Newer</value></data>
   <data name="ComparingDuration" xml:space="preserve"><value>Reading ahead/behind · {0:0.0} s</value><comment>{0} is elapsed local-read time in seconds, including history reading.</comment></data>
   <data name="OlderShort" xml:space="preserve"><value>Older</value></data>
+  <data name="BranchBadgeHelp" xml:space="preserve"><value>Local branch {0}.</value></data>
+  <data name="SyncedBadgeHelp" xml:space="preserve"><value>Local branch {0} and upstream {1} share this commit in the local snapshot. The server may have changed since the last fetch.</value></data>
+  <data name="CurrentBadgeHelp" xml:space="preserve"><value>Checked-out branch. {0}</value></data>
+  <data name="RemoteBadgeHelp" xml:space="preserve"><value>Remote-tracking branch {0}; last locally fetched position, not a live server check.</value></data>
+  <data name="TagBadgeHelp" xml:space="preserve"><value>Tag {0}.</value></data>
+  <data name="DetachedBadgeHelp" xml:space="preserve"><value>Current detached HEAD.</value></data>
+  <data name="BranchToolbar" xml:space="preserve"><value>Branch</value></data>
+  <data name="BranchMenu" xml:space="preserve"><value>Branch actions</value></data>
+  <data name="NoBranch" xml:space="preserve"><value>No attached branch</value></data>
+  <data name="ActionTitleNewBranch" xml:space="preserve"><value>New branch</value></data>
+  <data name="ActionTitleSwitchBranch" xml:space="preserve"><value>Switch branch</value></data>
+  <data name="ActionTitleFetch" xml:space="preserve"><value>Fetch</value></data>
+  <data name="ActionTitlePull" xml:space="preserve"><value>Pull</value></data>
+  <data name="ActionTitlePush" xml:space="preserve"><value>Push</value></data>
+  <data name="ActionExplainNewBranch" xml:space="preserve"><value>Create a local branch from the selected commit or reference. No existing branch is replaced. Checking it out requires a clean worktree.</value></data>
+  <data name="ActionExplainSwitchBranch" xml:space="preserve"><value>Switch to an existing local branch. Requires a clean worktree; changes are never discarded.</value></data>
+  <data name="ActionExplainFetch" xml:space="preserve"><value>Download remote branches into their remote-tracking refs. Rewritten remote tips are reflected locally; local branches are unchanged. No pruning. Reachable tags may be downloaded.</value></data>
+  <data name="ActionExplainPull" xml:space="preserve"><value>Fetch the selected remote branch and fast-forward the current local branch. Requires a clean worktree; divergence stops without a merge or rebase.</value></data>
+  <data name="ActionExplainPush" xml:space="preserve"><value>Publish the selected local branch to the named branch on the selected remote. Existing remote commits are not overwritten by force.</value></data>
+  <data name="ActionBranchNameLabel" xml:space="preserve"><value>New branch name</value></data>
+  <data name="ActionStart" xml:space="preserve"><value>Start at</value></data>
+  <data name="ActionCheckout" xml:space="preserve"><value>Check out the new branch</value></data>
+  <data name="ActionBranchLabel" xml:space="preserve"><value>Local branch</value></data>
+  <data name="ActionRemote" xml:space="preserve"><value>Remote</value></data>
+  <data name="ActionRemoteBranch" xml:space="preserve"><value>Branch on remote (name without remote prefix)</value></data>
+  <data name="ActionInto" xml:space="preserve"><value>Into: {0}</value></data>
+  <data name="ActionRebaseDeferred" xml:space="preserve"><value>Rebase instead of merge — not available yet</value></data>
+  <data name="ActionStashDeferred" xml:space="preserve"><value>Stash and reapply local changes — not available yet</value></data>
+  <data name="ActionAllRemotes" xml:space="preserve"><value>Fetch every listed remote (sequentially; stop on failure)</value></data>
+  <data name="ActionAllTags" xml:space="preserve"><value>Push all local tags as well (some refs may succeed if others fail)</value></data>
+  <data name="ActionSetUpstream" xml:space="preserve"><value>Set this destination as the local branch&apos;s upstream</value></data>
+  <data name="ActionForceDeferred" xml:space="preserve"><value>Force push — not available yet</value></data>
+  <data name="ActionAuthLimits" xml:space="preserve"><value>Uses cached credentials or an SSH agent and known hosts. Browser sign-in, passphrase, host-key and interactive hook/signing prompts are not supported yet. If authentication fails, complete it in your terminal and reopen this dialog. No credentials are saved by Shovel.</value></data>
+  <data name="ActionApproval" xml:space="preserve"><value>Allow this operation and this repository&apos;s configured hooks, filters and credential helpers to run. Only approve repositories and configuration you trust.</value></data>
+  <data name="ActionReady" xml:space="preserve"><value>Review the scope, then explicitly allow and start this operation.</value></data>
+  <data name="ActionDuration" xml:space="preserve"><value>Elapsed: {0:N1} s</value></data>
+  <data name="ActionOutput" xml:space="preserve"><value>Git output (in memory; URL credentials redacted)</value></data>
+  <data name="ActionAuthentication" xml:space="preserve"><value>Authentication requirements</value></data>
+  <data name="ActionClose" xml:space="preserve"><value>Close</value></data>
+  <data name="ActionCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="ActionCancelRunning" xml:space="preserve"><value>Cancel Git</value></data>
+  <data name="ActionCancelQuestion" xml:space="preserve"><value>Stop Git and its owned child processes? Changes may already have been applied locally or remotely. Cancellation does not undo them. Shovel will inspect the repository again.</value></data>
+  <data name="ActionPreparing" xml:space="preserve"><value>Reading operation targets…</value></data>
+  <data name="ActionDialogOpen" xml:space="preserve"><value>Git operation dialog open</value></data>
+  <data name="ActionRunning" xml:space="preserve"><value>Git is running. Interactive input is unsupported; cancel if a hook or helper is waiting. Five-minute command timeout.</value></data>
+  <data name="ActionCancelling" xml:space="preserve"><value>Stopping owned processes, then checking repository state…</value></data>
+  <data name="ActionSucceeded" xml:space="preserve"><value>Operation completed. Review refreshed history before the next action.</value></data>
+  <data name="ActionResultExited" xml:space="preserve"><value>Git reported failure. Some changes may already have applied; inspect the output and refreshed state. Resolve the cause, then reopen this dialog.</value></data>
+  <data name="ActionResultCancelled" xml:space="preserve"><value>Stopped. Local or remote changes may already have applied. Review the refreshed state; cancellation is not rollback.</value></data>
+  <data name="ActionResultTimedOut" xml:space="preserve"><value>Git timed out and was stopped. Check the output and repository state before retrying; changes may already have applied.</value></data>
+  <data name="ActionResultOutputLimit" xml:space="preserve"><value>Git exceeded the output limit and was stopped. Check repository state before retrying; changes may already have applied.</value></data>
+  <data name="ActionResultStartFailed" xml:space="preserve"><value>Git could not start. Check Git installation, permissions and available disk space.</value></data>
+  <data name="ActionIdentityChanged" xml:space="preserve"><value>The repository identity changed or could not be verified. Close this dialog and reopen the repository.</value></data>
+  <data name="ActionUnsupportedRemote" xml:space="preserve"><value>This remote configuration cannot be represented safely yet (multiple URLs, unusual name or too many remotes). Use your terminal for this configuration.</value></data>
+  <data name="ActionOtherInstance" xml:space="preserve"><value>Another Shovel instance is changing this repository or a linked worktree. Wait for it to finish, then reopen this dialog.</value></data>
+  <data name="ActionApprovalRequired" xml:space="preserve"><value>Explicit approval is required before configured programs or a Git write operation can run.</value></data>
+  <data name="ActionChanged" xml:space="preserve"><value>Repository refs, HEAD or configuration changed while this dialog was open. Nothing was started. Reopen the dialog to review current targets.</value></data>
+  <data name="ActionChangedAfterFetch" xml:space="preserve"><value>Fetch completed, but repository state changed before fast-forwarding. The local branch was not advanced by Shovel. Review history and reopen the dialog.</value></data>
+  <data name="ActionSequence" xml:space="preserve"><value>A merge, rebase, cherry-pick, revert or other sequence is already in progress. Resolve or abort it with your terminal before starting this operation.</value></data>
+  <data name="ActionWorktreeUnsupported" xml:space="preserve"><value>Checkout and Pull are not supported yet for repositories with submodules or sparse checkouts. Use your existing Git tools.</value></data>
+  <data name="ActionDirty" xml:space="preserve"><value>The worktree or index has changes, including untracked files. Commit, stash or move them with your existing tools before retrying. Shovel did not discard them.</value></data>
+  <data name="ActionNoStart" xml:space="preserve"><value>No commit is available at the selected starting reference. Create the first commit with your existing tools, or choose another reference.</value></data>
+  <data name="ActionNoRemote" xml:space="preserve"><value>No configured remote is available. Add one with your existing Git tools, then reopen this dialog.</value></data>
+  <data name="ActionAttachedRequired" xml:space="preserve"><value>Pull requires an existing, checked-out local branch.</value></data>
+  <data name="ActionBranchName" xml:space="preserve"><value>Enter a valid branch name without a leading dash, control characters or @ expressions. Existing branches are never replaced.</value></data>
+  <data name="ActionOutputLimit" xml:space="preserve"><value>Combined output exceeded the one-megabyte limit. Earlier commands may have completed. Review repository state before retrying.</value></data>
+  <data name="ActionCustomSsh" xml:space="preserve"><value>Custom core.sshCommand configurations require an interactive transport design that is not available yet. Use your terminal; configuration was not changed.</value></data>
+  <data name="ActionSshMissing" xml:space="preserve"><value>The selected Git installation has no recognized bundled OpenSSH executable. Use your terminal or select a standard Git for Windows installation.</value></data>
+  <data name="ActionReadFailed" xml:space="preserve"><value>Operation preparation or validation failed. Check repository availability, Git ownership, permissions and locks, then reopen the dialog. Shovel never deletes lock files automatically.</value></data>
+  <data name="ActionCustomMergeOptions" xml:space="preserve"><value>This branch has custom merge options that may change fast-forward behavior. Use your terminal for this Pull; Shovel has not changed the configuration or started fetching.</value></data>
 </root>

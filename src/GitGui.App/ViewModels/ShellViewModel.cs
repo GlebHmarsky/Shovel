@@ -12,7 +12,7 @@ namespace GitGui.App.ViewModels;
 
 public sealed record NavigationItem(NavigationSection Section, string Label, bool IsAvailable = false);
 
-public sealed class ShellViewModel : ObservableObject
+public sealed partial class ShellViewModel : ObservableObject
 {
     private readonly RepositoryReader? _reader;
     private readonly IUserInteraction? _interaction;
@@ -39,8 +39,8 @@ public sealed class ShellViewModel : ObservableObject
     public bool IsReady { get => _isReady; private set { if (Set(ref _isReady, value)) { RefreshCommands(); Changed(nameof(CanNavigate)); } } }
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(OperationStatus)); } } }
-    public bool CanNavigate => IsReady && !_stopping;
-    public string OperationStatus => IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) : UiText.Get("NoActiveOperation");
+    public bool CanNavigate => IsReady && !_stopping && !ActionOpen;
+    public string OperationStatus => IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) : UiText.Get(ActionOpen ? "ActionDialogOpen" : "NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput => State?.RawOutput ?? "";
@@ -77,7 +77,7 @@ public sealed class ShellViewModel : ObservableObject
         get => _selectedRepository;
         set
         {
-            if (_selectedRepository == value) return;
+            if (_selectedRepository == value || ActionOpen) return;
             HistoryViewChanging?.Invoke(this, EventArgs.Empty);
             _operationCancellation?.Cancel(); _generation++;
             _selectedRepository = value;
@@ -117,7 +117,7 @@ public sealed class ShellViewModel : ObservableObject
     public RelayCommand FirstHistoryCommand { get; }
 
     public ShellViewModel(RepositoryReader? reader = null, IUserInteraction? interaction = null,
-        IRepositoryIdentityProvider? identities = null, Func<AppSettings, Task>? persist = null, PerformanceTrace? trace = null)
+        IRepositoryIdentityProvider? identities = null, Func<AppSettings, Task>? persist = null, PerformanceTrace? trace = null, GitActions? actions = null)
     {
         _reader = reader; _interaction = interaction; _identities = identities ?? new WindowsRepositoryIdentity();
         _persist = persist; _trace = trace ?? new();
@@ -161,6 +161,7 @@ public sealed class ShellViewModel : ObservableObject
         RefreshTabCommand = new(tab => { SelectedRepository = tab; BeginInspection(tab, force: true); },
             tab => CanNavigate && _reader is not null && Repositories.Contains(tab));
         _timer.Tick += (_, _) => Changed(nameof(OperationStatus));
+        InitializeActions(actions);
     }
     private bool CanRead => CanNavigate && SelectedRepository is not null && _reader is not null;
 
@@ -193,9 +194,9 @@ public sealed class ShellViewModel : ObservableObject
             BeginInspection(SelectedRepository!);
     }
 
-    private void BeginInspection(RepositoryTab tab, bool reopen = false, bool force = false, int direction = 0, bool firstPage = false)
+    private void BeginInspection(RepositoryTab tab, bool reopen = false, bool force = false, int direction = 0, bool firstPage = false, bool actionReconcile = false)
     {
-        if (_reader is null || !CanNavigate) return;
+        if (_reader is null || (!CanNavigate && !actionReconcile)) return;
         _operationCancellation?.Cancel();
         var prior = _activeOperation;
         var generation = ++_generation;
@@ -266,7 +267,7 @@ public sealed class ShellViewModel : ObservableObject
                 (CommitRow[] Rows, long Bytes) prepared;
                 using (_trace.Measure(TimingStage.Formatting)) prepared = await Task.Run(() =>
                 {
-                    var formatted = history.Entries.Select(entry => new CommitRow(entry)).ToArray();
+                    var formatted = history.Entries.Select(entry => new CommitRow(entry, history.Session.Repository)).ToArray();
                     var bytes = formatted.Sum(row => 2L * (row.Commit.Message.Length + row.RefLabels.Length + row.AuthorDetails.Length + row.CommitterDetails.Length) + 4096) +
                         history.Session.References.Sum(reference => 2L * (reference.Name.Length + reference.Hash.Length) + 128);
                     return (formatted, bytes);
@@ -404,6 +405,7 @@ public sealed class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        NewBranchCommand?.Refresh(); FetchCommand?.Refresh(); PullCommand?.Refresh(); PushCommand?.Refresh(); SwitchBranchCommand?.Refresh(); Changed(nameof(LocalBranches)); Changed(nameof(BranchMenuItems));
         CloseTabCommand?.Refresh(); CloseOtherTabsCommand?.Refresh(); MoveTabLeftCommand?.Refresh(); MoveTabRightCommand?.Refresh(); RefreshTabCommand?.Refresh();
         OpenRepositoryCommand?.Refresh(); RefreshRepositoryCommand?.Refresh(); CancelCommand?.Refresh(); ChooseGitCommand?.Refresh();
         DiagnosticsCommand?.Refresh();

@@ -1,0 +1,46 @@
+<Window x:Class="GitGui.App.Views.GitActionWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{Binding Title}" Width="650" Height="560" MinWidth="520" MinHeight="480"
+ WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FlowDirection="{x:Static loc:UiText.Direction}"
+ Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
+ FontFamily="Segoe UI" FontSize="13" Closing="OnClosing">
+ <Window.Resources><BooleanToVisibilityConverter x:Key="Visible"/></Window.Resources>
+ <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"><Grid Margin="22">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel><TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" Margin="0,8"/>
+   <TextBlock Text="{Binding CurrentRepository}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentRepository}" FlowDirection="LeftToRight"/></StackPanel>
+  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12">
+   <StackPanel IsEnabled="{Binding CanEdit}">
+    <StackPanel Visibility="{Binding IsNew, Converter={StaticResource Visible}}">
+     <Label Content="{loc:Text Key=ActionBranchNameLabel}" Target="{Binding ElementName=NewName}"/><TextBox x:Name="NewName" Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{loc:Text Key=ActionBranchNameLabel}"/>
+     <Label Content="{loc:Text Key=ActionStart}"/><ComboBox ItemsSource="{Binding StartRefs}" SelectedItem="{Binding StartRef}" AutomationProperties.Name="{loc:Text Key=ActionStart}"/>
+     <CheckBox Content="{loc:Text Key=ActionCheckout}" IsChecked="{Binding Checkout}" Margin="0,10"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding ChooseBranch, Converter={StaticResource Visible}}"><Label Content="{loc:Text Key=ActionBranchLabel}"/><ComboBox ItemsSource="{Binding Branches}" SelectedItem="{Binding Branch}" AutomationProperties.Name="{loc:Text Key=ActionBranchLabel}"/></StackPanel>
+    <StackPanel Visibility="{Binding IsNetwork, Converter={StaticResource Visible}}"><Label Content="{loc:Text Key=ActionRemote}"/><ComboBox ItemsSource="{Binding Remotes}" SelectedItem="{Binding Remote}" DisplayMemberPath="Name" AutomationProperties.Name="{loc:Text Key=ActionRemote}"/>
+     <TextBlock Text="{Binding Target}" TextWrapping="Wrap" Margin="0,6" FlowDirection="LeftToRight"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding ChooseRemoteBranch, Converter={StaticResource Visible}}"><Label Content="{loc:Text Key=ActionRemoteBranch}"/><ComboBox IsEditable="True" ItemsSource="{Binding RemoteBranches}" Text="{Binding RemoteBranch, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{loc:Text Key=ActionRemoteBranch}"/></StackPanel>
+    <StackPanel Visibility="{Binding IsPull, Converter={StaticResource Visible}}" Margin="0,8">
+     <TextBlock Text="{Binding Into, StringFormat={loc:Text Key=ActionInto}}"/>
+     <CheckBox IsEnabled="False" Content="{loc:Text Key=ActionRebaseDeferred}" Margin="0,8,0,4"/><CheckBox IsEnabled="False" Content="{loc:Text Key=ActionStashDeferred}"/>
+    </StackPanel>
+    <CheckBox Content="{loc:Text Key=ActionAllRemotes}" IsChecked="{Binding AllRemotes}" Visibility="{Binding IsFetch, Converter={StaticResource Visible}}" Margin="0,8"/>
+    <StackPanel Visibility="{Binding IsPush, Converter={StaticResource Visible}}" Margin="0,8">
+     <CheckBox Content="{loc:Text Key=ActionAllTags}" IsChecked="{Binding AllTags}"/><CheckBox Content="{loc:Text Key=ActionSetUpstream}" IsChecked="{Binding SetUpstream}" Margin="0,8"/>
+     <CheckBox IsEnabled="False" Content="{loc:Text Key=ActionForceDeferred}"/>
+    </StackPanel>
+    <Expander Header="{loc:Text Key=ActionAuthentication}" Margin="0,12" Visibility="{Binding IsNetwork, Converter={StaticResource Visible}}">
+     <TextBlock Text="{loc:Text Key=ActionAuthLimits}" TextWrapping="Wrap" Margin="0,8"/>
+    </Expander>
+   </StackPanel>
+  </ScrollViewer>
+  <StackPanel Grid.Row="2" Visibility="{Binding HasAttempt, Converter={StaticResource Visible}}"><TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/><TextBlock Text="{Binding Duration}" Margin="0,4"/></StackPanel>
+  <TextBox Grid.Row="3" Height="90" Visibility="{Binding HasAttempt, Converter={StaticResource Visible}}" Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/>
+  <CheckBox Grid.Row="4" Margin="0,12,0,0" IsEnabled="{Binding CanEdit}" IsChecked="{Binding Approved}" AutomationProperties.Name="{loc:Text Key=ActionApproval}"><TextBlock Text="{loc:Text Key=ActionApproval}" TextWrapping="Wrap"/></CheckBox>
+  <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+   <Button Content="{Binding Title}" Command="{Binding RunCommand}" MinWidth="90" Padding="12,6" IsDefault="True"/>
+   <Button Content="{Binding CloseLabel}" Click="OnCancel" MinWidth="90" Padding="12,6" Margin="10,0,0,0"/>
+  </StackPanel>
+ </Grid></Border>
+</Window>

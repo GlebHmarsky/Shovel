@@ -45,9 +45,9 @@ The footer shows row range/status; tooltips expose read/graph limits. Detached H
 Use Repository > Refresh after external changes, or Cancel for a read.
 Activation refreshes cached snapshots older than 30 seconds. Right-click a tab for Refresh, Move, Close or Close others; middle click closes it.
 Pull shows behind and Push shows ahead of the configured upstream's local snapshot; no remote request is made.
-A dash means counts are pending/unavailable/failed; tooltips explain. Pull/Push do not execute yet.
-Menus, top toolbar and sidebar prototypes are restored; unavailable actions are disabled.
-Search/filter, file status, diffs, mutations, installer and automatic updates are not implemented.
+A dash means counts are pending/unavailable/failed; tooltips explain. Fetch/Pull/Push open explicit operation dialogs.
+Branch opens create/switch dialogs. Pull is fast-forward only; normal Push supports optional tags/upstream. Review targets and explicitly approve configured programs before execution.
+Interactive authentication, rebase, autostash, force-push, search/filter, file status, diffs, installer and updates remain deferred. Use existing terminal authentication; cancellation is not undo. Local history needs no approval.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.
 Settings are outside this folder: %LOCALAPPDATA%\GitGui\Foundation.
