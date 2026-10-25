@@ -1,6 +1,6 @@
 # Product
 
-Status: confirmed intent with explicitly marked UX proposals. Updated 2026-10-24.
+Status: confirmed intent with explicitly marked UX proposals. Updated 2026-10-25.
 Read [requirements](requirements.md) for obligations/tests, [architecture](architecture.md) for mechanisms, and [roadmap](roadmap.md) for phase scope.
 
 ## Purpose and audience
@@ -18,6 +18,8 @@ The history table starts directly with commit rows, without visible column headi
 Load older commits / Newer commits navigate 200-row pages with a visible row range. There is no total commit-count ceiling; only the current page is retained as rows/messages. Scope, filters, loading, end/shallow boundary, empty and errors are distinct; read/graph limits remain visible. Failed/cancelled paging retains the previous page. Ref or traversal-boundary changes require explicit refresh before paging continues. Tab changes clear history; restored tabs still require trust and refresh. Missing objects are never fetched implicitly.
 
 Individual branch selection, search/filter, file status, diffs, mutation/tool buttons and sequence recovery actions remain unavailable. No network requests are made. Remaining workflows below describe the target product; [roadmap](roadmap.md) owns delivery evidence.
+
+The application icon is the user-selected front-facing silver shovel head on a blue circular badge, with its shaft cropped at the bottom (confirmed 2026-10-25).
 
 ## Interface
 

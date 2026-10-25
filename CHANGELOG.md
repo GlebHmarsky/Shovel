@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2 — 2026-10-25
+
+- Add the user-selected front-facing silver shovel on a blue circle as the executable and main-window icon. Include transparent source artwork and a multi-size Windows icon.
+
 ## 0.4.1 — 2026-10-25
 
 - Remove the history column-heading row following the supplied Fork screenshot; keep aligned commit columns, localized cell accessibility help and row descriptions. Scope, paging and loading indicators remain visible.

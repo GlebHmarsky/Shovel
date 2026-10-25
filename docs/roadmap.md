@@ -97,6 +97,12 @@ Version 0.4.1 removes visible column headings based on the newly supplied Fork s
 
 Restore/Release build/publish succeeded with zero warnings/errors; all 49 checks passed. Reviewed normal/minimum offscreen renders in `artifacts/foundation-checks/20261024-222743-b5427f8ca010488182df81cd412f74b3` (fixture names use UTC). Preview: `Build/0.4.1-win-x64/Shovel.exe`; earlier previews retained. No interactive launch, desktop control or screen-reader test; the existing runtime/accessibility limits remain.
 
+## Application icon verification 2026-10-25
+
+Version 0.4.2 adds the user-selected front-facing silver shovel on a blue circle to the executable and main window, with the source PNG retained and nine transparent ICO sizes (16–256 pixels). An initial headless run caught a window resource URI resolving against the test executable; an assembly-qualified URI fixed it.
+
+Restore/Release build/publish succeeded with zero warnings/errors; all 49 checks passed in `artifacts/foundation-checks/20261025-014650-48835f984c0745538acfcc77aa4d75d6`. The executable icon was extracted and inspected at small size; ICO frame sizes and transparent corners were checked. Preview: `Build/0.4.2-win-x64/Shovel.exe`; all 14 checksums verified and published assemblies match the tested build. Earlier previews remain untouched; Build stays ignored. No interactive launch or desktop control; actual taskbar/Explorer caching and DPI appearance remain unverified.
+
 ## Initial compatibility boundaries
 
 F1a inspects ordinary and linked worktrees, rejects bare repositories and observes common operation markers. F1c reads named-ref/HEAD ancestry and recognizes shallow boundaries. Submodule/LFS/partial/sparse modes and file content are not comprehensively validated; missing commit objects fail without fetching. No submodule recursion, deepening, sparse expansion or filter bypass is available. Common-directory identity alone is not a shared-state lock.

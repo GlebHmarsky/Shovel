@@ -7,9 +7,11 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/Shovel.ico</ApplicationIcon>
     <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets/Shovel.ico" />
     <ProjectReference Include="../GitGui.Core/GitGui.Core.csproj" />
     <ProjectReference Include="../GitGui.ProcessHost/GitGui.ProcessHost.csproj" />
     <!-- ProjectReference publishes the host EXE; this item supplies it for ordinary build/run. -->

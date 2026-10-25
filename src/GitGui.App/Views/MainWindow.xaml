@@ -4,6 +4,7 @@
         xmlns:loc="clr-namespace:GitGui.App.Localization"
         xmlns:views="clr-namespace:GitGui.App.Views"
         Title="{loc:Text Key=AppTitle}" Width="1200" Height="800" MinWidth="900" MinHeight="620"
+        Icon="/Shovel;component/Assets/Shovel.ico"
         WindowStartupLocation="CenterScreen" FlowDirection="{x:Static loc:UiText.Direction}"
         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
         Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"

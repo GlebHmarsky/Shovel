@@ -1,6 +1,6 @@
 # Shovel
 
-A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.4.1** defaults to All Commits across local branches, remote-tracking branches and tags, with branch/tag labels, a connected graph and complete selected-commit details. Older/newer pages replace the previous 2,000-commit ceiling. File status, diffs, mutations, network access, installer and updater are not implemented. The product name is confirmed; publisher and permanent installation identity remain open.
+A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.4.2** defaults to All Commits across local branches, remote-tracking branches and tags, with branch/tag labels, a connected graph and complete selected-commit details. Older/newer pages replace the previous 2,000-commit ceiling. File status, diffs, mutations, network access, installer and updater are not implemented. The product name is confirmed; publisher and permanent installation identity remain open.
 
 Start with [AGENTS.md](AGENTS.md), [TODO.md](TODO.md) and the [roadmap](docs/roadmap.md). [Architecture](docs/architecture.md) describes implemented boundaries and future proposals separately.
 
@@ -59,7 +59,7 @@ Use **Trust / Refresh** after external changes, switching tabs or restarting; re
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-The script restores/builds/runs checks and publishes to `Build/0.4.1-win-x64/`. Double-click **Shovel.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
+The script restores/builds/runs checks and publishes to `Build/0.4.2-win-x64/`. Double-click **Shovel.exe** there; keep the helper and all other files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
 
 `Build/` is ignored and must never be committed. On 2026-10-24, the user requested removal of the old Build previews before rebuilding 0.3.1; those old package paths no longer exist. Cleanup is not automatic on subsequent builds. The script refuses to replace an existing version folder and keeps incomplete publishes in ignored `artifacts/`. Set the next delivery version in `Directory.Build.props` and update `CHANGELOG.md` once per delivery; see AGENTS.md for bump rules. The folder includes launch notes and SHA256 checksums. It is an unsigned local preview, not an installer or automatic update package. No hosting, keys or remote push are configured by packaging.
 

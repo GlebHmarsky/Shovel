@@ -33,6 +33,8 @@ All Commits / F1c / 0.4.0 is complete. The user prioritized complete named-ref h
 
 ## Completed work
 
+- [x] **P1 — Add selected application icon / 0.4.2.** Embed the front-facing shovel artwork in the executable and main window; preserve source PNG and nine ICO sizes. Release build/publish and all 49 headless checks passed on 2026-10-25. No interactive launch; desktop/taskbar cache behavior remains unverified.
+
 - [x] **P1 — Simplify history headings / 0.4.1.** Hide visible column headings per supplied screenshot; retain localized cell help and row descriptions. Restore/build/publish and all 49 checks passed; reviewed two offscreen layouts. No interactive launch or screen-reader verification.
 
 - [x] **P0 — Confirm C# + WPF; choose .NET 10 LTS.** Existing SDK/targeting pack sufficient; no third-party packages or installations.

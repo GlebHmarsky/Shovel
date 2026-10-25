@@ -1,10 +1,12 @@
 # Architecture and distribution
 
-Updated 2026-10-24. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1c:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
+Updated 2026-10-25. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F1c:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, read-only Git metadata and commit history. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
 
 ## Product identity
 
 **Confirmed:** Shovel (2026-10-24). Version 0.3.1 uses `Shovel.exe` / `Shovel.dll`, Shovel product metadata and the resource-backed title. Source folders, solution, namespaces, resource base name, helper executable and manifest identity retain their internal `GitGui` names. The existing settings path and profile mutex remain unchanged to preserve tabs/layout and exclude simultaneous writers across old/new previews. Publisher and permanent installer/data identity remain open; this rename does not add an installer or migrate data.
+
+Version 0.4.2 embeds Assets/Shovel.ico in Shovel.exe through ApplicationIcon and as a WPF resource referenced by the main window. The ICO contains 16, 20, 24, 32, 40, 48, 64, 128 and 256 pixel frames with transparency; Assets/Shovel.png preserves the selected generated source artwork. Conversion uses proportional scaling with transparent padding to keep the artwork square without distortion.
 
 ## Stack and boundaries
 
