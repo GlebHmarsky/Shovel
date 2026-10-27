@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.9.1**; 0.9.2 revises documentation only.
+Implemented through **0.9.3**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -33,7 +33,7 @@ Branch split button defaults to New branch (name, start reference, optional chec
 
 Fetch/Pull/Push dialogs asynchronously load actual remotes and redacted effective addresses. Opening never executes. Fetch chooses one/all remotes. Pull chooses a remote branch and fast-forwards the current branch with clean index/worktree. Push chooses source, remote and destination, with unchecked all-tags/set-upstream options. Rebase/autostash/force remain unimplemented.
 
-Normal action buttons should execute without an additional trust checkbox. **Existing implementation gap:** 0.9.1 still requires separate approval of repository-configured programs; remove that layer in the next functional update. Retain progress, elapsed time, bounded output, result and recovery guidance. Active modal/preparation/reconciliation currently blocks tab navigation/window close. Cancellation stops owned work and reinspects; it does not undo applied changes. Related caches become stale after every attempt; retry requires fresh targets. No automatic retries/stash/abort/lock removal.
+Normal action buttons execute without an additional trust checkbox. Missing targets, active work and missing dependencies disable actions with localized help; required authentication/SSH host prompts remain. Progress, elapsed time, bounded output, result and recovery guidance stay visible. Active modal/preparation/reconciliation blocks tab navigation/window close. Cancellation stops owned work and reinspects; it does not undo applied changes. Related caches become stale after every attempt; retry requires fresh targets. No automatic retries/stash/abort/lock removal.
 
 Badges distinguish local/tag/remote refs with original drawings. Check marks current tip, including detached HEAD. Only a local branch and its configured same-tip upstream share a local-name badge with remote icon; unrelated remotes stay separate. Full refs and relationship appear in help/accessibility. Remote icons describe local tracking tips.
 
@@ -45,9 +45,9 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 ## Interface and remaining workflows
 
-Frame: File/View/Repository/Window/Help; left Open/Fetch/Pull/Push/Stash; centered repository/branch/operation timer; right Explorer/Terminal/Editor/Tools; repository tabs; left changes/history/branches/remotes/tags/stashes/submodules; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
+Current frame: File/View/Repository/Window/Help; Open/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; All Commits sidebar heading; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 
-0.9.1 still displays unfinished tool/sidebar prototypes; their presence is a limitation, not permission to add more. Status/diffs, other mutations/tools and sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
+0.9.3 omits unfinished Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and rebase/autostash/force options. These workflows remain in scope for later functional deliveries; removing their entry points does not implement them. Status/diffs, other mutations/tools and sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
 
 **Proposed refinements:** separate History/Changes workspaces within this frame; Changes has staged/unstaged lists, diff and commit editor, with independent worktree view state. Single selection inspects; right-click targets clicked object while preserving a containing multiselection. Shared commands serve menus/toolbar/shortcuts. Compact owned operation dialogs restore focus; inspection/output can be non-modal; large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately.
 

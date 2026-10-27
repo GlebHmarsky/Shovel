@@ -46,15 +46,20 @@ public sealed class GitActionViewModel : ObservableObject
     public string RemoteBranch { get => _remoteBranch; set { if (Set(ref _remoteBranch, value)) Refresh(); } }
     public string NewName { get => _newName; set { if (Set(ref _newName, value)) Refresh(); } }
     public string StartRef { get => _startRef; set { if (Set(ref _startRef, value)) Refresh(); } }
-    private bool _checkout = true, _allRemotes, _allTags, _setUpstream, _approved, _running, _attempted;
+    private bool _checkout = true, _allRemotes, _allTags, _setUpstream, _running, _attempted;
     public bool Checkout { get => _checkout; set => Set(ref _checkout, value); }
     public bool AllRemotes { get => _allRemotes; set => Set(ref _allRemotes, value); }
     public bool AllTags { get => _allTags; set => Set(ref _allTags, value); }
     public bool SetUpstream { get => _setUpstream; set => Set(ref _setUpstream, value); }
-    public bool Approved { get => _approved; set { if (Set(ref _approved, value)) Refresh(); } }
     public bool IsRunning { get => _running; private set { if (Set(ref _running, value)) { Changed(nameof(CanEdit)); Changed(nameof(CloseLabel)); Refresh(); } } }
     public bool CanEdit => !IsRunning && !_attempted;
     public bool HasAttempt => _attempted;
+    public string RunUnavailableReason => UiText.Get(IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
+        IsNetwork && Remote is null ? "ActionNoRemote" :
+        IsNew && string.IsNullOrWhiteSpace(NewName) ? "ActionEnterBranchName" :
+        IsNew && !StartRefs.Contains(StartRef) ? "ActionNoStart" :
+        ChooseBranch && !Branches.Contains(Branch) ? "ActionChooseBranch" :
+        ChooseRemoteBranch && string.IsNullOrWhiteSpace(RemoteBranch) ? "ActionChooseRemoteBranch" : "ActionReady");
     public string CloseLabel => UiText.Get(IsRunning ? "ActionCancelRunning" : HasAttempt ? "ActionClose" : "ActionCancel");
     private string _status = UiText.Get("ActionReady"), _rawOutput = "";
     public string Status { get => _status; private set => Set(ref _status, value); }
@@ -74,12 +79,12 @@ public sealed class GitActionViewModel : ObservableObject
         _remote = Remotes.FirstOrDefault(item => context.Repository.UpstreamRef?.StartsWith("refs/remotes/" + item.Name + "/", StringComparison.Ordinal) == true) ?? Remotes.FirstOrDefault();
         _remoteBranch = context.Repository.UpstreamRef is { } upstream && _remote is not null && upstream.StartsWith("refs/remotes/" + _remote.Name + "/", StringComparison.Ordinal)
             ? upstream[(14 + _remote.Name.Length)..] : _branch;
-        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && Approved && (!IsNetwork || Remote is not null) &&
+        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!IsNetwork || Remote is not null) &&
             (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
             (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
         _timer.Tick += (_, _) => { Changed(nameof(Duration)); if (_outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
     }
-    private void Refresh() => RunCommand?.Refresh();
+    private void Refresh() { RunCommand?.Refresh(); Changed(nameof(RunUnavailableReason)); }
     public void Cancel() { if (IsRunning) { Status = UiText.Get("ActionCancelling"); _cancel.Cancel(); } }
     private async Task PublishOutputAsync()
     {
@@ -108,7 +113,7 @@ public sealed class GitActionViewModel : ObservableObject
                 finally { await _dispatcher.InvokeAsync(() => { if (!_cancel.IsCancellationRequested && Status == UiText.Get("ActionWaitingAuthentication")) Status = UiText.Get("ActionRunning"); }); }
             }, _cancel.Token)) : null;
             var result = await _actions.ExecuteAsync(Context, new(Action, IsNew ? NewName : Branch, StartRef,
-                Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream, Approved), _cancel.Token, output =>
+                Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream), _cancel.Token, output =>
                 { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }, authentication);
             _timer.Stop(); await _outputTask; RawOutput = result.Output;
             Status = UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure :

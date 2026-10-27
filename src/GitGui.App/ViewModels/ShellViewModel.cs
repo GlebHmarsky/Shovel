@@ -10,8 +10,6 @@ using GitGui.ProcessHost;
 
 namespace GitGui.App.ViewModels;
 
-public sealed record NavigationItem(NavigationSection Section, string Label, bool IsAvailable = false);
-
 public sealed partial class ShellViewModel : ObservableObject
 {
     private readonly RepositoryReader? _reader;
@@ -31,8 +29,6 @@ public sealed partial class ShellViewModel : ObservableObject
     public static TimeSpan RefreshAge { get; } = TimeSpan.FromSeconds(30);
     public const int CachedTabLimit = 3;
     private HistoryViewState? State => SelectedRepository?.History;
-    public IReadOnlyList<NavigationItem> Sections { get; } = Enum.GetValues<NavigationSection>()
-        .Select(section => new NavigationItem(section, UiText.Get(section == NavigationSection.History ? "AllCommits" : section.ToString()), section == NavigationSection.History)).ToArray();
     public ObservableCollection<RepositoryTab> Repositories { get; } = [];
     public string Version => UiText.Format("VersionFormat", typeof(ShellViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
     private bool _isReady;
@@ -70,7 +66,6 @@ public sealed partial class ShellViewModel : ObservableObject
     }
     public string HistoryNotice => State?.Notice ?? UiText.Get("HistoryNotLoaded");
     public bool IsHistory => true;
-    public NavigationItem SelectedSection { get => Sections.Single(item => item.IsAvailable); set { } }
     private RepositoryTab? _selectedRepository;
     public RepositoryTab? SelectedRepository
     {
@@ -95,7 +90,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public void SaveHistoryScroll(double vertical, double horizontal)
     { if (State is { } state) { state.VerticalOffset = vertical; state.HorizontalOffset = horizontal; } }
     public string RepositoryTitle => SelectedRepository?.Label ?? UiText.Get("NoRepositorySelected");
-    public string AreaTitle => SelectedSection.Label;
+    public string AreaTitle => UiText.Get("AllCommits");
     public SettingsLoadResult? LoadedSettings { get; private set; }
     private int _detailsIndex;
     public int DetailsIndex { get => _detailsIndex; set => Set(ref _detailsIndex, value); }
@@ -405,6 +400,7 @@ public sealed partial class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        foreach (var property in new[] { nameof(CanOpenBranchMenu), nameof(CanSwitchBranch), nameof(BranchActionHelp), nameof(FetchActionHelp), nameof(PullActionHelp), nameof(PushActionHelp), nameof(SwitchActionHelp) }) Changed(property);
         NewBranchCommand?.Refresh(); FetchCommand?.Refresh(); PullCommand?.Refresh(); PushCommand?.Refresh(); SwitchBranchCommand?.Refresh(); Changed(nameof(LocalBranches)); Changed(nameof(BranchMenuItems));
         CloseTabCommand?.Refresh(); CloseOtherTabsCommand?.Refresh(); MoveTabLeftCommand?.Refresh(); MoveTabRightCommand?.Refresh(); RefreshTabCommand?.Refresh();
         OpenRepositoryCommand?.Refresh(); RefreshRepositoryCommand?.Refresh(); CancelCommand?.Refresh(); ChooseGitCommand?.Refresh();

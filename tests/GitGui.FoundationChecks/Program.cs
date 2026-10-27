@@ -185,15 +185,15 @@ internal static partial class Program
             Expect(!model.IsReady, "Loading state must be explicit");
             Expect(window.Title == UiText.Get("AppTitle"), "Window title must resolve from English resources");
             var buttons = Descendants<Button>(window).ToArray();
-            var disabledLabels = new[] { "Stash", "Explorer", "Terminal", "Editor", "Tools" }.Select(UiText.Get).ToArray();
-            var futureButtons = buttons.Where(button => disabledLabels.Contains(AutomationProperties.GetName(button))).ToArray();
-            Expect(futureButtons.Length == 5 && futureButtons.All(button => !button.IsEnabled && button.Command is null), "Requested prototype actions are visible, disabled and cannot execute Git or tools");
-            var navigation = Descendants<ListBox>(window).Single(list => AutomationProperties.GetAutomationId(list) == "Navigation");
-            var firstItem = navigation.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
-            Expect(firstItem is not null && AutomationProperties.GetName(firstItem) == UiText.Get("LocalChanges"),
-                "Accessible navigation names must use localized labels, not model ToString values");
+            var unfinishedLabels = new[] { "Stash", "Explorer", "Terminal", "Editor", "Tools" }.Select(UiText.Get).ToArray();
+            Expect(!buttons.Any(button => unfinishedLabels.Contains(AutomationProperties.GetName(button))), "Unfinished toolbar actions are omitted");
+            var workspace = Descendants<TextBlock>(window).Single(item => AutomationProperties.GetAutomationId(item) == "CurrentWorkspace");
+            Expect(AutomationProperties.GetName(workspace) == UiText.Get("AllCommits"), "Implemented workspace has a localized accessible heading");
+            Expect(!Descendants<ListBox>(window).Any(list => AutomationProperties.GetAutomationId(list) == "Navigation"), "No no-op sidebar selector remains");
+            Expect(!model.CanOpenBranchMenu && !model.CanSwitchBranch && model.FetchActionHelp == UiText.Get("ActionWorkspaceStarting"), "Startup disables actions for a real state and explains it");
             model.CompleteStartup(new(new() { SelectedSection = NavigationSection.Branches }, SettingsLoadStatus.Loaded));
             Expect(model.IsReady && model.AreaTitle == UiText.Get("AllCommits"), "Retired prototype sections fall back to implemented history");
+            Expect(model.BranchActionHelp == UiText.Get("ActionOpenRepository") && !model.CanOpenBranchMenu, "Empty workspace explains the missing repository");
             model.CompleteStartup(new(new(), SettingsLoadStatus.NewerSchema));
             Expect(model.Status == UiText.Get("SettingsNewer"), "Unsafe settings must be explained in UI");
             window.Close();

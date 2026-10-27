@@ -19,7 +19,6 @@
   <data name="ToolsUnavailable" xml:space="preserve"><value>Repository tools will become available in a later phase.</value></data>
   <data name="NoRepositorySelected" xml:space="preserve"><value>No repository selected</value></data>
   <data name="NoActiveOperation" xml:space="preserve"><value>No active operation</value></data>
-  <data name="FoundationNotice" xml:space="preserve"><value>Read-only preview · All Commits. Dimmed actions are prototypes; file status, diffs and Git mutations are not available yet.</value></data>
   <data name="Navigation" xml:space="preserve"><value>Repository navigation</value></data>
   <data name="LocalChanges" xml:space="preserve"><value>Local changes</value></data>
   <data name="History" xml:space="preserve"><value>History</value></data>
@@ -31,7 +30,7 @@
   <data name="ResizeSidebar" xml:space="preserve"><value>Resize repository sidebar</value></data>
   <data name="ResizeDetails" xml:space="preserve"><value>Resize details panel</value></data>
   <data name="HistoryEmptyTitle" xml:space="preserve"><value>Your repositories will appear here</value></data>
-  <data name="HistoryEmptyBody" xml:space="preserve"><value>Open a trusted repository or refresh an existing tab to read commit history.</value></data>
+  <data name="HistoryEmptyBody" xml:space="preserve"><value>Open a repository to load its commit history automatically.</value></data>
   <data name="Details" xml:space="preserve"><value>Repository details</value></data>
   <data name="Commit" xml:space="preserve"><value>Commit</value></data>
   <data name="ChangedFiles" xml:space="preserve"><value>Changed files</value></data>
@@ -184,7 +183,6 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="WindowMenu" xml:space="preserve"><value>_Window</value></data>
   <data name="HelpMenu" xml:space="preserve"><value>_Help</value></data>
   <data name="RepositoryActions" xml:space="preserve"><value>Repository actions</value></data>
-  <data name="PrototypeUnavailable" xml:space="preserve"><value>Planned action — not implemented in this preview.</value></data>
   <data name="CountUnavailable" xml:space="preserve"><value>—</value><comment>Unavailable ahead/behind count, never a guessed zero.</comment></data>
   <data name="AheadCount" xml:space="preserve"><value>Commits ahead of upstream</value></data>
   <data name="BehindCount" xml:space="preserve"><value>Commits behind upstream</value></data>
@@ -226,15 +224,11 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionRemote" xml:space="preserve"><value>Remote</value></data>
   <data name="ActionRemoteBranch" xml:space="preserve"><value>Branch on remote (name without remote prefix)</value></data>
   <data name="ActionInto" xml:space="preserve"><value>Into: {0}</value></data>
-  <data name="ActionRebaseDeferred" xml:space="preserve"><value>Rebase instead of merge — not available yet</value></data>
-  <data name="ActionStashDeferred" xml:space="preserve"><value>Stash and reapply local changes — not available yet</value></data>
   <data name="ActionAllRemotes" xml:space="preserve"><value>Fetch every listed remote (sequentially; stop on failure)</value></data>
   <data name="ActionAllTags" xml:space="preserve"><value>Push all local tags as well (some refs may succeed if others fail)</value></data>
   <data name="ActionSetUpstream" xml:space="preserve"><value>Set this destination as the local branch&apos;s upstream</value></data>
-  <data name="ActionForceDeferred" xml:space="preserve"><value>Force push — not available yet</value></data>
   <data name="ActionAuthLimits" xml:space="preserve"><value>Uses existing credential helpers and SSH agents. Git credential and bundled OpenSSH prompts open in Shovel. Verify host fingerprints independently before accepting; OpenSSH may save accepted hosts. Browser sign-in through Credential Manager, interactive hooks and signing prompts still require your terminal. Shovel does not save credentials; configured Git helpers may store them.</value></data>
-  <data name="ActionApproval" xml:space="preserve"><value>Allow this operation and this repository&apos;s configured hooks, filters and credential helpers to run. Only approve repositories and configuration you trust.</value></data>
-  <data name="ActionReady" xml:space="preserve"><value>Review the scope, then explicitly allow and start this operation.</value></data>
+  <data name="ActionReady" xml:space="preserve"><value>Review the targets and options, then start this operation.</value></data>
   <data name="ActionDuration" xml:space="preserve"><value>Elapsed: {0:N1} s</value></data>
   <data name="ActionOutput" xml:space="preserve"><value>Git output (in memory; URL credentials redacted)</value></data>
   <data name="ActionAuthentication" xml:space="preserve"><value>Authentication requirements</value></data>
@@ -255,7 +249,6 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionIdentityChanged" xml:space="preserve"><value>The repository identity changed or could not be verified. Close this dialog and reopen the repository.</value></data>
   <data name="ActionUnsupportedRemote" xml:space="preserve"><value>This remote configuration cannot be represented safely yet (multiple URLs, unusual name or too many remotes). Use your terminal for this configuration.</value></data>
   <data name="ActionOtherInstance" xml:space="preserve"><value>Another Shovel instance is changing this repository or a linked worktree. Wait for it to finish, then reopen this dialog.</value></data>
-  <data name="ActionApprovalRequired" xml:space="preserve"><value>Explicit approval is required before configured programs or a Git write operation can run.</value></data>
   <data name="ActionChanged" xml:space="preserve"><value>Repository refs, HEAD or configuration changed while this dialog was open. Nothing was started. Reopen the dialog to review current targets.</value></data>
   <data name="ActionChangedAfterFetch" xml:space="preserve"><value>Fetch completed, but repository state changed before fast-forwarding. The local branch was not advanced by Shovel. Review history and reopen the dialog.</value></data>
   <data name="ActionSequence" xml:space="preserve"><value>A merge, rebase, cherry-pick, revert or other sequence is already in progress. Resolve or abort it with your terminal before starting this operation.</value></data>
@@ -283,4 +276,15 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionAuthenticationUnavailable" xml:space="preserve"><value>The authentication prompt connection failed or returned an invalid response. Git was stopped. Review refreshed repository state and reopen the operation to retry.</value></data>
   <data name="ActionAuthenticationTimedOut" xml:space="preserve"><value>The authentication prompt expired after two minutes. Git was stopped. Changes already applied are not undone; review refreshed state before retrying.</value></data>
   <data name="ActionAuthenticationPromptLimit" xml:space="preserve"><value>The operation exceeded the limit of 16 authentication requests and was stopped. Review the authentication configuration and refreshed repository state before retrying.</value></data>
+  <data name="ActionAlreadyAttempted" xml:space="preserve"><value>Close and reopen this dialog to review current targets before another attempt.</value></data>
+  <data name="ActionEnterBranchName" xml:space="preserve"><value>Enter a name for the new branch.</value></data>
+  <data name="ActionChooseBranch" xml:space="preserve"><value>Select an existing local branch.</value></data>
+  <data name="ActionChooseRemoteBranch" xml:space="preserve"><value>Enter the destination branch name on the remote.</value></data>
+  <data name="ActionWorkspaceStarting" xml:space="preserve"><value>Wait for the workspace to finish starting or saving.</value></data>
+  <data name="ActionOpenRepository" xml:space="preserve"><value>Open a repository to use this action.</value></data>
+  <data name="ActionWaitForRead" xml:space="preserve"><value>Wait for the current repository read to finish, or cancel it from the Repository menu.</value></data>
+  <data name="ActionSelectGit" xml:space="preserve"><value>Select a supported Git executable from the Repository menu.</value></data>
+  <data name="ActionInspectionNeeded" xml:space="preserve"><value>Refresh the repository successfully before using this action.</value></data>
+  <data name="ActionPullNeedsBranch" xml:space="preserve"><value>Check out a local branch with a commit before pulling.</value></data>
+  <data name="ActionNeedsBranch" xml:space="preserve"><value>Create a local branch with a commit before using this action.</value></data>
 </root>

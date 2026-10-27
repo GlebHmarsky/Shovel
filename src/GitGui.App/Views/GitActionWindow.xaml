@@ -6,7 +6,7 @@
  FontFamily="Segoe UI" FontSize="13" Closing="OnClosing">
  <Window.Resources><BooleanToVisibilityConverter x:Key="Visible"/></Window.Resources>
  <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"><Grid Margin="22">
-  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel><TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" Margin="0,8"/>
    <TextBlock Text="{Binding CurrentRepository}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentRepository}" FlowDirection="LeftToRight"/></StackPanel>
   <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12">
@@ -23,12 +23,10 @@
     <StackPanel Visibility="{Binding ChooseRemoteBranch, Converter={StaticResource Visible}}"><Label Content="{loc:Text Key=ActionRemoteBranch}"/><ComboBox IsEditable="True" ItemsSource="{Binding RemoteBranches}" Text="{Binding RemoteBranch, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{loc:Text Key=ActionRemoteBranch}"/></StackPanel>
     <StackPanel Visibility="{Binding IsPull, Converter={StaticResource Visible}}" Margin="0,8">
      <TextBlock Text="{Binding Into, StringFormat={loc:Text Key=ActionInto}}"/>
-     <CheckBox IsEnabled="False" Content="{loc:Text Key=ActionRebaseDeferred}" Margin="0,8,0,4"/><CheckBox IsEnabled="False" Content="{loc:Text Key=ActionStashDeferred}"/>
     </StackPanel>
     <CheckBox Content="{loc:Text Key=ActionAllRemotes}" IsChecked="{Binding AllRemotes}" Visibility="{Binding IsFetch, Converter={StaticResource Visible}}" Margin="0,8"/>
     <StackPanel Visibility="{Binding IsPush, Converter={StaticResource Visible}}" Margin="0,8">
      <CheckBox Content="{loc:Text Key=ActionAllTags}" IsChecked="{Binding AllTags}"/><CheckBox Content="{loc:Text Key=ActionSetUpstream}" IsChecked="{Binding SetUpstream}" Margin="0,8"/>
-     <CheckBox IsEnabled="False" Content="{loc:Text Key=ActionForceDeferred}"/>
     </StackPanel>
     <Expander Header="{loc:Text Key=ActionAuthentication}" Margin="0,12" Visibility="{Binding IsNetwork, Converter={StaticResource Visible}}">
      <TextBlock Text="{loc:Text Key=ActionAuthLimits}" TextWrapping="Wrap" Margin="0,8"/>
@@ -37,9 +35,9 @@
   </ScrollViewer>
   <StackPanel Grid.Row="2" Visibility="{Binding HasAttempt, Converter={StaticResource Visible}}"><TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/><TextBlock Text="{Binding Duration}" Margin="0,4"/></StackPanel>
   <TextBox Grid.Row="3" Height="90" Visibility="{Binding HasAttempt, Converter={StaticResource Visible}}" Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/>
-  <CheckBox Grid.Row="4" Margin="0,12,0,0" IsEnabled="{Binding CanEdit}" IsChecked="{Binding Approved}" AutomationProperties.Name="{loc:Text Key=ActionApproval}"><TextBlock Text="{loc:Text Key=ActionApproval}" TextWrapping="Wrap"/></CheckBox>
-  <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-   <Button Content="{Binding Title}" Command="{Binding RunCommand}" MinWidth="90" Padding="12,6" IsDefault="True"/>
+  <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+   <Button Content="{Binding Title}" Command="{Binding RunCommand}" MinWidth="90" Padding="12,6" IsDefault="True"
+           ToolTip="{Binding RunUnavailableReason}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding RunUnavailableReason}"/>
    <Button Content="{Binding CloseLabel}" Click="OnCancel" MinWidth="90" Padding="12,6" Margin="10,0,0,0"/>
   </StackPanel>
  </Grid></Border>

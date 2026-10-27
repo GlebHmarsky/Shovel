@@ -47,7 +47,7 @@ internal static partial class Program
             var uiThread = Environment.CurrentManagedThreadId;
             var reconciled = 0;
             var model = new GitActionViewModel(context, GitAction.Push, new GitActions(runner, reader, identities),
-                () => { reconciled++; return Task.CompletedTask; }, interaction: interaction) { Approved = true };
+                () => { reconciled++; return Task.CompletedTask; }, interaction: interaction);
             model.RunCommand.Execute(null);
             await interaction.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Expect(interaction.SetupThread != uiThread, "Helper file/pipe setup stays off dispatcher");

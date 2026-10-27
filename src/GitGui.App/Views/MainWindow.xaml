@@ -24,14 +24,9 @@
       </Style.Triggers>
     </Style>
     <Style x:Key="ToolbarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Padding" Value="7,4" /><Setter Property="Margin" Value="2,0" />
+      <Setter Property="ToolTipService.ShowOnDisabled" Value="True" /><Setter Property="Padding" Value="7,4" /><Setter Property="Margin" Value="2,0" />
       <Setter Property="MinWidth" Value="48" /><Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" /><Setter Property="FontSize" Value="12" />
-    </Style>
-    <Style x:Key="PrototypeButton" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
-      <Setter Property="IsEnabled" Value="False" /><Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
-      <Setter Property="ToolTip" Value="{loc:Text Key=PrototypeUnavailable}" />
-      <Setter Property="AutomationProperties.HelpText" Value="{loc:Text Key=PrototypeUnavailable}" />
     </Style>
     <Style x:Key="ToolbarIcon" TargetType="Path">
       <Setter Property="Width" Value="18" /><Setter Property="Height" Value="18" /><Setter Property="Stretch" Value="Uniform" />
@@ -113,31 +108,28 @@
       </ListBox.ItemContainerStyle>
     </ListBox>
     <Grid Grid.Row="1" Margin="8,4" AutomationProperties.Name="{loc:Text Key=RepositoryActions}">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
         <Button Style="{StaticResource ToolbarButton}" Command="{Binding OpenRepositoryCommand}" AutomationProperties.Name="{loc:Text Key=OpenRepository}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M1,4 L7,4 9,6 19,6 19,17 1,17 Z"/><TextBlock Text="{loc:Text Key=OpenRepository}"/></StackPanel>
         </Button>
-        <Button Style="{StaticResource ToolbarButton}" Command="{Binding FetchCommand}" AutomationProperties.Name="{loc:Text Key=Fetch}">
+        <Button Style="{StaticResource ToolbarButton}" Command="{Binding FetchCommand}" ToolTip="{Binding FetchActionHelp}" AutomationProperties.HelpText="{Binding FetchActionHelp}" AutomationProperties.Name="{loc:Text Key=Fetch}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M10,1 L10,14 M5,9 L10,14 15,9 M2,16 L2,20 18,20 18,16"/><TextBlock Text="{loc:Text Key=Fetch}"/></StackPanel>
         </Button>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
-          <Button Style="{StaticResource ToolbarButton}" Command="{Binding PullCommand}" AutomationProperties.Name="{loc:Text Key=Pull}" ToolTip="{Binding DivergenceHelp}">
+          <Button Style="{StaticResource ToolbarButton}" Command="{Binding PullCommand}" AutomationProperties.Name="{loc:Text Key=Pull}" ToolTip="{Binding PullActionHelp}" AutomationProperties.HelpText="{Binding PullActionHelp}">
             <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M17,2 C5,2 5,5 5,16 M1,11 L5,16 10,11"/><TextBlock Text="{loc:Text Key=Pull}"/></StackPanel>
           </Button>
           <TextBlock Text="{Binding PullCount}" VerticalAlignment="Top" Margin="0,5,5,0" FontWeight="SemiBold" AutomationProperties.Name="{loc:Text Key=BehindCount}" AutomationProperties.HelpText="{Binding DivergenceHelp}" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
-          <Button Style="{StaticResource ToolbarButton}" Command="{Binding PushCommand}" AutomationProperties.Name="{loc:Text Key=Push}" ToolTip="{Binding DivergenceHelp}">
+          <Button Style="{StaticResource ToolbarButton}" Command="{Binding PushCommand}" AutomationProperties.Name="{loc:Text Key=Push}" ToolTip="{Binding PushActionHelp}" AutomationProperties.HelpText="{Binding PushActionHelp}">
             <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M3,18 C15,18 15,15 15,4 M10,9 L15,4 19,9"/><TextBlock Text="{loc:Text Key=Push}"/></StackPanel>
           </Button>
           <TextBlock Text="{Binding PushCount}" VerticalAlignment="Top" Margin="0,5,5,0" FontWeight="SemiBold" AutomationProperties.Name="{loc:Text Key=AheadCount}" AutomationProperties.HelpText="{Binding DivergenceHelp}" />
         </StackPanel>
-        <Button Style="{StaticResource PrototypeButton}" AutomationProperties.Name="{loc:Text Key=Stash}">
-          <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M1,2 L19,2 19,6 1,6 Z M3,6 L3,18 17,18 17,6 M7,10 L13,10"/><TextBlock Text="{loc:Text Key=Stash}"/></StackPanel>
-        </Button>
       </StackPanel>
-      <Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Grid Grid.Column="1" MaxWidth="530"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <Border Margin="12,0" Padding="10,4" MaxWidth="430" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" CornerRadius="3">
         <StackPanel HorizontalAlignment="Stretch">
           <TextBlock Text="{Binding RepositoryTitle}" TextAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedRepository.Directory}" />
@@ -147,25 +139,19 @@
         </StackPanel>
       </Border>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-       <Button Style="{StaticResource ToolbarButton}" Command="{Binding NewBranchCommand}" ToolTip="{loc:Text Key=ActionTitleNewBranch}" AutomationProperties.Name="{loc:Text Key=ActionTitleNewBranch}">
+       <Button Style="{StaticResource ToolbarButton}" Command="{Binding NewBranchCommand}" ToolTip="{Binding BranchActionHelp}" AutomationProperties.HelpText="{Binding BranchActionHelp}" AutomationProperties.Name="{loc:Text Key=ActionTitleNewBranch}">
         <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M5,2 L5,18 M5,12 C5,7 15,13 15,4 M11,4 L19,4 M15,0 L15,8"/><TextBlock Text="{loc:Text Key=BranchToolbar}"/></StackPanel>
        </Button>
-       <Button Content="▾" Click="OnBranchMenu" Padding="3,6" IsEnabled="{Binding CanNavigate}" AutomationProperties.Name="{loc:Text Key=BranchMenu}">
+       <Button Content="▾" Click="OnBranchMenu" Padding="3,6" IsEnabled="{Binding CanOpenBranchMenu}" ToolTip="{Binding BranchActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchActionHelp}" AutomationProperties.Name="{loc:Text Key=BranchMenu}">
         <Button.ContextMenu><ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-         <MenuItem Header="{loc:Text Key=ActionTitleNewBranch}" Command="{Binding NewBranchCommand}"/>
+         <MenuItem Header="{loc:Text Key=ActionTitleNewBranch}" Command="{Binding NewBranchCommand}" ToolTip="{Binding BranchActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchActionHelp}"/>
          <Separator/>
-         <MenuItem Header="{loc:Text Key=ActionTitleSwitchBranch}" ItemsSource="{Binding BranchMenuItems}">
+         <MenuItem Header="{loc:Text Key=ActionTitleSwitchBranch}" ItemsSource="{Binding BranchMenuItems}" IsEnabled="{Binding CanSwitchBranch}" ToolTip="{Binding SwitchActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding SwitchActionHelp}">
           <MenuItem.ItemContainerStyle><Style TargetType="MenuItem"><Setter Property="Header" Value="{Binding Name}"/><Setter Property="Command" Value="{Binding Command}"/><Setter Property="CommandParameter" Value="{Binding Name}"/></Style></MenuItem.ItemContainerStyle>
          </MenuItem>
         </ContextMenu></Button.ContextMenu>
        </Button>
       </StackPanel></Grid>
-      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-        <Button Style="{StaticResource PrototypeButton}" Content="{loc:Text Key=Explorer}" AutomationProperties.Name="{loc:Text Key=Explorer}" />
-        <Button Style="{StaticResource PrototypeButton}" Content="{loc:Text Key=Terminal}" AutomationProperties.Name="{loc:Text Key=Terminal}" />
-        <Button Style="{StaticResource PrototypeButton}" Content="{loc:Text Key=Editor}" AutomationProperties.Name="{loc:Text Key=Editor}" />
-        <Button Style="{StaticResource PrototypeButton}" Content="{loc:Text Key=Tools}" AutomationProperties.Name="{loc:Text Key=Tools}" />
-      </StackPanel>
     </Grid>
     <Grid Grid.Row="3">
       <Grid.ColumnDefinitions>
@@ -175,22 +161,9 @@
       </Grid.ColumnDefinitions>
       <DockPanel Margin="10,14">
         <TextBlock DockPanel.Dock="Top" Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" Margin="8,0,0,12" />
-        <ListBox ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection, Mode=TwoWay}"
-                 DisplayMemberPath="Label" BorderThickness="0" IsEnabled="{Binding CanNavigate}"
-                 AutomationProperties.Name="{loc:Text Key=Navigation}" AutomationProperties.AutomationId="Navigation">
-          <ListBox.ItemContainerStyle>
-            <Style TargetType="ListBoxItem">
-              <Setter Property="Padding" Value="8,9" />
-              <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
-              <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
-              <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
-              <Style.Triggers><DataTrigger Binding="{Binding IsAvailable}" Value="False">
-                <Setter Property="ToolTip" Value="{loc:Text Key=PrototypeUnavailable}" />
-                <Setter Property="AutomationProperties.HelpText" Value="{loc:Text Key=PrototypeUnavailable}" />
-              </DataTrigger></Style.Triggers>
-            </Style>
-          </ListBox.ItemContainerStyle>
-        </ListBox>
+        <Border Padding="8,9" VerticalAlignment="Top" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+          <TextBlock Text="{Binding AreaTitle}" AutomationProperties.Name="{Binding AreaTitle}" AutomationProperties.AutomationId="CurrentWorkspace" />
+        </Border>
       </DockPanel>
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" ResizeDirection="Columns"
                     Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"

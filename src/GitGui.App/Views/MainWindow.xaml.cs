@@ -97,7 +97,7 @@ public partial class MainWindow : Window
         IsMaximized = WindowState == WindowState.Maximized,
         SidebarWidth = SidebarColumn.ActualWidth,
         DetailsHeight = DetailsRow.ActualHeight,
-        SelectedSection = ViewModel.SelectedSection.Section
+        SelectedSection = NavigationSection.History
     };
 
     private void OnWorkspaceSizeChanged(object sender, SizeChangedEventArgs e)

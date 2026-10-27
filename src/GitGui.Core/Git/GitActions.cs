@@ -11,7 +11,7 @@ public sealed record ActionContext(GitInstallation Git, RepositoryIdentity Ident
     HistorySession History, IReadOnlyList<GitRemote> Remotes, string ConfigStamp);
 public sealed record ActionOptions(GitAction Action, string Branch = "", string StartRef = "HEAD",
     string Remote = "", string RemoteBranch = "", bool Checkout = true, bool AllRemotes = false,
-    bool AllTags = false, bool SetUpstream = false, bool AllowConfiguredPrograms = false);
+    bool AllTags = false, bool SetUpstream = false);
 public sealed class GitActionException(string code) : Exception(code) { public string Code { get; } = code; }
 public sealed record ActionResult(ProcessOutcome Outcome, int? ExitCode, string Output)
 { public bool Success => Outcome == ProcessOutcome.Exited && ExitCode == 0; }
@@ -65,7 +65,6 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
         async Task<ActionResult> ExecuteLocked()
         {
             token.ThrowIfCancellationRequested();
-            if (!options.AllowConfiguredPrograms) throw new GitActionException("ActionApprovalRequired");
             var git = context.Git; var path = context.Identity.Worktree;
             if ((await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint)
                 throw new GitActionException("ActionIdentityChanged");
@@ -176,7 +175,7 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
                 var environment = EnvironmentForGit();
                 environment["GIT_OPTIONAL_LOCKS"] = null;
                 environment["GIT_MERGE_AUTOEDIT"] = "no";
-                // The broker exists only for this explicitly approved operation, never history reads.
+                // The broker exists only for this user-started operation, never history reads.
                 if (options.Action is GitAction.Fetch or GitAction.Pull or GitAction.Push)
                 {
                     if (authentication is not null)

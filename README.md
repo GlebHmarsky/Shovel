@@ -1,10 +1,10 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.9.2** compacts documentation and revises delivery/consent policy; functional scope remains 0.9.1: automatic All Commits/graph/details/paging, branch create/switch, Fetch, fast-forward Pull, Push/tags/upstream and Git/OpenSSH askpass.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.9.3** applies the revised interaction policy: automatic All Commits/graph/details/paging, branch create/switch, Fetch, fast-forward Pull, Push/tags/upstream and Git/OpenSSH askpass, without a separate program-consent step.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
-**Delivery policy:** requested controls must perform real actions; no new placeholders or UI-only completion. Established work environment: no repo-trust/first-use/program-consent layer for ordinary Git actions, and no extra safety measures without concrete need. Normal action buttons authorize the operation; required auth/destructive confirmations remain. Existing 0.9.1 program-approval checkbox/disabled prototypes still need code changes; this docs release does not remove them.
+**Delivery policy:** requested controls must perform real actions; no new placeholders or UI-only completion. Established work environment: no repo-trust/first-use/program-consent layer for ordinary Git actions, and no extra safety measures without concrete need. Normal action buttons authorize the operation and configured hooks/helpers; required auth/destructive confirmations remain. Unfinished entry points are omitted; disabled working actions explain the missing target/dependency or active operation.
 
 ## Prerequisites
 
@@ -32,7 +32,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#authentication-bridge-verification-2026-10-26) distinguishes integration/headless from desktop.
+Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#interaction-policy-verification-2026-10-27) distinguishes integration/headless from desktop.
 
 ## Run
 
@@ -58,11 +58,11 @@ Cached switch publishes immediately/validates identity off-thread. >30 s snapsho
 
 Pull badge = behind, Push = ahead of configured upstream **locally**, loaded after rows; separate push target not compared. Zero measured, dash pending/unavailable/failed; tooltip reason/time/upstream. Missing/detached/unborn/shallow cannot claim synchronized; failed refresh keeps stale counts, no implicit fetch.
 
-Menus/toolbars/center timer exist; unfinished Stash/Explorer/Terminal/Editor/Tools/sidebar controls are still disabled debt. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers yellow, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
+Menus, working toolbar actions and center timer remain; unfinished Stash/Explorer/Terminal/Editor/Tools/sidebar controls are omitted. All Commits is the current sidebar heading. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers yellow, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
 
 ## Branch and remote actions
 
-Branch: create from concrete starting commit/optional checkout; arrow switches local branches. Fetch chooses remote/all; Pull remote branch → current branch, clean fast-forward only; Push source/remote/destination with optional tags/upstream. Dialog opening is local preparation; Execute starts action. Current binary additionally requires program approval; policy requires removing that redundant checkbox.
+Branch: create from concrete starting commit/optional checkout; arrow switches local branches. Fetch chooses remote/all; Pull remote branch → current branch, clean fast-forward only; Push source/remote/destination with optional tags/upstream. Dialog opening is local preparation; the normal action button executes, without another approval checkbox. Unsupported rebase/autostash/force options are omitted.
 
 Existing restrictions: dirty/untracked/ignored collisions, active sequences, sparse/submodule checkout/Pull, custom SSH/multiple remote URLs, force/rebase/autostash unsupported. Hooks preserved. [Action details](docs/architecture.md#explicit-git-actions-f2a-080). Output/duration/results remain in modal memory, HTTP(S) credentials redacted. Cancel stops owned work, is not undo; fresh inspection before modal exit/retry, tab/window admission currently blocked while active.
 
@@ -83,7 +83,7 @@ First: three samples/isolated 2,500 commits, separate settings/discovery/inspect
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.9.2-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.9.3-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

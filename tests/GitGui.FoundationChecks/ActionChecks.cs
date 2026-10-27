@@ -20,16 +20,15 @@ internal static partial class Program
         await Git(repo, "remote", "add", "origin", remote);
         var actions = new GitActions(runner, reader, new WindowsRepositoryIdentity());
         Task<ActionContext> Prepare(string? path = null) => actions.PrepareAsync(git, path ?? repo, default);
-        Task<ActionResult> Run(ActionContext context, ActionOptions options, CancellationToken token = default) => actions.ExecuteAsync(context, options with { AllowConfiguredPrograms = true }, token);
+        Task<ActionResult> Run(ActionContext context, ActionOptions options, CancellationToken token = default) => actions.ExecuteAsync(context, options, token);
         async Task Reject(string code, Func<Task> act)
         {
             try { await act(); throw new InvalidOperationException("Expected action rejection: " + code); }
             catch (GitActionException exception) { Expect(exception.Code == code, "Expected safe action rejection"); }
         }
-        await Check("Create/switch branches, reject invalid/duplicate names, require explicit execution approval", async () =>
+        await Check("Normal branch actions execute and reject invalid/duplicate names", async () =>
         {
             var context = await Prepare();
-            await Reject("ActionApprovalRequired", () => actions.ExecuteAsync(context, new(GitAction.NewBranch, "not-approved"), default));
             Expect((await Run(context, new(GitAction.NewBranch, "feature/日本語", Checkout: false))).Success, "Create real branch without checkout");
             Expect((await reader.InspectAsync(git, repo, default)).Branch == "main", "Unchecked checkout retains HEAD");
             Expect((await Run(await Prepare(), new(GitAction.SwitchBranch, "feature/日本語"))).Success, "Switch real branch");
@@ -115,10 +114,10 @@ internal static partial class Program
         {
             var failureRunner = new AuthenticationFailureRunner(runner);
             var failedActions = new GitActions(failureRunner, reader, new WindowsRepositoryIdentity());
-            var result = await failedActions.ExecuteAsync(await Prepare(), new(GitAction.Push, "main", Remote: "origin", RemoteBranch: "main", AllowConfiguredPrograms: true), default);
+            var result = await failedActions.ExecuteAsync(await Prepare(), new(GitAction.Push, "main", Remote: "origin", RemoteBranch: "main"), default);
             Expect(!result.Success && result.Output.Contains("Authentication failed") && !result.Output.Contains("secret") && !result.Output.Contains("token-value"), "Controlled auth failure never logs/exposes URL credentials");
         });
-        await Check("Real Git credential askpass works inside an approved local push hook without persisting credentials", async () =>
+        await Check("Real Git credential askpass works inside a normal local push hook without persisting credentials", async () =>
         {
             var hooks = Fixture("askpass hooks");
             await Git(repo, "config", "core.hooksPath", hooks.Replace('\\', '/'));
@@ -135,13 +134,13 @@ internal static partial class Program
                     new(Encoding.UTF8.GetBytes(++prompts == 1 ? "fixture-user" : "fixture-secret"))), default);
                 var context = await Prepare();
                 var result = await actions.ExecuteAsync(context,
-                    new(GitAction.Push, "feature/日本語", Remote: "origin", RemoteBranch: "feature-test", AllowConfiguredPrograms: true),
+                    new(GitAction.Push, "feature/日本語", Remote: "origin", RemoteBranch: "feature-test"),
                     default, authentication: session);
                 Expect(result.Success && prompts == 2 && !result.Output.Contains("fixture-secret"), "Real Git invokes helper for username/password without terminal or output leak");
                 // Denying a second operation's prompt cancels its owned Git/hook and releases the gate.
                 await using var denied = new AskPassSession(AskPassExecutable, (_, _) => Task.FromResult<AuthenticationAnswer?>(null), default);
                 var stopped = await actions.ExecuteAsync(await Prepare(),
-                    new(GitAction.Push, "feature/日本語", Remote: "origin", RemoteBranch: "feature-test", AllowConfiguredPrograms: true),
+                    new(GitAction.Push, "feature/日本語", Remote: "origin", RemoteBranch: "feature-test"),
                     default, authentication: denied);
                 Expect(stopped.Outcome == ProcessOutcome.Cancelled, "Prompt cancellation stops operation and owned hook");
                 Expect((await reader.InspectAsync(git, repo, default)).Commit is not null, "Repository remains inspectable");

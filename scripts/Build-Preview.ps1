@@ -47,8 +47,8 @@ Use Repository > Refresh after external changes, or Cancel for a read.
 Activation refreshes cached snapshots older than 30 seconds. Right-click a tab for Refresh, Move, Close or Close others; middle click closes it.
 Pull shows behind and Push shows ahead of the configured upstream's local snapshot; no remote request is made.
 A dash means counts are pending/unavailable/failed; tooltips explain. Fetch/Pull/Push open explicit operation dialogs.
-Branch opens create/switch dialogs. Pull is fast-forward only; normal Push supports optional tags/upstream. Review targets and explicitly approve configured programs before execution.
-Git/OpenSSH askpass prompts are available during approved network actions. Keep Shovel.AskPass.exe and its companion files here. Verify SSH host fingerprints independently before accepting; Shovel does not save credentials, but configured Git helpers may do so.
+Branch opens create/switch dialogs. Pull is fast-forward only; normal Push supports optional tags/upstream. Review targets and click the operation button to execute, including configured hooks/helpers; there is no extra trust checkbox. Unfinished actions/options are omitted; disabled working actions explain what is missing.
+Git/OpenSSH askpass prompts are available during explicit network actions. Keep Shovel.AskPass.exe and its companion files here. Verify SSH host fingerprints independently before accepting; Shovel does not save credentials, but configured Git helpers may do so.
 Credential Manager browser sign-in, signing, interactive hooks, custom SSH commands, rebase, autostash, force-push, search/filter, file status, diffs, installer and updates remain deferred. Use existing terminal tools for those workflows; cancellation is not undo. Local history needs no approval.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.

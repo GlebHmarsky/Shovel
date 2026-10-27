@@ -4,9 +4,9 @@ Updated 2026-10-27. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
-**0.9.2: documentation policy/compaction.** Last functional increment: F2b/0.9.1 Git/OpenSSH askpass, following history and explicit branch/network actions. Status/diffs, other mutations, browser/signing/interactive hooks and distribution remain pending.
+**0.9.3: ordinary action execution and control cleanup.** Applies the interaction policy to the existing branch/network/askpass workflows; no separate program-consent gate or unfinished toolbar/sidebar/dialog controls. Status/diffs, other mutations, browser/signing/interactive hooks and distribution remain pending.
 
-**Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 changes docs, not runtime; TODO tracks removal of existing extra consent/prototypes.
+**Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 recorded the policy; 0.9.3 applies it in code. The user also explicitly reconfirmed removing the gate for configured hooks/helpers during this delivery.
 
 No historical phase order or incomplete unrelated desktop matrix may veto a newly requested feature. Requirements for the feature's own correctness still apply. Startup updater checks supersede old research advice; no startup fetch.
 
@@ -28,6 +28,7 @@ Proposed remaining order; requests can reprioritize. Each increment must work en
 | F2a / 0.8.0 | Real branch create/switch/Fetch/FF Pull/Push/tags/upstream/badges | 77 checks/local bare remotes/offscreen |
 | F2b / 0.9.1 | Packaged Git/OpenSSH askpass/owned prompts/cancel/reinspection | 87 checks/local credential protocol/offscreen; live providers unverified |
 | 0.9.2 | Compact docs/working-feature and normal-consent policy | Documentation-only; verification below |
+| 0.9.3 | Normal action execution/no routine consent; implemented controls only | Local Git workflow and headless verification below |
 | F1g onward | Real status/files/tree/diffs; filtering when requested | Bounded parsers/content and relevant read tests |
 | 2: Local MVP | Init/stage/hunks/commit/amend/branch delete/tracking/stashes | Mutation/hook/signing/stale-hunk coverage |
 | 3: Network MVP | Clone/remotes/broader network/recovery continue/skip/abort | Visible auth/input, failures/external races |
@@ -173,6 +174,16 @@ Final 620×440/480×340 masked/confirmation/notification offscreen prompts revie
 0.9.2 compacts all ten maintained Markdown files by about 46% in word count. All 34 requirement IDs, 41 local links/anchors, 68 external references and 40 historical evidence paths retained/checked. Generated ignored Build/artifacts snapshots remain historical outputs. Application behavior unchanged; separate checkbox/prototypes still need code work.
 
 Restore/Release build/publish passed with zero warnings/errors; **87 checks passed, 0 failed**. Restricted run stopped at local push/clone fixtures; permitted rerun passed. Log: `artifacts/preview-0.9.2-verification.txt`; fixture: `artifacts/foundation-checks/20261027-161840-12950ac5a7ed4e9b8e473067430e2188`. Preview: `Build/0.9.2-win-x64/Shovel.exe`; 16 checksums/seven tested-published files verified, app/helper file versions 0.9.2.0. No interactive launch/live authentication; existing runtime verification limits remain. Intended docs/version committed; no push.
+
+## Interaction-policy verification (2026-10-27)
+
+0.9.3 removes the configured-program approval flag/checkbox and unfinished toolbar/sidebar/dialog controls. Actual targets/state determine availability, with localized tooltip/accessibility help. Automatic reads, Git protections, hooks, askpass and shared-worktree/cancel/reinspection boundaries remain. No new startup queries or performance claim.
+
+Restore/Release build/publish passed with zero warnings/errors; **89 passed, 0 failed**. Added real dialog-command create/checkout → push/set-upstream → fetch → pull → switch against disposable local repositories, plus missing-target help checks. Existing failed hooks, ignored-file collisions, divergence, stale context, authentication/cancellation, modal admission and automatic-history regressions pass. No live remotes used.
+
+Reviewed offscreen workspace at 1200×760/900×580 and action dialogs at 650×520/520×440. Primary actions remain outside the scrolling options; history keeps horizontal scrolling at minimum width. This is not desktop focus/input, live-provider, Windows 10, OS accessibility or performance certification.
+
+Log: `artifacts/preview-0.9.3-verification.txt`; fixtures/renders: `artifacts/foundation-checks/20261027-164923-14c646bd549d4cab9e9489fb853efbcf`. Preview: `Build/0.9.3-win-x64/Shovel.exe`; all 16 checksums and seven tested/published app/helper files match, both executable file versions 0.9.3.0. Build remains ignored/untracked; earlier previews retained. No interactive launch, push, dependency installation or distribution work. Next: remaining authentication routes, then Local Changes/status per TODO.
 
 ## Initial compatibility boundaries
 

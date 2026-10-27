@@ -18,6 +18,20 @@ public sealed partial class ShellViewModel
     public IReadOnlyList<string> LocalBranches => State?.Page?.Session.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray() ?? [];
     public IReadOnlyList<BranchMenuItem> BranchMenuItems => LocalBranches.Select(name => new BranchMenuItem(name, SwitchBranchCommand)).ToArray();
     private bool CanAct => CanNavigate && !IsBusy && _interaction is not null && _actions is not null && _git is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
+    public bool CanOpenBranchMenu => CanAct;
+    private string? ActionUnavailableKey => !IsReady || _stopping ? "ActionWorkspaceStarting" :
+        ActionOpen ? "ActionDialogOpen" : SelectedRepository is null ? "ActionOpenRepository" :
+        IsBusy ? "ActionWaitForRead" : _git is null ? "ActionSelectGit" :
+        _interaction is null || _actions is null || SelectedRepository.Snapshot is null ? "ActionInspectionNeeded" :
+        SelectedRepository.Snapshot.Operation != RepositoryOperation.None ? "ActionSequence" : null;
+    public string BranchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleNewBranch");
+    public string FetchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleFetch");
+    public string PullActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
+        SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? UiText.Get("ActionPullNeedsBranch") : DivergenceHelp;
+    public string PushActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
+        LocalBranches.Count == 0 ? UiText.Get("ActionNeedsBranch") : DivergenceHelp;
+    public string SwitchActionHelp => UiText.Get(ActionUnavailableKey ?? (LocalBranches.Count == 0 ? "ActionNeedsBranch" : "ActionTitleSwitchBranch"));
+    public bool CanSwitchBranch => CanAct && LocalBranches.Count != 0;
     private void InitializeActions(GitActions? actions)
     {
         _actions = actions;
@@ -25,7 +39,7 @@ public sealed partial class ShellViewModel
         FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanAct);
         PullCommand = new(() => OpenAction(GitAction.Pull), () => CanAct && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
         PushCommand = new(() => OpenAction(GitAction.Push), () => CanAct && LocalBranches.Count != 0);
-        SwitchBranchCommand = new(branch => OpenAction(GitAction.SwitchBranch, branch), _ => CanAct);
+        SwitchBranchCommand = new(branch => OpenAction(GitAction.SwitchBranch, branch), branch => CanAct && LocalBranches.Contains(branch));
     }
     private async void OpenAction(GitAction action, string? branch = null)
     {

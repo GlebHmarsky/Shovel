@@ -40,12 +40,57 @@ internal static partial class Program
         var runner = new WindowsProcessRunner(); var reader = new RepositoryReader(runner);
         var identities = new WindowsRepositoryIdentity(); var actions = new GitActions(runner, reader, identities);
         var context = await actions.PrepareAsync(_actionFixture.Git, _actionFixture.Repository.Worktree, default);
-        await Check("Operation dialogs render offscreen at normal/minimum sizes with localized scope and guarded execution", async () =>
+        await Check("Missing operation targets explain disabled actions without introducing consent", () =>
+        {
+            var model = new GitActionViewModel(context, GitAction.NewBranch, actions, () => Task.CompletedTask);
+            Expect(!model.RunCommand.CanExecute(null) && model.RunUnavailableReason == UiText.Get("ActionEnterBranchName"), "Blank branch name has a concrete reason");
+            model.NewName = "valid-name"; model.StartRef = "missing";
+            Expect(!model.RunCommand.CanExecute(null) && model.RunUnavailableReason == UiText.Get("ActionNoStart"), "Missing starting ref is explained");
+            model.StartRef = "HEAD";
+            Expect(model.RunCommand.CanExecute(null), "Selecting a valid target enables creation");
+            model.Cancel();
+            Expect(!model.HasAttempt, "Cancel before execution leaves repository untouched");
+            model = new(context, GitAction.Push, actions, () => Task.CompletedTask);
+            model.Branch = "missing";
+            Expect(!model.RunCommand.CanExecute(null) && model.RunUnavailableReason == UiText.Get("ActionChooseBranch"), "Unknown source branch is explained");
+            model.Branch = "main"; model.RemoteBranch = " ";
+            Expect(!model.RunCommand.CanExecute(null) && model.RunUnavailableReason == UiText.Get("ActionChooseRemoteBranch"), "Blank remote destination is explained");
+            model.RemoteBranch = "main"; model.Remote = null;
+            Expect(!model.RunCommand.CanExecute(null) && model.RunUnavailableReason == UiText.Get("ActionNoRemote"), "Missing remote is explained");
+            return Task.CompletedTask;
+        });
+        await Check("Normal dialog buttons create, push, fetch, pull and switch using real local repositories", async () =>
+        {
+            foreach (var action in new[] { GitAction.NewBranch, GitAction.Push, GitAction.Fetch, GitAction.Pull, GitAction.SwitchBranch })
+            {
+                var fresh = await actions.PrepareAsync(context.Git, context.Repository.Worktree, default);
+                var reconciled = 0;
+                var model = new GitActionViewModel(fresh, action, actions, async () =>
+                {
+                    await reader.InspectAsync(fresh.Git, fresh.Repository.Worktree, default); reconciled++;
+                }) { NewName = "ui-workflow", SetUpstream = true };
+                if (action == GitAction.Push) { model.Branch = "ui-workflow"; model.RemoteBranch = "ui-workflow"; }
+                if (action == GitAction.SwitchBranch) model.Branch = "main";
+                Expect(model.RunCommand.CanExecute(null) && !model.HasAttempt, "Targets alone enable the ordinary action");
+                model.RunCommand.Execute(null);
+                await model.RunningTask.WaitAsync(TimeSpan.FromSeconds(30));
+                Expect(model.Status == UiText.Get("ActionSucceeded") && reconciled == 1, "Real action succeeded and reinspected once");
+                Expect(!model.RunCommand.CanExecute(null) && model.RunUnavailableReason == UiText.Get("ActionAlreadyAttempted"), "Another attempt needs fresh targets, not consent");
+                var after = await actions.PrepareAsync(context.Git, context.Repository.Worktree, default);
+                Expect(after.Repository.Branch == (action == GitAction.SwitchBranch ? "main" : "ui-workflow"), "Actual checked-out branch matches the operation");
+                if (action is GitAction.Push or GitAction.Fetch or GitAction.Pull)
+                    Expect(after.Repository.UpstreamRef == "refs/remotes/origin/ui-workflow" &&
+                        after.History.References.Any(item => item.Name == "refs/remotes/origin/ui-workflow" && item.Hash == after.Repository.Commit),
+                        "Real push/fetch/pull retains the expected upstream tip");
+            }
+        });
+        await Check("Operation dialogs render offscreen at normal/minimum sizes with localized targets and only implemented options", async () =>
         {
             foreach (var action in Enum.GetValues<GitAction>())
             {
                 var model = new GitActionViewModel(context, action, actions, () => Task.CompletedTask);
-                Expect(!model.RunCommand.CanExecute(null), "Configured helpers require explicit action approval");
+                model.NewName = "render-only";
+                Expect(model.RunCommand.CanExecute(null) && !model.HasAttempt, "Valid targets enable the ordinary action without executing on dialog construction");
                 var window = new GitActionWindow(model);
                 try
                 {
@@ -54,7 +99,10 @@ internal static partial class Program
                     SaveRender(content, "action-" + action + ".png", 650, 520);
                     Arrange(content, 520, 440); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                     SaveRender(content, "action-" + action + "-minimum.png", 520, 440);
-                    Expect(VisualDescendants<Button>(content).Any(button => button.Command == model.RunCommand && !button.IsEnabled), "Visible action cannot execute before approval");
+                    Expect(VisualDescendants<Button>(content).Any(button => button.Command == model.RunCommand && button.IsEnabled), "Ordinary action button is enabled for valid targets");
+                    var options = VisualDescendants<CheckBox>(content).Where(box => box.Visibility == Visibility.Visible && box.IsVisible).ToArray();
+                    Expect(options.All(box => box.IsEnabled), "No disabled prototype options remain");
+                    Expect(Descendants<CheckBox>(window).Count() == 4, "Only checkout, all remotes, all tags and upstream options exist; no routine consent control");
                     Expect(VisualDescendants<TextBox>(content).Any(box => AutomationProperties.GetName(box) == UiText.Get("ActionOutput")), "Output remains accessible");
                 }
                 finally { window.Close(); }
@@ -84,7 +132,7 @@ internal static partial class Program
                 Expect(shell.ActionOpen && !shell.CanNavigate, "Admission closed during modal");
                 shell.SelectedRepository = other; shell.CloseTab(original);
                 Expect(shell.SelectedRepository == original && shell.Repositories.Contains(original), "No close or tab switch during action");
-                model.NewName = "ui-created"; model.Checkout = false; model.Approved = true;
+                model.NewName = "ui-created"; model.Checkout = false;
                 model.RunCommand.Execute(null);
                 var frame = new DispatcherFrame();
                 var dispatcher = Dispatcher.CurrentDispatcher;
@@ -107,7 +155,7 @@ internal static partial class Program
                 var reconciled = 0;
                 var model = new GitActionViewModel(fresh, GitAction.Push, new GitActions(controlled, reader, identities),
                     async () => { await reader.InspectAsync(fresh.Git, fresh.Repository.Worktree, default); reconciled++; });
-                model.Approved = true; model.RunCommand.Execute(null);
+                model.RunCommand.Execute(null);
                 await controlled.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 if (cancel) model.Cancel();
                 await model.RunningTask.WaitAsync(TimeSpan.FromSeconds(10));

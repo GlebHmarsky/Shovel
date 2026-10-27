@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-27. C# / WPF / .NET 10 LTS confirmed. Runtime through F2b/0.9.1; 0.9.2 changes docs/version only. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-27. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.9.3, applying the interaction policy to F2b actions. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -45,7 +45,7 @@ Future logical boundaries, not extra existing projects: UI/view models; applicat
 
 Established work environment: no repository-trust dialog, first-use modal or repeated program-approval checkbox. Ordinary Execute authorizes the selected action/configured Git behavior. **Do not add extra safety measures or approval layers without a concrete requirement.** Keep normal Git data-loss protections, required auth/SSH host verification, structured arguments, cancellation/state handling and targeted destructive confirmation.
 
-0.9.1 still has separate program approval and disabled prototypes; these are tracked implementation gaps, not requirements to preserve. The details below describe existing code accurately until changed.
+0.9.3 removes the approval flag from ActionOptions and the consent checkbox/view-model state. RunCommand validates actual targets only; execution still happens solely after the normal action. Shell/action view models expose localized reasons through disabled-control tooltips/accessibility help. Unfinished toolbar/sidebar/dialog controls and the no-op navigation setter are removed; the legacy settings field remains readable and saves History.
 
 ## Startup, lifetime and settings
 
@@ -117,7 +117,7 @@ Input-wait state exists only while prompt callback active. Prompt cancel/expiry 
 
 `GitActions` prepares immutable identity/HEAD/refs/effective redacted fetch-push addresses/config hash off-thread on dialog opening, not startup. <=32 remotes, single fetch/push URL each; unsupported config explained. GitActionViewModel edits options/one attempt; ShellActions blocks navigation, invalidates related caches and reinspects after every outcome.
 
-**Current implementation, pending removal of extra consent:** per-operation program-approval checkbox. Target behavior is normal Execute only; no replacement trust modal. Identity/paths/HEAD/refs/config revalidation and sequence checks remain correctness handling. Common-directory named mutex coordinates Shovel in one Windows login; acquire/release same worker, abandoned lock requires fresh validation. Other sessions/clients/aliases/launch races outside lock; Git locks authoritative, never deleted. Hashes do not attest helper contents.
+Normal Execute authorizes the selected operation and configured hooks/helpers; no separate approval flag, checkbox or replacement trust modal. Identity/paths/HEAD/refs/config revalidation and sequence checks remain correctness handling. Common-directory named mutex coordinates Shovel in one Windows login; acquire/release same worker, abandoned lock requires fresh validation. Other sessions/clients/aliases/launch races outside lock; Git locks authoritative, never deleted. Hashes do not attest helper contents.
 
 | Action | Current command behavior |
 | --- | --- |
