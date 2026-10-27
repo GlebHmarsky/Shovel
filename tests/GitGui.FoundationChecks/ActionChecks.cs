@@ -118,6 +118,36 @@ internal static partial class Program
             var result = await failedActions.ExecuteAsync(await Prepare(), new(GitAction.Push, "main", Remote: "origin", RemoteBranch: "main", AllowConfiguredPrograms: true), default);
             Expect(!result.Success && result.Output.Contains("Authentication failed") && !result.Output.Contains("secret") && !result.Output.Contains("token-value"), "Controlled auth failure never logs/exposes URL credentials");
         });
+        await Check("Real Git credential askpass works inside an approved local push hook without persisting credentials", async () =>
+        {
+            var hooks = Fixture("askpass hooks");
+            await Git(repo, "config", "core.hooksPath", hooks.Replace('\\', '/'));
+            await File.WriteAllTextAsync(Path.Combine(hooks, "pre-push"),
+                "#!/bin/sh\nreply=$(printf 'protocol=https\\nhost=example.invalid\\n\\n' | git -c credential.helper= credential fill) || exit 1\n" +
+                "case \"$reply\" in *password=fixture-secret*) exit 0 ;; *) exit 2 ;; esac\n", new UTF8Encoding(false));
+            try
+            {
+                var helperPath = Fixture("Git askpass helper 日本語");
+                foreach (var file in new[] { "Shovel.AskPass.exe", "Shovel.AskPass.dll", "Shovel.AskPass.deps.json", "Shovel.AskPass.runtimeconfig.json", "GitGui.Core.dll", "GitGui.ProcessHost.dll" })
+                    File.Copy(Path.Combine(AppContext.BaseDirectory, file), Path.Combine(helperPath, file));
+                var prompts = 0;
+                await using var session = new AskPassSession(Path.Combine(helperPath, "Shovel.AskPass.exe"), (_, _) => Task.FromResult<AuthenticationAnswer?>(
+                    new(Encoding.UTF8.GetBytes(++prompts == 1 ? "fixture-user" : "fixture-secret"))), default);
+                var context = await Prepare();
+                var result = await actions.ExecuteAsync(context,
+                    new(GitAction.Push, "feature/日本語", Remote: "origin", RemoteBranch: "feature-test", AllowConfiguredPrograms: true),
+                    default, authentication: session);
+                Expect(result.Success && prompts == 2 && !result.Output.Contains("fixture-secret"), "Real Git invokes helper for username/password without terminal or output leak");
+                // Denying a second operation's prompt cancels its owned Git/hook and releases the gate.
+                await using var denied = new AskPassSession(AskPassExecutable, (_, _) => Task.FromResult<AuthenticationAnswer?>(null), default);
+                var stopped = await actions.ExecuteAsync(await Prepare(),
+                    new(GitAction.Push, "feature/日本語", Remote: "origin", RemoteBranch: "feature-test", AllowConfiguredPrograms: true),
+                    default, authentication: denied);
+                Expect(stopped.Outcome == ProcessOutcome.Cancelled, "Prompt cancellation stops operation and owned hook");
+                Expect((await reader.InspectAsync(git, repo, default)).Commit is not null, "Repository remains inspectable");
+            }
+            finally { await Git(repo, "config", "--unset", "core.hooksPath"); }
+        });
         await Check("Branch checkout preserves ignored files that collide with tracked target files", async () =>
         {
             await Git(repo, "switch", "-c", "ignored-target");

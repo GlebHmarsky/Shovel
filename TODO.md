@@ -1,19 +1,19 @@
 # Implementation checklist
 
-Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 = next delivery, P2 = later. [Roadmap](docs/roadmap.md) owns milestone scope and evidence; [requirements](docs/requirements.md) owns acceptance obligations. Check items only when their stated scope is verified.
+Single prioritized task list. Updated 2026-10-26. P0 = prerequisite/safety, P1 = next delivery, P2 = later. [Roadmap](docs/roadmap.md) owns milestone scope and evidence; [requirements](docs/requirements.md) owns acceptance obligations. Check items only when their stated scope is verified.
 
 ## Current phase
 
-**Current: explicit branch/network actions and ref badges / 0.8.0.** User authorized this next capability increment. No interactive launch, desktop control or live authentication/network tests.
+**Current: bounded Git/OpenSSH authentication prompts / F2b / 0.9.1.** First working subset of the authentication priority. No interactive launch, desktop control or live authentication/network tests.
 
-- [x] **P1 — Add Branch split button and operation dialogs.** New/switch branch, Fetch, fast-forward-only Pull, normal Push; explicit targets, optional upstream/tags and disabled advanced options.
-- [x] **P0 — Verify execution safety.** Identity/config/ref revalidation, linked-worktree gate, dirty/sequence rejection, hook failures, cancellation and state reconciliation in disposable repositories.
-- [x] **P1 — Verify ref badges and layout.** Current branch check, branch/tag/remote icons, combined upstream badge on matching tip, accessible help and normal/minimum offscreen renders.
-- [x] **P0 — Deliver.** Restore/build/publish and 77 checks passed; docs/version/changelog updated. Ignored 0.8.0 preview has 11 verified checksums and matching tested assemblies. Intended source/docs committed with this delivery; live authentication and desktop behavior remain unverified.
+- [x] **P1 — Connect explicit operations to owned prompts.** Git askpass and bundled OpenSSH responses; masked input, no automatic host acceptance, no startup listener or helper.
+- [x] **P0 — Bound prompt lifetime and data.** Current-user operation pipe, nonce/server check, cancellation/disconnect, capped requests/frames, no credential persistence or payload logging.
+- [x] **P1 — Review prompt UI headlessly.** Localized accessible controls, normal/minimum renders, explicit waiting state and reconciliation after cancellation.
+- [x] **P0 — Deliver.** Restore/build/publish and 87 checks passed; final offscreen renders reviewed. Ignored 0.9.1 preview has 16 verified checksums and seven matching tested files. Documentation/changelog updated and intended source/docs committed with this delivery. Live authentication and desktop input remain unverified.
 
 ## Next priorities
 
-- [ ] **P1 — Finish interactive authentication before broader network rollout.** Design an explicit askpass/credential-manager/SSH/signing route; test with separately authorized accounts. Current actions require noninteractive credentials and known hosts. Keep bounded cancellation and do not bypass hooks.
+- [ ] **P1 — Complete remaining authentication routes before broader network rollout.** Design tracked Credential Manager/browser and signing/interactive-hook interaction without killing shared agents/browsers. F2b supplies the askpass route; separately authorized real HTTPS/SSH/unknown-host/rejected-key and live provider tests are still required. Do not bypass hooks or relax host verification.
 
 - [ ] **P1 — Implement Local Changes/status after workspace review.** Replace that prototype with real porcelain-v2/NUL data: staged, unstaged, untracked, ignored and conflicted states. Retain automatic history responsiveness and test only disposable repositories; no staging/commit implementation yet.
 - [ ] **P0 — Validate startup on representative repositories before more features.** With separate authorization, measure actual cold/warm launch, first visible rows and keyboard/tab responsiveness on Windows 10/11; no interactive launch is authorized now. Include custom Git installations and real profile restart/replacement detection.
@@ -39,6 +39,8 @@ Single prioritized task list. Updated 2026-10-25. P0 = prerequisite/safety, P1 =
 - [ ] **P1 before first installer — Identity:** product name Shovel is confirmed; finalize publisher and permanent settings/install identity; plan migration from the provisional Foundation profile.
 
 ## Completed work
+
+- [x] **P1 — Git/OpenSSH authentication bridge / 0.9.1.** Delivered F2b on 2026-10-26; roadmap records 87 checks, helper/fixture evidence, offscreen review and preview verification. Browser/signing/interactive-hook routes remain open above.
 
 - [x] **P1 — Branch/network actions and ref badges / 0.8.0.** F2a delivered on 2026-10-25 with 77 checks, headless dialog/workspace review and verified preview. See roadmap F2a for scope, evidence and limits.
 

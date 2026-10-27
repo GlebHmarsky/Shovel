@@ -1,18 +1,18 @@
 # Roadmap and decision register
 
-Updated 2026-10-25. [Product](product.md) owns experience; [requirements](requirements.md) owns scope/safety/tests; [architecture](architecture.md) separates implemented choices from proposals. [TODO.md](../TODO.md) is the single prioritized implementation checklist; this file owns milestones, decisions and verification evidence.
+Updated 2026-10-26. [Product](product.md) owns experience; [requirements](requirements.md) owns scope/safety/tests; [architecture](architecture.md) separates implemented choices from proposals. [TODO.md](../TODO.md) is the single prioritized implementation checklist; this file owns milestones, decisions and verification evidence.
 
 ## Current status
 
-- **Branch/network actions and ref badges / F2a / 0.8.0 is delivered.** The user requested Branch creation/switching, current/local/remote/tag badges, and real Fetch/Pull/Push dialogs; this supersedes their earlier deferral. C# + WPF / .NET 10 LTS is confirmed. No desktop control; verification limits are below and build/run/package instructions are in [README](../README.md).
+- **Git/OpenSSH authentication bridge / F2b / 0.9.1 is delivered.** Continuing the next TODO priority adds owned askpass prompts to approved network operations; broader provider interaction remains deferred. C# + WPF / .NET 10 LTS is confirmed. No desktop control; verification limits are below and build/run/package instructions are in [README](../README.md).
 - Existing instructions/documents were read and preserved; Git was initialized with `.gitignore`. Foundation commit `fff8f12` was created after the user's commit authorization. SDK 10.0.401/Desktop Runtime 10.0.12 were already installed; no dependencies were installed. No remote/push.
 - Official Fork screenshots/animations were inspected previously; the original attachment was unavailable. A new user screenshot was inspected on 2026-10-25 for the headerless history refinement. X media could not be reviewed without login. Historical observations are not current runtime verification.
-- Git CLI is implemented for repository metadata, all-branch/tag and HEAD ancestry. Explicit branch creation/switching, Fetch, fast-forward Pull and normal Push are implemented in F2a. Individual-ref filtering, status/diffs, other mutations, interactive credentials, installer/updater, hosting and signing remain deferred. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
+- Git CLI is implemented for repository metadata, all-branch/tag and HEAD ancestry. Explicit branch creation/switching, Fetch, fast-forward Pull and normal Push are implemented in F2a. Individual-ref filtering, status/diffs, other mutations, browser/signing/interactive-hook authentication, installer/updater, hosting and signing remain deferred. Local preview folders are distinct from distribution packages; updater/installer/host/signing remain unselected.
 - New startup updater requirement supersedes old research advice to disable update checks. Other network privacy restrictions remain.
 
 ## Proposed delivery sequence
 
-Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The latest request explicitly prioritizes Branch and Fetch/Pull/Push dialogs and clearer ref badges before status/diffs. F2a is a bounded subset of phases 2/3; broader recovery, interactive authentication and advanced options remain deferred. Preserve fast prompt-free local history. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
+Each phase is a working increment with evidence and limitations. The user authorized commits, version increments and local previews; on 2026-10-23 they prioritized history before status. The latest request explicitly prioritizes Branch and Fetch/Pull/Push dialogs and clearer ref badges before status/diffs. F2a is a bounded subset of phases 2/3; F2b now adds Git/OpenSSH askpass; broader recovery, browser/signing/interactive-hook authentication and advanced options remain deferred. Preserve fast prompt-free local history. Dependencies below are gates, not calendar estimates; break Git milestones into small deliveries.
 
 | Phase | Deliverable and boundary | Dependency / exit gate |
 | --- | --- | --- |
@@ -24,6 +24,7 @@ Each phase is a working increment with evidence and limitations. The user author
 | 1e: Fast local history — delivered | Direct job-contained Git, native entry point, combined HEAD/refs, no consent question, tab menus/middle-click | Build/publish, 61 checks, measured 0.5.0 comparison and packed 100k fixture; no interactive launch |
 | 1f: Workspace and upstream counts — delivered | Fixed All Commits directly below tabs; restored disabled prototypes/menus, centered timer, local ahead/behind after history | Build/publish + 65 checks; normal/minimum offscreen layout and timing comparison; no network/mutations |
 | 2a: Branch/network actions — delivered | Create/switch branch, Fetch, fast-forward Pull, normal Push/tags/upstream; explicit execution approval and ref badges | Disposable local-remote/safety checks and offscreen dialogs; no interactive launch/live auth |
+| 2b: Git/OpenSSH askpass — delivered | Operation-scoped helper and owned prompt, masked response, known waiting state, timeout/cancellation/reconciliation | Real local Git credential protocol and helper lifecycle checks; no live providers or interactive launch |
 | 1g onward: Read-only Git — deferred | Status and changed-file/tree/diff reads in bounded increments; external reconciliation; filtering only when revisited | F1f; G2-G8 read cases, E/S/L/A gates; baseline performance measurements |
 | 2: Local MVP | Init, file/text-hunk staging, commit/amend, branch create/switch/delete/tracking, stash operations | Phase 1; mutation safety, hooks/signing, stale hunk tests |
 | 3: Network MVP | Clone, remotes, fetch, push, upstream setup, proposed fast-forward-only pull default; external conflict resolution and valid continue/skip/abort for existing sequences | Phase 2; explicit interactive/auth routes, failures, external races and recovery |
@@ -230,6 +231,20 @@ Verified on Windows 11 x64 build 26200, .NET SDK 10.0.401/Desktop Runtime 10.0.1
 Preview: `Build/0.8.0-win-x64/Shovel.exe`. All **11 checksums** verified; App/Core/ProcessHost assemblies match the tested binaries. Product/file version is Shovel / 0.8.0.0. Build/artifacts remain ignored and untracked; existing 0.6.0/0.7.0 folders were preserved. The source/documentation increment is committed with this delivery; no remote push.
 
 **Limits:** no interactive app launch, real SSH/HTTPS/GCM/browser/signing validation, Windows 10, screen reader/mixed DPI/RTL, crash/sleep/disk-full or installed-update certification. Interactive auth, custom SSH, rebase/autostash/force-push, submodule/sparse checkout mutations and broader recovery remain deferred. Ordinary Git locks and external-client races remain relevant; cancellation and partial multi-ref operations are not rollback. Next priority is an explicit interactive authentication route before broader network rollout, followed by real Local Changes/status.
+
+## Authentication bridge verification (2026-10-26)
+
+F2b / **0.9.1** implements the first bounded subset of the next authentication TODO: an operation-scoped Git/OpenSSH askpass helper and owned prompt. The [architecture](architecture.md#authentication-bridge-f2b-091) owns security/lifetime details and research; [product](product.md#authentication-prompts-091) owns the workflow. Automatic local history and its five-process first-page path are unchanged; no new speed claim.
+
+Final restore, Release build and publish succeeded without warnings/errors; **87 checks passed, 0 failed** on Windows 11 x64 build 26200, SDK 10.0.401/runtime 10.0.12, Git 2.51.1. Log: `artifacts/preview-0.9.1-verification.txt`; fixtures: `artifacts/foundation-checks/20261026-151432-7f167dee62bc4163ba6c75183c7be306`.
+
+- Actual Git credential fill ran inside a disposable pre-push hook/local bare-remote operation with isolated configuration, including a helper path containing spaces/Unicode. No external server or credential store was used. Prompt cancellation stopped the owned Git/hook and left inspection usable.
+- Helper checks covered missing executable, Unicode replies and cleared response buffers, wrong nonce/server, oversized prompts/replies, multiline rejection, timeout, 16-request bound, stale endpoints and informational-helper exit. Dispatcher checks verified worker-thread helper setup, explicit input-wait status, cancellation and reconciliation. Existing history/branch/safety regressions passed.
+- Reviewed final normal/minimum prompt renders (620×440 / 480×340 content), including masked/confirmation/informational states. Long content scrolls; input and action buttons remain outside that scroll area. This is offscreen layout evidence, not desktop focus/keyboard certification.
+
+Preview: `Build/0.9.1-win-x64/Shovel.exe`. All **16 checksums** verified; seven tested/published App/Core/ProcessHost/helper binary and runtime files match. App/helper file versions are 0.9.1.0. Build/artifacts remain ignored and untracked. The internal 0.9.0 candidate passed 86 checks and was preserved; the final patch moves helper file/pipe setup off the dispatcher. Intended source/docs are committed with this delivery; no remote push.
+
+No interactive window was shown, desktop controlled, live sign-in attempted, shared agent/browser killed, dependency installed or global Git configuration changed. Real SSH host-key/password/agent/GCM-provider behavior, signing, Windows 10, actual keyboard/focus/high contrast and installed distribution remain unverified. Browser/GCM and signing/interactive-hook routes remain the next authentication priority before broader rollout, with Local Changes/status next in product scope.
 
 ## Documentation maintenance
 

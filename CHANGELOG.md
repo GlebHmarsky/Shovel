@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1 — 2026-10-26
+
+- Add owned Git/OpenSSH authentication prompts to explicitly approved Fetch/Pull/Push operations: masked replies, explicit confirmations, visible input-wait state and cancellation with repository reconciliation.
+- Package a small askpass helper with an operation-scoped current-user pipe, nonce/server checks, bounded requests/deadlines and disposable reply buffers. Automatic history remains noninteractive and launches no helper.
+- Retain cached Credential Manager/agent integration and strict SSH host verification. Browser sign-in, signing, custom SSH commands and interactive hooks still require existing terminal tools; no live-account or interactive desktop verification is claimed.
+- Add real disposable Git credential requests, helper lifecycle/failure checks and offscreen prompt renders. No new dependency, installer or updater.
+
 ## 0.8.0 — 2026-10-25
 
 - Add Branch split button with real create/switch dialogs, original branch/tag/remote badges, checked current tip and combined local/upstream badge when both share a commit.

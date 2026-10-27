@@ -14,5 +14,6 @@
     <Resource Include="Assets/Shovel.ico" />
     <ProjectReference Include="../GitGui.Core/GitGui.Core.csproj" />
     <ProjectReference Include="../GitGui.ProcessHost/GitGui.ProcessHost.csproj" />
+    <ProjectReference Include="../GitGui.AskPass/GitGui.AskPass.csproj" />
   </ItemGroup>
 </Project>

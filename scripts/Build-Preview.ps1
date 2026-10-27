@@ -27,7 +27,8 @@ try {
     dotnet publish src/GitGui.App --no-restore -c Release --self-contained false -o $staging -m:1 -p:UseSharedCompilation=false -nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed. The partial output is not a usable preview.' }
     $required = @('Shovel.exe', 'Shovel.dll', 'Shovel.runtimeconfig.json', 'GitGui.Core.dll',
-        'GitGui.ProcessHost.dll')
+        'GitGui.ProcessHost.dll', 'Shovel.AskPass.exe', 'Shovel.AskPass.dll',
+        'Shovel.AskPass.runtimeconfig.json', 'Shovel.AskPass.deps.json')
     foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $staging $file))) { throw ('Missing preview file: ' + $file) }
     }
@@ -47,7 +48,8 @@ Activation refreshes cached snapshots older than 30 seconds. Right-click a tab f
 Pull shows behind and Push shows ahead of the configured upstream's local snapshot; no remote request is made.
 A dash means counts are pending/unavailable/failed; tooltips explain. Fetch/Pull/Push open explicit operation dialogs.
 Branch opens create/switch dialogs. Pull is fast-forward only; normal Push supports optional tags/upstream. Review targets and explicitly approve configured programs before execution.
-Interactive authentication, rebase, autostash, force-push, search/filter, file status, diffs, installer and updates remain deferred. Use existing terminal authentication; cancellation is not undo. Local history needs no approval.
+Git/OpenSSH askpass prompts are available during approved network actions. Keep Shovel.AskPass.exe and its companion files here. Verify SSH host fingerprints independently before accepting; Shovel does not save credentials, but configured Git helpers may do so.
+Credential Manager browser sign-in, signing, interactive hooks, custom SSH commands, rebase, autostash, force-push, search/filter, file status, diffs, installer and updates remain deferred. Use existing terminal tools for those workflows; cancellation is not undo. Local history needs no approval.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.
 Settings are outside this folder: %LOCALAPPDATA%\GitGui\Foundation.

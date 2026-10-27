@@ -30,6 +30,7 @@ internal static partial class Program
         if (args.FirstOrDefault() == "--measure-large-history") { RunLargeHistoryBenchmarkAsync().GetAwaiter().GetResult(); return 0; }
         RunCoreChecksAsync().GetAwaiter().GetResult();
         RunProcessChecksAsync().GetAwaiter().GetResult();
+        RunAuthenticationChecksAsync().GetAwaiter().GetResult();
         RunWpfChecks();
         RunViewModelChecks();
         Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}");

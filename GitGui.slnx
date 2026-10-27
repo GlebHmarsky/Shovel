@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/GitGui.Core/GitGui.Core.csproj" />
     <Project Path="src/GitGui.ProcessHost/GitGui.ProcessHost.csproj" />
+    <Project Path="src/GitGui.AskPass/GitGui.AskPass.csproj" />
     <Project Path="src/GitGui.App/GitGui.App.csproj" />
   </Folder>
   <Folder Name="/tests/">

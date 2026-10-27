@@ -232,7 +232,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionAllTags" xml:space="preserve"><value>Push all local tags as well (some refs may succeed if others fail)</value></data>
   <data name="ActionSetUpstream" xml:space="preserve"><value>Set this destination as the local branch&apos;s upstream</value></data>
   <data name="ActionForceDeferred" xml:space="preserve"><value>Force push — not available yet</value></data>
-  <data name="ActionAuthLimits" xml:space="preserve"><value>Uses cached credentials or an SSH agent and known hosts. Browser sign-in, passphrase, host-key and interactive hook/signing prompts are not supported yet. If authentication fails, complete it in your terminal and reopen this dialog. No credentials are saved by Shovel.</value></data>
+  <data name="ActionAuthLimits" xml:space="preserve"><value>Uses existing credential helpers and SSH agents. Git credential and bundled OpenSSH prompts open in Shovel. Verify host fingerprints independently before accepting; OpenSSH may save accepted hosts. Browser sign-in through Credential Manager, interactive hooks and signing prompts still require your terminal. Shovel does not save credentials; configured Git helpers may store them.</value></data>
   <data name="ActionApproval" xml:space="preserve"><value>Allow this operation and this repository&apos;s configured hooks, filters and credential helpers to run. Only approve repositories and configuration you trust.</value></data>
   <data name="ActionReady" xml:space="preserve"><value>Review the scope, then explicitly allow and start this operation.</value></data>
   <data name="ActionDuration" xml:space="preserve"><value>Elapsed: {0:N1} s</value></data>
@@ -244,7 +244,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionCancelQuestion" xml:space="preserve"><value>Stop Git and its owned child processes? Changes may already have been applied locally or remotely. Cancellation does not undo them. Shovel will inspect the repository again.</value></data>
   <data name="ActionPreparing" xml:space="preserve"><value>Reading operation targets…</value></data>
   <data name="ActionDialogOpen" xml:space="preserve"><value>Git operation dialog open</value></data>
-  <data name="ActionRunning" xml:space="preserve"><value>Git is running. Interactive input is unsupported; cancel if a hook or helper is waiting. Five-minute command timeout.</value></data>
+  <data name="ActionRunning" xml:space="preserve"><value>Git is running. Supported authentication requests open a prompt. Cancel if an unsupported hook or helper is waiting. Five-minute command timeout.</value></data>
   <data name="ActionCancelling" xml:space="preserve"><value>Stopping owned processes, then checking repository state…</value></data>
   <data name="ActionSucceeded" xml:space="preserve"><value>Operation completed. Review refreshed history before the next action.</value></data>
   <data name="ActionResultExited" xml:space="preserve"><value>Git reported failure. Some changes may already have applied; inspect the output and refreshed state. Resolve the cause, then reopen this dialog.</value></data>
@@ -270,4 +270,17 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionSshMissing" xml:space="preserve"><value>The selected Git installation has no recognized bundled OpenSSH executable. Use your terminal or select a standard Git for Windows installation.</value></data>
   <data name="ActionReadFailed" xml:space="preserve"><value>Operation preparation or validation failed. Check repository availability, Git ownership, permissions and locks, then reopen the dialog. Shovel never deletes lock files automatically.</value></data>
   <data name="ActionCustomMergeOptions" xml:space="preserve"><value>This branch has custom merge options that may change fast-forward behavior. Use your terminal for this Pull; Shovel has not changed the configuration or started fetching.</value></data>
+  <data name="ActionAskPassMissing" xml:space="preserve"><value>The authentication helper is missing. Keep all preview files together, then reopen this dialog. No network operation was started.</value></data>
+  <data name="ActionWaitingAuthentication" xml:space="preserve"><value>Waiting for authentication input. Cancelling the prompt stops this operation; changes already applied are not undone.</value></data>
+  <data name="AuthTitle" xml:space="preserve"><value>Git authentication</value></data>
+  <data name="AuthContext" xml:space="preserve"><value>{0} — {1}</value></data>
+  <data name="AuthPromptSource" xml:space="preserve"><value>Request from Git or a configured program (untrusted text):</value></data>
+  <data name="AuthSafety" xml:space="preserve"><value>Only reply if this request matches the operation you started. For a new SSH host, verify the displayed fingerprint independently before typing yes. Replies are hidden, including usernames and host-key replies. Shovel keeps no credential copy after sending it; configured Git helpers may store credentials. This prompt expires after two minutes. Cancelling stops the operation without undoing changes.</value></data>
+  <data name="AuthResponse" xml:space="preserve"><value>Response (hidden)</value></data>
+  <data name="AuthSubmit" xml:space="preserve"><value>Send response</value></data>
+  <data name="AuthApprove" xml:space="preserve"><value>Approve request</value></data>
+  <data name="AuthCancel" xml:space="preserve"><value>Cancel operation</value></data>
+  <data name="ActionAuthenticationUnavailable" xml:space="preserve"><value>The authentication prompt connection failed or returned an invalid response. Git was stopped. Review refreshed repository state and reopen the operation to retry.</value></data>
+  <data name="ActionAuthenticationTimedOut" xml:space="preserve"><value>The authentication prompt expired after two minutes. Git was stopped. Changes already applied are not undone; review refreshed state before retrying.</value></data>
+  <data name="ActionAuthenticationPromptLimit" xml:space="preserve"><value>The operation exceeded the limit of 16 authentication requests and was stopped. Review the authentication configuration and refreshed repository state before retrying.</value></data>
 </root>

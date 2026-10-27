@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows.Threading;
 using GitGui.App.Localization;
 using GitGui.Core.Git;
+using GitGui.App.Services;
 
 namespace GitGui.App.ViewModels;
 
@@ -10,6 +11,8 @@ public sealed class GitActionViewModel : ObservableObject
 {
     private readonly GitActions _actions;
     private readonly Func<Task> _reconcile;
+    private readonly IUserInteraction? _interaction;
+    private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly CancellationTokenSource _cancel = new();
     private readonly Stopwatch _elapsed = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -60,9 +63,10 @@ public sealed class GitActionViewModel : ObservableObject
     public RelayCommand RunCommand { get; }
     public Task RunningTask { get; private set; } = Task.CompletedTask;
 
-    public GitActionViewModel(ActionContext context, GitAction action, GitActions actions, Func<Task> reconcile, string? initialBranch = null)
+    public GitActionViewModel(ActionContext context, GitAction action, GitActions actions, Func<Task> reconcile, string? initialBranch = null,
+        IUserInteraction? interaction = null)
     {
-        Context = context; Action = action; _actions = actions; _reconcile = reconcile;
+        Context = context; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
         Branches = context.History.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray();
         StartRefs = context.History.References.Select(item => item.Name).OrderBy(item => item == "HEAD" ? "" : item, StringComparer.Ordinal).ToArray();
         _branch = initialBranch ?? context.Repository.Branch ?? Branches.FirstOrDefault() ?? "";
@@ -96,11 +100,19 @@ public sealed class GitActionViewModel : ObservableObject
         _attempted = true; Changed(nameof(HasAttempt)); IsRunning = true; _elapsed.Restart(); _timer.Start(); Status = UiText.Get("ActionRunning");
         try
         {
+            var promptContext = UiText.Format("AuthContext", Title, CurrentRepository);
+            await using var authentication = IsNetwork ? await Task.Run(() => _interaction?.CreateAuthenticationSession(promptContext, async (prompt, token) =>
+            {
+                await _dispatcher.InvokeAsync(() => { if (!_cancel.IsCancellationRequested) Status = UiText.Get("ActionWaitingAuthentication"); });
+                try { return await _interaction.ShowAuthenticationAsync(promptContext, prompt, token); }
+                finally { await _dispatcher.InvokeAsync(() => { if (!_cancel.IsCancellationRequested && Status == UiText.Get("ActionWaitingAuthentication")) Status = UiText.Get("ActionRunning"); }); }
+            }, _cancel.Token)) : null;
             var result = await _actions.ExecuteAsync(Context, new(Action, IsNew ? NewName : Branch, StartRef,
                 Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream, Approved), _cancel.Token, output =>
-                { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } });
+                { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }, authentication);
             _timer.Stop(); await _outputTask; RawOutput = result.Output;
-            Status = UiText.Get(result.Success ? "ActionSucceeded" : "ActionResult" + result.Outcome);
+            Status = UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure :
+                result.Success ? "ActionSucceeded" : "ActionResult" + result.Outcome);
         }
         catch (GitActionException exception) { _timer.Stop(); await _outputTask; await PublishOutputAsync(); Status = UiText.Get(exception.Code); }
         catch (GitReadException exception) { _timer.Stop(); await _outputTask; Status = UiText.Get(exception.Failure == GitFailure.Cancelled ? "ActionResultCancelled" : "ActionReadFailed"); RawOutput = exception.RawOutput; }

@@ -1,6 +1,6 @@
 # Shovel
 
-A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.8.0** defaults to All Commits across local branches, remote-tracking branches and tags, with branch/tag labels, a connected graph and complete selected-commit details. Older/newer pages replace the previous 2,000-commit ceiling. Branch creation/switching, explicit Fetch, fast-forward-only Pull and normal Push are implemented. File status/diffs, other mutations, installer and updater remain deferred. The product name is confirmed; publisher and permanent installation identity remain open.
+A C# / WPF application for Windows 10/11, targeting .NET 10 LTS. Version **0.9.1** defaults to All Commits across local branches, remote-tracking branches and tags, with branch/tag labels, a connected graph and complete selected-commit details. Older/newer pages replace the previous 2,000-commit ceiling. Branch creation/switching, explicit Fetch, fast-forward-only Pull and normal Push are implemented, with operation-scoped Git/OpenSSH askpass prompts. File status/diffs, other mutations, installer and updater remain deferred. The product name is confirmed; publisher and permanent installation identity remain open.
 
 Start with [AGENTS.md](AGENTS.md), [TODO.md](TODO.md) and the [roadmap](docs/roadmap.md). [Architecture](docs/architecture.md) describes implemented boundaries and future proposals separately.
 
@@ -31,9 +31,11 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 These environment variables affect only this shell. Single-process MSBuild and disabled compiler sharing avoid restrictions observed in the Codex execution environment. WPF needs no optional .NET workload here. Check each command's exit code; there are no third-party NuGet packages. The console checks return a nonzero exit code on failure; they do not use `dotnet test` or a test-framework package.
 
-Checks write inspectable, isolated fixtures under ignored `artifacts/foundation-checks/`; one empty non-repository fixture uses the temporary directory. Git mutations use disposable repositories and isolated configuration, never working repositories. Headless WPF checks also save history-table PNGs without opening a window or controlling the desktop. [Current roadmap evidence](docs/roadmap.md#branch-and-network-actions-verification-2026-10-25) distinguishes these checks from interactive GUI verification.
+Checks write inspectable, isolated fixtures under ignored `artifacts/foundation-checks/`; one empty non-repository fixture uses the temporary directory. Git mutations use disposable repositories and isolated configuration, never working repositories. Headless WPF checks also save history-table PNGs without opening a window or controlling the desktop. [Current roadmap evidence](docs/roadmap.md#authentication-bridge-verification-2026-10-26) distinguishes these checks from interactive GUI verification.
 
 ## Run
+
+Keep `Shovel.AskPass.exe`, its `.dll`, `.deps.json` and `.runtimeconfig.json` beside Shovel; normal build/publish copies them automatically. Approved network actions can request masked Git credentials, SSH passphrases or host confirmation. Browser/GCM interaction, signing and interactive hooks still need existing terminal tools. No credentials or prompt payloads are stored by Shovel; configured Git helpers can store credentials. Actual sign-in/host-key and desktop input testing remain separate from the headless suite.
 
 ```powershell
 dotnet run --project src/GitGui.App -c Release --no-build
@@ -63,7 +65,7 @@ Automatic reading currently requires a root on a local fixed drive with no repar
 
 Click **Branch** to create a branch from a selected reference, optionally checking it out; its arrow menu offers existing local branches. Fetch chooses a configured remote or all remotes. Pull chooses a remote branch and fast-forwards the current branch only. Push selects local/remote branches and optionally sends all tags or sets upstream. Review the displayed targets, explicitly approve configured programs, then run. No network access occurs until execution. See [workflow limits](docs/product.md#explicit-branch-and-remote-workflows-080) and [execution safeguards](docs/architecture.md#explicit-git-actions-f2a-080).
 
-Checkout/Pull require a clean worktree, protect ignored-file collisions and reject submodule/sparse worktrees. Existing sequences block actions. Rebase/autostash/force-push are disabled. Cached HTTPS credentials and standard bundled OpenSSH with agent/known hosts are the intended noninteractive auth route; live auth has not been tested. Interactive auth, custom SSH commands and multiple URLs per remote require your existing terminal. No hook bypass or saved secrets. Cancelling does not undo changes; the modal waits for cleanup and history reinspection. Main-window close/tab changes are blocked while the modal is active. Raw output stays in modal memory with URL redaction; close/reopen to retry after reviewing state.
+Checkout/Pull require a clean worktree, protect ignored-file collisions and reject submodule/sparse worktrees. Existing sequences block actions. Rebase/autostash/force-push are disabled. Git/OpenSSH askpass uses owned prompts during approved network actions; cached credentials/agents remain available. Live auth has not been tested. Browser/GCM interaction, signing/interactive hooks, custom SSH commands and multiple URLs per remote still require existing terminal tools. No hook bypass or Shovel credential store. Cancelling does not undo changes; the modal waits for cleanup and history reinspection. Main-window close/tab changes are blocked while the modal is active. Raw output stays in modal memory with URL redaction; close/reopen to retry after reviewing state.
 
 The expanded headless checks use local bare remotes and executable fixture hooks. On a restricted Windows sandbox, MSYS named-object creation may need permission to run those checks outside the sandbox; this is not permission for live remotes or desktop launches.
 
@@ -79,7 +81,7 @@ The runner now starts Git directly in a per-command Windows Job Object, without 
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-The script restores/builds/runs checks and publishes to `Build/0.8.0-win-x64/`. Double-click **Shovel.exe** there; keep all files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
+The script restores/builds/runs checks and publishes to `Build/0.9.1-win-x64/`. Double-click **Shovel.exe** there; keep all files together. No SDK is needed to run, but the matching .NET 10 Desktop Runtime is required. No additional prerequisite is missing on this machine.
 
 `Build/` is ignored and must never be committed. On 2026-10-24, the user requested removal of the old Build previews before rebuilding 0.3.1; those old package paths no longer exist. Cleanup is not automatic on subsequent builds. The script refuses to replace an existing version folder and keeps incomplete publishes in ignored `artifacts/`. Set the next delivery version in `Directory.Build.props` and update `CHANGELOG.md` once per delivery; see AGENTS.md for bump rules. The folder includes launch notes and SHA256 checksums. It is an unsigned local preview, not an installer or automatic update package. No hosting, keys or remote push are configured by packaging.
 

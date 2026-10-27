@@ -220,6 +220,7 @@ internal static partial class Program
             await RunTabInteractionChecksAsync();
             await RunDivergenceViewChecksAsync();
             await RunActionViewChecksAsync();
+            await RunAuthenticationViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)
             {

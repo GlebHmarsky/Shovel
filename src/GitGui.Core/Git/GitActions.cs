@@ -47,8 +47,11 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
     }, token);
 
     public Task<ActionResult> ExecuteAsync(ActionContext context, ActionOptions options, CancellationToken token,
-        Action<ProcessOutput>? progress = null) => Task.Run(() =>
+        Action<ProcessOutput>? progress = null, IAuthenticationSession? authentication = null) => Task.Run(() =>
     {
+        using var authenticationStop = CancellationTokenSource.CreateLinkedTokenSource(token,
+            authentication?.CancellationToken ?? CancellationToken.None);
+        token = authenticationStop.Token;
         // Named mutex covers shared refs across linked worktrees and Shovel profiles. Acquire/release
         // on this one worker thread: an await continuation must never release another thread's mutex.
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context.Identity.CommonDirectory.ToUpperInvariant())));
@@ -173,16 +176,19 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
                 var environment = EnvironmentForGit();
                 environment["GIT_OPTIONAL_LOCKS"] = null;
                 environment["GIT_MERGE_AUTOEDIT"] = "no";
-                // Only cached credentials / SSH agent with known hosts in this increment. No hidden prompt.
+                // The broker exists only for this explicitly approved operation, never history reads.
                 if (options.Action is GitAction.Fetch or GitAction.Pull or GitAction.Push)
                 {
+                    if (authentication is not null)
+                        foreach (var pair in authentication.Environment) environment[pair.Key] = pair.Value;
                     var sshConfig = await Raw(git, path, ["config", "--get", "core.sshCommand"], token);
                     if (sshConfig.ExitCode == 0) throw new GitActionException("ActionCustomSsh");
                     var root = Directory.GetParent(Path.GetDirectoryName(git.Executable)!)!;
                     if (root.Name is "mingw64" or "mingw32" or "ucrt64") root = root.Parent!;
                     var ssh = Path.Combine(root.FullName, "usr", "bin", "ssh.exe");
                     if (!File.Exists(ssh)) throw new GitActionException("ActionSshMissing");
-                    environment["GIT_SSH_COMMAND"] = "'" + ssh.Replace('\\', '/').Replace("'", "'\\''") + "' -oBatchMode=yes -oStrictHostKeyChecking=yes";
+                    environment["GIT_SSH_COMMAND"] = "'" + ssh.Replace('\\', '/').Replace("'", "'\\''") +
+                        (authentication is null ? "' -oBatchMode=yes -oStrictHostKeyChecking=yes" : "' -oBatchMode=no -oStrictHostKeyChecking=ask");
                     environment["GIT_SSH_VARIANT"] = "ssh";
                 }
                 var result = await runner.RunAsync(new(git.Executable, path,
@@ -221,10 +227,14 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
         foreach (System.Collections.DictionaryEntry variable in Environment.GetEnvironmentVariables())
         {
             var key = (string)variable.Key;
-            if (key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase) && key is not ("GIT_CONFIG_GLOBAL" or "GIT_CONFIG_SYSTEM" or "GIT_CONFIG_NOSYSTEM")) environment[key] = null;
+            if ((key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase) && key is not ("GIT_CONFIG_GLOBAL" or "GIT_CONFIG_SYSTEM" or "GIT_CONFIG_NOSYSTEM")) ||
+                key.StartsWith("SHOVEL_ASKPASS_", StringComparison.OrdinalIgnoreCase) || key.StartsWith("GCM_TRACE", StringComparison.OrdinalIgnoreCase)) environment[key] = null;
         }
         environment["GIT_TERMINAL_PROMPT"] = "0"; environment["GCM_INTERACTIVE"] = "never";
         environment["GIT_ASKPASS"] = ""; environment["SSH_ASKPASS"] = ""; environment["SSH_ASKPASS_REQUIRE"] = "never";
+        environment["SSH_ASKPASS_PROMPT"] = null;
+        environment["GCM_DEBUG"] = "0"; environment["GCM_TRACE"] = "0"; environment["GCM_TRACE_SECRETS"] = "0";
+        environment["GCM_TRACE_MSAUTH"] = "0";
         environment["GIT_OPTIONAL_LOCKS"] = "0"; environment["GIT_NO_LAZY_FETCH"] = "1";
         return environment;
     }

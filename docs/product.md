@@ -1,6 +1,6 @@
 # Product
 
-Status: confirmed intent with explicitly marked UX proposals. Updated 2026-10-25.
+Status: confirmed intent with explicitly marked UX proposals. Updated 2026-10-26.
 Read [requirements](requirements.md) for obligations/tests, [architecture](architecture.md) for mechanisms, and [roadmap](roadmap.md) for phase scope.
 
 ## Purpose and audience
@@ -26,6 +26,12 @@ Pull displays commits **behind**, Push commits **ahead**, comparing the selected
 Selecting a commit highlights the text of other rows with the same exact raw author name and email in light yellow. Comparisons are ordinal/case-sensitive, do not apply mailmap, and never use the committer. Blank email never matches; blank name matches only the same blank name with a nonblank matching email. The selected row keeps normal selection styling. Unrelated text stays white on the dark history surface; graph/ref colors remain independent. High contrast uses system colors; the row accessibility name also states “Same author as the selected commit.”
 
 The application icon is the user-selected front-facing silver shovel head on a blue circular badge, with its shaft cropped at the bottom (confirmed 2026-10-25).
+
+## Authentication prompts (0.9.1)
+
+During an approved Fetch/Pull/Push, Git credential requests and bundled OpenSSH askpass requests open an owned **Git authentication** window. The operation shows **Waiting for authentication input**. Display the operation/repository and plain, untrusted request text; responses use a masked field, including usernames and host-key answers. For an unknown host, independently verify its fingerprint before explicitly typing `yes`. OpenSSH confirmation requests require an explicit **Approve request**; Enter defaults to Cancel. Informational prompts remain visible until their helper exits or the user cancels.
+
+Cancelling/closing a prompt stops the operation and triggers the same repository reconciliation as other cancellation; applied changes are not rolled back. Prompts expire after two minutes; excessive requests or broken helper connections fail visibly. Neither prompts nor credentials are saved by Shovel. Existing Git helpers may store credentials, and OpenSSH may save an explicitly accepted host key. Browser sign-in through Credential Manager, signing, custom SSH commands and interactive hooks still require existing terminal tools. Live providers and actual desktop focus/input remain unverified; no startup/history authentication is enabled.
 
 ## Explicit branch and remote workflows (0.8.0)
 

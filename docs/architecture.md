@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-25. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F2a / 0.8.0:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, automatic history and explicit branch/fetch/fast-forward-pull/push actions. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
+Updated 2026-10-26. **Confirmed stack: C# + WPF**, selected by the user. **Implemented through F2b / 0.9.1:** .NET 10 LTS, MVVM shell, local settings/resources/diagnostics, automatic history, explicit branch/fetch/fast-forward-pull/push actions and operation-scoped Git/OpenSSH askpass. Other designs below remain proposals unless identified as implemented. User obligations live in [requirements](requirements.md); tasks in [TODO](../TODO.md); evidence and unresolved decisions in [roadmap](roadmap.md).
 
 ## Product identity
 
@@ -27,7 +27,7 @@ The following are **future logical boundaries**, not six projects already create
 
 Keep one primary language, minimal dependencies, pinned SDK/packages, reproducible build/test/publish commands. No embedded web server, plugin framework, or database initially.
 
-### Implemented structure (F0 through F2a)
+### Implemented structure (F0 through F2b)
 
 ```text
 GitGui.slnx / global.json / Directory.Build.props
@@ -35,6 +35,7 @@ src/GitGui.App/                 WPF executable, composition and lifetime owner
   App.xaml(.cs)                Startup/shutdown, profile mutex, guarded error handling
   Views/MainWindow.xaml(.cs)   Layout and view-only geometry handling
   Views/GitActionWindow.xaml   Owned operation modal; close/cancel view behavior
+  Views/AuthenticationWindow.xaml  Owned masked-input/confirmation/notification prompt
   ViewModels/GitActionViewModel.cs  Dialog options, progress and explicit execution
   ViewModels/ShellActions.cs   Admission, context preparation and reconciliation
   Views/CommitGraphCell.cs     Visible-row drawing only; no Git/graph computation
@@ -51,11 +52,13 @@ src/GitGui.Core/                UI-independent net10.0 library
   Git/CommitGraph.cs           UI-independent parent-lane layout and page cursor
   Processes/                   Requests/results and asynchronous runner contract
 src/GitGui.ProcessHost/         Windows runner, native launch/job ownership and filesystem identity
+  AskPassSession/Client/Protocol.cs  Operation-scoped current-user pipe and bounded reply protocol
+src/GitGui.AskPass/             Shovel.AskPass.exe; small console-free Git/OpenSSH protocol entry point
 tests/GitGui.FoundationChecks/  Disposable-file/Git, process, view-model and headless WPF checks
 scripts/Build-Preview.ps1       Verified local publish into ignored Build/<version>-win-x64
 ```
 
-App references Core and ProcessHost; Core never references WPF or Windows process APIs. There are no external NuGet packages. Small INotifyPropertyChanged/ICommand implementations suffice; no command framework, DI container or generic repository/service scaffolding. Add mature dependencies only when a concrete need outweighs owning a small amount of code. Standard WPF controls preserve native keyboard/automation behavior; the graph cell draws already-computed real parent connections.
+App references Core and ProcessHost and packages the AskPass executable; Core never references WPF or Windows process APIs. There are no external NuGet packages. Small INotifyPropertyChanged/ICommand implementations suffice; no command framework, DI container or generic repository/service scaffolding. Add mature dependencies only when a concrete need outweighs owning a small amount of code. Standard WPF controls preserve native keyboard/automation behavior; the graph cell draws already-computed real parent connections.
 
 App creates services explicitly, shows a loading shell, then loads settings on a worker task. Schema 4 restores identity stamps; 0.7.0 ignores saved narrower scope preferences and writes All Commits; the selected repository loads automatically without a consent question. Identity saves are serialized with the settings writer and drained before shutdown; a save failure leaves local history usable and is reported. Closing cancels startup, stops navigation, captures a plain layout snapshot on the dispatcher and saves it off-thread. Saving failure offers stay/retry or explicit exit without saving; normal exit drains diagnostics with a bounded wait. A per-profile mutex prevents two app writers. Dispatcher/startup failures show a resource-backed generic error and exit without saving potentially invalid state; fatal process logging is best effort. No tray, startup network work or background polling exists.
 
@@ -107,7 +110,21 @@ Page navigation remembers hash/scroll for the bounded back window; tab activatio
 
 ### Deferred execution boundaries
 
-Before status/diffs: add porcelain-v2/NUL path parsers, literal pathspecs, bounded content loading and no external diff/textconv/lazy fetch. F2a below implements shared-action serialization, prerequisite checks and post-attempt reconciliation for its narrow command set. Before broader network/hooks/tools: add an authenticated askpass/editor or visible terminal route and explicit prompt/tool lifecycle. F2a supports only noninteractive execution with visible limits; it does not certify interactive hooks or authentication. External clients remain outside app coordination. Never disable hooks silently to fit the runner.
+Before status/diffs: add porcelain-v2/NUL path parsers, literal pathspecs, bounded content loading and no external diff/textconv/lazy fetch. F2a below implements shared-action serialization, prerequisite checks and post-attempt reconciliation for its narrow command set. Before broader network/hooks/tools: add an authenticated askpass/editor or visible terminal route and explicit prompt/tool lifecycle. F2b adds the bounded askpass route below; browser/signing/interactive-hook lifecycles remain deferred. External clients remain outside app coordination. Never disable hooks silently to fit the runner.
+
+## Authentication bridge (F2b, 0.9.1)
+
+The first authentication increment uses Git/OpenSSH's established askpass protocols, with no external dependency or permanent service. App composes an `AskPassSession` only after an explicit network action is approved. Core receives an `IAuthenticationSession`; WPF stays out of Core. A tiny `Shovel.AskPass.exe` forwards a request to the active operation and writes only the reply to its inherited stdout. It is packaged beside Shovel with its runtime/dependency files; it never runs during history or dialog preparation. Existing credential helpers/agents remain configured, and Git can still store supplied credentials through its configured helper. [Git credential request/helper protocol](https://git-scm.com/docs/gitcredentials) (checked 2026-10-26).
+
+The local pipe uses `CurrentUserOnly`, `FirstPipeInstance`, a random name and 256-bit operation nonce. The client also verifies the server PID. Windows checks the account/elevation level on both ends. Frames are length-checked before allocation: 16 KiB prompt, 4 KiB reply; the UI limits input to 1,024 UTF-16 units and rejects NUL/newline replies. One connection/prompt at a time, at most 16 per operation; connect deadline five seconds and prompt deadline two minutes, within the existing five-minute Git-command deadline. No idle listener, polling or per-history helper. [Pipe options](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipes.pipeoptions?view=net-10.0), [server PID API](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid) (checked 2026-10-26).
+
+Environment endpoint/nonce values pass only to the approved command tree; they are not credentials and expire with the session. This is not a sandbox against same-user processes, trusted hooks/helpers that inherit those values, or a replaced app/helper binary. Request text is untrusted, displayed as plain text with URL redaction; it cannot prove the requesting remote's identity. Responses use PasswordBox/SecurePassword and disposable UTF-8 buffers cleared after send, never view-model string bindings, settings or diagnostics. Temporary OS/native/managed/Git copies cannot be guaranteed erased; configured helper output may itself contain secrets, so raw operation output stays in memory with no automatic export.
+
+For a broker-backed command, standard bundled OpenSSH uses `BatchMode=no`, `StrictHostKeyChecking=ask` and `SSH_ASKPASS_REQUIRE=force`. No automatic host acceptance or known_hosts cleanup. Unknown-host prompts have no structured type in OpenSSH: show the original prompt and require a typed answer instead of guessing from translated text. `SSH_ASKPASS_PROMPT=confirm` has an explicit approval button; `none` is a notification whose helper exit dismisses it without cancelling SSH (for security-key touch). Other helper exit/cancellation closes pending input and stops the operation. Signing and custom SSH commands remain deferred. [OpenSSH environment](https://man.openbsd.org/ssh.1), [askpass hints](https://github.com/openssh/openssh-portable/blob/master/readpass.c), [host confirmation source](https://github.com/openssh/openssh-portable/blob/master/sshconnect.c) (checked 2026-10-26; protocol research, not live interoperability certification).
+
+Git stdin remains closed and `GIT_TERMINAL_PROMPT=0`; ordinary cached GCM usage remains, but `GCM_INTERACTIVE=never` continues to suppress its GUI/browser prompts. Credential debug/trace environment is suppressed for explicit actions. Browser sign-in needs a tracked external-interaction lifecycle before enabling it: the current job boundary must not terminate a newly launched browser. GCM's official interactive and modal-parent options are candidates for that later route, not enabled behavior. [GCM environment documentation](https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/environment.md) (checked 2026-10-26). No global Git/credential-store configuration is changed.
+
+The operation model publishes a known input-wait state only while its prompt callback is active. Cancelling or expiring a prompt cancels the owned operation; disposal waits for the prompt broker before reconciliation/navigation resumes. Pipe failure, timeout and request-limit outcomes have localized explanations. Existing shutdown/modal admission, repository mutex, state revalidation and post-attempt refresh remain unchanged. No interactive UI or live account was used for development verification; roadmap records headless evidence and remaining gates.
 
 ## Explicit Git actions (F2a, 0.8.0)
 
@@ -121,7 +138,7 @@ Push supplies explicit source/destination refs, disables implicit mirror/follow-
 
 Writes reuse the job-contained async runner with a five-minute per-command deadline and 1 MiB output cap. Stream decoding/redaction runs off the dispatcher; output is retained only in modal memory. Userinfo/query secrets in HTTP(S) URLs are redacted; arbitrary trusted-helper output cannot be comprehensively classified as secret and must not be persisted/exported automatically. Progress reports running, duration and explicit cancellation, never guesses an input wait from silence. Cancellation kills only owned job descendants and is not undo. Partial output and state remain inspectable; no retry is automatic.
 
-**Auth limitation:** cached HTTPS credentials/noninteractive GCM and standard Git for Windows bundled OpenSSH with agent/known hosts are the supported design for this increment; live authentication is unverified. `GIT_TERMINAL_PROMPT=0`, empty askpass, `GCM_INTERACTIVE=never`, OpenSSH BatchMode and strict host-key checking suppress normal hidden prompts. Custom `core.sshCommand` and unrecognized bundled SSH layouts are rejected for network actions. Browser sign-in, interactive passphrases/host-key confirmation, signing and interactive hook protocols need a future broker/terminal route; the modal explains the existing-terminal workaround and permits cancellation of uncooperative hooks/helpers. No shared agent is killed or credential saved by Shovel. The command defaults to denying other transports while explicitly allowing file/http/https/ssh/git; Git can still honor an explicitly configured per-protocol permission, so operation approval includes trust in the repository configuration and its transport helpers; startup reads still prohibit network/helpers. No global settings are changed.
+**Authentication:** F2b above supersedes the original cached-only F2a limitation with an operation-scoped askpass bridge. Without a broker, the Core action service retains noninteractive execution and strict known-host behavior. Custom core.sshCommand and unrecognized bundled SSH layouts still fail explicitly. The command defaults to denying other transports while explicitly allowing file/http/https/ssh/git; Git may honor an explicitly configured per-protocol permission, so execution approval includes repository transport helpers. Startup reads still request no network/helpers.
 
 `CommitRef.Upstream` reuses the existing ref query, adding no startup subprocess. `RefBadge` combines only the configured same-tip upstream; full names and current-branch meaning remain in accessible help. Original vector paths inherit row/system colors and preserve virtualization/author highlighting. No provider logos, avatars or additional network assets are used.
 

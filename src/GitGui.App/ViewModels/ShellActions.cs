@@ -44,7 +44,7 @@ public sealed partial class ShellViewModel
                 // Keep navigation blocked through reconciliation. Internal refresh explicitly bypasses that UI gate.
                 BeginInspection(tab, force: true, actionReconcile: true);
                 await WaitForIdleAsync();
-            }, branch);
+            }, branch, _interaction);
             _interaction!.ShowGitAction(model);
         }
         catch (GitActionException exception) { _interaction!.ShowActionError(UiText.Get(exception.Code)); }
