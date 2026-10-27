@@ -51,7 +51,7 @@ public sealed class GitActionViewModel : ObservableObject
     public bool AllRemotes { get => _allRemotes; set => Set(ref _allRemotes, value); }
     public bool AllTags { get => _allTags; set => Set(ref _allTags, value); }
     public bool SetUpstream { get => _setUpstream; set => Set(ref _setUpstream, value); }
-    public bool IsRunning { get => _running; private set { if (Set(ref _running, value)) { Changed(nameof(CanEdit)); Changed(nameof(CloseLabel)); Refresh(); } } }
+    public bool IsRunning { get => _running; private set { if (Set(ref _running, value)) { Changed(nameof(CanEdit)); Changed(nameof(CanCancel)); Refresh(); } } }
     public bool CanEdit => !IsRunning && !_attempted;
     public bool HasAttempt => _attempted;
     public string RunUnavailableReason => UiText.Get(IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
@@ -60,7 +60,15 @@ public sealed class GitActionViewModel : ObservableObject
         IsNew && !StartRefs.Contains(StartRef) ? "ActionNoStart" :
         ChooseBranch && !Branches.Contains(Branch) ? "ActionChooseBranch" :
         ChooseRemoteBranch && string.IsNullOrWhiteSpace(RemoteBranch) ? "ActionChooseRemoteBranch" : "ActionReady");
-    public string CloseLabel => UiText.Get(IsRunning ? "ActionCancelRunning" : HasAttempt ? "ActionClose" : "ActionCancel");
+    public event EventHandler? ExecutionStarting;
+    private bool _reconciling, _gitFinished, _cancelled;
+    public bool IsReconciling { get => _reconciling; private set { if (Set(ref _reconciling, value)) Changed(nameof(CanCancel)); } }
+    public bool CanCancel => IsRunning && !IsReconciling && !_cancel.IsCancellationRequested;
+    public bool Succeeded { get; private set; }
+    private string _phase = UiText.Get("ActionPreparing");
+    private GitActionStage _gitStage = GitActionStage.Validating;
+    public string Phase { get => _phase; private set { if (Set(ref _phase, value)) Changed(nameof(Summary)); } }
+    public string Summary => UiText.Format("ActionSummary", Title, Phase, _elapsed.Elapsed.TotalSeconds);
     private string _status = UiText.Get("ActionReady"), _rawOutput = "";
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
@@ -82,10 +90,10 @@ public sealed class GitActionViewModel : ObservableObject
         RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!IsNetwork || Remote is not null) &&
             (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
             (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
-        _timer.Tick += (_, _) => { Changed(nameof(Duration)); if (_outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
+        _timer.Tick += (_, _) => { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
     }
     private void Refresh() { RunCommand?.Refresh(); Changed(nameof(RunUnavailableReason)); }
-    public void Cancel() { if (IsRunning) { Status = UiText.Get("ActionCancelling"); _cancel.Cancel(); } }
+    public void Cancel() { if (CanCancel) { Status = UiText.Get("ActionCancelling"); Phase = UiText.Get("ActionStopping"); _cancel.Cancel(); Changed(nameof(CanCancel)); } }
     private async Task PublishOutputAsync()
     {
         var text = await Task.Run(() =>
@@ -102,35 +110,71 @@ public sealed class GitActionViewModel : ObservableObject
     }
     private async Task RunAsync()
     {
+        // Freeze the reviewed options before the view closes or any asynchronous work starts.
+        var options = new ActionOptions(Action, IsNew ? NewName : Branch, StartRef,
+            Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream);
         _attempted = true; Changed(nameof(HasAttempt)); IsRunning = true; _elapsed.Restart(); _timer.Start(); Status = UiText.Get("ActionRunning");
         try
         {
+            ExecutionStarting?.Invoke(this, EventArgs.Empty);
+            // Let ShowDialog unwind before creating prompts or starting Git. The shell owns this task.
+            await Dispatcher.Yield(DispatcherPriority.Background);
             var promptContext = UiText.Format("AuthContext", Title, CurrentRepository);
             await using var authentication = IsNetwork ? await Task.Run(() => _interaction?.CreateAuthenticationSession(promptContext, async (prompt, token) =>
             {
-                await _dispatcher.InvokeAsync(() => { if (!_cancel.IsCancellationRequested) Status = UiText.Get("ActionWaitingAuthentication"); });
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    if (!_cancel.IsCancellationRequested) { Status = UiText.Get("ActionWaitingAuthentication"); Phase = UiText.Get("ActionWaitingShort"); }
+                });
                 try { return await _interaction.ShowAuthenticationAsync(promptContext, prompt, token); }
-                finally { await _dispatcher.InvokeAsync(() => { if (!_cancel.IsCancellationRequested && Status == UiText.Get("ActionWaitingAuthentication")) Status = UiText.Get("ActionRunning"); }); }
+                finally
+                {
+                    await _dispatcher.InvokeAsync(() =>
+                    {
+                        if (!_cancel.IsCancellationRequested && !_gitFinished)
+                        { Status = UiText.Get("ActionRunning"); Phase = UiText.Get("ActionStage" + _gitStage); }
+                    });
+                }
             }, _cancel.Token)) : null;
-            var result = await _actions.ExecuteAsync(Context, new(Action, IsNew ? NewName : Branch, StartRef,
-                Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream), _cancel.Token, output =>
-                { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }, authentication);
-            _timer.Stop(); await _outputTask; RawOutput = result.Output;
+            var result = await _actions.ExecuteAsync(Context, options, _cancel.Token, output =>
+                { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }, authentication,
+                stage => _dispatcher.BeginInvoke(() =>
+                {
+                    if (_gitFinished || _cancel.IsCancellationRequested) return;
+                    _gitStage = stage;
+                    if (Status != UiText.Get("ActionWaitingAuthentication")) Phase = UiText.Get("ActionStage" + stage);
+                }));
+            _gitFinished = true; await _outputTask; RawOutput = result.Output;
+            Succeeded = result.Success && authentication?.Failure is null;
+            _cancelled = result.Outcome == GitGui.Core.Processes.ProcessOutcome.Cancelled;
             Status = UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure :
                 result.Success ? "ActionSucceeded" : "ActionResult" + result.Outcome);
         }
-        catch (GitActionException exception) { _timer.Stop(); await _outputTask; await PublishOutputAsync(); Status = UiText.Get(exception.Code); }
-        catch (GitReadException exception) { _timer.Stop(); await _outputTask; Status = UiText.Get(exception.Failure == GitFailure.Cancelled ? "ActionResultCancelled" : "ActionReadFailed"); RawOutput = exception.RawOutput; }
-        catch (OperationCanceledException) { _timer.Stop(); await _outputTask; await PublishOutputAsync(); Status = UiText.Get("ActionResultCancelled"); }
+        catch (GitActionException exception) { _gitFinished = true; await _outputTask; await PublishOutputAsync(); Status = UiText.Get(exception.Code); }
+        catch (GitReadException exception)
+        {
+            _gitFinished = true; await _outputTask; _cancelled = exception.Failure == GitFailure.Cancelled;
+            Status = UiText.Get(_cancelled ? "ActionResultCancelled" : "ActionReadFailed"); RawOutput = exception.RawOutput;
+        }
+        catch (OperationCanceledException) { _gitFinished = true; _cancelled = true; await _outputTask; await PublishOutputAsync(); Status = UiText.Get("ActionResultCancelled"); }
         catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         { Status = UiText.Get("ActionReadFailed"); }
+        catch (Exception) { Status = UiText.Get("ActionUnexpectedFailure"); }
         finally
         {
-            _timer.Stop(); _elapsed.Stop(); Changed(nameof(Duration));
+            _gitFinished = true;
             await _outputTask;
+            IsReconciling = true; Phase = UiText.Get("ActionReinspecting");
+            var refreshed = false;
             // Cancellation is not rollback. Reinspection uses a fresh cancellation scope.
-            try { await _reconcile(); }
-            finally { IsRunning = false; _cancel.Dispose(); }
+            try { await _reconcile(); refreshed = true; }
+            catch (Exception) { Status = UiText.Format("ActionReinspectionFailed", Status); }
+            finally
+            {
+                _timer.Stop(); _elapsed.Stop();
+                Phase = UiText.Get(!refreshed ? "ActionRefreshFailedShort" : Succeeded ? "ActionCompletedShort" : _cancelled ? "ActionStoppedShort" : "ActionFailedShort");
+                IsReconciling = false; IsRunning = false; Changed(nameof(Duration)); Changed(nameof(Summary)); _cancel.Dispose();
+            }
         }
     }
 }

@@ -232,12 +232,8 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionDuration" xml:space="preserve"><value>Elapsed: {0:N1} s</value></data>
   <data name="ActionOutput" xml:space="preserve"><value>Git output (in memory; URL credentials redacted)</value></data>
   <data name="ActionAuthentication" xml:space="preserve"><value>Authentication requirements</value></data>
-  <data name="ActionClose" xml:space="preserve"><value>Close</value></data>
   <data name="ActionCancel" xml:space="preserve"><value>Cancel</value></data>
-  <data name="ActionCancelRunning" xml:space="preserve"><value>Cancel Git</value></data>
-  <data name="ActionCancelQuestion" xml:space="preserve"><value>Stop Git and its owned child processes? Changes may already have been applied locally or remotely. Cancellation does not undo them. Shovel will inspect the repository again.</value></data>
   <data name="ActionPreparing" xml:space="preserve"><value>Reading operation targets…</value></data>
-  <data name="ActionDialogOpen" xml:space="preserve"><value>Git operation dialog open</value></data>
   <data name="ActionRunning" xml:space="preserve"><value>Git is running. Supported authentication requests open a prompt. Cancel if an unsupported hook or helper is waiting. Five-minute command timeout.</value></data>
   <data name="ActionCancelling" xml:space="preserve"><value>Stopping owned processes, then checking repository state…</value></data>
   <data name="ActionSucceeded" xml:space="preserve"><value>Operation completed. Review refreshed history before the next action.</value></data>
@@ -276,7 +272,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionAuthenticationUnavailable" xml:space="preserve"><value>The authentication prompt connection failed or returned an invalid response. Git was stopped. Review refreshed repository state and reopen the operation to retry.</value></data>
   <data name="ActionAuthenticationTimedOut" xml:space="preserve"><value>The authentication prompt expired after two minutes. Git was stopped. Changes already applied are not undone; review refreshed state before retrying.</value></data>
   <data name="ActionAuthenticationPromptLimit" xml:space="preserve"><value>The operation exceeded the limit of 16 authentication requests and was stopped. Review the authentication configuration and refreshed repository state before retrying.</value></data>
-  <data name="ActionAlreadyAttempted" xml:space="preserve"><value>Close and reopen this dialog to review current targets before another attempt.</value></data>
+  <data name="ActionAlreadyAttempted" xml:space="preserve"><value>Open the operation again to review current targets before another attempt.</value></data>
   <data name="ActionEnterBranchName" xml:space="preserve"><value>Enter a name for the new branch.</value></data>
   <data name="ActionChooseBranch" xml:space="preserve"><value>Select an existing local branch.</value></data>
   <data name="ActionChooseRemoteBranch" xml:space="preserve"><value>Enter the destination branch name on the remote.</value></data>
@@ -287,4 +283,25 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionInspectionNeeded" xml:space="preserve"><value>Refresh the repository successfully before using this action.</value></data>
   <data name="ActionPullNeedsBranch" xml:space="preserve"><value>Check out a local branch with a commit before pulling.</value></data>
   <data name="ActionNeedsBranch" xml:space="preserve"><value>Create a local branch with a commit before using this action.</value></data>
+  <data name="ActionSummary" xml:space="preserve"><value>{0} · {1} · {2:N1} s</value></data>
+  <data name="ActionDetails" xml:space="preserve"><value>Details</value></data>
+  <data name="ActionDetailsTab" xml:space="preserve"><value>Operation</value></data>
+  <data name="ActionCancelHelp" xml:space="preserve"><value>Stop the current Git command and its owned processes. Changes already applied are not undone. Cancellation is unavailable while repository state is being refreshed.</value></data>
+  <data name="ActionWorkspaceBusy" xml:space="preserve"><value>Finish or cancel the current Git operation before starting another action.</value></data>
+  <data name="ActionWaitingShort" xml:space="preserve"><value>Waiting for authentication</value></data>
+  <data name="ActionStopping" xml:space="preserve"><value>Stopping</value></data>
+  <data name="ActionReinspecting" xml:space="preserve"><value>Refreshing repository</value></data>
+  <data name="ActionCompletedShort" xml:space="preserve"><value>Completed</value></data>
+  <data name="ActionFailedShort" xml:space="preserve"><value>Failed — see details</value></data>
+  <data name="ActionStoppedShort" xml:space="preserve"><value>Stopped — see details</value></data>
+  <data name="ActionRefreshFailedShort" xml:space="preserve"><value>Refresh failed — see details</value></data>
+  <data name="ActionReinspectionFailed" xml:space="preserve"><value>{0} Repository refresh failed. Use Repository → Refresh to check the current state before another operation.</value></data>
+  <data name="ActionStageValidating" xml:space="preserve"><value>Checking targets</value></data>
+  <data name="ActionStageFetching" xml:space="preserve"><value>Fetching</value></data>
+  <data name="ActionStageCheckingFetchedTip" xml:space="preserve"><value>Checking fetched commit</value></data>
+  <data name="ActionStageFastForwarding" xml:space="preserve"><value>Updating local branch</value></data>
+  <data name="ActionStagePushing" xml:space="preserve"><value>Pushing</value></data>
+  <data name="ActionStageUpdatingBranch" xml:space="preserve"><value>Updating branch</value></data>
+  <data name="ActionReviewing" xml:space="preserve"><value>Review operation options</value></data>
+  <data name="ActionUnexpectedFailure" xml:space="preserve"><value>The operation could not finish because of an unexpected error. Changes may already have applied. Review the output and refreshed repository state before retrying.</value></data>
 </root>

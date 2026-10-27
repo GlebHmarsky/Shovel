@@ -4,12 +4,12 @@ Updated 2026-10-27. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.9.3 interaction-policy delivery complete; evidence in [roadmap](docs/roadmap.md#interaction-policy-verification-2026-10-27). Continue with the next priorities below. Desktop/live-provider validation remains separately authorized work.
+0.10.0 main-window Pull/action delivery complete; see [verification](docs/roadmap.md#workspace-pull-verification-2026-10-27). Next implementation priority is Local Changes/status, ahead of broader authentication work. Desktop/live-provider validation remains separate.
 
 ## Next priorities
 
-- [ ] **P1 — Complete authentication routes before broader network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Real HTTPS/SSH, unknown/rejected host key and live provider tests require separate authorization; they do not block unrelated local features.
 - [ ] **P1 — Implement Local Changes/status.** Real porcelain-v2/NUL staged, unstaged, untracked, ignored/conflicted data; preserve history responsiveness. Disposable fixtures; staging/commit is separate scope.
+- [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
 - [ ] **P1 — Extend performance fixtures.** Merge-heavy/million-commit cases, cancellation under load, app/child peak memory, five-minute idle CPU; retain F1e baseline.
 - [ ] **P1 — Validate accessibility/layout.** Mixed DPI, OS high contrast/screen reader, keyboard/focus, +40%/RTL, themes. Offscreen colors do not certify OS accessibility.
@@ -34,6 +34,7 @@ Updated 2026-10-27. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Completed
 
+- [x] **F2c / 0.10.0 / 2026-10-27:** options close on submission; shell-owned Git execution/top-center phase/cancel/retained output through reinspection. Real incoming-commit/file Pull, refreshed history/counts, failures/cancellation; 93 checks, normal/minimum offscreen review, 16 preview checksums/seven matching tested files.
 - [x] **0.9.3 / 2026-10-27:** ordinary branch/network actions without extra program consent; omitted unfinished toolbar/sidebar/dialog controls; localized unavailability help. 89 checks, normal/minimum offscreen review, 16 preview checksums/seven matching tested files.
 - [x] **0.9.2 / 2026-10-27:** compact all ten maintained Markdown files; require working features and normal operation consent; remove routine trust/prototype mandates. Documentation/version delivery; verification recorded in roadmap.
 - [x] **F2b / 0.9.1 / 2026-10-26:** Git/OpenSSH askpass, bounded operation pipe/lifetime, masked owned prompts/wait state/cancellation/reconciliation; 87 checks, offscreen review, 16 checksums/seven matching tested files.

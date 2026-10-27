@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.9.3**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.10.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -33,7 +33,9 @@ Branch split button defaults to New branch (name, start reference, optional chec
 
 Fetch/Pull/Push dialogs asynchronously load actual remotes and redacted effective addresses. Opening never executes. Fetch chooses one/all remotes. Pull chooses a remote branch and fast-forwards the current branch with clean index/worktree. Push chooses source, remote and destination, with unchecked all-tags/set-upstream options. Rebase/autostash/force remain unimplemented.
 
-Normal action buttons execute without an additional trust checkbox. Missing targets, active work and missing dependencies disable actions with localized help; required authentication/SSH host prompts remain. Progress, elapsed time, bounded output, result and recovery guidance stay visible. Active modal/preparation/reconciliation blocks tab navigation/window close. Cancellation stops owned work and reinspects; it does not undo applied changes. Related caches become stale after every attempt; retry requires fresh targets. No automatic retries/stash/abort/lock removal.
+Normal action buttons execute without an additional trust checkbox. **Submitting Pull closes the options modal immediately**; the same shared flow applies to Fetch/Push/branch actions. The main window shows the actual phase (checking targets, fetching, checking fetched commit, updating local branch), elapsed time and indeterminate progress at top center. Existing history stays visible/selectable. Cancel is available there and in Repository; cancellation is unavailable during fresh inspection. Missing targets/dependencies disable actions with localized help.
+
+Operation details opens below with the repository, full result explanation and bounded original/redacted Git output. Success/failure/cancellation persists at top center and in details after reinspection. A failed refresh is distinct from Git success. One last result is kept in memory, only shown on its repository tab; cancelling a later options dialog preserves it. No percentage is invented. Authentication prompts are owned by the main window after options close. Preparation/execution/reconciliation still blocks tab navigation/new Git actions/window close; attempting close shows operation details. Cancellation stops owned work and reinspects; it does not undo changes. Related caches become stale after every attempt; retry uses fresh targets. No automatic retries/stash/abort/lock removal.
 
 Badges distinguish local/tag/remote refs with original drawings. Check marks current tip, including detached HEAD. Only a local branch and its configured same-tip upstream share a local-name badge with remote icon; unrelated remotes stay separate. Full refs and relationship appear in help/accessibility. Remote icons describe local tracking tips.
 

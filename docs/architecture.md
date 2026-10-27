@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-27. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.9.3, applying the interaction policy to F2b actions. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-27. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.10.0: shell-owned Git execution after options close. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -19,7 +19,7 @@ Historical platform baseline: x64 Windows 10 22H2/11, ARM64 later, no x86 plan; 
 | GitGui.slnx / global.json / Directory.Build.props | Solution, SDK pin, version/build defaults |
 | App/App.xaml(.cs) | Composition/startup/shutdown/profile mutex/error exit |
 | App/Views/MainWindow.xaml(.cs) | Layout/view geometry/MMB dispatch |
-| App/Views/GitActionWindow.xaml; ViewModels/GitActionViewModel.cs | Owned modal/options/progress/one action attempt |
+| App/Views/GitActionWindow.xaml; ViewModels/GitActionViewModel.cs | Options close on submission; one task with phase/output/cancel/reinspection |
 | App/Views/AuthenticationWindow.xaml | Masked/confirm/informational owned prompts |
 | App/ViewModels/ShellActions.cs | Preparation/admission/reconciliation |
 | App/ViewModels/ | Shell/tab/row presentation and command/observable bases |
@@ -53,7 +53,7 @@ App shows loading shell, loads settings off-thread and automatically reads selec
 
 Closing stops new inspections/navigation, cancels/drains startup/reads, captures plain layout on dispatcher, saves off-thread and bounds diagnostic drain. Save failure offers stay/retry or explicit exit without saving. Dispatcher/startup failure shows localized generic error, exits without saving invalid state; fatal logging best effort. Per-profile mutex excludes app writers. No tray/autostart/polling/startup fetch exists.
 
-Current explicit-modal preparation/execution/reconciliation blocks main close/tab navigation. Running modal cannot close; cancellation drains then reinspects. Common-directory mutex coordinates linked-worktree actions. This is not the future updater/external-tool idle coordinator.
+Options close on submission; shell-owned preparation/execution/reconciliation blocks main close/tab navigation until finished. Main close shows Operation details while busy; cancellation drains then reinspects. Common-directory mutex coordinates linked-worktree actions. This is not the future updater/external-tool idle coordinator.
 
 Settings: `%LOCALAPPDATA%\GitGui\Foundation`, or explicit absolute `--data-directory`; separate from binaries. Stores layout/navigation, up to 20 tab paths/order/selection, legacy scope and identity stamps; no history/credentials. 64 KiB input/output, normalized values. Schema 1/2/3 → 4; previous bytes backed up on atomic replace. Same-directory temp, cancellation check, move/replace; external change since load blocks saving. Invalid/newer/unsupported/inaccessible files stay untouched. No general migration engine/recovery/export UI or automatic backup restore; older previews open newer schemas read-only. Separate profiles for divergent pilot schemas. Future drafts/tools/update/recovery fields/caches need versioning and bounded rebuildable data. Rediscover state after restart; never replay commands. [Recovery instructions](../README.md#local-data-and-recovery).
 
@@ -115,7 +115,9 @@ Input-wait state exists only while prompt callback active. Prompt cancel/expiry 
 
 ## Explicit Git actions (F2a, 0.8.0)
 
-`GitActions` prepares immutable identity/HEAD/refs/effective redacted fetch-push addresses/config hash off-thread on dialog opening, not startup. <=32 remotes, single fetch/push URL each; unsupported config explained. GitActionViewModel edits options/one attempt; ShellActions blocks navigation, invalidates related caches and reinspects after every outcome.
+`GitActions` prepares immutable identity/HEAD/refs/effective redacted fetch-push addresses/config hash off-thread on dialog opening, not startup. <=32 remotes, single fetch/push URL each; unsupported config explained. GitActionViewModel freezes options on Run, emits ExecutionStarting to close its view, then yields the dispatcher before Git/authentication work. ShellActions awaits RunningTask after ShowDialog returns; its admission flag covers the whole action and reconciliation. No fire-and-forget Git lifetime.
+
+Core reports typed GitActionStage values at real command boundaries; dispatcher callbacks are ignored after Git finishes/cancels. A 250 ms timer publishes bounded decoded output/duration only while active; no guessed percentage or input-wait inference. MainWindow binds progress/summary and Operation details to CurrentAction. The shell retains one last model, exposes it only on the matching repository tab, and preserves it if new options are dismissed. Git outcome survives failed refresh; cancellation is disabled during reconciliation. AuthenticationWindow is owned by MainWindow, never the disposed options window. Related caches invalidate and fresh inspection completes before admission reopens.
 
 Normal Execute authorizes the selected operation and configured hooks/helpers; no separate approval flag, checkbox or replacement trust modal. Identity/paths/HEAD/refs/config revalidation and sequence checks remain correctness handling. Common-directory named mutex coordinates Shovel in one Windows login; acquire/release same worker, abandoned lock requires fresh validation. Other sessions/clients/aliases/launch races outside lock; Git locks authoritative, never deleted. Hashes do not attest helper contents.
 
@@ -130,7 +132,7 @@ Normal Execute authorizes the selected operation and configured hooks/helpers; n
 
 Pull's two commands are not transactional; failed merge may leave fetched objects/refs. Sequential fetch-all/multiple push refs can partially succeed. Git 2.51.1 local remotes tested; sources checked 2026-10-25: [fetch](https://git-scm.com/docs/git-fetch), [merge](https://git-scm.com/docs/git-merge), [push](https://git-scm.com/docs/git-push), [switch](https://git-scm.com/docs/git-switch).
 
-Writes: existing runner, 5 min/command, 1 MiB output; decode/redact off dispatcher, modal memory only. HTTP(S) userinfo/query secrets redacted; arbitrary helper output may still contain secrets. Show running/duration/cancel; no wait inference from silence, automatic retry or rollback claim.
+Writes: existing runner, 5 min/command, 1 MiB output; decode/redact off dispatcher, bounded session Operation details only. HTTP(S) userinfo/query secrets redacted; arbitrary helper output may still contain secrets. Show running/duration/cancel; no wait inference from silence, automatic retry or rollback claim.
 
 F2b supersedes cached-only auth. Core without broker stays noninteractive/strict known-host; custom core.sshCommand/unrecognized bundled layout rejected. Default transports file/http/https/ssh/git allowed, others denied unless explicit Git per-protocol permission overrides. Startup requests none. RefBadge reuses CommitRef.Upstream, no extra startup query; original vectors inherit row/system colors, preserve virtualization. No provider/avatar network assets.
 

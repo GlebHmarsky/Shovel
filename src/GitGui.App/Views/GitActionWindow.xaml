@@ -3,10 +3,10 @@
  xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{Binding Title}" Width="650" Height="560" MinWidth="520" MinHeight="480"
  WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FlowDirection="{x:Static loc:UiText.Direction}"
  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
- FontFamily="Segoe UI" FontSize="13" Closing="OnClosing">
+ FontFamily="Segoe UI" FontSize="13">
  <Window.Resources><BooleanToVisibilityConverter x:Key="Visible"/></Window.Resources>
  <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"><Grid Margin="22">
-  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel><TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" Margin="0,8"/>
    <TextBlock Text="{Binding CurrentRepository}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentRepository}" FlowDirection="LeftToRight"/></StackPanel>
   <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12">
@@ -33,12 +33,10 @@
     </Expander>
    </StackPanel>
   </ScrollViewer>
-  <StackPanel Grid.Row="2" Visibility="{Binding HasAttempt, Converter={StaticResource Visible}}"><TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/><TextBlock Text="{Binding Duration}" Margin="0,4"/></StackPanel>
-  <TextBox Grid.Row="3" Height="90" Visibility="{Binding HasAttempt, Converter={StaticResource Visible}}" Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/>
-  <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+  <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
    <Button Content="{Binding Title}" Command="{Binding RunCommand}" MinWidth="90" Padding="12,6" IsDefault="True"
            ToolTip="{Binding RunUnavailableReason}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding RunUnavailableReason}"/>
-   <Button Content="{Binding CloseLabel}" Click="OnCancel" MinWidth="90" Padding="12,6" Margin="10,0,0,0"/>
+   <Button Content="{loc:Text Key=ActionCancel}" Click="OnCancel" MinWidth="90" Padding="12,6" Margin="10,0,0,0"/>
   </StackPanel>
  </Grid></Border>
 </Window>

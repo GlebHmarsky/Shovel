@@ -22,12 +22,10 @@ public interface IUserInteraction
 public sealed class UserInteraction : IUserInteraction
 {
     private static Window Owner => Application.Current.MainWindow;
-    private Window? _actionWindow;
     public void ShowGitAction(GitActionViewModel model)
     {
-        _actionWindow = new GitActionWindow(model) { Owner = Owner };
-        try { _actionWindow.ShowDialog(); }
-        finally { _actionWindow = null; }
+        var window = new GitActionWindow(model) { Owner = Owner };
+        window.ShowDialog();
     }
     public IAuthenticationSession CreateAuthenticationSession(string context,
         Func<AuthenticationPrompt, CancellationToken, Task<AuthenticationAnswer?>> prompt, CancellationToken token) =>
@@ -35,8 +33,8 @@ public sealed class UserInteraction : IUserInteraction
     public async Task<AuthenticationAnswer?> ShowAuthenticationAsync(string context, AuthenticationPrompt prompt, CancellationToken token) =>
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            if (token.IsCancellationRequested || _actionWindow is null) return null;
-            var window = new AuthenticationWindow(context, prompt) { Owner = _actionWindow };
+            if (token.IsCancellationRequested) return null;
+            var window = new AuthenticationWindow(context, prompt) { Owner = Owner };
             using var cancelled = token.Register(() => window.Dispatcher.BeginInvoke(() => window.Close()));
             window.ShowDialog();
             if (!token.IsCancellationRequested) return window.TakeAnswer();

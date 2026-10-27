@@ -4,7 +4,7 @@ Updated 2026-10-27. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
-**0.9.3: ordinary action execution and control cleanup.** Applies the interaction policy to the existing branch/network/askpass workflows; no separate program-consent gate or unfinished toolbar/sidebar/dialog controls. Status/diffs, other mutations, browser/signing/interactive hooks and distribution remain pending.
+**0.10.0: main-window Git execution.** Pull and the shared action flow close options on submission, show top-center progress/cancellation and retain results/output in Operation details. Status/diffs, other mutations, browser/signing/interactive hooks and distribution remain pending. Working Git features take priority over broad authentication expansion; Local Changes/status is next.
 
 **Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 recorded the policy; 0.9.3 applies it in code. The user also explicitly reconfirmed removing the gate for configured hooks/helpers during this delivery.
 
@@ -29,6 +29,7 @@ Proposed remaining order; requests can reprioritize. Each increment must work en
 | F2b / 0.9.1 | Packaged Git/OpenSSH askpass/owned prompts/cancel/reinspection | 87 checks/local credential protocol/offscreen; live providers unverified |
 | 0.9.2 | Compact docs/working-feature and normal-consent policy | Documentation-only; verification below |
 | 0.9.3 | Normal action execution/no routine consent; implemented controls only | Local Git workflow and headless verification below |
+| F2c / 0.10.0 | Shell-owned Pull/action execution after options close | Real incoming-commit/error/cancellation and offscreen verification below |
 | F1g onward | Real status/files/tree/diffs; filtering when requested | Bounded parsers/content and relevant read tests |
 | 2: Local MVP | Init/stage/hunks/commit/amend/branch delete/tracking/stashes | Mutation/hook/signing/stale-hunk coverage |
 | 3: Network MVP | Clone/remotes/broader network/recovery continue/skip/abort | Visible auth/input, failures/external races |
@@ -184,6 +185,16 @@ Restore/Release build/publish passed with zero warnings/errors; **89 passed, 0 f
 Reviewed offscreen workspace at 1200×760/900×580 and action dialogs at 650×520/520×440. Primary actions remain outside the scrolling options; history keeps horizontal scrolling at minimum width. This is not desktop focus/input, live-provider, Windows 10, OS accessibility or performance certification.
 
 Log: `artifacts/preview-0.9.3-verification.txt`; fixtures/renders: `artifacts/foundation-checks/20261027-164923-14c646bd549d4cab9e9489fb853efbcf`. Preview: `Build/0.9.3-win-x64/Shovel.exe`; all 16 checksums and seven tested/published app/helper files match, both executable file versions 0.9.3.0. Build remains ignored/untracked; earlier previews retained. No interactive launch, push, dependency installation or distribution work. Next: remaining authentication routes, then Local Changes/status per TODO.
+
+## Workspace Pull verification (2026-10-27)
+
+0.10.0 fixes the reported interaction gap: 0.9.3 already invoked real fetch/fast-forward commands, but execution/results stayed inside the modal and the shell only reported an open dialog. The user's particular remote failure was not reproduced or diagnosed. Submitting now closes options and transfers lifetime/progress/results to the shell; required authentication prompts use MainWindow. No Git strategy or authentication restriction was silently relaxed.
+
+Restore/Release build/publish passed with zero warnings/errors; **93 passed, 0 failed**. New real local bare-remote/peer fixture invokes the bound Pull command, verifies immediate options closure, actual incoming commit/file, refreshed history/behind count and retained output. A controlled pre-fetch pause exposes running-state layout and duplicate-action/navigation guards; it is not a performance measurement. Real dirty/unavailable-remote failures, cancellation, cancelled options retaining the previous result, other-tab isolation, failed reinspection and askpass after options closure are covered alongside existing regressions.
+
+Reviewed final offscreen running/completed workspace at 1200×760/900×580 and retained the normal/minimum action-dialog checks. Log: `artifacts/preview-0.10.0-verification.txt`; fixtures/renders: `artifacts/foundation-checks/20261027-211310-1127f0a6756f4f7d9dc644e81c8b3b9d`. Initial run also exited successfully with 93 checks after delayed completion; a persistent runner hang was not established. Preview: `Build/0.10.0-win-x64/Shovel.exe`; 16 checksums/seven tested-published files match, both executable versions 0.10.0.0. Build stays ignored/untracked; earlier versions retained.
+
+No interactive launch, desktop input/focus, live HTTPS/SSH/GCM, Windows 10 or new performance certification. Pull still requires a clean worktree and fast-forward; no merge/rebase/autostash. No dependency installation, push or distribution work. Next implementation: Local Changes/status, before broader authentication expansion.
 
 ## Initial compatibility boundaries
 

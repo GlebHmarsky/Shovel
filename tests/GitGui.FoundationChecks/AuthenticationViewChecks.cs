@@ -39,7 +39,7 @@ internal static partial class Program
             }
         });
         if (_actionFixture is null) throw new InvalidOperationException("Action fixture required");
-        await Check("Authentication waiting/cancellation remains in the modal operation until repository reconciliation finishes", async () =>
+        await Check("Authentication waiting/cancellation outlives the options dialog and drains before reconciliation finishes", async () =>
         {
             var inner = new WindowsProcessRunner(); var reader = new RepositoryReader(inner); var identities = new WindowsRepositoryIdentity();
             var context = await new GitActions(inner, reader, identities).PrepareAsync(_actionFixture.Git, _actionFixture.Repository.Worktree, default);
@@ -48,9 +48,12 @@ internal static partial class Program
             var reconciled = 0;
             var model = new GitActionViewModel(context, GitAction.Push, new GitActions(runner, reader, identities),
                 () => { reconciled++; return Task.CompletedTask; }, interaction: interaction);
+            var options = new GitActionWindow(model);
+            var optionsClosed = false; options.Closed += (_, _) => optionsClosed = true;
             model.RunCommand.Execute(null);
             await interaction.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Expect(interaction.SetupThread != uiThread, "Helper file/pipe setup stays off dispatcher");
+            Expect(optionsClosed, "Options dialog closed before asking for authentication");
             Expect(model.IsRunning && model.Status == UiText.Get("ActionWaitingAuthentication") && !model.CanEdit, "Explicit waiting state while navigation stays gated");
             model.Cancel();
             await model.RunningTask.WaitAsync(TimeSpan.FromSeconds(10));

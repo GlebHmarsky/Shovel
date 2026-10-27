@@ -105,7 +105,7 @@ public partial class App : Application
         if (_allowClose) return;
         e.Cancel = true;
         if (_closing || sender is not MainWindow window) return;
-        if (_shell!.ActionOpen) return; // The modal must finish/cancel and reconcile before shutdown.
+        if (_shell!.ActionOpen) { _shell.ShowActionDetailsCommand.Execute(null); return; } // Finish/cancel and reconcile before shutdown.
         _closing = true;
         _shell!.BeginShutdown();
         _startupCancellation.Cancel();

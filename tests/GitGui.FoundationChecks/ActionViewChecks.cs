@@ -103,12 +103,12 @@ internal static partial class Program
                     var options = VisualDescendants<CheckBox>(content).Where(box => box.Visibility == Visibility.Visible && box.IsVisible).ToArray();
                     Expect(options.All(box => box.IsEnabled), "No disabled prototype options remain");
                     Expect(Descendants<CheckBox>(window).Count() == 4, "Only checkout, all remotes, all tags and upstream options exist; no routine consent control");
-                    Expect(VisualDescendants<TextBox>(content).Any(box => AutomationProperties.GetName(box) == UiText.Get("ActionOutput")), "Output remains accessible");
+                    Expect(!VisualDescendants<TextBox>(content).Any(box => AutomationProperties.GetName(box) == UiText.Get("ActionOutput")), "Options dialog no longer owns operation output");
                 }
                 finally { window.Close(); }
             }
         });
-        await Check("Modal action blocks tab changes/close and refreshes real history after execution", async () =>
+        await Check("Shell owns a submitted action after its options dialog returns and refreshes real history", async () =>
         {
             var interaction = new ActionInteraction();
             var shell = new ShellViewModel(reader, interaction, identities, actions: actions);
@@ -134,19 +134,27 @@ internal static partial class Program
                 Expect(shell.SelectedRepository == original && shell.Repositories.Contains(original), "No close or tab switch during action");
                 model.NewName = "ui-created"; model.Checkout = false;
                 model.RunCommand.Execute(null);
-                var frame = new DispatcherFrame();
-                var dispatcher = Dispatcher.CurrentDispatcher;
-                _ = model.RunningTask.ContinueWith(_ => dispatcher.BeginInvoke(() => frame.Continue = false), TaskScheduler.Default);
-                Dispatcher.PushFrame(frame); model.RunningTask.GetAwaiter().GetResult();
-                Expect(model.Status == UiText.Get("ActionSucceeded") && !model.RunCommand.CanExecute(null), "One attempt per fresh dialog");
-                Expect(shell.LocalBranches.Contains("ui-created"), "Reconciliation updated history refs before modal exit");
-                interaction.Done.TrySetResult();
+                Expect(model.IsRunning && !model.RunCommand.CanExecute(null), "One attempt owned outside the options dialog");
             };
             shell.NewBranchCommand.Execute(null);
-            await interaction.Done.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            await shell.ActionTask.WaitAsync(TimeSpan.FromSeconds(20));
+            Expect(shell.CurrentAction?.Status == UiText.Get("ActionSucceeded") && shell.LocalBranches.Contains("ui-created"), "Reconciliation updated history refs before admission reopened");
             Expect(!shell.ActionOpen && shell.CanNavigate, "Admission reopened only after completion");
         });
-        await Check("Failed and cancelled modal actions always reconcile and release their running state", async () =>
+        await Check("Reinspection stays busy and a refresh failure cannot hide the Git result", async () =>
+        {
+            var fresh = await actions.PrepareAsync(context.Git, context.Repository.Worktree, default);
+            var entered = new TaskCompletionSource(); var release = new TaskCompletionSource();
+            var model = new GitActionViewModel(fresh, GitAction.NewBranch, actions, async () =>
+            { entered.TrySetResult(); await release.Task; throw new IOException(); }) { NewName = "ui-refresh-failure", Checkout = false };
+            model.RunCommand.Execute(null);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            Expect(model.IsRunning && model.IsReconciling && !model.CanCancel && model.Phase == UiText.Get("ActionReinspecting"), "Busy state includes fresh inspection without cancelling that read");
+            release.TrySetResult(); await model.RunningTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Expect(model.Succeeded && !model.IsRunning && model.Phase == UiText.Get("ActionRefreshFailedShort") &&
+                model.Status == UiText.Format("ActionReinspectionFailed", UiText.Get("ActionSucceeded")), "Git success and failed refresh are distinguished");
+        });
+        await Check("Failed and cancelled actions always reconcile and release their running state", async () =>
         {
             foreach (var cancel in new[] { false, true })
             {

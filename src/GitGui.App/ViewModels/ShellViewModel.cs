@@ -36,7 +36,10 @@ public sealed partial class ShellViewModel : ObservableObject
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(OperationStatus)); } } }
     public bool CanNavigate => IsReady && !_stopping && !ActionOpen;
-    public string OperationStatus => IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) : UiText.Get(ActionOpen ? "ActionDialogOpen" : "NoActiveOperation");
+    public string OperationStatus => IsActionRunning ? CurrentAction!.Summary :
+        ActionOpen ? UiText.Get(_preparingAction ? "ActionPreparing" : "ActionReviewing") :
+        IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) :
+        HasAction ? CurrentAction!.Summary : UiText.Get("NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput => State?.RawOutput ?? "";
@@ -133,7 +136,11 @@ public sealed partial class ShellViewModel : ObservableObject
         LoadMoreHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: 1), () => CanRead && !IsBusy && State?.Page?.HasMore == true && State.NeedsRefresh == false);
         NewerHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: -1), () => CanRead && !IsBusy && State?.PageIndex > 0 && State.NeedsRefresh == false);
         FirstHistoryCommand = new(() => BeginInspection(SelectedRepository!, force: true, firstPage: true), () => CanRead && !IsBusy && State?.Page?.Cursor.Offset > 0);
-        CancelCommand = new(() => { _operationCancellation?.Cancel(); }, () => IsBusy);
+        CancelCommand = new(() =>
+        {
+            if (ActionOpen) CurrentAction?.Cancel();
+            else _operationCancellation?.Cancel();
+        }, () => ActionOpen ? CurrentAction?.CanCancel == true : IsBusy);
         ChooseGitCommand = new(() =>
         {
             var path = _interaction!.ChooseGit(); if (path is null) return;
@@ -400,6 +407,7 @@ public sealed partial class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        NotifyActionContext();
         foreach (var property in new[] { nameof(CanOpenBranchMenu), nameof(CanSwitchBranch), nameof(BranchActionHelp), nameof(FetchActionHelp), nameof(PullActionHelp), nameof(PushActionHelp), nameof(SwitchActionHelp) }) Changed(property);
         NewBranchCommand?.Refresh(); FetchCommand?.Refresh(); PullCommand?.Refresh(); PushCommand?.Refresh(); SwitchBranchCommand?.Refresh(); Changed(nameof(LocalBranches)); Changed(nameof(BranchMenuItems));
         CloseTabCommand?.Refresh(); CloseOtherTabsCommand?.Refresh(); MoveTabLeftCommand?.Refresh(); MoveTabRightCommand?.Refresh(); RefreshTabCommand?.Refresh();

@@ -134,7 +134,14 @@
         <StackPanel HorizontalAlignment="Stretch">
           <TextBlock Text="{Binding RepositoryTitle}" TextAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedRepository.Directory}" />
           <TextBlock Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12" ToolTip="{Binding SelectedRepository.Head}" />
-          <TextBlock Text="{Binding OperationStatus}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="11" ToolTip="{Binding OperationStatus}" AutomationProperties.AutomationId="OperationStatus" AutomationProperties.LiveSetting="Polite" />
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}">
+              <Button Content="{loc:Text Key=ActionDetails}" Command="{Binding ShowActionDetailsCommand}" Padding="3,0" Margin="3,0" FontSize="11" BorderThickness="0" Background="Transparent" AutomationProperties.Name="{loc:Text Key=ActionDetails}" />
+              <Button Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Padding="3,0" FontSize="11" BorderThickness="0" Background="Transparent" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionCancelHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{loc:Text Key=ActionCancelHelp}" />
+            </StackPanel>
+            <TextBlock Text="{Binding OperationStatus}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="11" ToolTip="{Binding OperationStatus}" AutomationProperties.AutomationId="OperationStatus" AutomationProperties.LiveSetting="Polite" />
+          </DockPanel>
+          <ProgressBar Height="3" Margin="0,2,0,0" IsIndeterminate="{Binding IsActionRunning}" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="{Binding OperationStatus}" AutomationProperties.AutomationId="ActionProgress" />
           <TextBlock Text="{Binding SelectedRepository.State}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="11" ToolTip="{Binding SelectedRepository.State}" Visibility="{Binding SelectedRepository.HasOperation, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
       </Border>
@@ -292,6 +299,14 @@
               <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="160" VerticalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RawOutput}" />
               <TextBlock Text="{loc:Text Key=TimingNotice}" TextWrapping="Wrap" />
               <TextBox Text="{Binding TimingDetails, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MaxHeight="160" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=TimingNotice}" />
+            </StackPanel></ScrollViewer>
+          </TabItem>
+          <TabItem Header="{loc:Text Key=ActionDetailsTab}" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12" DataContext="{Binding CurrentAction}">
+              <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,6" AutomationProperties.LiveSetting="Polite" />
+              <TextBlock Text="{Binding CurrentRepository}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentRepository}" FlowDirection="LeftToRight" />
+              <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MinHeight="60" MaxHeight="250" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}" />
             </StackPanel></ScrollViewer>
           </TabItem>
         </TabControl>

@@ -6,6 +6,7 @@ using GitGui.Core.Processes;
 namespace GitGui.Core.Git;
 
 public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push }
+public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, FastForwarding, Pushing, UpdatingBranch }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
 public sealed record ActionContext(GitInstallation Git, RepositoryIdentity Identity, RepositorySnapshot Repository,
     HistorySession History, IReadOnlyList<GitRemote> Remotes, string ConfigStamp);
@@ -47,7 +48,8 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
     }, token);
 
     public Task<ActionResult> ExecuteAsync(ActionContext context, ActionOptions options, CancellationToken token,
-        Action<ProcessOutput>? progress = null, IAuthenticationSession? authentication = null) => Task.Run(() =>
+        Action<ProcessOutput>? progress = null, IAuthenticationSession? authentication = null,
+        Action<GitActionStage>? stage = null) => Task.Run(() =>
     {
         using var authenticationStop = CancellationTokenSource.CreateLinkedTokenSource(token,
             authentication?.CancellationToken ?? CancellationToken.None);
@@ -65,6 +67,7 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
         async Task<ActionResult> ExecuteLocked()
         {
             token.ThrowIfCancellationRequested();
+            stage?.Invoke(GitActionStage.Validating);
             var git = context.Git; var path = context.Identity.Worktree;
             if ((await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint)
                 throw new GitActionException("ActionIdentityChanged");
@@ -142,12 +145,19 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
             ActionResult? last = null;
             foreach (var command in commands)
             {
+                stage?.Invoke(options.Action switch
+                {
+                    GitAction.Fetch or GitAction.Pull => GitActionStage.Fetching,
+                    GitAction.Push => GitActionStage.Pushing,
+                    _ => GitActionStage.UpdatingBranch
+                });
                 last = await Write(command);
                 if (!last.Success) return last with { Output = output.ToString() };
             }
             if (options.Action == GitAction.Pull)
             {
                 token.ThrowIfCancellationRequested();
+                stage?.Invoke(GitActionStage.CheckingFetchedTip);
                 var afterFetch = await reader.InspectAsync(git, path, token);
                 if (afterFetch.Branch != fresh.Branch || afterFetch.Commit != fresh.Commit || afterFetch.Operation != RepositoryOperation.None ||
                     await ConfigStamp(git, path, token) != context.ConfigStamp ||
@@ -159,6 +169,7 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
                 if (tip != trackingTip) throw new GitActionException("ActionChangedAfterFetch");
                 if ((await Read(git, path, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], token)).StandardOutput.Length != 0)
                     throw new GitActionException("ActionDirty");
+                stage?.Invoke(GitActionStage.FastForwarding);
                 last = await Write(["merge", "--ff-only", "--no-overwrite-ignore", "--no-autostash", "--no-edit", tip]);
             }
             return last! with { Output = output.ToString() };

@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.9.3** applies the revised interaction policy: automatic All Commits/graph/details/paging, branch create/switch, Fetch, fast-forward Pull, Push/tags/upstream and Git/OpenSSH askpass, without a separate program-consent step.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.10.0** moves Git execution into the main workspace: submit Pull/Fetch/Push/branch options, then follow top-center progress and retained Operation details. Automatic All Commits/graph/paging and Git/OpenSSH askpass remain.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -32,7 +32,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#interaction-policy-verification-2026-10-27) distinguishes integration/headless from desktop.
+Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#workspace-pull-verification-2026-10-27) distinguishes integration/headless from desktop.
 
 ## Run
 
@@ -62,9 +62,9 @@ Menus, working toolbar actions and center timer remain; unfinished Stash/Explore
 
 ## Branch and remote actions
 
-Branch: create from concrete starting commit/optional checkout; arrow switches local branches. Fetch chooses remote/all; Pull remote branch → current branch, clean fast-forward only; Push source/remote/destination with optional tags/upstream. Dialog opening is local preparation; the normal action button executes, without another approval checkbox. Unsupported rebase/autostash/force options are omitted.
+Branch: create from concrete starting commit/optional checkout; arrow switches local branches. Fetch chooses remote/all; Pull remote branch → current branch, clean fast-forward only; Push source/remote/destination with optional tags/upstream. Opening options prepares local targets; clicking the normal action closes the modal and starts Git. Follow the actual phase/elapsed time at top center, use Cancel there or under Repository, and read retained output/results through Details → Operation. No extra approval checkbox. Unsupported rebase/autostash/force options are omitted.
 
-Existing restrictions: dirty/untracked/ignored collisions, active sequences, sparse/submodule checkout/Pull, custom SSH/multiple remote URLs, force/rebase/autostash unsupported. Hooks preserved. [Action details](docs/architecture.md#explicit-git-actions-f2a-080). Output/duration/results remain in modal memory, HTTP(S) credentials redacted. Cancel stops owned work, is not undo; fresh inspection before modal exit/retry, tab/window admission currently blocked while active.
+Existing restrictions: dirty/untracked/ignored collisions, active sequences, sparse/submodule checkout/Pull, custom SSH/multiple remote URLs, force/rebase/autostash unsupported. Hooks preserved. [Action details](docs/architecture.md#explicit-git-actions-f2a-080). One last result/output is retained in memory on its repository tab, with HTTP(S) credentials redacted. Cancel stops owned work, is not undo; fresh history/count inspection completes before another action/tab/window close. Main-window authentication prompts remain available after options close. Failures persist visibly, including a distinct refresh failure after Git completes.
 
 ## Headless timing reproduction
 
@@ -83,7 +83,7 @@ First: three samples/isolated 2,500 commits, separate settings/discovery/inspect
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.9.3-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.10.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

@@ -48,6 +48,7 @@ Activation refreshes cached snapshots older than 30 seconds. Right-click a tab f
 Pull shows behind and Push shows ahead of the configured upstream's local snapshot; no remote request is made.
 A dash means counts are pending/unavailable/failed; tooltips explain. Fetch/Pull/Push open explicit operation dialogs.
 Branch opens create/switch dialogs. Pull is fast-forward only; normal Push supports optional tags/upstream. Review targets and click the operation button to execute, including configured hooks/helpers; there is no extra trust checkbox. Unfinished actions/options are omitted; disabled working actions explain what is missing.
+Submitting closes the options window. Follow progress/elapsed time at top center, Cancel there or under Repository, and use Details to see the retained Operation result/output. Pull updates local files/history/counts; dirty worktrees or divergence fail visibly without discarding changes. Repository navigation/exit waits for completion or cancellation and reinspection.
 Git/OpenSSH askpass prompts are available during explicit network actions. Keep Shovel.AskPass.exe and its companion files here. Verify SSH host fingerprints independently before accepting; Shovel does not save credentials, but configured Git helpers may do so.
 Credential Manager browser sign-in, signing, interactive hooks, custom SSH commands, rebase, autostash, force-push, search/filter, file status, diffs, installer and updates remain deferred. Use existing terminal tools for those workflows; cancellation is not undo. Local history needs no approval.
 
