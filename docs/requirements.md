@@ -1,108 +1,115 @@
 # Requirements and acceptance
 
-Updated 2026-10-26. **Confirmed** unless marked proposed. Feature delivery boundaries are owned by [roadmap](roadmap.md); [product](product.md) owns presentation and workflows. IDs below are stable references, not implementation classes.
+Updated 2026-10-27. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
 
 ## Git functionality and compatibility
 
-- **G1:** Plan clone/init/open, status, file/hunk staging and unstaging, commits/amend, branches/tracking, fetch/pull/push, tags, stashes, merge, rebase, cherry-pick, revert, reset, reflog, and conflict resolution. Deferred commands must not appear functional.
-- **G2:** Preserve installed Git for Windows behavior for configuration, credentials, hooks, signing, filters, and tools, subject to explicit trust/network boundaries. Detect missing Git and unsupported versions with remedies; no automatic installation or global configuration edits.
-- **G3:** Model unborn/detached HEAD; dirty worktree; index versus worktree; untracked/ignored, rename/delete, binary and EOL changes. No assumption of 40-character hashes or loose ref storage.
-- **G4:** Detect merge/rebase/cherry-pick/revert in progress; support valid continuation/skip/abort according to phase. Reopening must recover observed state, not execute an old intent.
-- **G5:** Handle multiple remotes, missing/deleted upstreams, ahead/behind/divergence, rejected/non-fast-forward pushes, rewritten history, and branches checked out in other worktrees.
-- **G6:** Detect submodules, linked worktrees, LFS, shallow/partial clones, sparse checkouts, and large repositories. Show unsupported operations explicitly; never silently expand sparse contents, fetch missing objects, bypass LFS, or recursively mutate submodules.
-- **G7:** Preserve exact path identity across Unicode, spaces, leading dashes, unusual valid filenames, long paths, and case-only renames. Display unsupported Windows tree names without promising checkout. Handle permissions, locks, encoding, and external changes without data loss.
+| ID | Requirement |
+| --- | --- |
+| G1 | Deliver real clone/init/open, status, file/hunk stage/unstage, commit/amend, branches/tracking, fetch/pull/push, tags, stashes, merge/rebase/cherry-pick/revert/reset/reflog/conflicts in usable increments. Every requested feature includes working controls and behavior; no placeholder/no-op UI or mock completion. Implement or omit unfinished entry points; state-dependent disabling needs a localized reason. |
+| G2 | Preserve Git for Windows configuration, credentials, hooks, signing, filters/tools. Explain missing/unsupported Git; no automatic install/global config edits. Ordinary use needs no extra repository/program-trust consent. |
+| G3 | Model unborn/detached HEAD, dirty index/worktree, untracked/ignored, rename/delete/binary/EOL. No fixed 40-character hashes or loose-ref assumptions. |
+| G4 | Detect existing merge/rebase/cherry-pick/revert; implement valid continue/skip/abort with recovery work. Reopen observes state, never replays old intent. |
+| G5 | Handle multiple remotes, missing/deleted upstreams, ahead/behind/divergence, rejected pushes, rewritten history and branches occupied in other worktrees. |
+| G6 | Detect submodule/linked-worktree/LFS/shallow/partial/sparse/large-repo cases. Explain unsupported operations; no silent sparse expansion, lazy fetch, LFS bypass or recursive submodule mutation. |
+| G7 | Preserve exact Unicode/space/dash/unusual/long/case-only paths; show unsupported Windows tree names without promising checkout. Handle permissions/locks/encoding/external edits. |
+| G8 | Fixed All Commits: local/remote/tag/current-HEAD ancestry, including detached; excludes reflog-only/unreachable/stash-only. Ignore legacy narrow scopes. No scope/filter selector until revisited. Accessible scope/limits, ref labels/range/loading, complete selected metadata within read limits; no silent paging truncation. |
+| G9 | Automatically load selected startup tab; publish cached tab page immediately, refresh asynchronously when stale. Retain page/selection/scroll and useful rows on failure; reject outdated results. Bound cache/concurrency, no preload/polling; measure full path before optimizing. |
+| G10 | Exact ordinal raw author name/email peers: nonblank email, blank-name equality, no committer/mailmap. Light-yellow peer text/accessibility relationship; normal selection, graph/ref colors, virtualization/keyboard/high contrast preserved. |
+| G11 | Tab menu targets placement tab: refresh/move/close/close others; MMB closes clicked tab. Active close cancels/drains/rejects late reads; inactive close preserves active work. Current operation modal blocks navigation until completion/cancel+reinspection; closing never deletes data. |
+| G12 | History directly below tabs; standard menus/toolbar, centered repo/branch/timer. Older prototype-retention mandate is superseded by G1. Pull/Push badges show real local-upstream behind/ahead after rows, handling unavailable/stale/cancelled states; never fetch implicitly or substitute zero. |
+| G13 | Real Branch create/start/checkout and switch; target-specific Fetch/Pull/Push dialogs with duration/output/results. Normal Execute authorizes the action, no separate trust checkbox; opening does not execute. Initial Pull is clean-worktree fast-forward only. Rebase/autostash/force require implementation before exposure as working options. |
+| G14 | Original local/tag/remote badges, current-tip mark, grouping only configured same-tip upstream; full accessible meaning. Local tracking tip is not a live-server guarantee. |
 
-- **G8 (revised 0.7.0):** fixed All Commits shows ancestry of local branches, remote-tracking branches, tags and current HEAD, including detached HEAD. Exclude reflog-only/unreachable and stash-only history. Remove the scope/filter controls until filtering is revisited; ignore saved narrower scopes. Show ref labels, page range and loading; scope help and limits remain accessible without consuming a heading row. Older/newer navigation must not silently truncate. Selected details expose full message/metadata within explicit read limits.
+## Execution and data handling
 
-- **G9 (2026-10-25):** automatically load the previously selected repository on startup; show cached per-tab history on selection and refresh asynchronously when stale. Preserve scope/page/selection/scroll where practical; keep rows during refresh/failure, reject cancelled/outdated results, and bound cache/concurrency without preloading all repositories or polling. Measure the full path before optimizing; distinguish headless evidence from desktop responsiveness.
-- **G11:** repository-tab context menus act on their placement tab; support refresh, left/right movement, close and close others. Middle-click closes its tab. Closing active reads cancels/drains and rejects late results; inactive-tab closing does not interrupt selected-tab reads. Explicit-operation modals block tab close/switch until completion or deliberate cancellation plus reinspection. Neither path deletes repository data.
-- **G10:** selected row retains normal styling; other rows match the exact raw author name/email pair (ordinal, case-sensitive; nonblank email required), with light-yellow text and an accessible same-author relationship. Preserve graph/ref colors, virtualization, keyboard selection and high-contrast colors.
-- **G12 (0.7.0):** history begins directly below repository tabs. Restore sidebar prototypes and standard top menus/action toolbar; center repository/branch/elapsed operation above tabs. Unimplemented actions stay disabled with localized explanations. Pull/Push show real behind/ahead values from the selected branch's local upstream snapshot, separately from explicit network actions added in 0.8.0. Compare after publishing rows; handle missing upstream, detached/unborn/shallow history, failures/cancellation and stale results explicitly. Never fetch implicitly or claim unavailable values as zero.
+The established work environment is trusted. **Do not add extra safety measures, repository-trust modals, first-use approval layers or repeated consent for routine Git actions.** Use normal operation controls; confirm actual destructive scope and honor required authentication/host verification. This replaces older routine trust-gate requirements.
 
-- **G13 (0.8.0):** Branch split button defaults to a real create dialog (name/start/checkout); its menu lists local branch switching. Fetch/Pull/Push open target-specific modals, never execute on opening, and expose progress/output/duration and failures. Initial Pull is clean-worktree fast-forward only; rebase/autostash/force-push remain disabled. User explicitly authorized implementing these actions before status/diffs.
-- **G14:** distinguish local branches, tags and remote-tracking tips with original icons; mark the checked-out tip, combine only a configured upstream at the same commit, and expose full meaning accessibly. Never label a locally observed tip as a live server guarantee.
-
-## Execution, safety, and privacy
-
-- **E1:** No Git, hooks, scripts, filesystem scanning, or expensive parsing on the UI thread. Use async processes, bounded concurrency/output, streaming, incremental loading, and virtualized views.
-- **E2:** Coordinate mutations including shared worktree state; reject stale results and recheck prerequisites. External clients remain independent; app locks are not global Git transactions.
-- **E3:** Show operation, progress, duration, output and running/input/conflict status. Handle SSH passphrases/host keys, credential-manager/browser auth, signing, hooks, editors, pagers, interactive rebase explicitly; no invisible input waits or inferred waiting state based only on silence.
-- **E4:** Cancellation manages owned descendants, never shared agents/browsers. It is not rollback. Reinspect after cancellation/failure/crash/resume; handle network loss, disk full and stale locks without automatic unsafe cleanup or mutation retries.
-- **S1:** Never silently discard, clean, reset, rewrite history, force-push, bypass hooks, or change global config. Preview destructive scope and confirm; prefer explicit force-with-lease. Explain recovery limits, including untracked/uncommitted content not protected by reflog.
-- **S2 (revised 2026-10-25):** audited local history reads run automatically for opened/restored tabs without approval questions. This explicitly supersedes session-only and remembered read-consent policies. Retain identity/replacement and Git ownership checks; do not bypass safe.directory or grant permission to hooks, filters, helpers, tools, scripts, network access or future mutations. Those execution features need separate trust/workflow gates. Document identity limits and fail safely for invalid, unavailable or replaced targets.
-
-- **S3:** Treat repository data, filenames, remote URLs, output, and release notes as untrusted. Use structured arguments/machine-readable output, literal path handling, and safe text rendering; never shell-interpolate untrusted values.
-- **S4:** Use established credential storage; no plaintext secrets or embedded shared passwords/tokens. Keep Git wording alongside explanations, with sensitive values redacted before logging/export. Bound retained diagnostics; arbitrary hook output may contain secrets.
-- **S5:** No telemetry, analytics, repository uploads, avatar requests, auto-fetch, or other unsolicited network features by default. **Explicit exception:** requested startup updater checks to the disclosed release endpoint; optional periodic checks are configurable. They transmit no repository content. This supersedes the earlier research suggestion that all update checks start disabled. Disclose necessary HTTP metadata/server access logs; do not promise network anonymity.
+| ID | Requirement |
+| --- | --- |
+| E1 | Git/hooks/scripts/filesystem/parsing off UI thread; async processes, bounded streams/concurrency, incremental reads, virtualized views. |
+| E2 | Coordinate related mutations/shared worktrees; reject stale results/recheck prerequisites. External clients are independent; app locks are not global transactions. |
+| E3 | Show operation/progress/duration/output and known running/input/conflict states. Provide visible routes for SSH/host keys/GCM/browser/signing/hooks/editor/pager/rebase input; silence alone never proves waiting. |
+| E4 | Cancel owned descendants, preserve shared agents/browsers, reinspect after failure/cancel/crash/resume. Cancellation is not rollback; handle network/disk/permissions/locks without automatic destructive cleanup/retries. |
+| S1 | No silent discard/clean/reset/rewrite/force push/hook bypass/global-config change. Confirm destructive targets/consequences; prefer force-with-lease. Reflog does not protect all untracked/uncommitted data. |
+| S2 | Opened/restored history reads automatically with no trust/consent dialog or setting. Normal action button authorizes ordinary mutations/configured programs. Identity checks detect replacement/errors internally, not permissions; retain Git ownership checks without changing safe.directory. No unsolicited network actions. |
+| S3 | Render repo/output/release-note text as data; structured arguments, literal paths, machine parsers; no shell interpolation. |
+| S4 | Established credential storage; no plaintext secrets/shared embedded tokens. Redact sensitive output before export/logging; bounded diagnostics, arbitrary hook output can contain secrets. |
+| S5 | No default telemetry/uploads/avatar requests/auto-fetch/unsolicited network. Confirmed exception: disclosed startup updater endpoint; configurable periodic checks, no repo content. Disclose normal HTTP metadata/access logs. Supersedes historical advice to disable update checks. |
 
 ## Localization, accessibility, and lifecycle
 
-- **L1:** Every app-owned menu, dialog, error, tooltip, accessibility label, installer/updater message supports localization from inception. Complete resource messages, plural rules, culture-aware dates/numbers, expansion, RTL, and direction isolation for code/paths/hashes; no sentence concatenation. Git output remains original text.
-- **A1:** Keyboard-only navigation, visible/restored focus, accessible context menus/dialogs, screen-reader semantics including custom graph/diff views, text/icon status beyond color, dark/light themes, high contrast, DPI scaling.
-- **B1:** Preserve tab order/selection and settings. Optional tray with explicit close/exit and no surprise autostart; minimal hidden/idle work. No dependency on hosted services for local Git use.
+| ID | Requirement |
+| --- | --- |
+| L1 | Resource-backed complete menus/dialogs/errors/help/accessibility/install/update messages; plural rules, cultural dates/numbers, text expansion/RTL, direction-isolated code/paths/hashes, no sentence concatenation. Git output remains original. |
+| A1 | Keyboard/context-menu/dialog access, restored visible focus, screen-reader semantics for custom graph/diff, noncolor status, light/dark/high contrast, DPI scaling. |
+| B1 | Persist tab order/selection/settings; optional explicit tray/close/exit, no surprise autostart, minimal hidden/idle work. Local Git needs no hosted service. |
 
 ## Updates and distribution
 
-- **U1:** Install once, in-place updates for approximately 30 Windows 10/11 users. Prefer mature stack-compatible updater, static HTTPS manifest, and per-user no-admin install where feasible. No custom backend/permanent service absent demonstrated need. Flow is specified in [product](product.md#update-experience-confirmed).
-- **U2:** Manifest carries version, package location, verification metadata, release notes; support stable/test channels and a small pilot. Manual check, installed version, meaningful status, and postponement are required.
-- **U3:** Never interrupt an active Git command, hook, auth/signing prompt, tracked external tool, or conflict-resolution workflow. Recheck all sessions/instances immediately before shutdown. Refuse unknown/busy state; prevent new work racing the check. No automatic apply on later launch/exit that bypasses explicit consent and this gate.
-- **U4:** Verify package authenticity before executing/installing; distinguish updater signatures from Windows code signing. Protect keys, verify trusted metadata/package correspondence, reject invalid signatures and wrong channel/architecture/version. A checksum or HTTPS alone is not a publisher signature.
-- **U5:** Offline hosting, timeout, proxy/auth failure, interrupted download, insufficient space, install failure, and crashes have explicit recoverable status. Check/download failures leave the installed version usable. Never mistake a login page for a package; never disable verification to recover.
-- **U6:** Preserve settings, tabs/drafts and recovery data through versioned schema migration. Document bad-release recovery. No automatic rollback claim until supported by chosen updater and tested, including data-schema compatibility.
-- **U7:** Private distribution uses approved access controls without shipped shared secrets. Outside-office access must be documented. Publish complete immutable packages before promoting the manifest; hosting failure must not disable installed apps.
-- **D1:** Clean uninstall, dependency-license notices, signed distribution options. Never remove repositories, installed Git, shared credentials, or external tools. Data-retention choice for app settings/cache is explicit.
+Deferred implementation; these define the requested install-once experience, not prerequisites for unrelated Git features.
+
+| ID | Requirement |
+| --- | --- |
+| U1 | In-place updates for ~30 Windows 10/11 coworkers; mature stack-compatible updater/static HTTPS, preferably per-user/no admin. No custom backend/service without need. [Flow](product.md#update-experience-confirmed). |
+| U2 | Version/package/verification/notes in manifest; stable/test channels, small pilot, manual check, installed version/status/postpone. |
+| U3 | Install only on explicit restart after checking all instances/sessions for Git/hooks/auth/signing/tracked tools/conflicts. Stop new admission before final check; unknown/busy blocks. No implicit next-launch/exit application. |
+| U4 | Verify feed/package authenticity before execution; updater signatures differ from Windows signing. Protect keys; match package/metadata/channel/architecture/version; reject invalid signatures. HTTPS/hash alone is not publisher authentication. |
+| U5 | Recoverable offline/timeout/proxy/auth/interruption/space/install/crash status. Failed check/download leaves installed app usable; reject HTML/login responses, never disable verification. |
+| U6 | Preserve settings/tabs/drafts/recovery through schema migration/backups; document bad-release repair. Claim rollback only after updater and data-compatibility testing. |
+| U7 | Approved private/offsite access without embedded shared secrets. Publish immutable packages before manifest; outage never disables installed app. |
+| D1 | Clean uninstall/license notices/signed distribution options; preserve repos/Git/shared credentials/tools, explicit app-data retention choice. |
 
 ## Verification and acceptance
 
-The cases below translate confirmed requirements into a **proposed verification specification**; numerical budgets and test parameters are not approved or measured results.
+Build/headless evidence is distinct from desktop/live-auth/installed verification. Use meaningful parser/process tests and disposable real-Git integration fixtures with isolated config/test hooks; never destructive tests on working repositories. Live accounts/desktop launches require task authorization. Record date, OS/build/architecture/Git/runtime/fixture/results/limits. **A feature is complete only when its real action works within stated scope.** Mock/layout checks cannot replace Git semantics.
 
-Run meaningful parser/unit and disposable-repository integration tests, followed by actual installed Windows runtime tests. Do not execute destructive tests on user repositories. Use isolated Git config and explicit test hooks; live auth uses approved test accounts. Record OS/build, architecture, Git/runtime versions, fixture and test evidence. Build success is not runtime proof.
+Historical phase gates below preserve regression coverage; old prototype/trust behavior is evidence only. Update assertions when implementing G1/G13/S2. Unrelated runtime matrices do not block independent requested functionality.
 
-| Gate | Pass condition |
+| Gate | Acceptance |
 | --- | --- |
-| Foundation F0 | Restore/build cleanly; real resizable shell, clear unavailable Git controls, English resources, async profile I/O, safe diagnostic fields; corrupt/newer settings and failed/cancelled saves preserve existing bytes. Verify actual launch, layout changes, close and relaunch separately from headless checks. |
-| Metadata F1a | Structured arguments round-trip; both output streams drain within caps; timeouts/cancellation stop owned descendants, including inherited-pipe cases. Trusted discovery rejects missing/older Git. Disposable unborn/detached/linked/conflicted worktrees produce correct metadata. Opened/restored tabs automatically read locally; missing/replaced targets are rejected; shutdown cancels/drains reads; stale completions cannot populate another selection. Verify published app/library files and launch separately. |
-| History F1b | Real topologically ordered rows match CLI fixtures; left graph nodes connect actual parents and right columns show description/author/date/hash. Selection exposes corresponding message/metadata. Bounded expansion pins the tip and preserves selection; shallow/empty/failure states are explicit. Malformed output fails safely; signature helpers never run; stale history cannot enter a new tab. Offscreen WPF checks prove columns, graph cells and limited realized rows; interactive runtime remains a separate gate. |
-| History F1c | Default All Commits matches CLI across local/remote/tag-only ancestors, merges, annotated/nested tags and packed refs. All 2,005 fixture commits remain accessible across bounded pages, without duplicates or broken graph boundaries. Detached/unborn/empty scopes are distinct; scope changes never checkout. Ref changes require refresh; failed/cancelled pages preserve visible rows. Labels, full selected details and paging controls bind headlessly; actual visual/keyboard verification remains separate. |
-| Automatic history F1d | Startup loads only the selected repository without clicks; fresh cached tab switch performs no Git query. Retain page/scope/selection/scroll and old rows on refresh failure/cancellation; reject stale results after switches/close. Reject replaced/missing identities before Git. Verify author relation, normal selection, high-contrast fallback and normal/minimum offscreen layouts. Report repeatable timings, not an unmeasured instant-start claim. |
-| Fast history F1e | No consent dialog/setting for local history. Native process launch preserves arguments, environment, exit codes and ownership/cancellation; explicit Git wrapper remains usable. Tab menu/MMB closes the intended tab, including active/last tabs, without leaking stale results. Repeat first-page benchmarks without reducing scope/page size; packed 100k first/last-page fixture remains bounded. |
-| Branch/network F2a | Disposable bare-remotes verify actual create/switch, fetch, push/tags/upstream, fast-forward pull and rejected divergence. Cover invalid/duplicate names, dirty/sequence/stale identity/refs/config, failed hooks, unavailable remotes, controlled auth failure, cancellation and shared-worktree exclusion. Check modal admission/reinspection and same-tip/different-tip/unrelated-remote/tag badges. Review normal/minimum headless dialogs; real auth, Windows 10 and interactive accessibility remain separate gates. |
-| Askpass F2b | Only approved explicit network operations get an operation-scoped prompt endpoint. Real disposable Git credential requests round-trip through the packaged helper, including Unicode/space paths. Reject stale endpoints, wrong nonce/server, oversized/multiline replies; bound prompt lifetime/count and cancel owned work. Prompt rejection, command exit and timeout close pending UI and retain reconciliation/admission rules. Mask input, clear owned response buffers, never persist payloads; review normal/minimum offscreen prompts. Actual HTTPS/GCM/SSH host verification/signing and keyboard/focus require separately authorized runtime tests. |
-| Workspace F1f | No scope/filter control; history top aligns with repository-tabs bottom at normal/minimum sizes. Prototype toolbar/sidebar actions are visible but cannot execute. Fixed All Commits restores even from old current-branch preferences and includes detached HEAD. Disposable upstream fixtures verify synchronized/ahead/behind/diverged and unavailable states. Slow/failing/cancelled comparison cannot delay/hide rows or leak counts into another tab. Preserve virtualization and author selection; review offscreen renders separately from actual desktop behavior. |
-| Git reads | Status/index/worktree and commit/diff results match CLI fixtures, including empty, detached, binary, renamed, deleted, ignored, EOL and unusual paths. |
-| Mutations | Expected refs/index/files change and unrelated data stays intact; stale hunk and external-edit races fail safely. |
-| Recovery | Conflicts and interrupted sequences survive restart; only valid actions enabled; cancellation owns the correct children and refreshes state. |
-| Failure | Failed hooks/signing, auth/network loss, disk full, permissions and existing locks yield usable UI and preserved diagnostics, without unsafe retry/cleanup. |
-| Trust/privacy | Untrusted repo cannot execute configured test helper; background browsing causes no implicit network fetch; secret fixtures do not appear in retained logs. |
-| Accessibility/localization | Windows 10/11 keyboard and screen-reader pass; 100/150/200% and mixed-monitor DPI; +40% pseudo-localization and RTL without inaccessible/clipped actions. |
+| F0 foundation | Clean restore/build; resizable shell, resources, async profile I/O, bounded diagnostics; invalid/newer schemas and failed/cancelled saves preserve bytes. Actual launch/layout/save/relaunch separately verified. |
+| F1a metadata | Argument/stream caps, timeout/cancellation/descendant/inherited-pipe handling; valid Git discovery. Real unborn/detached/linked/conflicted metadata; automatic restored/open reads, replacement errors, drained shutdown, no stale tab completions. Published files/launch checked separately. |
+| F1b history | CLI-equal topology/parent graph/columns/details, pinned bounded expansion/selection; empty/shallow/failure/malformed cases. No signature helpers/stale rows. Headless graph/virtualization plus separate desktop review. |
+| F1c All Commits | Multi-ref/merge/annotated/nested-tag/packed-ref fixtures; all 2,005 commits reachable without duplicates/broken page edges. Detached/unborn/empty distinctions, no checkout from scope; changed refs require refresh; failed pages retain rows; full details/labels. |
+| F1d automatic | Startup selected repo without clicks; fresh cached tab has zero Git calls. Retain view state/rows, bounded eviction, obsolete-result rejection and replacement checks. Author relation/selection/high contrast, normal/minimum layouts, measured timings. |
+| F1e fast history | No history consent UI; native launch preserves args/env/exit/ownership. Custom wrapper works. Menu/MMB targets correct tab even active/last; no stale leaks. Equal scope/page benchmarks and packed 100k first/last pages. |
+| F1f workspace/counts | No selector; history flush below tabs at normal/minimum sizes. Fixed scope restored from old preferences with detached HEAD. Real upstream synchronized/ahead/behind/diverged/unavailable cases; comparison never delays rows/leaks across tabs. Historical disabled controls are debt, not required acceptance. |
+| F2a branch/network | Real create/switch/fetch/push/tags/upstream/fast-forward and rejected divergence on disposable remotes. Invalid/duplicate/dirty/sequence/stale refs/config/identity, hooks/remote failure, cancellation/shared exclusion. Normal Execute needs no trust checkbox. Reinspection/badges/headless layouts; live auth/Windows 10/accessibility separate. |
+| F2b askpass | Operation-only packaged helper; real credential round-trip incl. Unicode/spaces. Endpoint/nonce/server validation, oversized/multiline rejection, bounded lifetime/count, cleared replies/no persistence. Cancel/exit/timeout closes prompts/reconciles. Masked accessible prompts and offscreen review; real provider/host/signing/focus separate. |
+| Reads | CLI-matching status/index/worktree/files/diffs: empty/detached/binary/rename/delete/ignored/EOL/unusual paths. |
+| Mutations/recovery | Expected refs/index/files, unrelated data intact; stale hunks/external edits; conflicts/interrupted sequences survive reopen with valid actions. Owned cancellation/reinspection. |
+| Failures | Hook/signing/auth/network/disk/permission/lock failures preserve usable UI/diagnostics without destructive retry. |
+| Routine consent/privacy | No repository-trust/first-use/program-consent layer for ordinary actions. Background reads request no network/helper; secret fixtures absent from retained logs. Destructive/auth prompts remain targeted. |
+| Accessibility/localization | Windows 10/11 keyboard/screen reader; 100/150/200%/mixed DPI; +40% pseudo-localization/RTL without inaccessible/clipped actions. |
 
 ### Proposed performance budgets (not measurements)
 
-Release build, documented 4-core/8-GB/SSD reference machine; record antivirus/cache conditions. At least 20 runs for p95 claims; cold runs after reboot, warm runs after prior launch. Separate shell readiness from Git load; report child-process peaks as well as app memory.
+Document 4-core/8-GB/SSD reference host, antivirus/cache conditions and child peaks; >=20 runs for p95. Cold after reboot, warm after prior launch; distinguish shell from Git load.
 
-| Metric | Proposed acceptance |
+| Metric | Proposed limit |
 | --- | --- |
-| Interactive shell | Warm p95 <=1 s; cold p95 <=2.5 s |
-| Initial status + 200 commits | p95 <=2 s on 10,000-file/100,000-commit fixture |
-| Idle private bytes | <=180 MiB for one repo; <=300 MiB with ten restored tabs/inactive views unloaded |
-| Idle CPU | <=0.2% total CPU average over 5 min; zero periodic Git launches while unchanged |
-| Input latency under load | p95 <=100 ms; no app-caused UI-thread stall >200 ms |
-| Installer | Compressed self-contained x64 <=100 MiB, excluding separately installed Git |
-| Scaling | Million-commit fixture remains interactive; bounded caches, no full-history UI allocation |
+| Interactive shell | Warm p95 <=1 s; cold <=2.5 s |
+| Status + 200 rows | p95 <=2 s on 10k-file/100k-commit fixture |
+| Idle private bytes | <=180 MiB one repo; <=300 MiB ten tabs/inactive views unloaded |
+| Idle CPU | <=0.2% total average/5 min; zero periodic Git launches unchanged |
+| Input | p95 <=100 ms; no app UI-thread stall >200 ms |
+| Installer | Self-contained compressed x64 <=100 MiB, excluding Git |
+| Scaling | Interactive million commits, bounded caches/no full-history UI allocation |
 
 ### Update acceptance matrix
 
-Test real signed N -> N+1 installations on agreed Windows 10/11 builds, standard user, both channels. Use disposable user profiles/repositories and a controllable test endpoint; do not configure production hosting for tests.
+Real signed N → N+1, agreed Windows 10/11 builds, standard user, both channels, disposable profiles/repos and controlled endpoint.
 
-| Test | Required result |
+| Case | Required result |
 | --- | --- |
-| Successful upgrade | Explicit restart installs verified N+1 in place, no uninstall step/elevation where supported; version/status correct. |
-| Postpone | N remains usable; no install on idle/ordinary exit/next startup without renewed explicit action. |
-| Hosting unavailable | Offline/DNS/timeout/5xx and proxy/401/403 failures do not block launch or Git; manual retry works; no tight retry loop. |
-| Invalid content | Altered manifest/package, wrong signer, truncated response, wrong architecture/channel and login HTML rejected before execution. |
-| Interrupted download | Cancel, connectivity loss and app crash leave N usable; retry safely restarts or resumes then re-verifies all content. |
-| Preserved data | Settings, tab order/selection, draft and recovery markers preserved; migration backup exists; invalid/newer schema handled without overwriting it. |
-| Busy installation | Each Git/hook/auth/external-tool/conflict state blocks install, including activity starting between click and shutdown and in another app instance. |
-| Resource/install failure | Low disk, locked files, denied permissions and installer/app crash do not corrupt user data; follow documented repair path. No untested rollback assertion. |
-| Bad release/channel | Pilot receives test release only; stable unaffected. Withdraw bad manifest and exercise higher-version corrective release plus documented offline repair. |
-| Publication race | Package exists and verifies before manifest exposure; manifest/signature mismatch fails closed and later recovers; old installed version remains usable. |
+| Success | Explicit restart installs verified N+1 in place, correct version/status, no routine uninstall/elevation where supported. |
+| Postpone | N usable; no later idle/exit/startup install without explicit action. |
+| Hosting | Offline/DNS/timeout/5xx/proxy/401/403 leaves startup/Git usable; manual retry, no tight loop. |
+| Invalid content | Reject altered feed/package, wrong signer/architecture/channel, truncation/login HTML before execution. |
+| Interrupted download | Cancel/loss/crash leaves N usable; resumed/restarted bytes fully reverified. |
+| Data | Preserve settings/tabs/drafts/recovery; migration backup; invalid/newer schema not overwritten. |
+| Busy/race | Git/hook/auth/tool/conflict blocks, including work starting before shutdown or in another instance. |
+| Resource/install failure | Low disk/locked files/permissions/installer/app crash preserves data; documented repair, no untested rollback claim. |
+| Bad release/channel | Test pilot isolated from stable; withdraw manifest, higher corrective release and offline repair tested. |
+| Publication | Package verifies before manifest; signature mismatch rejects, later retry recovers; installed version usable. |
