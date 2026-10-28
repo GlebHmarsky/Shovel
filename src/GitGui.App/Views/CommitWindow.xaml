@@ -7,6 +7,16 @@
  UseLayoutRounding="True" AutomationProperties.AutomationId="CommitWindow">
  <Window.Resources>
   <BooleanToVisibilityConverter x:Key="Visible"/>
+  <ContextMenu x:Key="ChangeFileMenu" Closed="OnFileMenuClosed" PreviewKeyDown="OnFileMenuKeyDown" MinWidth="260" FlowDirection="{x:Static loc:UiText.Direction}" AutomationProperties.HelpText="{Binding SelectionHelp}">
+   <MenuItem Header="{loc:Text Key=FileMenuOpen}" Command="{Binding OpenCommand}" InputGestureText="{loc:Text Key=FileMenuOpenKeys}" ToolTip="{Binding OpenHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding OpenHelp}"/>
+   <MenuItem Header="{loc:Text Key=FileMenuExplorer}" Command="{Binding ExplorerCommand}" ToolTip="{Binding ExplorerHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding ExplorerHelp}"/>
+   <Separator/>
+   <MenuItem Header="{Binding StageLabel}" Command="{Binding StageCommand}" InputGestureText="{loc:Text Key=FileMenuStageKeys}" ToolTip="{Binding MutationHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding MutationHelp}"/>
+   <MenuItem Header="{Binding AllLabel}" Command="{Binding AllCommand}" InputGestureText="{loc:Text Key=FileMenuAllKeys}" ToolTip="{Binding MutationHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding MutationHelp}"/>
+   <Separator/>
+   <MenuItem Header="{loc:Text Key=FileMenuCopy}" Command="{Binding CopyCommand}" InputGestureText="{loc:Text Key=FileMenuCopyKeys}" AutomationProperties.HelpText="{Binding SelectionHelp}"/>
+   <MenuItem Header="{loc:Text Key=FileMenuCopyFull}" Command="{Binding CopyFullCommand}" InputGestureText="{loc:Text Key=FileMenuCopyFullKeys}" AutomationProperties.HelpText="{Binding SelectionHelp}"/>
+  </ContextMenu>
   <Style x:Key="FileTable" TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
    <Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="IsReadOnly" Value="True"/>
    <Setter Property="CanUserAddRows" Value="False"/><Setter Property="CanUserDeleteRows" Value="False"/><Setter Property="CanUserSortColumns" Value="False"/>
@@ -15,7 +25,7 @@
    <Setter Property="SelectionMode" Value="Extended"/><Setter Property="SelectionUnit" Value="FullRow"/>
    <Setter Property="EnableRowVirtualization" Value="True"/><Setter Property="EnableColumnVirtualization" Value="True"/>
    <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/><Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
-   <Setter Property="RowStyle"><Setter.Value><Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}"><Setter Property="ToolTip" Value="{Binding Details}"/><Setter Property="AutomationProperties.Name" Value="{Binding Details}"/></Style></Setter.Value></Setter>
+   <Setter Property="RowStyle"><Setter.Value><Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}"><Setter Property="ToolTip" Value="{Binding Details}"/><Setter Property="AutomationProperties.Name" Value="{Binding Details}"/><Setter Property="ContextMenu" Value="{StaticResource ChangeFileMenu}"/><EventSetter Event="PreviewMouseRightButtonDown" Handler="OnFileRightButtonDown"/><EventSetter Event="ContextMenuOpening" Handler="OnFileMenuOpening"/></Style></Setter.Value></Setter>
   </Style>
   <Style x:Key="FileText" TargetType="TextBlock"><Setter Property="Margin" Value="6,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style>
  </Window.Resources>

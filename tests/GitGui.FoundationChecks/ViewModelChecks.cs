@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false, bool stashesOnly = false)
+    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false, bool stashesOnly = false, bool fileMenusOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -37,7 +37,7 @@ internal static partial class Program
             // A bounded watchdog makes a harness/lifetime regression fail instead of hanging packaging.
             // The full aggregate now includes recovery and stash fixtures; keep individual
             // operation timeouts unchanged while allowing their sequential total to finish.
-            var focused = localOnly || commitOnly || hunksOnly || commitFilesOnly || fastChangesOnly || recoveryOnly || stashesOnly;
+            var focused = localOnly || commitOnly || hunksOnly || commitFilesOnly || fastChangesOnly || recoveryOnly || stashesOnly || fileMenusOnly;
             var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(focused ? 8 : 12) };
             watchdog.Tick += (_, _) => { watchdog.Stop(); frame.Continue = false; };
             watchdog.Start();
@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (fileMenusOnly) { await RunFileMenuChecksAsync(); return; }
             if (stashesOnly) { await RunStashChecksAsync(); return; }
             if (recoveryOnly) { await RunRecoveryChecksAsync(); return; }
             if (localOnly) { await RunLocalChangesChecksAsync(); return; }
@@ -248,6 +249,7 @@ internal static partial class Program
             await RunPullChecksAsync();
             await RunRecoveryChecksAsync();
             await RunStashChecksAsync();
+            await RunFileMenuChecksAsync();
             await RunAuthenticationViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)

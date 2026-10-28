@@ -539,4 +539,30 @@ Commit: {2}
 Message: {3}
 
 This removes the saved entry without applying it. Its contents may become unrecoverable after Git cleanup. Working files are not changed. No complete undo is promised.</value></data>
+  <data name="FileMenuOpen" xml:space="preserve"><value>Open</value></data>
+  <data name="FileMenuExplorer" xml:space="preserve"><value>Show in File Explorer</value></data>
+  <data name="FileMenuCopy" xml:space="preserve"><value>Copy path</value></data>
+  <data name="FileMenuCopyFull" xml:space="preserve"><value>Copy full path</value></data>
+  <data name="FileMenuOpenKeys" xml:space="preserve"><value>Ctrl+Shift+Alt+O</value></data>
+  <data name="FileMenuStageKeys" xml:space="preserve"><value>Enter</value></data>
+  <data name="FileMenuAllKeys" xml:space="preserve"><value>Ctrl+Shift+Alt+S</value></data>
+  <data name="FileMenuCopyKeys" xml:space="preserve"><value>Ctrl+C</value></data>
+  <data name="FileMenuCopyFullKeys" xml:space="preserve"><value>Ctrl+Shift+C</value></data>
+  <data name="FileMenuSelection" xml:space="preserve"><value>Selected files: {0}. This menu keeps these targets even if the list changes.</value></data>
+  <data name="FileMenuStale" xml:space="preserve"><value>The file list changed. Reopen the menu to review the current targets.</value></data>
+  <data name="FileMenuStageHelp" xml:space="preserve"><value>Change the index for the selected files, or all files listed on this side. Shift does not change these explicit menu actions.</value></data>
+  <data name="FileMenuSingle" xml:space="preserve"><value>Select one file for this action. Staging and copying paths support multiple files.</value></data>
+  <data name="FileMenuDeleted" xml:space="preserve"><value>This entry is deleted. Show its containing folder in File Explorer instead.</value></data>
+  <data name="FileMenuOpenHelp" xml:space="preserve"><value>Open the current working file using its Windows default application. This does not open the saved staged version.</value></data>
+  <data name="FileMenuExplorerHelp" xml:space="preserve"><value>Select the working file in Explorer. If it is missing, open the nearest existing containing folder.</value></data>
+  <data name="FileMenuBusy" xml:space="preserve"><value>Wait for the current command or file handoff to finish.</value></data>
+  <data name="FileMenuCopied" xml:space="preserve"><value>Paths copied, one per line.</value></data>
+  <data name="FileMenuCopyFailed" xml:space="preserve"><value>The paths could not be copied. The clipboard may be busy; try again.</value></data>
+  <data name="FileMenuOpening" xml:space="preserve"><value>Opening the selected file location in Windows…</value></data>
+  <data name="FileMenuOpened" xml:space="preserve"><value>The file request was handed to Windows. Refresh Local Changes after editing externally.</value></data>
+  <data name="FileMenuOpenedFolder" xml:space="preserve"><value>The file is missing or is a directory; its existing folder was opened.</value></data>
+  <data name="FileMenuOpenFailed" xml:space="preserve"><value>Windows could not open the file or folder, or did not respond in time. Check the default application, permissions and path. No Git changes were made.</value></data>
+  <data name="FileMenuMissingFile" xml:space="preserve"><value>The working file is missing or is not a regular file. Use Show in File Explorer or refresh the file list.</value></data>
+  <data name="FileMenuLinkedPath" xml:space="preserve"><value>Opening paths through filesystem links is not supported yet. Use your existing file tools for this path.</value></data>
+  <data name="FileMenuShellBusy" xml:space="preserve"><value>A previous Windows file handoff is still running. Try again after it finishes.</value></data>
 </root>

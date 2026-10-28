@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.0 — 2026-10-28
+
+- Add right-click menus to staged and unstaged Local Changes rows: selected/all Stage or Unstage, Open, Show in File Explorer, Copy path and Copy full path. Preserve a containing multiselection and freeze menu targets; refreshed snapshots disable stale index actions. Menus do no Git or filesystem preparation, and a newly selected diff waits until the menu closes.
+- Add real file-grid/menu shortcuts and visible shortcut labels in shared dark menus. Explicit menu actions ignore the toolbar's Shift-to-all modifier; Enter inside a popup keeps normal highlighted-item behavior.
+- Hand explicit working-file requests to Windows away from the UI thread, with bounded admission/wait, localized failures and missing-file folder fallback. Never launch external applications or modify the clipboard merely by opening a menu.
+
 ## 0.18.0 — 2026-10-28
 
 - Add Stashes in the sidebar and Repository menu: create with optional untracked files, inspect saved tracked/staged/unstaged/untracked files and text/binary diffs, apply, pop and confirmed drop. Optional staged-state restoration controls Apply/Pop explicitly.

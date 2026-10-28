@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.18.0: Stashes and sequence recovery; scoped file-action reconciliation, quiet background scans and binary/LFS cards; modal Local Changes/diffs/file and hunk staging/commit/amend/Commit and Push, history/committed changes, branch/network options and Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.19.0: Local Changes file menus, Stashes and sequence recovery; scoped file-action reconciliation, quiet scans and binary/LFS cards; modal diffs/file and hunk staging/commit/amend/Commit and Push, history/committed changes, branch/network options and Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -22,6 +22,7 @@ Historical platform baseline: x64 Windows 10 22H2/11, ARM64 later, no x86 plan; 
 | App/Views/GitActionWindow.xaml; ViewModels/GitActionViewModel.cs | Options close on submission; one task with phase/output/cancel/reinspection |
 | App/Views/AuthenticationWindow.xaml | Masked/confirm/informational owned prompts |
 | App/Views/CommitWindow.xaml(.cs); ViewModels/CommitViewModel.cs; ShellChanges.cs | Owned commit workspace, Shift variants, per-tab cache/draft, diff selection/cancellation and background count |
+| App/ViewModels/ChangeFileMenu.cs; Services/FileShellActions.cs | Captured file-menu targets/commands and explicit asynchronous Windows file handoff |
 | App/Views/StashWindow.xaml(.cs); ViewModels/StashViewModel.cs; ShellStashes.cs; Core/Git/Stashes.cs | Cached stash modal, saved-object inspection, serialized create/apply/pop/drop and partial-success handling |
 | App/ViewModels/ShellActions.cs | Preparation/admission/reconciliation |
 | App/ViewModels/ | Shell/tab/row presentation and command/observable bases |
@@ -149,6 +150,14 @@ Sequential fetch-all/multiple push refs can partially succeed. Git 2.51.1 local 
 Writes: existing runner, 5 min/command, 1 MiB output; decode/redact off dispatcher, bounded session Operation details only. HTTP(S) userinfo/query secrets redacted; arbitrary helper output may still contain secrets. Show running/duration/cancel; no wait inference from silence, automatic retry or rollback claim.
 
 F2b supersedes cached-only auth. Core without broker stays noninteractive/strict known-host; custom core.sshCommand/unrecognized bundled layout rejected. Default transports file/http/https/ssh/git allowed, others denied unless explicit Git per-protocol permission overrides. Startup requests none. RefBadge reuses CommitRef.Upstream, no extra startup query; original vectors inherit row/system colors, preserve virtualization. No provider/avatar network assets.
+
+## Local Changes file menus (0.19.0)
+
+`CommitWindow` owns row right-click/focus/native menu lifecycle and file-grid shortcuts. `ChangeFileMenu` captures selected/all rows and the exact `WorkingCopyContext` per invocation; command readiness follows the owner, while a different context disables captured Git actions. Explicit entry arrays feed the existing `StartAction`/scoped reconciliation path, independently of `ShiftHeld`; no new Git mutation implementation. A menu keeps containing multiselection, replaces an unrelated selection, and defers the new selection's diff until close. No view construction query, polling or menu-time filesystem checks. Virtualized row containers are never used as late operation targets. Resource-backed shortcut labels use the shared native WPF menu template; popup Enter remains standard highlighted-item activation.
+
+Clipboard work uses an injectable user-interaction boundary on the UI/STA thread; raw relative or normalized absolute paths are newline-separated. Explicit Open/Explorer invokes `FileShellActions` on one background STA thread, with COM initialization and a 15-second cancellable caller wait. The single native handoff remains admitted until Windows returns, even after caller timeout, preventing accumulated stuck shell workers. Cancellation/closing prevents late UI publication; it cannot undo an already sent request or terminate an existing/shared editor. External application lifetime is not tracked. Path resolution is shared with Core, followed by off-thread existence/reparse-component checks. Open accepts a regular working file via Windows default association; Explorer selects an exact PIDL, avoiding command-line path interpolation. Missing files fall back to an existing containing directory. Local Git/history remains independent of shell completion; no file contents or arbitrary shell exceptions enter diagnostics.
+
+Official APIs checked 2026-10-28: [WPF ContextMenuOpening](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/how-to-handle-the-contextmenuopening-event), [UseShellExecute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0), [SHOpenFolderAndSelectItems](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shopenfolderandselectitems). Tests substitute clipboard/Windows dispatch to avoid desktop side effects, while exercising real Git mutations, filesystem target planning and offscreen WPF. Actual default-app/Explorer/clipboard/keyboard focus remains separately unverified. Discard, external diff, blame/file history, ignore/LFS, selected-file stash and patch export stay deferred.
 
 ## Stashes (0.18.0)
 

@@ -4,10 +4,10 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.18.0 complete: working Stashes, verified preview and local release commit. Broader theme work remains P2.
+0.19.0 delivered: Local Changes right-click menus. Broader theme work remains P2.
 
-- [x] **P1 — Stash workflows.** Cached create/inspect/apply/pop/confirmed drop; real saved-content diffs, staged-state option, retained conflicts/partial results and shared progress/cancellation. Eleven disposable stash checks pass.
-- [x] **P1 — Deliver 0.18.0.** 187 checks pass, normal/minimum offscreen review, matching versioned preview, evidence/docs and local commit. No interactive launch.
+- [x] **P1 — Local Changes file menus.** Selected/all Stage and Unstage, Open/Explorer and path copying; preserved multiselection, captured targets, no opening-time Git work, shortcuts and localized states.
+- [x] **P1 — Deliver 0.19.0.** 192 checks, reviewed offscreen menus/normal/minimum layouts, matching preview and documentation. No interactive launch or external app/clipboard manipulation during checks. [Evidence](docs/roadmap.md#current-status).
 
 
 ## Next priorities
@@ -23,6 +23,7 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Backlog
 
+- [ ] **P2 — Extend file context menus.** Confirmed-target Discard, configured external diff, file history/blame, ignore/LFS actions, selected-file stash and patch export; add each only with working execution and disposable checks. Current menus cover staging, file opening/Explorer and path copying.
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
 
@@ -39,6 +40,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.19.0 / 2026-10-28:** Local Changes right-click menus, real selected/all index actions, asynchronous Windows file handoff and path copying. 192 checks; zero opening-time Git calls, 11 ms warmed offscreen menu layout, normal/minimum review and verified package. [Evidence and limits](docs/roadmap.md#current-status).
 
 - [x] **0.18.0 / 2026-10-28:** stash create/inspect/apply/pop/drop, cached opening and real saved-object diffs; exact-target deletion, retained conflicts/partial results and cancellation. 187 checks; zero opening-time Git calls, normal/minimum offscreen review and verified package. [Evidence and timing limits](docs/roadmap.md#current-status).
 

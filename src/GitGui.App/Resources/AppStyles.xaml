@@ -79,14 +79,16 @@
     <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="Padding" Value="8,5"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
       <Border x:Name="Surface" Background="Transparent" Padding="{TemplateBinding Padding}"><Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
-        <TextBlock x:Name="Arrow" Grid.Column="1" Text="›" Margin="14,0,0,0" Visibility="Collapsed"/>
+        <TextBlock x:Name="Shortcut" Grid.Column="1" Text="{TemplateBinding InputGestureText}" Margin="24,0,0,0"/>
+        <TextBlock x:Name="Arrow" Grid.Column="2" Text="›" Margin="14,0,0,0" Visibility="Collapsed"/>
         <Popup x:Name="PART_Popup" IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}" Placement="Right" AllowsTransparency="True" Focusable="False" PlacementTarget="{Binding ElementName=Surface}">
           <Border Background="{DynamicResource Theme.Raised}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" Padding="2"><ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer></Border>
         </Popup>
       </Grid></Border>
       <ControlTemplate.Triggers>
+        <Trigger Property="InputGestureText" Value=""><Setter TargetName="Shortcut" Property="Visibility" Value="Collapsed"/></Trigger>
         <Trigger Property="HasItems" Value="True"><Setter TargetName="Arrow" Property="Visibility" Value="Visible"/></Trigger>
         <Trigger Property="Role" Value="TopLevelHeader"><Setter TargetName="PART_Popup" Property="Placement" Value="Bottom"/><Setter TargetName="Arrow" Property="Visibility" Value="Collapsed"/></Trigger>
         <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Theme.Hover}"/><Setter Property="Foreground" Value="{DynamicResource Theme.SelectionText}"/></Trigger>

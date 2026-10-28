@@ -95,7 +95,8 @@ public sealed partial class RepositoryReader
         return new FileDiff(kind, lines, oldBytes, newBytes, added, removed, patch) { HunkAvailability = availability, HunkPreview = preview, OldLfs = oldInfo.Lfs, NewLfs = newInfo.Lfs };
     }, token);
 
-    internal static string WorkingCopyPath(string root, string relative)
+    // Pure path resolution, shared by explicit file commands. No filesystem access.
+    public static string WorkingCopyPath(string root, string relative)
     {
         if (string.IsNullOrEmpty(relative) || relative.IndexOf('\0') >= 0 || Path.IsPathRooted(relative) ||
             relative.Split('/', '\\').Any(part => part == ".." || part.Equals(".git", StringComparison.OrdinalIgnoreCase)))

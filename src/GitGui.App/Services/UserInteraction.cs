@@ -15,6 +15,8 @@ public interface IUserInteraction
     void ShowGitAction(GitActionViewModel model) { }
     Task ShowCommitAsync(CommitViewModel model) => Task.CompletedTask;
     Task ShowStashesAsync(StashViewModel model) => Task.CompletedTask;
+    void CopyFilePaths(string text) => throw new NotSupportedException();
+    Task<bool> OpenWorkingFileAsync(string root, string relative, bool explorer, CancellationToken token) => throw new NotSupportedException();
     bool ConfirmAmend(string branch, string hash) => false;
     bool ConfirmRecovery(string message, string title) => false;
     void ShowActionError(string message) { }
@@ -25,6 +27,8 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public void CopyFilePaths(string text) => Clipboard.SetText(text);
+    public Task<bool> OpenWorkingFileAsync(string root, string relative, bool explorer, CancellationToken token) => FileShellActions.OpenAsync(root, relative, explorer, token);
     public Task ShowStashesAsync(StashViewModel model) { new StashWindow(model) { Owner = Owner }.ShowDialog(); return Task.CompletedTask; }
     public bool ConfirmRecovery(string message, string title) => MessageBox.Show(Owner, message, title,
         MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;

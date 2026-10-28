@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.18.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.19.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -52,6 +52,14 @@ Opening binds cached rows/draft immediately, then reads after layout; it never f
 **0.16.0 file-action feedback:** file Stage/Unstage updates affected rows from real Git status before a wider background scan. Keep selection on the same path when its side changes. A short trailing delay coalesces successive actions; cached rows remain usable, newer generations supersede old reads and a failed full refresh visibly marks retained rows stale. Bottom activity bars and the ticking commit footer are removed. Static results/errors, Refresh/Cancel, in-memory phase timings and command-only top-center duration remain. Ordinary background work adds no throbber or polling.
 
 Draft, file selection and last output are session-only per tab; successful commit clears the draft, failed commit retains it. Closing the tab/app discards that draft; no crash-safe draft persistence yet. [Architecture](architecture.md#local-changes-and-commit-0130) owns bounds and execution details.
+
+## Local Changes file menus (0.19.0)
+
+Right-click a staged or unstaged/untracked/conflicted row for **Stage/Unstage**, **Stage all/Unstage all**, **Open**, **Show in File Explorer**, **Copy path** and **Copy full path**. A selected row keeps its multiselection; a different row becomes the single target. Blank space has no file menu. The menu captures its targets, so refresh cannot silently redirect a command; reopen a stale menu. Opening starts no Git/filesystem preparation. A right-click selection's diff waits until the menu closes; existing useful content remains visible.
+
+Stage/Unstage operates on the captured selection; the explicit All entry uses all rows on that side. Shift does not expand these menu commands. In a file grid, **Enter** stages/unstages selected files, **Ctrl+Shift+Alt+S** acts on all listed files, **Ctrl+C / Ctrl+Shift+C** copies relative/full paths, and **Ctrl+Shift+Alt+O** opens one file. **Shift+F10 / Menu key** uses the native context menu; Enter inside the popup activates its highlighted item. Shortcuts are scoped to file grids/menus, leaving message editing and diff selection alone.
+
+Open/Explorer require one selected row. Open uses the **current working file** and its Windows default application, even from the staged list; it does not export staged content. A deleted row explains why Open is unavailable; Explorer selects an existing file or opens the nearest existing containing folder. Copies preserve exact paths, one per line. Clipboard/default-app/permission failures are localized without logging contents. File handoff is asynchronous and bounded, but an already sent Windows request cannot be retracted. External application lifetime is not tracked; refresh after editing. Discard/delete, external diff, blame/file history, ignore/LFS management, selected-file stash and patch export are deferred rather than present as nonfunctional menu entries.
 
 ## Stashes (0.18.0)
 

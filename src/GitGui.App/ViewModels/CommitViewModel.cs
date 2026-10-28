@@ -32,7 +32,7 @@ public sealed record DiffRow(DiffLine Line, int HunkId = -1)
         : UiText.Format("DiffHunkAccessible", HunkId + 1, UiText.Get("DiffLine" + Kind), OldLine, NewLine, Text);
 }
 
-public sealed class CommitViewModel : ObservableObject
+public sealed partial class CommitViewModel : ObservableObject
 {
     private readonly GitActions _actions;
     private readonly RepositoryReader _reader;
@@ -249,6 +249,7 @@ public sealed class CommitViewModel : ObservableObject
     }
     private void QueueDiff(ChangeRow? row, bool retain = false)
     {
+        if (_fileMenuOpen) { _fileMenuDiffPending = true; return; }
         _diffCancel?.Cancel(); var previous = DiffTask; var generation = ++_diffGeneration;
         HasDiffError = false;
         _fileDiff = null; _diffChange = row; _selectedHunks = [];
@@ -302,12 +303,12 @@ public sealed class CommitViewModel : ObservableObject
         _selectedHunks = rows.Where(row => row.HunkId >= 0 && current.Contains(row)).Select(row => row.HunkId).Distinct().Order().ToArray();
         RefreshCommands();
     }
-    private void StartAction(WorkingCopyAction action, HunkSelection? hunks = null)
+    private void StartAction(WorkingCopyAction action, HunkSelection? hunks = null, IReadOnlyList<ChangeRow>? explicitEntries = null)
     {
         if (!Ready) return;
         var context = _state.Context!; var push = action == WorkingCopyAction.Commit && ShiftHeld;
         if (action == WorkingCopyAction.Commit && Amend && !_interaction.ConfirmAmend(context.Repository.Branch ?? UiText.Get("NoBranch"), context.Repository.Commit!)) return;
-        var entries = hunks is not null ? new[] { _diffChange! } : action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : [];
+        var entries = explicitEntries ?? (hunks is not null ? new[] { _diffChange! } : action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : []);
         var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), Message, Amend, hunks);
         _mutating = true; HasMutation = true; _diffCancel?.Cancel(); _readCancel?.Cancel(); _state.ReadAt = default;
         // Cancel obsolete read generations, but do not put their drain on the write's critical
@@ -423,7 +424,8 @@ public sealed class CommitViewModel : ObservableObject
     public void Cancel() { _readCancel?.Cancel(); _diffCancel?.Cancel(); _actionCancel?.Cancel(); }
     public async Task CloseAsync()
     {
-        _closed = true; ShiftHeld = false; Cancel();
+        _closed = true; ShiftHeld = false; _fileCancel?.Cancel(); Cancel();
+        await FileTask;
         await LoadingTask; await DiffTask; await OperationTask; _timer.Stop();
     }
 }

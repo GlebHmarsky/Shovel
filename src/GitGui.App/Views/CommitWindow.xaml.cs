@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 using GitGui.App.ViewModels;
 
 namespace GitGui.App.Views;
@@ -10,11 +12,14 @@ public partial class CommitWindow : Window
 {
     private readonly CommitViewModel _model;
     private bool _closing, _allowClose;
+    private ContextMenu? _openFileMenu;
     public CommitWindow(CommitViewModel model)
     {
         _model = model; DataContext = model; InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         Loaded += async (_, _) => await _model.StartLoading();
         PreviewKeyDown += OnKeyState; PreviewKeyUp += OnKeyState;
+        PreviewMouseRightButtonUp += (_, _) => Dispatcher.BeginInvoke(() => { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); }, DispatcherPriority.Background);
+        PreviewMouseLeftButtonDown += (_, _) => { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); };
         Deactivated += (_, _) => _model.ShiftHeld = false;
         Activated += (_, _) => _model.ShiftHeld = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         Closing += OnClosing;
@@ -22,7 +27,80 @@ public partial class CommitWindow : Window
     private void OnKeyState(object sender, KeyEventArgs e)
     {
         _model.ShiftHeld = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        if (e.Key == Key.Escape) { e.Handled = true; Close(); }
+        if (e.RoutedEvent != Keyboard.PreviewKeyDownEvent) { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); return; }
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            if (_openFileMenu?.IsOpen == true) _openFileMenu.IsOpen = false; else Close();
+            return;
+        }
+        var table = FindFileTable(e.OriginalSource as DependencyObject);
+        if (table is null) return;
+        if (e.Key == Key.Apps || e.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift) { _model.BeginFileMenu(); return; }
+        if (_openFileMenu?.IsOpen != true) _model.EndFileMenu();
+        using var menu = _model.CreateFileMenu(table == StagedTable);
+        e.Handled = RunShortcut(menu, e.Key == Key.System ? e.SystemKey : e.Key, Keyboard.Modifiers);
+    }
+    private DataGrid? FindFileTable(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source == UnstagedTable || source == StagedTable) return (DataGrid)source;
+            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        return null;
+    }
+    private void OnFileRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not DataGridRow { Item: ChangeRow change } row) return;
+        _model.BeginFileMenu(); SelectContextRow(row, change); e.Handled = true;
+    }
+    private void SelectContextRow(DataGridRow row, ChangeRow change)
+    {
+        var table = change.Change.Group == GitGui.Core.Git.ChangeGroup.Staged ? StagedTable : UnstagedTable;
+        if (!table.SelectedItems.Contains(change)) { table.SelectedItems.Clear(); table.SelectedItem = change; }
+        row.Focus();
+    }
+    private void OnFileMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not DataGridRow { Item: ChangeRow, ContextMenu: not null } row) { e.Handled = true; return; }
+        PrepareFileMenu(row);
+    }
+    public ContextMenu PrepareFileMenu(DataGridRow row)
+    {
+        var change = (ChangeRow)row.Item; var menu = row.ContextMenu;
+        _model.BeginFileMenu(); SelectContextRow(row, change);
+        (menu.DataContext as IDisposable)?.Dispose();
+        menu.DataContext = _model.CreateFileMenu(change.Change.Group == GitGui.Core.Git.ChangeGroup.Staged);
+        _openFileMenu = menu;
+        return menu;
+    }
+    private void OnFileMenuClosed(object sender, RoutedEventArgs e)
+    {
+        var menu = (ContextMenu)sender; (menu.DataContext as IDisposable)?.Dispose(); menu.DataContext = null;
+        _openFileMenu = null; _model.ShiftHeld = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift); _model.EndFileMenu();
+    }
+    private void OnFileMenuKeyDown(object sender, KeyEventArgs e)
+    {
+        // Enter in a popup belongs to its highlighted item, not the grid's Stage shortcut.
+        if (e.Key == Key.Enter) return;
+        var menu = (ContextMenu)sender;
+        if (menu.DataContext is ChangeFileMenu model && RunShortcut(model, e.Key == Key.System ? e.SystemKey : e.Key, Keyboard.Modifiers))
+        { e.Handled = true; menu.IsOpen = false; }
+    }
+    private static bool RunShortcut(ChangeFileMenu menu, Key key, ModifierKeys modifiers)
+    {
+        var command = (key, modifiers) switch
+        {
+            (Key.Enter, ModifierKeys.None or ModifierKeys.Shift) => menu.StageCommand,
+            (Key.C, ModifierKeys.Control) => menu.CopyCommand,
+            (Key.C, ModifierKeys.Control | ModifierKeys.Shift) => menu.CopyFullCommand,
+            (Key.S, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt) => menu.AllCommand,
+            (Key.O, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt) => menu.OpenCommand,
+            _ => null
+        };
+        if (command is null) return false;
+        command.Execute(null); return true;
     }
     private void OnUnstagedSelection(object sender, SelectionChangedEventArgs e) => _model.Select(false, ((DataGrid)sender).SelectedItems.Cast<ChangeRow>().ToArray());
     private void OnStagedSelection(object sender, SelectionChangedEventArgs e) => _model.Select(true, ((DataGrid)sender).SelectedItems.Cast<ChangeRow>().ToArray());
