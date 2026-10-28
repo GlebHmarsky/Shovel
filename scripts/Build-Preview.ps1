@@ -36,6 +36,7 @@ try {
 Shovel $version - local Windows x64 preview
 
 Double-click Shovel.exe. Keep all files in this folder together.
+The client area uses the shared dark palette; Windows high contrast uses system colors. Native title bars/pickers/message boxes remain OS-owned; light-mode selection is deferred.
 Requires the .NET 10 Desktop Runtime and Git for Windows 2.47.0 or newer.
 Use Repository > Open to select a local worktree root; history loads without an approval prompt.
 The selected saved tab loads automatically at startup; switching tabs reuses bounded cached pages.

@@ -4,9 +4,9 @@
         xmlns:l="clr-namespace:GitGui.App.Localization"
         Title="{l:Text Key=AuthTitle}" Width="620" Height="480" MinWidth="480" MinHeight="380"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Closed="OnClosed" FlowDirection="{x:Static l:UiText.Direction}"
-        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
+        Background="{DynamicResource Theme.Sidebar}" Foreground="{DynamicResource Theme.Text}"
         FontFamily="Segoe UI" FontSize="13">
-    <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"><Grid Margin="18">
+    <Border Background="{DynamicResource Theme.Sidebar}"><Grid Margin="18">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <TextBlock x:Name="ContextText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,0,0,12"/>
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">

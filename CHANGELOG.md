@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.1 — 2026-10-28
+
+- Apply a restrained dark client-area theme to menus/toolbar, repository tabs, sidebar, history/Local Changes, lower details tabs and existing operation/authentication dialogs. Distinct charcoal surfaces and orange lower-tab accents follow the supplied reference without copying assets.
+- Centralize semantic colors and hover/pressed/disabled/selection/focus styles; preserve native control input, history author highlighting and virtualization. Map colors to Windows high contrast and document the project-wide pattern.
+- Keep further theme polish low-priority behind file diffs/staging. Native OS title bars/pickers/message boxes remain system-owned; light-mode selection is deferred.
+
 ## 0.12.0 — 2026-10-28
 
 - Add read-only Local Changes with real staged, unstaged, untracked and conflicted entries; ignored paths are opt-in. Preserve rename origins and show both index/worktree changes for partially staged files.

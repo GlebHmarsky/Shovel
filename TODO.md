@@ -4,7 +4,7 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.12.0 complete: real read-only Local Changes with staged/unstaged/untracked/conflicted entries, optional ignored paths and immediate cached navigation. No staging/commit/diff affordances yet. [Evidence](docs/roadmap.md#local-changes-2026-10-28): 117 passing checks, offscreen review and a matching ignored preview. Next: selected-file diffs, then staging/unstaging.
+0.12.1 complete: shared dark surfaces and control states; 119 passing checks, reviewed offscreen renders and matching ignored preview. [Evidence](docs/roadmap.md#dark-theme-first-pass-2026-10-28). Local Changes remains read-only. Next functional work: selected-file diffs, then staging/unstaging. Theme polish stays P2.
 
 ## Next priorities
 
@@ -20,6 +20,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Backlog
 
+- [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, native title-bar integration where supported, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay file diffs/staging.
+
 - [ ] **P1 — Local MVP.** Init, file/hunk stage/unstage, commit/amend, branch deletion/tracking, stashes; real hooks/signing and failure recovery.
 - [ ] **P1 — Network MVP.** Clone/remote editing, valid sequence recovery and visible auth/input; Pull rebase/merge/auto-stash is in 0.11.0.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
@@ -34,6 +36,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.12.1 / 2026-10-28:** shared dark palette/styles for workspace and existing dialogs, high-contrast mapping, documented state conventions. 119 checks; normal/minimum offscreen review; 16 preview checksums/seven matching tested files. No desktop launch.
 
 - [x] **F1g / 0.12.0 / 2026-10-28:** read-only Local Changes, separate index/worktree/untracked/conflicted rows, optional ignored paths, immediate cached navigation, stale-result/cancellation handling and virtualization. 117 checks, normal/minimum offscreen review; 16 preview checksums/seven matching tested files.
 

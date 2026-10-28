@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.12.0: read-only Local Changes, prompt dialogs, default Pull-Rebase/optional Merge and auto-stash, shell-owned execution. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.12.1: read-only Local Changes, prompt dialogs, default Pull-Rebase/optional Merge and auto-stash, shell-owned execution. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -26,7 +26,7 @@ Historical platform baseline: x64 Windows 10 22H2/11, ARM64 later, no x86 plan; 
 | App/Views/CommitGraphCell.cs | Draw precomputed segments for realized rows |
 | App/Services/UserInteraction.cs | Owned folder/executable selection/confirmation |
 | App/Localization/UiText.cs; Resources/Strings.resx | Resource lookup/formatting/XAML extension/English text |
-| App/Resources/AppStyles.xaml | Shared application styles, also loaded by the isolated headless harness |
+| App/Resources/AppStyles.xaml; DarkPalette.xaml; Services/AppTheme.cs | Shared semantic colors/control styles and system high-contrast overrides; [theme conventions](theme.md), also used by headless checks |
 | Core/Settings; Diagnostics | Schema-4 store; typed bounded events/stage timings |
 | Core/Git/RepositoryReader.cs; CommitHistory.cs | Discovery/metadata; ref snapshots/paged NUL parser |
 | Core/Git/GitActions.cs; CommitGraph.cs | Command plans/revalidation/shared lock; parent lanes/cursors |

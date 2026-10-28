@@ -2,10 +2,10 @@
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{Binding Title}" Width="650" Height="560" MinWidth="520" MinHeight="480"
  WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize" FlowDirection="{x:Static loc:UiText.Direction}"
- Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
+ Background="{DynamicResource Theme.Sidebar}" Foreground="{DynamicResource Theme.Text}"
  FontFamily="Segoe UI" FontSize="13">
  <Window.Resources><BooleanToVisibilityConverter x:Key="Visible"/></Window.Resources>
- <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"><Grid Margin="22">
+ <Border Background="{DynamicResource Theme.Sidebar}"><Grid Margin="22">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel><TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" Margin="0,8"/>
    <TextBlock Text="{Binding CurrentRepository}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentRepository}" FlowDirection="LeftToRight"/>

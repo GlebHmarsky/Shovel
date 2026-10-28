@@ -44,6 +44,7 @@ The established work environment is trusted. **Do not add extra safety measures,
 | --- | --- |
 | L1 | Resource-backed complete menus/dialogs/errors/help/accessibility/install/update messages; plural rules, cultural dates/numbers, text expansion/RTL, direction-isolated code/paths/hashes, no sentence concatenation. Git output remains original. |
 | A1 | Keyboard/context-menu/dialog access, restored visible focus, screen-reader semantics for custom graph/diff, noncolor status, light/dark/high contrast, DPI scaling. |
+| A2 | Shared dark surface/state conventions from the supplied reference; semantic brushes, readable normal/selected text, disabled reasons and visible focus. Respect Windows high contrast; no theme-driven Git work. [Theme](theme.md) owns palette rules. First pass now; further polish/light-mode selection deferred. |
 | B1 | Persist tab order/selection/settings; optional explicit tray/close/exit, no surprise autostart, minimal hidden/idle work. Local Git needs no hosted service. |
 
 ## Updates and distribution
@@ -85,6 +86,7 @@ Historical phase gates below preserve regression coverage; old prototype/trust b
 | F1g Local Changes | Disposable unborn/clean/partially staged/renamed/deleted/Unicode/binary/untracked/ignored/conflicted fixtures; unchanged index bytes and suppressed filters/fsmonitor. Reject malformed/truncated/oversized records. Verify immediate view switch, warm cache/selection/history retention, failure/cancellation/external refresh and stale-tab rejection. Virtualize large file lists; review normal/minimum offscreen renders; desktop timing remains separate. |
 | Failures | Hook/signing/auth/network/disk/permission/lock failures preserve usable UI/diagnostics without destructive retry. |
 | Routine consent/privacy | No repository-trust/first-use/program-consent layer for ordinary actions. Background reads request no network/helper; secret fixtures absent from retained logs. Destructive/auth prompts remain targeted. |
+| Dark theme | Verify shared resource loading, normal/secondary/selected/accent contrast, live system-color mapping and dark restoration; selected/disabled/editable controls keep real state and bindings. Review history/Local Changes/action dialogs at normal/minimum sizes offscreen. Desktop hover/keyboard, OS high contrast, native chrome and mixed DPI remain separately verified. |
 | Accessibility/localization | Windows 10/11 keyboard/screen reader; 100/150/200%/mixed DPI; +40% pseudo-localization/RTL without inaccessible/clipped actions. |
 
 ### Proposed performance budgets (not measurements)

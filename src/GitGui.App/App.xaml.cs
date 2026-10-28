@@ -21,6 +21,7 @@ public partial class App : Application
     private readonly CancellationTokenSource _startupCancellation = new();
     private Mutex? _profileMutex;
     private bool _ownsProfile;
+    private AppTheme? _theme;
     private DiagnosticLog? _log;
     private SettingsStore? _settings;
     private ShellViewModel? _shell;
@@ -38,6 +39,7 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnDomainException;
         try
         {
+            _theme = new AppTheme(this);
             var directory = ResolveDataDirectory(e.Args);
             // One writer per local user/profile; the hash keeps the path out of the mutex name.
             var identity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(directory.ToUpperInvariant())));
@@ -181,6 +183,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _theme?.Dispose();
         _startupCancellation.Cancel();
         _startupCancellation.Dispose();
         if (_ownsProfile) _profileMutex!.ReleaseMutex();
