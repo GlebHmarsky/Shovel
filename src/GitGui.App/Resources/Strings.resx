@@ -565,4 +565,97 @@ This removes the saved entry without applying it. Its contents may become unreco
   <data name="FileMenuMissingFile" xml:space="preserve"><value>The working file is missing or is not a regular file. Use Show in File Explorer or refresh the file list.</value></data>
   <data name="FileMenuLinkedPath" xml:space="preserve"><value>Opening paths through filesystem links is not supported yet. Use your existing file tools for this path.</value></data>
   <data name="FileMenuShellBusy" xml:space="preserve"><value>A previous Windows file handoff is still running. Try again after it finishes.</value></data>
+  <data name="FileActionUnsupported" xml:space="preserve"><value>This action requires ordinary files without unresolved conflicts or submodule directories. Resolve conflicts through the recovery workflow; nested repositories and filesystem links need existing tools.</value></data>
+  <data name="FileActionSelectionLimit" xml:space="preserve"><value>Select at most 128 files with a combined path length below 16,000 characters for this action.</value></data>
+  <data name="FileActionHelp" xml:space="preserve"><value>Use the selected files only. Required validation runs after submission; results and cancellation remain in Local Changes.</value></data>
+  <data name="FileActionTargets" xml:space="preserve"><value>Files and effects</value></data>
+  <data name="FileDiscardMenu" xml:space="preserve"><value>Discard changes…</value></data>
+  <data name="FileDiscardKeys" xml:space="preserve"><value>Delete</value></data>
+  <data name="FileDiscardTitle" xml:space="preserve"><value>Discard selected changes</value></data>
+  <data name="FileDiscardButton" xml:space="preserve"><value>Discard</value></data>
+  <data name="FileDiscardExplanation" xml:space="preserve"><value>Repository: {1}
+Discard the changes listed below? HEAD: {0}
+Only the listed paths (including rename origins) are affected. Unstaged files restore the index version; staged files restore HEAD in both the index and working tree. Files absent from the restore source are removed. Untracked files are permanently deleted, not sent to the Recycle Bin.
+There is no guaranteed undo. Cancel keeps everything. Concurrent external edits are not a transaction with this confirmation.</value></data>
+  <data name="FileDiscardWorktreeTarget" xml:space="preserve"><value>{0} — discard unstaged changes; preserve staged content.</value></data>
+  <data name="FileDiscardStagedTarget" xml:space="preserve"><value>{0} — discard staged AND unstaged changes; restore HEAD.</value></data>
+  <data name="FileDiscardNewTarget" xml:space="preserve"><value>{0} — permanently remove this file and any selected new index entry.</value></data>
+  <data name="FileStashLabel" xml:space="preserve"><value>Stash selected files ({0})…</value></data>
+  <data name="FileStashTitle" xml:space="preserve"><value>Stash selected files</value></data>
+  <data name="FileStashButton" xml:space="preserve"><value>Create stash</value></data>
+  <data name="FileStashTarget" xml:space="preserve"><value>{0} — stash staged and unstaged content for this path.</value></data>
+  <data name="FileStashExplanation" xml:space="preserve"><value>Repository: {1}
+Save these selected paths, including selected untracked files, in a new stash and return their index/worktree state to HEAD ({0}). Unrelated working files stay in place. Inspect or restore the entry from Stashes. A failed or cancelled command may have partially changed state; inspect the result before retrying.</value></data>
+  <data name="FileStashHelp" xml:space="preserve"><value>Save both staged and unstaged changes for selected paths, plus selected untracked files. Unrelated working files are left in place.</value></data>
+  <data name="FileExternalDiff" xml:space="preserve"><value>External Diff</value></data>
+  <data name="FileDiffToolHelp" xml:space="preserve"><value>Open one file in the configured Git GUI diff tool (diff.guitool, merge.guitool, diff.tool or merge.tool). Uses this list's comparison. Cancel stops owned tool processes; a tool that detaches itself is not tracked.</value></data>
+  <data name="FileDiffToolMissing" xml:space="preserve"><value>No Git diff tool is configured. Set diff.guitool or diff.tool using your Git configuration, then refresh. Shovel does not choose an arbitrary installed tool or change global settings.</value></data>
+  <data name="FileIgnoreMenu" xml:space="preserve"><value>Ignore</value></data>
+  <data name="FileIgnorePaths" xml:space="preserve"><value>Selected paths</value></data>
+  <data name="FileIgnoreExtensions" xml:space="preserve"><value>Selected extensions throughout repository</value></data>
+  <data name="FileIgnoreHelp" xml:space="preserve"><value>Add literal selected paths to the root .gitignore. Files stay on disk; the rule file remains unstaged.</value></data>
+  <data name="FileIgnoreExtensionHelp" xml:space="preserve"><value>For untracked files with extensions: add wildcard rules for these extensions to the root .gitignore, affecting matching untracked files throughout the repository.</value></data>
+  <data name="FileIgnoreTracked" xml:space="preserve"><value>Ignore applies only to untracked files. It does not remove tracked files from the index.</value></data>
+  <data name="FileIgnoreNoExtension" xml:space="preserve"><value>At least one selected file has no extension. Use Selected paths instead.</value></data>
+  <data name="FileRulePathUnsupported" xml:space="preserve"><value>Ignore and LFS rules for paths containing control characters are not supported.</value></data>
+  <data name="FileRulesTooLarge" xml:space="preserve"><value>The rule file exceeds the 1 MiB editing limit. Edit it using your existing tools.</value></data>
+  <data name="FileLfsMenu" xml:space="preserve"><value>LFS</value></data>
+  <data name="FileLfsTrack" xml:space="preserve"><value>Track selected paths with LFS</value></data>
+  <data name="FileLfsUntrack" xml:space="preserve"><value>Stop tracking selected paths with LFS</value></data>
+  <data name="FileLfsHelp" xml:space="preserve"><value>Edit exact-path rules in the root .gitattributes. No history migration, automatic restaging, hook installation or downloads. Stage the rule file and affected files when ready. More specific nested rules can override root rules.</value></data>
+  <data name="FileLfsMissing" xml:space="preserve"><value>Git LFS is unavailable to the selected Git installation. Install/configure it with your existing tools before enabling tracking.</value></data>
+  <data name="FileLfsSetup" xml:space="preserve"><value>Git LFS filters are not configured. Configure Git LFS with your existing tools, then refresh. Shovel has not changed global configuration or hooks.</value></data>
+  <data name="FileLfsInherited" xml:space="preserve"><value>The root .gitattributes rule was written, but another attribute source overrides at least one selected path. Review nested .gitattributes and local attributes before staging; no files were converted.</value></data>
+  <data name="FilePatchMenu" xml:space="preserve"><value>Save as Patch…</value></data>
+  <data name="FilePatchHelp" xml:space="preserve"><value>Export this list's selected changes, including binary patch data. Untracked files become additions. Limit: 16 MiB / 128 paths. No files are staged or discarded.</value></data>
+  <data name="FilePatchTitle" xml:space="preserve"><value>Save selected changes as a patch</value></data>
+  <data name="FilePatchFilter" xml:space="preserve"><value>Git patch (*.patch)|*.patch|All files (*.*)|*.*</value></data>
+  <data name="FilePatchWriting" xml:space="preserve"><value>Reading and saving the selected patch…</value></data>
+  <data name="FilePatchSaved" xml:space="preserve"><value>Patch saved. Repository files and index were not changed.</value></data>
+  <data name="FilePatchDestination" xml:space="preserve"><value>Choose a patch destination outside Git metadata and different from the selected source files.</value></data>
+  <data name="FileHistoryMenu" xml:space="preserve"><value>History…</value></data>
+  <data name="FileBlameMenu" xml:space="preserve"><value>Blame / Timeline…</value></data>
+  <data name="FileHistoryHelp" xml:space="preserve"><value>Inspect one file's committed history and line authors at the current HEAD snapshot. Rename history is followed. Uncommitted content is not part of blame.</value></data>
+  <data name="FileHistoryTitle" xml:space="preserve"><value>File history — {0}</value></data>
+  <data name="FileHistoryScope" xml:space="preserve"><value>File history follows first-parent ancestry and renames at {0}; blame uses committed content at this tip. Reopen to use a newer HEAD. History: 200 commits per page / 4 MiB per read / 128 back cursors plus Newest. Blame: 20,000 lines / 4 MiB. No implicit fetch.</value></data>
+  <data name="FileIgnoreInherited" xml:space="preserve"><value>The root .gitignore rule was written, but at least one selected file is still visible or its ignored state could not be checked. Review nested ignore rules and the Git output; files remain on disk.</value></data>
+  <data name="FileHistoryPage" xml:space="preserve"><value>Commits {0:N0}–{1:N0}</value></data>
+  <data name="FileHistoryLoading" xml:space="preserve"><value>Reading file history… Existing content remains available.</value></data>
+  <data name="FileHistoryEmpty" xml:space="preserve"><value>No committed history for this path at the captured HEAD.</value></data>
+  <data name="FileHistoryEnd" xml:space="preserve"><value>End of locally available file history. No additional objects were fetched.</value></data>
+  <data name="FileHistoryMore" xml:space="preserve"><value>More file history is available. Choose Older to continue.</value></data>
+  <data name="FileHistoryOlder" xml:space="preserve"><value>Older</value></data>
+  <data name="FileHistoryNewer" xml:space="preserve"><value>Newer</value></data>
+  <data name="FileHistoryTab" xml:space="preserve"><value>History</value></data>
+  <data name="FileHistoryMetadata" xml:space="preserve"><value>Selected commit message and metadata</value></data>
+  <data name="FileHistoryDetails" xml:space="preserve"><value>Commit: {0}
+Author: {1} &lt;{2}&gt; — {3}
+Committer: {4} &lt;{5}&gt; — {6}
+Parents: {7}
+{8}</value></data>
+  <data name="FileBlameTab" xml:space="preserve"><value>Blame at HEAD</value></data>
+  <data name="FileBlameLine" xml:space="preserve"><value>Line</value></data>
+  <data name="FileBlameText" xml:space="preserve"><value>Committed text</value></data>
+  <data name="FileBlameHelp" xml:space="preserve"><value>{0} · {1} &lt;{2}&gt; · {3}</value></data>
+  <data name="FileBlameCount" xml:space="preserve"><value>Committed lines: {0:N0}. Working changes are excluded.</value></data>
+  <data name="FileBlameBinary" xml:space="preserve"><value>Line blame requires UTF-8 text without binary content. Use file history or the binary diff instead.</value></data>
+  <data name="FileBlameNoHead" xml:space="preserve"><value>Blame requires a committed file at HEAD. New and untracked files have no committed lines yet.</value></data>
+  <data name="CommitPhaseDiscard" xml:space="preserve"><value>Discarding selected changes</value></data>
+  <data name="CommitSucceededDiscard" xml:space="preserve"><value>Selected changes discarded. Unrelated files were left in place.</value></data>
+  <data name="CommitPhaseStashFiles" xml:space="preserve"><value>Stashing selected files</value></data>
+  <data name="CommitSucceededStashFiles" xml:space="preserve"><value>Selected files stashed. Inspect or restore the new entry from Stashes.</value></data>
+  <data name="CommitPhaseIgnoreFiles" xml:space="preserve"><value>Adding selected ignore rules</value></data>
+  <data name="CommitSucceededIgnoreFiles" xml:space="preserve"><value>Selected path rules written to .gitignore. Files were kept; review and stage the rule file.</value></data>
+  <data name="CommitPhaseIgnoreExtension" xml:space="preserve"><value>Adding extension ignore rules</value></data>
+  <data name="CommitSucceededIgnoreExtension" xml:space="preserve"><value>Extension rules written to .gitignore. Files were kept; review and stage the rule file.</value></data>
+  <data name="CommitPhaseLfsTrack" xml:space="preserve"><value>Enabling selected LFS attributes</value></data>
+  <data name="CommitSucceededLfsTrack" xml:space="preserve"><value>Selected LFS tracking rules written. Stage .gitattributes and affected files to convert them; existing commits and index content were not rewritten.</value></data>
+  <data name="CommitPhaseLfsUntrack" xml:space="preserve"><value>Removing selected LFS attributes</value></data>
+  <data name="CommitSucceededLfsUntrack" xml:space="preserve"><value>Selected LFS attributes reset. Stage .gitattributes and affected files when ready; stored LFS objects and commits were not removed.</value></data>
+  <data name="CommitPhaseExternalDiff" xml:space="preserve"><value>External diff tool is running — close the tool to finish, or Cancel</value></data>
+  <data name="CommitSucceededExternalDiff" xml:space="preserve"><value>External diff finished. Working files have been checked again.</value></data>
+  <data name="FileStashIndexRetained" xml:space="preserve"><value>The selected stash was saved, but the real index changed or could not be reset. Inspect Stashes and Local Changes before continuing; do not blindly repeat or apply the stash.</value></data>
+  <data name="FileHistoryFirst" xml:space="preserve"><value>Newest</value></data>
+  <data name="FileActionPath" xml:space="preserve"><value>{0} (rename origin: {1})</value></data>
+  <data name="FileRulesEncoding" xml:space="preserve"><value>The existing rule file is not UTF-8. It was not rewritten; edit its encoding with your existing tools.</value></data>
 </root>

@@ -17,6 +17,9 @@ public interface IUserInteraction
     Task ShowStashesAsync(StashViewModel model) => Task.CompletedTask;
     void CopyFilePaths(string text) => throw new NotSupportedException();
     Task<bool> OpenWorkingFileAsync(string root, string relative, bool explorer, CancellationToken token) => throw new NotSupportedException();
+    string? ConfirmFileAction(FileActionPrompt prompt) => null;
+    string? ChoosePatchFile() => null;
+    void ShowFileHistory(FileHistoryViewModel model) { }
     bool ConfirmAmend(string branch, string hash) => false;
     bool ConfirmRecovery(string message, string title) => false;
     void ShowActionError(string message) { }
@@ -27,6 +30,17 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public string? ConfirmFileAction(FileActionPrompt prompt)
+    {
+        var window = new FileActionWindow(prompt) { Owner = Owner };
+        return window.ShowDialog() == true ? window.Message : null;
+    }
+    public string? ChoosePatchFile()
+    {
+        var picker = new SaveFileDialog { Title = UiText.Get("FilePatchTitle"), Filter = UiText.Get("FilePatchFilter"), DefaultExt = ".patch", AddExtension = true, OverwritePrompt = true };
+        return picker.ShowDialog(Owner) == true ? picker.FileName : null;
+    }
+    public void ShowFileHistory(FileHistoryViewModel model) => new FileHistoryWindow(model) { Owner = Owner }.ShowDialog();
     public void CopyFilePaths(string text) => Clipboard.SetText(text);
     public Task<bool> OpenWorkingFileAsync(string root, string relative, bool explorer, CancellationToken token) => FileShellActions.OpenAsync(root, relative, explorer, token);
     public Task ShowStashesAsync(StashViewModel model) { new StashWindow(model) { Owner = Owner }.ShowDialog(); return Task.CompletedTask; }

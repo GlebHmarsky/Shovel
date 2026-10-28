@@ -9,10 +9,27 @@
   <BooleanToVisibilityConverter x:Key="Visible"/>
   <ContextMenu x:Key="ChangeFileMenu" Closed="OnFileMenuClosed" PreviewKeyDown="OnFileMenuKeyDown" MinWidth="260" FlowDirection="{x:Static loc:UiText.Direction}" AutomationProperties.HelpText="{Binding SelectionHelp}">
    <MenuItem Header="{loc:Text Key=FileMenuOpen}" Command="{Binding OpenCommand}" InputGestureText="{loc:Text Key=FileMenuOpenKeys}" ToolTip="{Binding OpenHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding OpenHelp}"/>
+   <MenuItem Header="{loc:Text Key=FileExternalDiff}" Command="{Binding ExternalDiffCommand}" ToolTip="{loc:Text Key=FileDiffToolHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding ActionHelp}"/>
    <MenuItem Header="{loc:Text Key=FileMenuExplorer}" Command="{Binding ExplorerCommand}" ToolTip="{Binding ExplorerHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding ExplorerHelp}"/>
    <Separator/>
+   <MenuItem Header="{loc:Text Key=FileBlameMenu}" Command="{Binding BlameCommand}" ToolTip="{Binding InspectionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding InspectionHelp}"/>
+   <MenuItem Header="{loc:Text Key=FileHistoryMenu}" Command="{Binding HistoryCommand}" ToolTip="{Binding InspectionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding InspectionHelp}"/>
+   <Separator/>
    <MenuItem Header="{Binding StageLabel}" Command="{Binding StageCommand}" InputGestureText="{loc:Text Key=FileMenuStageKeys}" ToolTip="{Binding MutationHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding MutationHelp}"/>
+   <MenuItem Header="{loc:Text Key=FileDiscardMenu}" Command="{Binding DiscardCommand}" InputGestureText="{loc:Text Key=FileDiscardKeys}" ToolTip="{Binding ActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding ActionHelp}"/>
    <MenuItem Header="{Binding AllLabel}" Command="{Binding AllCommand}" InputGestureText="{loc:Text Key=FileMenuAllKeys}" ToolTip="{Binding MutationHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding MutationHelp}"/>
+   <Separator/>
+   <MenuItem Header="{loc:Text Key=FileIgnoreMenu}" ToolTip="{Binding IgnoreHelp}" AutomationProperties.HelpText="{Binding IgnoreHelp}">
+    <MenuItem Header="{loc:Text Key=FileIgnorePaths}" Command="{Binding IgnoreCommand}" ToolTip="{Binding IgnoreHelp}" ToolTipService.ShowOnDisabled="True"/>
+    <MenuItem Header="{loc:Text Key=FileIgnoreExtensions}" Command="{Binding IgnoreExtensionCommand}" ToolTip="{loc:Text Key=FileIgnoreExtensionHelp}" ToolTipService.ShowOnDisabled="True"/>
+   </MenuItem>
+   <MenuItem Header="{loc:Text Key=FileLfsMenu}" ToolTip="{loc:Text Key=FileLfsHelp}">
+    <MenuItem Header="{loc:Text Key=FileLfsTrack}" Command="{Binding LfsTrackCommand}" ToolTip="{Binding ActionHelp}" ToolTipService.ShowOnDisabled="True"/>
+    <MenuItem Header="{loc:Text Key=FileLfsUntrack}" Command="{Binding LfsUntrackCommand}" ToolTip="{Binding ActionHelp}" ToolTipService.ShowOnDisabled="True"/>
+   </MenuItem>
+   <Separator/>
+   <MenuItem Header="{Binding StashLabel}" Command="{Binding StashCommand}" ToolTip="{Binding StashHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding ActionHelp}"/>
+   <MenuItem Header="{loc:Text Key=FilePatchMenu}" Command="{Binding PatchCommand}" ToolTip="{loc:Text Key=FilePatchHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding ActionHelp}"/>
    <Separator/>
    <MenuItem Header="{loc:Text Key=FileMenuCopy}" Command="{Binding CopyCommand}" InputGestureText="{loc:Text Key=FileMenuCopyKeys}" AutomationProperties.HelpText="{Binding SelectionHelp}"/>
    <MenuItem Header="{loc:Text Key=FileMenuCopyFull}" Command="{Binding CopyFullCommand}" InputGestureText="{loc:Text Key=FileMenuCopyFullKeys}" AutomationProperties.HelpText="{Binding SelectionHelp}"/>

@@ -1,13 +1,14 @@
 # Implementation checklist
 
-Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
 
-0.19.0 delivered: Local Changes right-click menus. Broader theme work remains P2.
+0.20.0 complete: requested Local Changes file-menu actions delivered. Next implementation priority is local repository initialization; broader theme work remains P2.
 
-- [x] **P1 — Local Changes file menus.** Selected/all Stage and Unstage, Open/Explorer and path copying; preserved multiselection, captured targets, no opening-time Git work, shortcuts and localized states.
-- [x] **P1 — Deliver 0.19.0.** 192 checks, reviewed offscreen menus/normal/minimum layouts, matching preview and documentation. No interactive launch or external app/clipboard manipulation during checks. [Evidence](docs/roadmap.md#current-status).
+- [x] **P1 — Selected Discard and Stash.** Exact scope confirmation, staged/unstaged/untracked semantics, preserved unrelated content, stale-target refusal, cancellation and targeted refresh.
+- [x] **P1 — Remaining screenshot actions.** Configured external diff, first-parent file history/blame, ignore paths/extensions, LFS tracking attributes and binary-capable patch export; cached menu/options opening and real outcomes.
+- [x] **P1 — Deliver 0.20.0.** 207 checks passed, normal/minimum offscreen review, documented limits, matching ignored preview and intended local commit; no interactive launch.
 
 
 ## Next priorities
@@ -19,11 +20,11 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] **P1 — Extend performance fixtures.** Merge-heavy/million-commit cases, cancellation under load, app/child peak memory, five-minute idle CPU; retain F1e baseline.
 - [ ] **P1 — Validate accessibility/layout.** Mixed DPI, OS high contrast/screen reader, keyboard/focus, +40%/RTL, themes. Offscreen colors do not certify OS accessibility.
 - [ ] **P2 — External reconciliation/tools.** Focus/resume/external-client races and tracked tool sessions.
+- [ ] **P2 — File-menu extensions.** Optional all-parent file history/extra diff-tool chooser, repository/global ignore editing and LFS locks/migration; current implemented scopes remain visible.
 - [ ] **P2 — Filtering when requested.** Ref/search ancestry, default All Commits, retained selection/scroll.
 
 ## Backlog
 
-- [ ] **P2 — Extend file context menus.** Confirmed-target Discard, configured external diff, file history/blame, ignore/LFS actions, selected-file stash and patch export; add each only with working execution and disposable checks. Current menus cover staging, file opening/Explorer and path copying.
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
 
@@ -40,6 +41,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.20.0 / 2026-10-29:** confirmed selected Discard/Stash, configured External Diff, first-parent file History/Blame, Ignore/LFS rules and binary patch export. 207 checks; warmed menu/history layout 10/23 ms with zero opening-time queries, selected Discard 667 ms on a disposable fixture. Normal/minimum/menu review and package hashes verified. [Evidence and limits](docs/roadmap.md#current-status).
 
 - [x] **0.19.0 / 2026-10-28:** Local Changes right-click menus, real selected/all index actions, asynchronous Windows file handoff and path copying. 192 checks; zero opening-time Git calls, 11 ms warmed offscreen menu layout, normal/minimum review and verified package. [Evidence and limits](docs/roadmap.md#current-status).
 

@@ -10,6 +10,20 @@ public sealed record FileShellTarget(string Path, bool SelectInExplorer, bool Mi
 /// <summary>Explicit user handoff to Windows, never a Git or menu-opening prerequisite.</summary>
 public static class FileShellActions
 {
+    public static Task SavePatchAsync(string destination, byte[] bytes, string root, IReadOnlyList<string> sourcePaths, CancellationToken token) => Task.Run(async () =>
+    {
+        destination = Path.GetFullPath(destination);
+        if (destination.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(part => part.Equals(".git", StringComparison.OrdinalIgnoreCase)) ||
+            sourcePaths.Any(path => string.Equals(destination, RepositoryReader.WorkingCopyPath(root, path), StringComparison.OrdinalIgnoreCase)))
+            throw new GitActionException("FilePatchDestination");
+        var temporary = Path.Combine(Path.GetDirectoryName(destination)!, ".shovel-patch-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            await File.WriteAllBytesAsync(temporary, bytes, token); token.ThrowIfCancellationRequested();
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally { try { File.Delete(temporary); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
+    }, token);
     private static int _active;
     public static Task<bool> OpenAsync(string root, string relative, bool explorer, CancellationToken token)
     {

@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false, bool stashesOnly = false, bool fileMenusOnly = false)
+    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false, bool stashesOnly = false, bool fileMenusOnly = false, bool fileActionsOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -35,10 +35,10 @@ internal static partial class Program
             var frame = new DispatcherFrame();
             // Complete on the dispatcher that owns this frame, including faulted test tasks.
             // A bounded watchdog makes a harness/lifetime regression fail instead of hanging packaging.
-            // The full aggregate now includes recovery and stash fixtures; keep individual
+            // The full aggregate includes recovery, stashes and extended file fixtures; keep individual
             // operation timeouts unchanged while allowing their sequential total to finish.
-            var focused = localOnly || commitOnly || hunksOnly || commitFilesOnly || fastChangesOnly || recoveryOnly || stashesOnly || fileMenusOnly;
-            var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(focused ? 8 : 12) };
+            var focused = localOnly || commitOnly || hunksOnly || commitFilesOnly || fastChangesOnly || recoveryOnly || stashesOnly || fileMenusOnly || fileActionsOnly;
+            var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(focused ? 8 : 15) };
             watchdog.Tick += (_, _) => { watchdog.Stop(); frame.Continue = false; };
             watchdog.Start();
             async Task CompleteFrameAsync() { try { await task; } finally { frame.Continue = false; } }
@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (fileActionsOnly) { await RunFileActionChecksAsync(); return; }
             if (fileMenusOnly) { await RunFileMenuChecksAsync(); return; }
             if (stashesOnly) { await RunStashChecksAsync(); return; }
             if (recoveryOnly) { await RunRecoveryChecksAsync(); return; }
@@ -250,6 +251,7 @@ internal static partial class Program
             await RunRecoveryChecksAsync();
             await RunStashChecksAsync();
             await RunFileMenuChecksAsync();
+            await RunFileActionChecksAsync();
             await RunAuthenticationViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)

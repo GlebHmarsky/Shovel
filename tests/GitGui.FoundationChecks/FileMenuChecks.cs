@@ -51,37 +51,37 @@ internal static partial class Program
                 var first = model.Unstaged.Single(r => r.Change.Path == names[0]); var second = model.Unstaged.Single(r => r.Change.Path == names[1]);
                 unstaged.SelectedItems.Clear(); unstaged.SelectedItems.Add(first); unstaged.SelectedItems.Add(second); await model.DiffTask;
                 var row = Row(unstaged, second); var calls = runner.Calls; var watch = Stopwatch.StartNew(); RightClick(row);
-                var menu = window.PrepareFileMenu(row); Arrange(menu, 340, 220); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                var menu = window.PrepareFileMenu(row); Arrange(menu, 340, 480); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 Expect(unstaged.SelectedItems.Count == 2 && runner.Calls == calls && interaction.OpenCalls == 0, "Preserve containing selection, no menu preparation calls");
                 Console.WriteLine($"File menu construction/layout: {watch.Elapsed.TotalMilliseconds:F0} ms; zero Git calls");
                 Expect(!MenuModel(menu).OpenCommand.CanExecute(null) && MenuModel(menu).StageCommand.CanExecute(null), "Single-file opening and multi-file staging states");
                 MenuModel(menu).CopyCommand.Execute(null); Expect(interaction.Clipboard.Split(Environment.NewLine).ToHashSet().SetEquals(names.Take(2)), "Copy exactly selected relative paths");
-                SaveRender(menu, "local-changes-file-menu.png", 340, 220); CloseMenu(menu); await model.DiffTask;
+                SaveRender(menu, "local-changes-file-menu.png", 340, 480); CloseMenu(menu); await model.DiffTask;
                 row = Row(unstaged, model.Unstaged.Single(r => r.Change.Path == "-new.txt")); calls = runner.Calls; RightClick(row); menu = window.PrepareFileMenu(row);
-                Arrange(menu, 340, 220); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                Arrange(menu, 340, 480); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 Expect(unstaged.SelectedItems.Count == 1 && runner.Calls == calls, "Different row replaces selection without starting its diff until menu closes");
                 MenuModel(menu).CopyFullCommand.Execute(null); Expect(interaction.Clipboard == Path.Combine(repo, "-new.txt"), "Full path targets clicked row");
-                SaveRender(menu, "local-changes-single-menu.png", 340, 220);
+                SaveRender(menu, "local-changes-single-menu.png", 340, 480);
                 CloseMenu(menu); await model.DiffTask; Expect(model.DiffTitle == "-new.txt", "Deferred selection diff follows menu close");
                 Expect(unstaged.ContextMenu is null, "Blank table background has no inherited file menu");
             });
             await Check("Bound context commands stage selected files despite Shift, unstage all, and retain draft/worktree", async () =>
             {
                 var first = model.Unstaged.Single(r => r.Change.Path == names[0]); var row = Row(unstaged, first); RightClick(row);
-                var menu = window.PrepareFileMenu(row); Arrange(menu, 340, 220); model.ShiftHeld = true; model.Subject = "keep draft";
+                var menu = window.PrepareFileMenu(row); Arrange(menu, 340, 480); model.ShiftHeld = true; model.Subject = "keep draft";
                 var stage = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, UiText.Get("CommitStage")));
                 Expect(ReferenceEquals(stage.Command, MenuModel(menu).StageCommand), "Real menu command binding");
                 stage.Command.Execute(null); CloseMenu(menu); await Idle();
                 Expect(await Git("diff", "--cached", "--name-only") == names[0] || model.Staged.Single().Change.Path == names[0], "Only selected file staged; Shift does not expand targets");
                 Expect(model.Staged.Count == 1 && model.Subject == "keep draft" && await File.ReadAllTextAsync(Path.Combine(repo, names[0])) == "changed\n", "Real index result, retained file and draft");
-                row = Row(staged, model.Staged.Single()); menu = window.PrepareFileMenu(row); Arrange(menu, 340, 220);
+                row = Row(staged, model.Staged.Single()); menu = window.PrepareFileMenu(row); Arrange(menu, 340, 480);
                 Expect(MenuModel(menu).StageLabel == UiText.Get("CommitUnstage") && MenuModel(menu).AllLabel == UiText.Get("CommitUnstageAll"), "Staged menu labels reflect direction");
                 MenuModel(menu).AllCommand.Execute(null); CloseMenu(menu); await Idle();
                 Expect(await Git("diff", "--cached", "--name-only") == "" && model.Staged.Count == 0, "Real unstage all");
                 model.ShiftHeld = false;
                 row = Row(unstaged, model.Unstaged[0]); menu = window.PrepareFileMenu(row); MenuModel(menu).AllCommand.Execute(null); CloseMenu(menu); await Idle();
                 Expect(model.Staged.Count == 4 && model.Unstaged.Count == 0, "Stage all includes observed additions and deletion");
-                row = Row(staged, model.Staged[0]); menu = window.PrepareFileMenu(row); Arrange(menu, 340, 220); SaveRender(menu, "local-changes-staged-menu.png", 340, 220); CloseMenu(menu);
+                row = Row(staged, model.Staged[0]); menu = window.PrepareFileMenu(row); Arrange(menu, 340, 480); SaveRender(menu, "local-changes-staged-menu.png", 340, 480); CloseMenu(menu);
             });
             await Check("Refreshed menus reject stale writes; copy errors and file handoff failures stay localized", async () =>
             {

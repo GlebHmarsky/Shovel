@@ -8,6 +8,7 @@ public sealed record ParentChoice(string? Hash, string Label);
 public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallation git, string path, CommitRecord commit) : ObservableObject
 {
     public bool ShowParentSelector { get; init; } = true;
+    public string? PreferredPath { get; init; }
     private CancellationTokenSource? _cancel;
     private long _generation;
     private CommitFiles? _comparison;
@@ -34,10 +35,10 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
     public string Notice { get => _notice; private set => Set(ref _notice, value); }
     public bool Busy { get => _busy; private set => Set(ref _busy, value); }
     public RelayCommand RefreshCommand => new(Refresh);
-    public RelayCommand CancelCommand => new(() => _cancel?.Cancel());
+    public RelayCommand CancelCommand => new(() => _cancel?.Cancel(), () => !_closed);
     public Task Pending { get; private set; } = Task.CompletedTask;
     public void Start() { if (_parent is null) Parent = Parents[0]; }
-    public void Stop() { _closed = true; _generation++; _cancel?.Cancel(); }
+    public void Stop() { _closed = true; _generation++; _cancel?.Cancel(); _cancel = null; }
     private void Refresh()
     {
         if (_closed || Parent is null) return;
@@ -49,7 +50,7 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
             var comparison = await reader.ReadCommitFilesAsync(git, path, commit.Hash, parent, token);
             var rows = await Task.Run(() => comparison.Files.Select(file => new ChangeRow(file)).ToArray(), token);
             return () => { _comparison = comparison; Files = rows; Status = UiText.Format("CommitFilesCount", rows.Length); if (rows.Length == 0) { Lines = []; Notice = UiText.Get("DiffNoTextChanges"); } };
-        }, after: () => { var old = Selected?.Change.Path; _selected = null; Selected = Files.FirstOrDefault(f => f.Change.Path == old) ?? Files.FirstOrDefault(); });
+        }, after: () => { var old = Selected?.Change.Path ?? PreferredPath; _selected = null; Selected = Files.FirstOrDefault(f => f.Change.Path == old || f.Change.OriginalPath == old) ?? Files.FirstOrDefault(); });
     }
     private void LoadDiff()
     {

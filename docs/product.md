@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.19.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.20.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -59,7 +59,21 @@ Right-click a staged or unstaged/untracked/conflicted row for **Stage/Unstage**,
 
 Stage/Unstage operates on the captured selection; the explicit All entry uses all rows on that side. Shift does not expand these menu commands. In a file grid, **Enter** stages/unstages selected files, **Ctrl+Shift+Alt+S** acts on all listed files, **Ctrl+C / Ctrl+Shift+C** copies relative/full paths, and **Ctrl+Shift+Alt+O** opens one file. **Shift+F10 / Menu key** uses the native context menu; Enter inside the popup activates its highlighted item. Shortcuts are scoped to file grids/menus, leaving message editing and diff selection alone.
 
-Open/Explorer require one selected row. Open uses the **current working file** and its Windows default application, even from the staged list; it does not export staged content. A deleted row explains why Open is unavailable; Explorer selects an existing file or opens the nearest existing containing folder. Copies preserve exact paths, one per line. Clipboard/default-app/permission failures are localized without logging contents. File handoff is asynchronous and bounded, but an already sent Windows request cannot be retracted. External application lifetime is not tracked; refresh after editing. Discard/delete, external diff, blame/file history, ignore/LFS management, selected-file stash and patch export are deferred rather than present as nonfunctional menu entries.
+Open/Explorer require one selected row. Open uses the **current working file** and its Windows default application, even from the staged list; it does not export staged content. A deleted row explains why Open is unavailable; Explorer selects an existing file or opens the nearest existing containing folder. Copies preserve exact paths, one per line. Clipboard/default-app/permission failures are localized without logging contents. File handoff is asynchronous and bounded, but an already sent Windows request cannot be retracted. External application lifetime is not tracked; refresh after editing.
+
+### Selected-file actions (0.20.0)
+
+**Discard changes…** (Delete in a file grid) opens immediately with the repository, HEAD and exact selected paths/rename endpoints. Cancel is the default. Unstaged tracked files restore from the index, preserving staged content; staged selections restore **both index and working files to HEAD**, including unstaged edits at those paths. Selected untracked files and unborn staged additions are permanently removed, without a recycle bin or promise of undo. Conflicted files, submodule directories and linked paths are excluded. Submission rechecks state; cancellation/failure can leave partial results, which are reinspected without automatic cleanup.
+
+**Stash selected files…** shows the selected paths and optional message. It saves both staged and unstaged content for those paths, plus selected untracked files; unrelated index/worktree content stays in place. Inspect/apply/pop/drop the result in Stashes. Git can reject applying into a dirty index. A stash saved before cancellation remains available; partial index cleanup is reported separately, never retried automatically.
+
+**External Diff** runs the configured Git diff tool for one file and the selected staged/unstaged side; an untracked file compares against empty content. Missing configuration and tool failures are explained after submission. The command remains tracked until its process exits or is cancelled; a tool that detaches itself cannot be tracked afterward.
+
+**History… / Blame / Timeline…** opens a resizable window before reading. History follows the captured HEAD's **first-parent file ancestry and renames**, with 200-row pages and commit metadata/real changed-file diffs; it is distinct from main-window All Commits. Blame shows line, author, date, hash and committed text at that tip, excluding working edits. Refresh rereads the captured tip; reopen for a new HEAD. Loading retains existing rows; no history, missing objects, unsupported/binary blame and bounded-read failures are explicit. No automatic fetch.
+
+**Ignore** offers literal selected paths or their extensions throughout the repository, for untracked files only. It appends root `.gitignore` rules without removing files or untracking content; nested overrides are reported. **LFS** adds exact-path tracking/reset rules to root `.gitattributes`, preserving other rules. Tracking needs existing Git LFS/filter setup; neither action installs hooks, migrates history, downloads or restages content. Review/stage the rule file and affected files yourself; more-specific attribute overrides are reported.
+
+**Save as Patch…** exports selected staged or unstaged/untracked changes, including binary patches, through a save picker with overwrite confirmation. It never stages/discards source files; failed/cancelled writes preserve an existing destination. Limits and configured-filter differences are described in [architecture](architecture.md#selected-file-actions-0200). Menu actions retain captured targets and Shift does not expand their scope.
 
 ## Stashes (0.18.0)
 

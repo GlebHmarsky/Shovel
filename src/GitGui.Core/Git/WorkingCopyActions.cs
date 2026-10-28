@@ -10,7 +10,7 @@ public sealed record WorkingCopyContext(GitInstallation Git, RepositoryIdentity 
 {
     internal string[]? FilterOverrides { get; init; }
 }
-public enum WorkingCopyAction { Stage, Unstage, Commit, StageHunks, UnstageHunks }
+public enum WorkingCopyAction { Stage, Unstage, Commit, StageHunks, UnstageHunks, Discard, StashFiles, IgnoreFiles, IgnoreExtension, LfsTrack, LfsUntrack, ExternalDiff }
 public sealed record WorkingCopyOptions(WorkingCopyAction Action, IReadOnlyList<LocalChange> Entries, string Message = "", bool Amend = false,
     HunkSelection? Hunks = null);
 public sealed record WorkingCopyResult(ActionResult Result, string? CommitHash = null)
@@ -92,6 +92,8 @@ public sealed partial class GitActions
                 fresh.Operation != context.Repository.Operation || await IndexStampAsync(fresh, token) != context.IndexStamp ||
                 await configuration != context.ConfigStamp) throw new GitActionException("CommitStale");
             if (!Enum.IsDefined(options.Action)) throw new GitActionException("ActionReadFailed");
+            if (options.Action >= WorkingCopyAction.Discard)
+                return await ExecuteFileMenuLockedAsync(context, fresh, options, timing.Elapsed.TotalMilliseconds, token, progress);
             var temporary = Directory.CreateTempSubdirectory("shovel-git-");
             try
             {

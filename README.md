@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.19.0** adds Local Changes right-click menus for staging, opening files, Explorer and copying paths. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.20.0** extends Local Changes menus with confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -76,7 +76,9 @@ File Stage/Unstage publishes freshly checked target rows before a coalesced full
 
 Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for hunks, `--check-commit-files` for historical files/diffs and `--check-fast-changes` for scoped/background action results, delayed reads, LFS sizes and binary cards. The full preview checks include all of them.
 
-Local Changes file menus: right-click a row, or use Shift+F10/Menu key. Stage/Unstage and explicit All entries keep their captured scope regardless of Shift. Open/Explorer accepts one file; Copy path/full path supports multiselection. Enter in the file grid stages/unstages selected files; Ctrl+C / Ctrl+Shift+C copies relative/full paths; Ctrl+Shift+Alt+S acts on all files on that side; Ctrl+Shift+Alt+O opens one working file. Menu Enter activates its highlighted item. Deleted files use Explorer's containing-folder fallback. Refresh after editing externally. [Workflow/limits](docs/product.md#local-changes-file-menus-0190). Focused headless checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-file-menus`; tests never launch editors/Explorer or change the real clipboard.
+Local Changes file menus: right-click a row, or use Shift+F10/Menu key. Stage/Unstage and explicit All entries keep their captured scope regardless of Shift. Open/Explorer accepts one file; Copy path/full path supports multiselection. Enter in the file grid stages/unstages selected files; Delete opens Discard confirmation; Ctrl+C / Ctrl+Shift+C copies relative/full paths; Ctrl+Shift+Alt+S acts on all files on that side; Ctrl+Shift+Alt+O opens one working file. Menu Enter activates its highlighted item. Deleted files use Explorer's containing-folder fallback. Refresh after editing externally. [Workflow/limits](docs/product.md#local-changes-file-menus-0190).
+
+Additional menu commands: confirmed Discard and selected-file Stash; configured External Diff; pinned first-parent file History and committed Blame; Ignore paths/extensions; exact-path LFS tracking/reset rules; binary-capable Save as Patch. Discard in Staged removes **both staged and unstaged** edits at selected paths; Unstaged preserves staged content. Untracked deletion is permanent. [Detailed scopes and recovery](docs/product.md#selected-file-actions-0200). Focused checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-file-menus` or `--check-file-actions`; both are included in full verification. Tests use disposable repositories and a synthetic external diff script, never actual editors/Explorer or the real clipboard.
 
 ## Stashes
 
@@ -118,7 +120,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.19.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.20.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

@@ -93,6 +93,7 @@ public partial class CommitWindow : Window
         var command = (key, modifiers) switch
         {
             (Key.Enter, ModifierKeys.None or ModifierKeys.Shift) => menu.StageCommand,
+            (Key.Delete, ModifierKeys.None) => menu.DiscardCommand,
             (Key.C, ModifierKeys.Control) => menu.CopyCommand,
             (Key.C, ModifierKeys.Control | ModifierKeys.Shift) => menu.CopyFullCommand,
             (Key.S, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt) => menu.AllCommand,

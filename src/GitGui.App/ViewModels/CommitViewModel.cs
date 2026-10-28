@@ -72,10 +72,10 @@ public sealed partial class CommitViewModel : ObservableObject
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
     public string Summary => _mutating ? UiText.Format("ActionSummary", UiText.Get("CommitWorkspace"), _phase, _elapsed.Elapsed.TotalSeconds) : Status;
-    public bool IsBusy => _loading || _mutating || _diffLoading;
+    public bool IsBusy => _loading || _mutating || _diffLoading || _fileBusy;
     public bool IsMutating => _mutating;
     public bool CanEditMessage => !_closed && !_mutating;
-    public bool Ready => !_closed && !_mutating && (!_loading || _backgroundLoading) && _state.ReadAt != default && _state.Context is not null;
+    public bool Ready => !_closed && !_mutating && !_fileBusy && (!_loading || _backgroundLoading) && _state.ReadAt != default && _state.Context is not null;
     public bool CanAmend => Ready && _state.Context?.Repository is { Commit: not null, Operation: RepositoryOperation.None };
     public bool HasMutation { get; private set; }
     public bool ShiftHeld { get => _shift; set { if (Set(ref _shift, value)) RefreshCommands(); } }
@@ -303,13 +303,13 @@ public sealed partial class CommitViewModel : ObservableObject
         _selectedHunks = rows.Where(row => row.HunkId >= 0 && current.Contains(row)).Select(row => row.HunkId).Distinct().Order().ToArray();
         RefreshCommands();
     }
-    private void StartAction(WorkingCopyAction action, HunkSelection? hunks = null, IReadOnlyList<ChangeRow>? explicitEntries = null)
+    private void StartAction(WorkingCopyAction action, HunkSelection? hunks = null, IReadOnlyList<ChangeRow>? explicitEntries = null, string? actionMessage = null)
     {
         if (!Ready) return;
         var context = _state.Context!; var push = action == WorkingCopyAction.Commit && ShiftHeld;
         if (action == WorkingCopyAction.Commit && Amend && !_interaction.ConfirmAmend(context.Repository.Branch ?? UiText.Get("NoBranch"), context.Repository.Commit!)) return;
         var entries = explicitEntries ?? (hunks is not null ? new[] { _diffChange! } : action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : []);
-        var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), Message, Amend, hunks);
+        var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), actionMessage ?? Message, Amend, hunks);
         _mutating = true; HasMutation = true; _diffCancel?.Cancel(); _readCancel?.Cancel(); _state.ReadAt = default;
         // Cancel obsolete read generations, but do not put their drain on the write's critical
         // path. They never write the index; close still drains them and late results cannot bind.
@@ -330,7 +330,7 @@ public sealed partial class CommitViewModel : ObservableObject
                 var result = await _actions.ExecuteWorkingCopyAsync(context, options, _actionCancel.Token, CollectOutput);
                 measured = result;
                 await _outputTask; RawOutput = result.Result.Output; committed = result.CommitHash;
-                Status = UiText.Get(result.Result.Success ? "CommitSucceeded" + action : "ActionResult" + result.Result.Outcome);
+                Status = UiText.Get(result.Result.MessageCode ?? (result.Result.Success ? "CommitSucceeded" + action : "ActionResult" + result.Result.Outcome));
                 if (result.Result.Success && action == WorkingCopyAction.Commit)
                 {
                     SetMessage(""); _amend = false; _automaticAmendMessage = null; Changed(nameof(Amend));
@@ -421,7 +421,7 @@ public sealed partial class CommitViewModel : ObservableObject
         Changed(nameof(CanApplyHunks)); Changed(nameof(HunkActionLabel)); Changed(nameof(HunkHelp));
         foreach (var name in new[] { nameof(StageLabel), nameof(UnstageLabel), nameof(CommitLabel), nameof(CommitUnavailable), nameof(StageHelp), nameof(UnstageHelp) }) Changed(name);
     }
-    public void Cancel() { _readCancel?.Cancel(); _diffCancel?.Cancel(); _actionCancel?.Cancel(); }
+    public void Cancel() { _readCancel?.Cancel(); _diffCancel?.Cancel(); _actionCancel?.Cancel(); _fileCancel?.Cancel(); }
     public async Task CloseAsync()
     {
         _closed = true; ShiftHeld = false; _fileCancel?.Cancel(); Cancel();

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.0 — 2026-10-29
+
+- Extend Local Changes menus with confirmed selected-file Discard and Stash, configured External Diff, file History/Blame, Ignore paths/extensions, LFS tracking rules and binary-capable Save as Patch. Existing Open/Explorer, stage/all and copy actions remain.
+- Show exact discard targets and staged/unstaged/untracked consequences before execution; preserve unrelated work and recheck stale selections. Selected stashes exclude unrelated index changes, with explicit partial-success reporting.
+- Keep menus/confirmation and file-history windows preparation-free. Read pinned file history incrementally across renames, retain rows on failed refresh, reject cancelled results and reuse real committed-file diffs. Continue targeted post-action reconciliation and bounded background work.
+
 ## 0.19.0 — 2026-10-28
 
 - Add right-click menus to staged and unstaged Local Changes rows: selected/all Stage or Unstage, Open, Show in File Explorer, Copy path and Copy full path. Preserve a containing multiselection and freeze menu targets; refreshed snapshots disable stale index actions. Menus do no Git or filesystem preparation, and a newly selected diff waits until the menu closes.
