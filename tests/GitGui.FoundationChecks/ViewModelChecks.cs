@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false)
+    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -55,6 +55,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (recoveryOnly) { await RunRecoveryChecksAsync(); return; }
             if (localOnly) { await RunLocalChangesChecksAsync(); return; }
             if (commitOnly) { await RunCommitWorkspaceChecksAsync(); return; }
             if (hunksOnly) { await RunHunkChecksAsync(); return; }
@@ -241,6 +242,7 @@ internal static partial class Program
             await RunFastChangesChecksAsync();
             await RunWorkspaceActionChecksAsync();
             await RunPullChecksAsync();
+            await RunRecoveryChecksAsync();
             await RunAuthenticationViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)

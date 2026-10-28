@@ -15,6 +15,7 @@ public interface IUserInteraction
     void ShowGitAction(GitActionViewModel model) { }
     Task ShowCommitAsync(CommitViewModel model) => Task.CompletedTask;
     bool ConfirmAmend(string branch, string hash) => false;
+    bool ConfirmRecovery(string message, string title) => false;
     void ShowActionError(string message) { }
     IAuthenticationSession? CreateAuthenticationSession(string context,
         Func<AuthenticationPrompt, CancellationToken, Task<AuthenticationAnswer?>> prompt, CancellationToken token) => null;
@@ -23,6 +24,8 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public bool ConfirmRecovery(string message, string title) => MessageBox.Show(Owner, message, title,
+        MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     private static Window Owner => Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive) ?? Application.Current.MainWindow;
     public Task ShowCommitAsync(CommitViewModel model)
     {

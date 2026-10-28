@@ -28,7 +28,9 @@ internal static partial class Program
         if (args.FirstOrDefault() is "--measure-working-copy" or "--measure-working-copy-assets") _root = Path.Combine(Path.GetFullPath("artifacts/working-copy-benchmarks"), Path.GetFileName(_root));
         if (args.FirstOrDefault() == "--check-commit-files") _root = Path.Combine(Path.GetFullPath("artifacts/commit-files-checks"), Path.GetFileName(_root));
         if (args.FirstOrDefault() == "--check-fast-changes") _root = Path.Combine(Path.GetFullPath("artifacts/fast-changes-checks"), Path.GetFileName(_root));
+        if (args.FirstOrDefault() == "--check-recovery") _root = Path.Combine(Path.GetFullPath("artifacts/recovery-checks"), Path.GetFileName(_root));
         Directory.CreateDirectory(_root);
+        if (args.FirstOrDefault() == "--check-recovery") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(recoveryOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--check-fast-changes") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(fastChangesOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--check-commit-files") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(commitFilesOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--measure-working-copy") { MeasureWorkingCopyAsync().GetAwaiter().GetResult(); return 0; }

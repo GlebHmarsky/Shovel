@@ -20,6 +20,14 @@ public sealed partial class ShellViewModel
     public RelayCommand FetchCommand { get; private set; } = null!;
     public RelayCommand PullCommand { get; private set; } = null!;
     public RelayCommand PushCommand { get; private set; } = null!;
+    public RelayCommand ContinueCommand { get; private set; } = null!;
+    public RelayCommand SkipCommand { get; private set; } = null!;
+    public RelayCommand AbortCommand { get; private set; } = null!;
+    public bool HasRecovery => SelectedRepository?.Snapshot?.Recovery is not null;
+    public bool CanSkipRecovery => SelectedRepository?.Snapshot?.Recovery?.CanSkip == true;
+    public string RecoveryHelp => SelectedRepository?.Snapshot?.Recovery is { } recovery
+        ? UiText.Format("RecoveryHelp", UiText.Get("Operation" + recovery.Kind)) : UiText.Get("RecoveryUnavailable");
+    private bool CanRecover => CanNavigate && !IsBusy && _interaction is not null && _actions is not null && _git is not null && HasRecovery && State?.Page is not null;
     public RelayCommand<string> SwitchBranchCommand { get; private set; } = null!;
     public IReadOnlyList<string> LocalBranches => State?.Page?.Session.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray() ?? [];
     public IReadOnlyList<BranchMenuItem> BranchMenuItems => LocalBranches.Select(name => new BranchMenuItem(name, SwitchBranchCommand)).ToArray();
@@ -41,6 +49,9 @@ public sealed partial class ShellViewModel
     private void InitializeActions(GitActions? actions)
     {
         _actions = actions;
+        ContinueCommand = new(() => OpenAction(GitAction.Continue), () => CanRecover);
+        SkipCommand = new(() => OpenAction(GitAction.Skip), () => CanRecover && CanSkipRecovery);
+        AbortCommand = new(() => OpenAction(GitAction.Abort), () => CanRecover);
         ShowActionDetailsCommand = new(() => RevealDetails(3), () => HasAction);
         NewBranchCommand = new(() => OpenAction(GitAction.NewBranch), () => CanAct);
         FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanAct);
@@ -52,15 +63,28 @@ public sealed partial class ShellViewModel
     private async Task OpenActionAsync(GitAction action, string? branch)
     {
         var tab = SelectedRepository!;
+        // A modal confirmation pumps the dispatcher. Freeze its target before it opens;
+        // activation/refresh must not silently replace the operation the user reviewed.
+        var reviewedSnapshot = tab.Snapshot!;
+        var reviewedIdentity = _knownIdentities.GetValueOrDefault(tab.Directory);
+        var recoveryAction = action is GitAction.Continue or GitAction.Skip or GitAction.Abort;
+        if (recoveryAction && action != GitAction.Continue && reviewedSnapshot.Recovery is { } recovery &&
+            !_interaction!.ConfirmRecovery(UiText.Format("RecoveryConfirm" + action, tab.Directory,
+                UiText.Get("Operation" + recovery.Kind), recovery.Branch.Length > 0 ? recovery.Branch : reviewedSnapshot.Branch ?? UiText.Get("NoBranch"),
+                recovery.Target.Length > 0 ? recovery.Target : reviewedSnapshot.Commit ?? UiText.Get("NoBranch"), recovery.CurrentCommit), UiText.Get("ActionTitle" + action))) return;
+        if (SelectedRepository != tab) return;
+        CancelCountRead();
         var attempted = false;
         SetActionOpen(true); Status = UiText.Get("ActionPreparing");
         try
         {
-            if (tab.History.Page is not { } page || !_knownIdentities.TryGetValue(tab.Directory, out var identity))
+            var identity = recoveryAction ? reviewedIdentity : _knownIdentities.GetValueOrDefault(tab.Directory);
+            if (tab.History.Page is not { } page || identity is null)
                 throw new GitActionException("ActionInspectionNeeded");
-            var cached = new ActionContext(_git!, new RepositoryIdentity(tab.Snapshot!.Worktree, tab.Snapshot.GitDirectory,
-                tab.Snapshot.CommonDirectory, identity.Fingerprint), tab.Snapshot, page.Session,
-                tab.Snapshot!.RemoteNames.Select(name => new GitRemote(name, name, name)).ToArray(), "");
+            var snapshot = recoveryAction ? reviewedSnapshot : tab.Snapshot!;
+            var cached = new ActionContext(_git!, new RepositoryIdentity(snapshot.Worktree, snapshot.GitDirectory,
+                snapshot.CommonDirectory, identity.Fingerprint), snapshot, page.Session,
+                snapshot.RemoteNames.Select(name => new GitRemote(name, name, name)).ToArray(), "");
             var model = new GitActionViewModel(cached, action, _actions!, async () =>
             {
                 foreach (var related in Repositories.Where(item => string.Equals(item.Snapshot?.CommonDirectory, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
@@ -70,7 +94,7 @@ public sealed partial class ShellViewModel
                 await WaitForIdleAsync();
                 if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0)
                     throw new System.IO.IOException(); // Localized separately from the Git outcome; no raw exception logging.
-            }, branch, _interaction, async token =>
+            }, branch, _interaction, recoveryAction ? null : async token =>
             {
                 var context = await _actions!.PrepareAsync(_git!, tab.Directory, token);
                 if (!_knownIdentities.TryGetValue(tab.Directory, out var known) || known.Fingerprint != context.Identity.Fingerprint)
@@ -83,7 +107,8 @@ public sealed partial class ShellViewModel
             var previous = _lastAction;
             _preparingAction = false;
             SetLastAction(model);
-            _interaction!.ShowGitAction(model);
+            if (recoveryAction) model.RunCommand.Execute(null);
+            else _interaction!.ShowGitAction(model);
             model.DismissOptions(); attempted = model.HasAttempt;
             if (!model.HasAttempt) SetLastAction(previous);
             else

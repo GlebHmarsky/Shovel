@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.0 — 2026-10-28
+
+- Recover interrupted merges, rebases, cherry-picks and reverts through Continue, Skip and Abort in the sidebar and Repository menu. Reopen rediscovers state; no opening-time preparation or remote queries. Resolve/stage files through Local Changes, then continue with Git's existing message.
+- Confirm actual Abort/Skip targets and consequences; reject unresolved Continue and changed operation state. Reuse shared mutation coordination, top-center progress/cancellation and retained output. Reinspect after failure/cancellation; preserve subsequent conflicts and auto-stash recovery without automatic cleanup or rollback.
+
 ## 0.16.1 — 2026-10-28
 
 - Match native title bars to the dark toolbar on the main, commit, branch/network and authentication windows. Preserve native caption controls; restore system defaults in high contrast. Windows 11 supports exact palette colors; Windows 10 uses a best-effort native dark request.

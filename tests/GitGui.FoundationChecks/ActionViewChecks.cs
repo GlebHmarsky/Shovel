@@ -86,7 +86,7 @@ internal static partial class Program
         });
         await Check("Operation dialogs render offscreen at normal/minimum sizes with localized targets and only implemented options", async () =>
         {
-            foreach (var action in Enum.GetValues<GitAction>())
+            foreach (var action in new[] { GitAction.NewBranch, GitAction.SwitchBranch, GitAction.Fetch, GitAction.Pull, GitAction.Push })
             {
                 var model = new GitActionViewModel(context, action, actions, () => Task.CompletedTask);
                 model.NewName = "render-only";

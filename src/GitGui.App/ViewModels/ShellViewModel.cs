@@ -39,7 +39,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public string OperationStatus => _commitModel is not null ? _commitModel.Summary : IsActionRunning ? CurrentAction!.Summary :
         ActionOpen ? UiText.Get(_preparingAction ? "ActionPreparing" : "ActionReviewing") :
         IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) :
-        HasAction ? CurrentAction!.Summary : UiText.Get("NoActiveOperation");
+        HasRecovery ? UiText.Get("RecoveryWaiting") : HasAction ? CurrentAction!.Summary : UiText.Get("NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput => State?.RawOutput ?? "";
@@ -409,6 +409,8 @@ public sealed partial class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        ContinueCommand?.Refresh(); SkipCommand?.Refresh(); AbortCommand?.Refresh();
+        Changed(nameof(HasRecovery)); Changed(nameof(CanSkipRecovery)); Changed(nameof(RecoveryHelp));
         ShowChangesCommand?.Refresh(); ShowHistoryCommand?.Refresh();
         NotifyActionContext();
         foreach (var property in new[] { nameof(CanOpenBranchMenu), nameof(CanSwitchBranch), nameof(BranchActionHelp), nameof(FetchActionHelp), nameof(PullActionHelp), nameof(PushActionHelp), nameof(SwitchActionHelp) }) Changed(property);

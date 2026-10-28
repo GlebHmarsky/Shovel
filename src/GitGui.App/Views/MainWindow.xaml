@@ -61,6 +61,11 @@
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=RefreshRepository}" Command="{Binding RefreshRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" />
+        <MenuItem Header="{loc:Text Key=RecoveryMenu}" Visibility="{Binding HasRecovery, Converter={StaticResource BoolToVisibility}}">
+          <MenuItem Header="{loc:Text Key=ActionTitleContinue}" Command="{Binding ContinueCommand}" />
+          <MenuItem Header="{loc:Text Key=ActionTitleSkip}" Command="{Binding SkipCommand}" Visibility="{Binding CanSkipRecovery, Converter={StaticResource BoolToVisibility}}" />
+          <MenuItem Header="{loc:Text Key=ActionTitleAbort}" Command="{Binding AbortCommand}" />
+        </MenuItem>
         <MenuItem Header="{loc:Text Key=FirstHistoryPage}" Command="{Binding FirstHistoryCommand}" />
         <Separator />
         <MenuItem Header="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
@@ -174,6 +179,12 @@
         <StackPanel VerticalAlignment="Top">
           <Button Content="{loc:Text Key=LocalChanges}" Command="{Binding ShowChangesCommand}" HorizontalContentAlignment="Left" Padding="8,9" Background="Transparent" BorderThickness="0" ToolTip="{loc:Text Key=CommitOpenHelp}" AutomationProperties.AutomationId="LocalChangesNavigation"/>
           <RadioButton Style="{StaticResource NavigationItem}" Content="{loc:Text Key=AllCommits}" IsChecked="{Binding IsHistory, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.Name="{loc:Text Key=AllCommits}" AutomationProperties.AutomationId="CurrentWorkspace"/>
+          <StackPanel Margin="8,16,0,0" Visibility="{Binding HasRecovery, Converter={StaticResource BoolToVisibility}}" AutomationProperties.AutomationId="RecoveryPanel">
+            <TextBlock Text="{Binding RecoveryHelp}" TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite" />
+            <Button Content="{loc:Text Key=ActionTitleContinue}" Command="{Binding ContinueCommand}" Margin="0,2" ToolTip="{loc:Text Key=RecoveryContinueHelp}" />
+            <Button Content="{loc:Text Key=ActionTitleSkip}" Command="{Binding SkipCommand}" Margin="0,2" Visibility="{Binding CanSkipRecovery, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=RecoverySkipHelp}" />
+            <Button Content="{loc:Text Key=ActionTitleAbort}" Command="{Binding AbortCommand}" Margin="0,2" ToolTip="{loc:Text Key=RecoveryAbortHelp}" />
+          </StackPanel>
         </StackPanel>
       </DockPanel>
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" ResizeDirection="Columns"

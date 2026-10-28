@@ -22,6 +22,7 @@ public sealed record RepositorySnapshot(string Worktree, string GitDirectory, st
     internal HistoryState? InitialHistoryState { get; init; }
     public string? UpstreamRef { get; init; }
     public IReadOnlyList<string> RemoteNames { get; init; } = [];
+    public SequenceRecovery? Recovery { get; init; }
 }
 
 /// <summary>Read-only metadata commands. Caller validates repository identity before automatic reads; no helper/script permission is implied.</summary>
@@ -30,7 +31,9 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
     internal async Task<RepositorySnapshot> ReadWorkingCopyHeadAsync(GitInstallation git, RepositorySnapshot previous, CancellationToken token)
     {
         var state = await ReadHistoryStateAsync(git, previous, token, headOnly: true, includeUpstream: false);
-        return previous with { Branch = state.Branch, Commit = state.Commit, Operation = ReadOperation(previous.GitDirectory),
+        var operation = ReadOperation(previous.GitDirectory);
+        return previous with { Branch = state.Branch, Commit = state.Commit, Operation = operation,
+            Recovery = SequenceRecovery.Read(previous.GitDirectory, operation),
             HeadKind = state.Branch is null ? HeadKind.Detached : state.Commit is null ? HeadKind.Unborn : HeadKind.Branch };
     }
     public static Version MinimumVersion { get; } = new(2, 47, 0);
@@ -71,14 +74,16 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         var gitDirectory = Path.GetFullPath(lines[2]);
         var common = Path.GetFullPath(lines[3]);
         var operation = ReadOperation(gitDirectory);
-        var location = new RepositorySnapshot(worktree, gitDirectory, common, null, null, HeadKind.Unborn, operation, DateTimeOffset.Now);
+        var location = new RepositorySnapshot(worktree, gitDirectory, common, null, null, HeadKind.Unborn, operation, DateTimeOffset.Now)
+            { Recovery = SequenceRecovery.Read(gitDirectory, operation) };
         // Local names only: no URL resolution, helpers or network. Run alongside the ref read.
         var remotesTask = Command("remote");
         var stateTask = ReadHistoryStateAsync(git, location, token, headOnly: !includeHistory);
         await Task.WhenAll(remotesTask, stateTask).ConfigureAwait(false);
         var state = await stateTask;
         var remotes = Text((await remotesTask).StandardOutput).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        if (operation != ReadOperation(gitDirectory)) throw new GitReadException(GitFailure.ChangedDuringRead);
+        if (operation != ReadOperation(gitDirectory) || location.Recovery != SequenceRecovery.Read(gitDirectory, operation))
+            throw new GitReadException(GitFailure.ChangedDuringRead);
         return location with { Branch = state.Branch, Commit = state.Commit,
             HeadKind = state.Branch is null ? HeadKind.Detached : state.Commit is null ? HeadKind.Unborn : HeadKind.Branch,
             InitialHistoryState = includeHistory ? state : null, UpstreamRef = state.UpstreamRef, RemoteNames = remotes };

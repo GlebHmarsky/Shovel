@@ -4,15 +4,14 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.16.1 complete: native title bars matching the dark chrome; release checks and preview verified. Broader theme work remains P2.
+0.17.0 complete: in-app sequence recovery, verified preview and local release commit. Broader theme work remains P2.
 
-- [x] **P1 — Native title bars.** Match shared dark chrome on app-owned windows; retain native controls/high-contrast defaults and documented Windows 10 fallback.
-- [x] **P1 — Deliver.** Release checks and matching preview verified; source/docs included in the release commit. Desktop title-bar paint remains separately unverified.
+- [x] **P1 — Recovery workflows.** Cached Continue/Skip/Abort, actual-target confirmations, shared runner/gate and post-command reconciliation; interrupted/conflicted disposable coverage.
+- [x] **P1 — Deliver 0.17.0.** 176 checks passed, normal/minimum offscreen review, matching versioned preview, evidence/docs and local commit. No interactive launch.
 
 
 ## Next priorities
 
-- [ ] **P1 — In-app sequence recovery.** Show valid Continue/Skip/Abort for merge/rebase/cherry-pick/revert state; preserve conflict details after reopen, confirm destructive abort targets and verify disposable interrupted/conflicted cases. Keep command progress/cancellation visible.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
@@ -27,7 +26,7 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Local MVP remainder.** Init, branch deletion/tracking and stashes; broaden signing and failure recovery. Whole-hunk staging is delivered in 0.14.0.
-- [ ] **P1 — Network MVP.** Clone/remote editing and visible auth/input; sequence recovery is prioritized above. Pull rebase/merge/auto-stash is in 0.11.0.
+- [ ] **P1 — Network MVP.** Clone/remote editing and broader auth/input. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor; disposable destructive fixtures.
 - [ ] **P2 — Extended compatibility.** Submodule/worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization.
@@ -40,6 +39,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.17.0 / 2026-10-28:** real Continue/Skip/Abort recovery, cached controls and reviewed-target confirmation, shared progress/cancellation and preserved conflict state. 176 checks; zero opening-time Git calls, 44 ms warmed offscreen layout; normal/minimum review and verified package. [Evidence](docs/roadmap.md#current-status).
 
 - [x] **0.16.1 / 2026-10-28:** native dark title bars on app-owned windows, system high-contrast defaults and Windows 10 fallback. 157 checks passed on fresh rerun; hidden HWND API acceptance verified, visible paint unverified. Preview checksums/build/tested assemblies match. [Evidence](docs/roadmap.md#current-status).
 

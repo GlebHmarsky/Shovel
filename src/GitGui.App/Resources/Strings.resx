@@ -75,7 +75,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="DetachedHead" xml:space="preserve"><value>Detached HEAD: {0}</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
   <data name="BranchHead" xml:space="preserve"><value>Branch: {0}</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
   <data name="NoSequence" xml:space="preserve"><value>No interrupted Git sequence detected. Working-tree changes have not been checked.</value></data>
-  <data name="SequenceDetected" xml:space="preserve"><value>Operation in progress: {0}. Resolve it using your existing Git tools; recovery actions are not available here yet.</value><comment>{0} is a path, version, state, date or duration as indicated by the message; preserve the placeholder.</comment></data>
+  <data name="SequenceDetected" xml:space="preserve"><value>Operation in progress: {0}. Resolve and stage files in Local Changes, then use the recovery controls in the sidebar or Repository menu. Unrecognized operations require your existing Git tools.</value></data>
   <data name="OperationMerge" xml:space="preserve"><value>Merge</value></data>
   <data name="OperationRebase" xml:space="preserve"><value>Rebase</value></data>
   <data name="OperationApplyMailbox" xml:space="preserve"><value>Apply mailbox</value></data>
@@ -223,8 +223,8 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionAutoStash" xml:space="preserve"><value>Automatically stash and reapply local changes</value></data>
   <data name="ActionAutoStashHelp" xml:space="preserve"><value>Includes tracked changes only; untracked files stay in place. Reapplying can conflict, and staged changes may return unstaged. Submodule contents are not stashed or updated.</value></data>
   <data name="ActionIgnoredCollision" xml:space="preserve"><value>Incoming files overlap ignored local files. Move those local files before rebasing. They have not been overwritten.</value></data>
-  <data name="ActionRebaseConflict" xml:space="preserve"><value>Rebase stopped and needs attention. Review Git output, resolve and stage conflicts, then use git rebase --continue in a terminal, or git rebase --abort to abandon the rebase. Any auto-stash remains under Git's control until recovery finishes. Refresh Shovel afterward.</value></data>
-  <data name="ActionMergeConflict" xml:space="preserve"><value>Merge stopped and needs attention. Review Git output, resolve and stage conflicts, then use git merge --continue in a terminal, or git merge --abort to abandon the merge. Auto-stash recovery can also conflict. Refresh Shovel afterward.</value></data>
+  <data name="ActionRebaseConflict" xml:space="preserve"><value>Rebase stopped and needs attention. Review Git output, resolve and stage conflicts, then choose Continue in the sidebar or Repository menu. Abort abandons the rebase. Any auto-stash remains under Git's control until recovery finishes. Refresh Shovel afterward.</value></data>
+  <data name="ActionMergeConflict" xml:space="preserve"><value>Merge stopped and needs attention. Review Git output, resolve and stage conflicts, then choose Continue in the sidebar or Repository menu. Abort abandons the merge. Auto-stash recovery can also conflict. Refresh Shovel afterward.</value></data>
   <data name="ActionStashConflict" xml:space="preserve"><value>Pull left unresolved file conflicts, possibly while reapplying the auto-stash. Inspect git status and git stash list in a terminal. Resolve the files before further work; keep the recovery stash until your changes are verified. Refresh Shovel afterward.</value></data>
   <data name="ActionStageRebasing" xml:space="preserve"><value>Rebasing local commits</value></data>
   <data name="ActionStageMerging" xml:space="preserve"><value>Merging remote changes</value></data>
@@ -259,7 +259,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionOtherInstance" xml:space="preserve"><value>Another Shovel instance is changing this repository or a linked worktree. Wait for it to finish, then reopen this dialog.</value></data>
   <data name="ActionChanged" xml:space="preserve"><value>Repository refs, HEAD or configuration changed while this dialog was open. Nothing was started. Reopen the dialog to review current targets.</value></data>
   <data name="ActionChangedAfterFetch" xml:space="preserve"><value>Fetch completed, but repository state changed before fast-forwarding. The local branch was not advanced by Shovel. Review history and reopen the dialog.</value></data>
-  <data name="ActionSequence" xml:space="preserve"><value>A merge, rebase, cherry-pick, revert or other sequence is already in progress. Resolve or abort it with your terminal before starting this operation.</value></data>
+  <data name="ActionSequence" xml:space="preserve"><value>A Git sequence is already in progress. Use Local Changes and the recovery controls before starting another operation. Unrecognized sequences require your existing Git tools.</value></data>
   <data name="ActionWorktreeUnsupported" xml:space="preserve"><value>Branch checkout is not supported yet for repositories with submodules or sparse checkouts. Use your existing Git tools for switching branches.</value></data>
   <data name="ActionDirty" xml:space="preserve"><value>The worktree or index has changes, including untracked files. Commit, stash or move them with your existing tools before retrying. Shovel did not discard them.</value></data>
   <data name="ActionNoStart" xml:space="preserve"><value>No commit is available at the selected starting reference. Create the first commit with your existing tools, or choose another reference.</value></data>
@@ -476,4 +476,28 @@ This rewrites its hash and may require coordinating published history. Reflog ca
   <data name="BinaryExactBytes" xml:space="preserve"><value>{0:N0} B</value></data>
   <data name="BinarySize" xml:space="preserve"><value>{0:N1} {1} ({2:N0} B)</value></data>
   <data name="CommitBackgroundRefreshFailed" xml:space="preserve"><value>{0} The full refresh failed; retained rows may be stale. Use Refresh in this window to check them.</value></data>
+  <data name="RecoveryMenu" xml:space="preserve"><value>Recovery</value></data>
+  <data name="RecoveryWaiting" xml:space="preserve"><value>Awaiting conflict resolution / recovery</value></data>
+  <data name="ActionTitleContinue" xml:space="preserve"><value>Continue</value></data>
+  <data name="ActionTitleSkip" xml:space="preserve"><value>Skip…</value></data>
+  <data name="ActionTitleAbort" xml:space="preserve"><value>Abort…</value></data>
+  <data name="ActionStageRecovering" xml:space="preserve"><value>Recovering operation</value></data>
+  <data name="RecoveryHelp" xml:space="preserve"><value>{0} in progress. Open Local Changes to review conflicts, resolve files externally and stage them, then Continue.</value></data>
+  <data name="RecoveryContinueHelp" xml:space="preserve"><value>Continue the detected operation using staged resolutions and Git's existing commit message. Hooks and signing remain enabled.</value></data>
+  <data name="RecoverySkipHelp" xml:space="preserve"><value>Skip the current commit and discard its conflict resolution before continuing the sequence.</value></data>
+  <data name="RecoveryAbortHelp" xml:space="preserve"><value>Abandon the detected operation. Review the affected repository and original tip before confirming.</value></data>
+  <data name="RecoveryConfirmAbort" xml:space="preserve"><value>Abort {1} in {0}?
+Branch: {2}
+Original tip (observed): {3}
+
+Git will try to restore the pre-operation state. This can discard resolution edits and staged changes; auto-stash restoration can conflict. Some pre-existing uncommitted changes may not be recoverable. No complete undo is promised.</value></data>
+  <data name="RecoveryConfirmSkip" xml:space="preserve"><value>Skip the current commit in {1} in {0}?
+Branch: {2}
+Sequence original tip (observed): {3}
+Current commit: {4}
+
+Git will discard the current commit's resolution changes and continue with the remaining sequence. This may stop at another conflict. No complete undo is promised.</value></data>
+  <data name="RecoveryChanged" xml:space="preserve"><value>The operation or HEAD changed since it was displayed. Shovel will refresh its state. Review the new state before trying again.</value></data>
+  <data name="RecoveryUnavailable" xml:space="preserve"><value>No supported operation is available for recovery. Refresh after external changes; use your existing Git tools for mailbox, ambiguous or oversized sequence state.</value></data>
+  <data name="RecoveryPending" xml:space="preserve"><value>Git still has an operation in progress. Review the output and Local Changes, resolve and stage conflicts, then choose the next recovery action.</value></data>
 </root>

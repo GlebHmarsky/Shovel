@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.16.1**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.17.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -43,7 +43,7 @@ Right: numbered colored unified diff above subject/description and **Amend**. Ad
 
 **Selected hunks (0.14.0):** select any line inside a change block, or Ctrl/Shift-select several blocks, then use the single **Stage hunk(s)** / **Unstage hunk(s)** button beside the diff. This selects complete blocks, not individual lines; accessible row descriptions identify each block. Ordinary tracked text modifications are supported with normal diff options; unavailable types/options explain why and retain whole-file actions. The command preserves working files, unrelated index edits, draft and selected file. It clears block selection after refresh; stale previews fail visibly and reinspect without retrying. [Architecture](architecture.md#selected-hunks-0140) owns exact restrictions and race limits.
 
-**Commit** records the staged index with the entered message. **Amend** can preload the previous message when the draft is empty; execution confirms the actual branch/hash because it rewrites that tip. Hold Shift for **Commit and Push**, using the attached branch's configured upstream; a missing upstream disables that variant with a reason. No force push. Push failure retains the new commit and reports the two outcomes separately. Conflicted index entries block commit; after resolving files externally and staging them, a pending merge can be committed here. Other sequence recovery still uses existing tools.
+**Commit** records the staged index with the entered message. **Amend** can preload the previous message when the draft is empty; execution confirms the actual branch/hash because it rewrites that tip. Hold Shift for **Commit and Push**, using the attached branch's configured upstream; a missing upstream disables that variant with a reason. No force push. Push failure retains the new commit and reports the two outcomes separately. Conflicted index entries block commit; after resolving files externally and staging them, a pending merge can be committed here. Other sequence recovery uses the sidebar/Repository controls described below.
 
 Opening binds cached rows/draft immediately, then reads after layout; it never fetches. First load, clean lists, active reads/actions, stale rows, failures and conflicts remain distinct. Refresh/Cancel is one modal control. Failed/cancelled status reads keep useful rows but disable writes until a fresh context is available. New selection cancels obsolete diff work. Static action results and retained output stay in the modal; command duration stays at top center. Closing cancels/drains/reinspects, without claiming undo. History refreshes after the modal closes following a mutation.
 
@@ -53,6 +53,14 @@ Opening binds cached rows/draft immediately, then reads after layout; it never f
 
 Draft, file selection and last output are session-only per tab; successful commit clears the draft, failed commit retains it. Closing the tab/app discards that draft; no crash-safe draft persistence yet. [Architecture](architecture.md#local-changes-and-commit-0130) owns bounds and execution details.
 
+## Conflict recovery (0.17.0)
+
+Detected merge, rebase, cherry-pick and revert operations expose **Continue**, **Abort**, and **Skip** when a current replayed commit is known. Controls appear in the sidebar and Repository → Recovery from the cached snapshot; opening them performs no Git or filesystem work. Reopening a repository rediscovers Git's state rather than replaying a saved action.
+
+Open **Local Changes**, resolve files in your editor and Stage the resolutions, then close that modal and choose **Continue**. Continue uses Git's existing message; it refuses unresolved index entries. A subsequent conflict keeps recovery controls available. Abort confirms the repository, branch and observed original tip; Skip also identifies the current commit and warns that resolution edits will be discarded. Git may fail to restore all earlier uncommitted changes. Neither action promises complete undo.
+
+Commands use top-center progress/Cancel and retained Operation output. Existing history remains visible. Failures/cancellation re-read state; no automatic abort, stash deletion, lock cleanup or retry. A conflict while restoring an auto-stash remains a conflict even after the sequence ends: use Local Changes and inspect the preserved stash with existing tools. Mailbox (`git am`), ambiguous/oversized state and interactive todo/message editing remain unsupported. Hooks, signing and existing rebase exec steps remain enabled; unsupported input still requires existing tools. Recovery is not a built-in conflict editor.
+
 ## Explicit branch and remote workflows (0.8.0)
 
 Branch split button defaults to New branch (name, start reference, optional checkout); arrow lists local branches for switching. Start points bind observed commits. New branches do not inherit tracking; Push can set upstream. The commit editor can create an initial commit in an unborn repository.
@@ -61,7 +69,7 @@ Branch split button defaults to New branch (name, start reference, optional chec
 
 Ordinary UI interactions must respond promptly, without a loading prerequisite. Necessary command validation/execution runs after submission with visible progress. Explain and discuss any unavoidable new UI wait rather than silently introducing one. Pull still fetches its selected branch before integrating; merely opening any dialog never fetches.
 
-**Confirmed 2026-10-28:** Pull defaults to **Rebase**, with **Merge** as the alternative. Rebase replays local commits and changes their hashes; Merge preserves them and creates a merge commit for divergence. An initially unchecked **Automatically stash and reapply local changes** checkbox uses Git's tracked-file auto-stash. Untracked files remain in place; staged content can return unstaged. Git protects ordinary collisions/dirty state; Shovel no longer rejects all untracked files. Conflicts retain Git recovery state and original output, with terminal continue/abort guidance; a conflict during stash restoration must not appear as successful completion. In-app conflict recovery remains deferred.
+**Confirmed 2026-10-28:** Pull defaults to **Rebase**, with **Merge** as the alternative. Rebase replays local commits and changes their hashes; Merge preserves them and creates a merge commit for divergence. An initially unchecked **Automatically stash and reapply local changes** checkbox uses Git's tracked-file auto-stash. Untracked files remain in place; staged content can return unstaged. Git protects ordinary collisions/dirty state; Shovel no longer rejects all untracked files. Conflicts retain Git recovery state and original output, with in-app Continue/Skip/Abort and retained output; a conflict during stash restoration must not appear as successful completion. See Conflict recovery above; conflict editing remains deferred.
 
 Pull preserves existing sparse-checkout patterns and only updates superproject references to submodules. Submodule contents are neither updated nor included in auto-stash; use existing tools for those workflows. Branch switching in these repository modes remains deferred.
 
@@ -83,7 +91,7 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 Current frame: File/View/Repository/Window/Help; Open/Commit/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; Local changes modal entry/All Commits sidebar; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 
-Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Historical file-tree browsing, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
+Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Historical file-tree browsing, other mutations/tools and conflict editing remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
 
 **Proposed refinements:** context menus target the clicked object while preserving a containing multiselection; shared commands serve menus/toolbar/shortcuts. Large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately. The previously proposed separate embedded Changes workspace is superseded by the confirmed modal design above.
 

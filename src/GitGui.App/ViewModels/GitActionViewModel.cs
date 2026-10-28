@@ -184,6 +184,7 @@ public sealed class GitActionViewModel : ObservableObject
             _cancelled = result.Outcome == GitGui.Core.Processes.ProcessOutcome.Cancelled;
             Status = UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure :
                 result.Operation.HasFlag(RepositoryOperation.Rebase) ? "ActionRebaseConflict" : result.Operation.HasFlag(RepositoryOperation.Merge) ? "ActionMergeConflict" :
+                result.Operation != RepositoryOperation.None ? "RecoveryPending" :
                 result.HasConflicts ? "ActionStashConflict" :
                 result.Success ? "ActionSucceeded" : "ActionResult" + result.Outcome);
         }

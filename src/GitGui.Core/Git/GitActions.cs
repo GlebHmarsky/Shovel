@@ -5,8 +5,8 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push }
-public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch }
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort }
+public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch, Recovering }
 public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
 public sealed record ActionContext(GitInstallation Git, RepositoryIdentity Identity, RepositorySnapshot Repository,
@@ -55,7 +55,8 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
 
     public Task<ActionResult> ExecuteAsync(ActionContext context, ActionOptions options, CancellationToken token,
         Action<ProcessOutput>? progress = null, IAuthenticationSession? authentication = null,
-        Action<GitActionStage>? stage = null) => Task.Run(() =>
+        Action<GitActionStage>? stage = null) => options.Action is GitAction.Continue or GitAction.Skip or GitAction.Abort
+        ? ExecuteRecoveryAsync(context, options.Action, token, progress, stage) : Task.Run(() =>
     {
         using var authenticationStop = CancellationTokenSource.CreateLinkedTokenSource(token,
             authentication?.CancellationToken ?? CancellationToken.None);
