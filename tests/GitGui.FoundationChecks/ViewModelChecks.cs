@@ -327,6 +327,7 @@ internal static partial class Program
             try { await Release.Task.WaitAsync(cancellationToken); }
             catch (OperationCanceledException) { Cancelled = true; return new(ProcessOutcome.Cancelled, null, [], [], TimeSpan.Zero); }
             var args = request.Arguments;
+            if (args.Contains("remote")) return new(ProcessOutcome.Exited, 0, Encoding.UTF8.GetBytes("origin\n"), [], TimeSpan.Zero);
             if (args.Contains("rev-list"))
             {
                 DivergenceStarted.TrySetResult();

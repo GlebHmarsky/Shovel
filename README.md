@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.11.0** opens operation dialogs before asynchronous target preparation and adds default Pull-Rebase, Pull-Merge and optional auto-stash. Follow execution at top center and in retained Operation details. Automatic All Commits/graph/paging and Git/OpenSSH askpass remain.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.11.1** opens fixed-size operation dialogs immediately from cached local targets and retains default Pull-Rebase, Pull-Merge and optional auto-stash. Follow execution at top center and in retained Operation details. Automatic All Commits/graph/paging and Git/OpenSSH askpass remain.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -32,7 +32,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#prompt-dialogs-and-pull-strategies-2026-10-28) distinguishes integration/headless from desktop.
+Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#cached-operation-dialogs-2026-10-28) distinguishes integration/headless from desktop.
 
 ## Run
 
@@ -62,7 +62,7 @@ Menus, working toolbar actions and center timer remain; unfinished Stash/Explore
 
 ## Branch and remote actions
 
-Branch: create from concrete starting commit/optional checkout; arrow switches local branches. Fetch chooses remote/all; Pull remote branch → current branch defaults to Rebase, with Merge as the alternative. Optional auto-stash saves/reapplies tracked changes (untracked stay in place; staging may change). Push chooses source/remote/destination with optional tags/upstream. Options appear before target queries complete; loading/error remains visible and execution enables when ready. Clicking the normal action closes options and starts Git. Follow phase/time at top center, Cancel there or under Repository, and read results through Details → Operation. No extra approval checkbox; force options remain deferred.
+Branch: create from concrete starting commit/optional checkout; arrow switches local branches. Fetch chooses remote/all; Pull remote branch → current branch defaults to Rebase, with Merge as the alternative. Optional auto-stash saves/reapplies tracked changes (untracked stay in place; staging may change). Push chooses source/remote/destination with optional tags/upstream. Fixed-size close-only options are immediately editable from cached local refs/remote names; opening runs no Git queries. Use Fetch for new remote branches or Refresh after external configuration changes. Execution resolves the named remote using current Git configuration and validates the cached refs. Clicking the normal action closes options and starts Git. Follow phase/time at top center, Cancel there or under Repository, and read results through Details → Operation. No extra approval checkbox; force options remain deferred.
 
 Existing restrictions: Git rejects conflicting dirty/untracked paths; Shovel protects ignored collisions. Branch checkout still requires clean state and excludes sparse/submodule repositories. Pull respects existing sparse patterns and updates superproject pointers without updating/stashing submodule contents. Active sequences, custom SSH/multiple remote URLs and force remain unsupported. Hooks are preserved. [Action details](docs/architecture.md#explicit-git-actions-f2a-080). Rebase/merge/stash conflicts keep recovery state, show terminal instructions and original output; in-app resolve/continue/abort is pending. One last result/output remains in memory on its repository tab, with HTTP(S) credentials redacted. Cancel is not undo; fresh history/count inspection finishes before another action/tab/window close. Main-window auth prompts survive options closure; refresh failure is distinct from Git outcome.
 
@@ -78,7 +78,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --me
 
 First: three samples/isolated 2,500 commits, separate settings/discovery/inspection/ref/page/graph/format/process timings, first/warm offscreen construction. Second: packed 100k commits/1,201 refs, first/last page before/after fixture-only commit-graph/packed-ref maintenance. App never maintains user repos for a benchmark. Regular checks cover auto-start/tab/refresh/render timing. Outputs artifacts/history-benchmarks; [roadmap](docs/roadmap.md) records comparisons. Not cold desktop/Windows 10/p95 certification.
 
-Third: seven samples on an isolated 2,500-commit/one-remote fixture; separate loading-dialog layout, preparation/subprocess times and prepared-dialog layout. Writes artifacts/action-benchmarks. First construction includes WPF/JIT initialization; later samples are warm. No window is shown, no network fetch or user repository is read.
+Third: seven samples on an isolated 2,500-commit/one-remote fixture; separate cached editable-dialog layout, post-submission preparation/subprocess cost and prepared-dialog layout. Writes artifacts/action-benchmarks. First construction includes WPF/JIT initialization; later samples are warm. No window is shown, no network fetch or user repository is read.
 
 ## Build a local preview
 
@@ -86,7 +86,7 @@ Third: seven samples on an isolated 2,500-commit/one-remote fixture; separate lo
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.11.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.11.1-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

@@ -20,13 +20,10 @@ public sealed class GitActionViewModel : ObservableObject
     private int _publishedBytes;
     private Task _outputTask = Task.CompletedTask;
     private ActionContext? _context;
+    private readonly Func<CancellationToken, Task<ActionContext>>? _prepareExecution;
     public ActionContext Context => _context ?? throw new InvalidOperationException();
     private readonly string _repository;
-    private CancellationTokenSource? _preparation;
-    private bool _preparing, _dismissed;
-    public bool IsPreparing { get => _preparing; private set { Set(ref _preparing, value); Changed(nameof(CanEdit)); Refresh(); } }
-    public bool HasPreparationError => !IsPreparing && _context is null;
-    public Task PreparationTask { get; private set; } = Task.CompletedTask;
+    private bool _dismissed;
     public GitAction Action { get; }
     public bool IsNew => Action == GitAction.NewBranch;
     public bool IsSwitch => Action == GitAction.SwitchBranch;
@@ -47,7 +44,8 @@ public sealed class GitActionViewModel : ObservableObject
         .Select(item => item.Name[(14 + Remote!.Name.Length)..]).ToArray() ?? [];
     private GitRemote? _remote;
     public GitRemote? Remote { get => _remote; set { if (Set(ref _remote, value)) { Changed(nameof(Target)); Changed(nameof(RemoteBranches)); Refresh(); } } }
-    public string Target => Remote is null ? UiText.Get("ActionNoRemote") : IsPush ? Remote.PushAddress : Remote.FetchAddress;
+    public string Target => Remote is null ? UiText.Get("ActionNoRemote") : _prepareExecution is not null
+        ? UiText.Get("ActionCachedTargets") : IsPush ? Remote.PushAddress : Remote.FetchAddress;
     private string _branch = "", _remoteBranch = "", _newName = "", _startRef = "HEAD";
     public string Branch { get => _branch; set { if (Set(ref _branch, value)) Refresh(); } }
     public string RemoteBranch { get => _remoteBranch; set { if (Set(ref _remoteBranch, value)) Refresh(); } }
@@ -67,9 +65,9 @@ public sealed class GitActionViewModel : ObservableObject
     public bool Rebase { get => Strategy == PullStrategy.Rebase; set { if (value) Strategy = PullStrategy.Rebase; } }
     public bool Merge { get => Strategy == PullStrategy.Merge; set { if (value) Strategy = PullStrategy.Merge; } }
     public bool IsRunning { get => _running; private set { if (Set(ref _running, value)) { Changed(nameof(CanEdit)); Changed(nameof(CanCancel)); Refresh(); } } }
-    public bool CanEdit => !IsPreparing && _context is not null && !_dismissed && !IsRunning && !_attempted;
+    public bool CanEdit => _context is not null && !_dismissed && !IsRunning && !_attempted;
     public bool HasAttempt => _attempted;
-    public string RunUnavailableReason => UiText.Get(IsPreparing ? "ActionPreparing" : _context is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
+    public string RunUnavailableReason => UiText.Get(_context is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
         IsNetwork && Remote is null ? "ActionNoRemote" :
         IsNew && string.IsNullOrWhiteSpace(NewName) ? "ActionEnterBranchName" :
         IsNew && !StartRefs.Contains(StartRef) ? "ActionNoStart" :
@@ -92,43 +90,20 @@ public sealed class GitActionViewModel : ObservableObject
     public Task RunningTask { get; private set; } = Task.CompletedTask;
 
     public GitActionViewModel(ActionContext context, GitAction action, GitActions actions, Func<Task> reconcile, string? initialBranch = null,
-        IUserInteraction? interaction = null) : this(context.Repository.Worktree, action, actions, reconcile, interaction)
+        IUserInteraction? interaction = null, Func<CancellationToken, Task<ActionContext>>? prepareExecution = null)
     {
-        ApplyContext(context, initialBranch);
-    }
-    public GitActionViewModel(string repository, GitAction action, GitActions actions, Func<Task> reconcile, IUserInteraction? interaction = null)
-    {
-        _repository = repository; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
-        _preparing = true;
+        _repository = context.Repository.Worktree; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
+        _prepareExecution = prepareExecution;
         RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!IsNetwork || Remote is not null) &&
             (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
             (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
+        ApplyContext(context, initialBranch);
         _timer.Tick += (_, _) => { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
-    }
-    public void Prepare(Func<CancellationToken, Task<ActionContext>> prepare, string? initialBranch = null)
-    {
-        if (_context is not null || _preparation is not null) throw new InvalidOperationException();
-        _preparation = new(TimeSpan.FromSeconds(45));
-        PreparationTask = PrepareCoreAsync(prepare, initialBranch);
-    }
-    private async Task PrepareCoreAsync(Func<CancellationToken, Task<ActionContext>> prepare, string? initialBranch)
-    {
-        try
-        {
-            // Open/layout the options view before starting even local Git preparation.
-            await Dispatcher.Yield(DispatcherPriority.Background);
-            var context = await prepare(_preparation!.Token);
-            if (!_dismissed && !_preparation.IsCancellationRequested) ApplyContext(context, initialBranch);
-        }
-        catch (GitActionException exception) { if (!_dismissed) Status = UiText.Get(exception.Code); }
-        catch (GitReadException exception) { if (!_dismissed) { Status = UiText.Get("ActionReadFailed"); RawOutput = GitActions.Redact(exception.RawOutput); } }
-        catch (Exception) { if (!_dismissed) Status = UiText.Get("ActionReadFailed"); }
-        finally { IsPreparing = false; Changed(nameof(HasPreparationError)); _preparation!.Dispose(); _preparation = null; }
     }
     public void DismissOptions()
     {
         if (HasAttempt) return;
-        _dismissed = true; _preparation?.Cancel(); Refresh();
+        _dismissed = true; Refresh();
     }
     private void ApplyContext(ActionContext context, string? initialBranch)
     {
@@ -140,9 +115,9 @@ public sealed class GitActionViewModel : ObservableObject
         _remote = Remotes.FirstOrDefault(item => context.Repository.UpstreamRef?.StartsWith("refs/remotes/" + item.Name + "/", StringComparison.Ordinal) == true) ?? Remotes.FirstOrDefault();
         _remoteBranch = context.Repository.UpstreamRef is { } upstream && _remote is not null && upstream.StartsWith("refs/remotes/" + _remote.Name + "/", StringComparison.Ordinal)
             ? upstream[(14 + _remote.Name.Length)..] : _branch;
-        IsPreparing = false; Status = UiText.Get("ActionReady");
+        Status = UiText.Get("ActionReady");
         foreach (var property in new[] { nameof(Into), nameof(Remotes), nameof(Branches), nameof(StartRefs), nameof(Remote), nameof(RemoteBranches),
-            nameof(Branch), nameof(RemoteBranch), nameof(StartRef), nameof(Target), nameof(HasPreparationError) }) Changed(property);
+            nameof(Branch), nameof(RemoteBranch), nameof(StartRef), nameof(Target) }) Changed(property);
     }
     private void Refresh() { RunCommand?.Refresh(); Changed(nameof(RunUnavailableReason)); }
     public void Cancel() { if (CanCancel) { Status = UiText.Get("ActionCancelling"); Phase = UiText.Get("ActionStopping"); _cancel.Cancel(); Changed(nameof(CanCancel)); } }
@@ -171,6 +146,13 @@ public sealed class GitActionViewModel : ObservableObject
             ExecutionStarting?.Invoke(this, EventArgs.Empty);
             // Let ShowDialog unwind before creating prompts or starting Git. The shell owns this task.
             await Dispatcher.Yield(DispatcherPriority.Background);
+            if (_prepareExecution is not null)
+            {
+                Phase = UiText.Get("ActionStageValidating");
+                using var validation = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token);
+                validation.CancelAfter(TimeSpan.FromSeconds(45));
+                _context = await _prepareExecution(validation.Token);
+            }
             var promptContext = UiText.Format("AuthContext", Title, CurrentRepository);
             await using var authentication = IsNetwork ? await Task.Run(() => _interaction?.CreateAuthenticationSession(promptContext, async (prompt, token) =>
             {

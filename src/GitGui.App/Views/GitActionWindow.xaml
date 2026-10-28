@@ -1,7 +1,7 @@
 <Window x:Class="GitGui.App.Views.GitActionWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{Binding Title}" Width="650" Height="560" MinWidth="520" MinHeight="480"
- WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FlowDirection="{x:Static loc:UiText.Direction}"
+ WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize" FlowDirection="{x:Static loc:UiText.Direction}"
  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
  FontFamily="Segoe UI" FontSize="13">
  <Window.Resources><BooleanToVisibilityConverter x:Key="Visible"/></Window.Resources>
@@ -9,14 +9,6 @@
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel><TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" Margin="0,8"/>
    <TextBlock Text="{Binding CurrentRepository}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentRepository}" FlowDirection="LeftToRight"/>
-   <StackPanel Visibility="{Binding IsPreparing, Converter={StaticResource Visible}}" Margin="0,8,0,0">
-    <TextBlock Text="{loc:Text Key=ActionPreparing}" AutomationProperties.LiveSetting="Polite"/>
-    <ProgressBar IsIndeterminate="True" Height="3" Margin="0,4,0,0" AutomationProperties.Name="{loc:Text Key=ActionPreparing}"/>
-   </StackPanel>
-   <StackPanel Visibility="{Binding HasPreparationError, Converter={StaticResource Visible}}" Margin="0,8,0,0">
-    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
-    <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" MaxHeight="80" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ActionPreparationOutput}"/>
-   </StackPanel>
   </StackPanel>
   <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12">
    <StackPanel IsEnabled="{Binding CanEdit}">

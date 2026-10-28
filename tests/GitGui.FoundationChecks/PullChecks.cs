@@ -168,23 +168,42 @@ internal static partial class Program
             Expect(!directoryCollision.Succeeded && directoryCollision.Status == UiText.Get("ActionIgnoredCollision") &&
                 await File.ReadAllTextAsync(Path.Combine(repo, "generated", "file.txt")) == "preserve generated content", "Collapsed ignored directory still protects its files");
         });
-        await Check("Options render before preparation finishes; dismissal drains and rejects late results", async () =>
+        await Check("Post-submission validation can be cancelled before Git mutation", async () =>
         {
-            var context = _actionFixture!; var release = new TaskCompletionSource<ActionContext>();
-            var model = new GitActionViewModel(context.Repository.Worktree, GitAction.Pull, actions, () => Task.CompletedTask);
-            model.Prepare(_ => release.Task);
+            var started = new TaskCompletionSource(); var reconciled = 0;
+            var model = new GitActionViewModel(_actionFixture!, GitAction.Pull, actions,
+                () => { reconciled++; return Task.CompletedTask; }, prepareExecution: async token =>
+                {
+                    started.SetResult(); await Task.Delay(Timeout.Infinite, token); return _actionFixture!;
+                });
+            model.RunCommand.Execute(null); await started.Task;
+            model.Cancel(); await model.RunningTask;
+            Expect(!model.IsRunning && !model.Succeeded && reconciled == 1 && model.Status == UiText.Get("ActionResultCancelled"),
+                "Cancellation drains validation and reconciles without starting mutation");
+        });
+        await Check("Cached options are editable without preparation; only submission validates, with retained failures", async () =>
+        {
+            var context = _actionFixture!; var calls = 0;
+            Task<ActionContext> Prepare(CancellationToken token)
+            {
+                calls++;
+                return Task.FromException<ActionContext>(new GitReadException(GitFailure.CommandFailed, "fixture read failed"));
+            }
+            var model = new GitActionViewModel(context, GitAction.Pull, actions, () => Task.CompletedTask, prepareExecution: Prepare);
             var dialog = new GitActionWindow(model); var content = (FrameworkElement)dialog.Content;
-            Arrange(content, 650, 520); SaveRender(content, "pull-preparing.png", 650, 520);
-            Expect(model.IsPreparing && !model.RunCommand.CanExecute(null) && model.Rebase && !model.AutoStash, "Visible loading shell, default rebase, optional auto-stash");
+            Arrange(content, 650, 520); SaveRender(content, "pull-cached.png", 650, 520);
+            Expect(dialog.ResizeMode == ResizeMode.NoResize && model.RunCommand.CanExecute(null) && model.Rebase && !model.AutoStash,
+                "Fixed-size close-only options immediately usable with default rebase");
             await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-            dialog.Close(); release.SetResult(context); await model.PreparationTask;
-            Expect(!model.CanEdit && model.Remotes.Count == 0 && !model.HasAttempt, "Late preparation cannot repopulate a dismissed dialog or execute");
-            var failure = new GitActionViewModel(context.Repository.Worktree, GitAction.Pull, actions, () => Task.CompletedTask);
-            failure.Prepare(_ => Task.FromException<ActionContext>(new GitReadException(GitFailure.CommandFailed, "fixture read failed")));
-            await failure.PreparationTask;
+            Expect(calls == 0, "Opening and dispatcher pumping do not prepare Git targets");
+            dialog.Close();
+            Expect(calls == 0 && !model.HasAttempt && !model.CanEdit, "Dismissing performs no work");
+            var failure = new GitActionViewModel(context, GitAction.Pull, actions, () => Task.CompletedTask, prepareExecution: Prepare);
             var errorDialog = new GitActionWindow(failure);
-            Arrange((FrameworkElement)errorDialog.Content, 520, 440); SaveRender((FrameworkElement)errorDialog.Content, "pull-preparation-error.png", 520, 440);
-            Expect(failure.HasPreparationError && failure.RawOutput == "fixture read failed" && !failure.RunCommand.CanExecute(null), "Preparation error remains in the existing dialog");
+            failure.RunCommand.Execute(null);
+            await failure.RunningTask;
+            Expect(calls == 1 && failure.RawOutput == "fixture read failed" && !failure.Succeeded && !failure.IsRunning,
+                "Validation occurs after submit; failure retained in operation details");
             errorDialog.Close();
         });
     }

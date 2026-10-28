@@ -38,11 +38,24 @@ internal static partial class Program
         var expected = await reader.InspectAsync(git, peer, default);
         var gate = new PausedFetchRunner(inner);
         var interaction = new ActionInteraction();
-        interaction.Opening = model => Expect(model.IsPreparing && !model.PreparationTask.IsCompleted,
-            "Shell opens options before asynchronous Git preparation completes");
-        var shell = new ShellViewModel(reader, interaction, identities, actions: new GitActions(gate, reader, identities));
+        interaction.Opening = model => Expect(model.CanEdit && model.Remote?.Name == "origin",
+            "Shell opens fully editable options from cached local targets without preparation");
+        var observedReader = new RepositoryReader(gate);
+        var shell = new ShellViewModel(observedReader, interaction, identities, actions: new GitActions(gate, observedReader, identities));
         shell.CompleteStartup(new(new() { RepositoryPaths = [repo, peer], SelectedRepositoryPath = repo }, SettingsLoadStatus.Loaded));
         await shell.WaitForIdleAsync();
+        await Check("All operation dialogs open and dismiss with zero Git calls from the cached tab", async () =>
+        {
+            interaction.Show = model => new GitActionWindow(model).Close();
+            var calls = gate.Calls;
+            foreach (var command in new[] { shell.NewBranchCommand, shell.FetchCommand, shell.PullCommand, shell.PushCommand })
+            {
+                command.Execute(null); await shell.ActionTask;
+            }
+            shell.SwitchBranchCommand.Execute("main"); await shell.ActionTask;
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+            Expect(gate.Calls == calls && !shell.HasAction, "Opening, closing and pumping dispatch queue perform no Git commands");
+        });
         var optionsClosed = false;
         interaction.Show = model =>
         {
@@ -116,6 +129,24 @@ internal static partial class Program
             Expect(gate.Fetches == attempts && ReferenceEquals(shell.CurrentAction, result), "Dismissing options does not execute or discard the previous result");
             await Git(repo, "remote", "set-url", "origin", remote);
         });
+        await Check("Cached targets include unfetched remotes and reject changed refs on submission", async () =>
+        {
+            await Git(repo, "remote", "add", "unfetched", remote);
+            shell.RefreshRepositoryCommand.Execute(null); await shell.WaitForIdleAsync();
+            interaction.Show = model =>
+            {
+                Expect(model.Remotes.Any(item => item.Name == "unfetched") && !model.Context.History.References.Any(item => item.Name.StartsWith("refs/remotes/unfetched/")),
+                    "Configured local remotes do not require a prior fetch");
+                new GitActionWindow(model).Close();
+            };
+            shell.FetchCommand.Execute(null); await shell.ActionTask;
+            await Git(repo, "branch", "external-change");
+            interaction.Show = model => model.RunCommand.Execute(null);
+            var fetches = gate.Fetches;
+            shell.PullCommand.Execute(null); await shell.ActionTask;
+            Expect(shell.CurrentAction?.Status == UiText.Get("ActionChanged") && gate.Fetches == fetches,
+                "Refs changed since cached view fail before network work and reconcile");
+        });
         await Check("Main-window cancellation drains an operation after its options dialog closes", async () =>
         {
             var paused = new PausedFetchRunner(inner);
@@ -137,8 +168,10 @@ internal static partial class Program
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Fetches { get; private set; }
+        public int Calls;
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
+            Interlocked.Increment(ref Calls);
             if (request.Arguments.Contains("fetch"))
             {
                 Fetches++; Started.TrySetResult();

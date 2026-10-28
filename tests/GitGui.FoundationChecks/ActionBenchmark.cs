@@ -33,12 +33,15 @@ internal static partial class Program
         Git("remote", "add", "origin", repo); Git("config", "branch.main.remote", "origin"); Git("config", "branch.main.merge", "refs/heads/main");
         var actions = new GitActions(runner, reader, new WindowsRepositoryIdentity());
         var samples = new List<object>();
+        var cached = actions.PrepareAsync(git, repo, default).GetAwaiter().GetResult();
         for (var i = 0; i < 7; i++)
         {
+            runner.Calls.Clear();
             var open = Stopwatch.StartNew();
-            var loading = new GitActionWindow(new GitActionViewModel(repo, GitAction.Pull, actions, () => Task.CompletedTask));
+            var loading = new GitActionWindow(new GitActionViewModel(cached, GitAction.Pull, actions, () => Task.CompletedTask, prepareExecution: token => actions.PrepareAsync(git, repo, token)));
             Arrange((FrameworkElement)loading.Content, 650, 520);
-            var loadingDialogMs = open.Elapsed.TotalMilliseconds; loading.Close();
+            var cachedDialogMs = open.Elapsed.TotalMilliseconds; loading.Close();
+            Expect(runner.Calls.Count == 0, "Cached editable dialog performs no Git queries");
             runner.Calls.Clear(); var watch = Stopwatch.StartNew();
             var context = actions.PrepareAsync(git, repo, default).GetAwaiter().GetResult();
             var prepareMs = watch.Elapsed.TotalMilliseconds;
@@ -56,7 +59,7 @@ internal static partial class Program
                 SaveRender((FrameworkElement)window.Content, "pull-benchmark-minimum.png", 520, 440);
             }
             window.Close();
-            samples.Add(new { iteration = i, loadingDialogMs, prepareMs, dialogMs, calls = runner.Calls.ToArray() });
+            samples.Add(new { iteration = i, cachedDialogMs, prepareMs, dialogMs, calls = runner.Calls.ToArray() });
         }
         File.WriteAllText(Path.Combine(_root, "action-timings.json"), JsonSerializer.Serialize(samples, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"Timings: {_root}");

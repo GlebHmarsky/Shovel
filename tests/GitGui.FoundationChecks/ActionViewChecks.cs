@@ -192,12 +192,6 @@ internal static partial class Program
         public void ShowGitAction(GitActionViewModel model)
         {
             Opening?.Invoke(model);
-            // Model the nested ShowDialog dispatcher without displaying a desktop window.
-            var frame = new DispatcherFrame();
-            var dispatcher = Dispatcher.CurrentDispatcher;
-            _ = model.PreparationTask.ContinueWith(_ => dispatcher.BeginInvoke(() => frame.Continue = false), TaskScheduler.Default);
-            if (!model.PreparationTask.IsCompleted) Dispatcher.PushFrame(frame);
-            model.PreparationTask.GetAwaiter().GetResult();
             Show?.Invoke(model);
         }
         public void ShowActionError(string message) => Done.TrySetException(new InvalidOperationException(message));

@@ -33,8 +33,7 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
         if (!SamePaths(identity, repository)) throw new GitActionException("ActionIdentityChanged");
         var history = await reader.OpenInspectedHistoryAsync(git, repository, HistoryScope.AllCommits, token).ConfigureAwait(false);
         var remotes = new List<GitRemote>();
-        var names = Decode(await Read(git, path, ["remote"], token)).TrimEnd('\r', '\n');
-        foreach (var name in names.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var name in repository.RemoteNames)
         {
             if (remotes.Count >= 32 || name.StartsWith('-') || name.Contains('\r') || name.Any(char.IsControl))
                 throw new GitActionException("ActionUnsupportedRemote");

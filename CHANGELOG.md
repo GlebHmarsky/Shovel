@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.1 — 2026-10-28
+
+- Pull/Fetch/Push/branch dialogs use cached local targets immediately; removed opening-time Git preparation and loading/error shells. Fresh validation runs after submission with main-window progress and retained errors.
+- All operation options are fixed-size with Close only in the title bar; content remains scrollable. Pull keeps default Rebase, optional Merge and auto-stash.
+- Cache configured remote names during local inspection, including unfetched remotes. No opening-time network checks; Fetch discovers new remote branches. Document prompt UI behavior as a project requirement.
+
+
 Historical entries describe their release, not current policy. From 0.9.2, working features/normal operation consent supersede older prototype/trust requirements.
 
 ## 0.11.0 â€” 2026-10-28

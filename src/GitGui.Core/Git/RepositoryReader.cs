@@ -21,6 +21,7 @@ public sealed record RepositorySnapshot(string Worktree, string GitDirectory, st
 {
     internal HistoryState? InitialHistoryState { get; init; }
     public string? UpstreamRef { get; init; }
+    public IReadOnlyList<string> RemoteNames { get; init; } = [];
 }
 
 /// <summary>Read-only metadata commands. Caller validates repository identity before automatic reads; no helper/script permission is implied.</summary>
@@ -65,11 +66,16 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         var common = Path.GetFullPath(lines[3]);
         var operation = ReadOperation(gitDirectory);
         var location = new RepositorySnapshot(worktree, gitDirectory, common, null, null, HeadKind.Unborn, operation, DateTimeOffset.Now);
-        var state = await ReadHistoryStateAsync(git, location, token).ConfigureAwait(false);
+        // Local names only: no URL resolution, helpers or network. Run alongside the ref read.
+        var remotesTask = Command("remote");
+        var stateTask = ReadHistoryStateAsync(git, location, token);
+        await Task.WhenAll(remotesTask, stateTask).ConfigureAwait(false);
+        var state = await stateTask;
+        var remotes = Text((await remotesTask).StandardOutput).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (operation != ReadOperation(gitDirectory)) throw new GitReadException(GitFailure.ChangedDuringRead);
         return location with { Branch = state.Branch, Commit = state.Commit,
             HeadKind = state.Branch is null ? HeadKind.Detached : state.Commit is null ? HeadKind.Unborn : HeadKind.Branch,
-            InitialHistoryState = state, UpstreamRef = state.UpstreamRef };
+            InitialHistoryState = state, UpstreamRef = state.UpstreamRef, RemoteNames = remotes };
 
         async Task<ProcessResult> Command(params string[] args)
         {

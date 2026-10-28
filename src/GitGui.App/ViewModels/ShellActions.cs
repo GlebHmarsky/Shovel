@@ -23,12 +23,12 @@ public sealed partial class ShellViewModel
     public RelayCommand<string> SwitchBranchCommand { get; private set; } = null!;
     public IReadOnlyList<string> LocalBranches => State?.Page?.Session.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray() ?? [];
     public IReadOnlyList<BranchMenuItem> BranchMenuItems => LocalBranches.Select(name => new BranchMenuItem(name, SwitchBranchCommand)).ToArray();
-    private bool CanAct => CanNavigate && !IsBusy && _interaction is not null && _actions is not null && _git is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
+    private bool CanAct => CanNavigate && !IsBusy && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
     public bool CanOpenBranchMenu => CanAct;
     private string? ActionUnavailableKey => !IsReady || _stopping ? "ActionWorkspaceStarting" :
         ActionOpen ? "ActionWorkspaceBusy" : SelectedRepository is null ? "ActionOpenRepository" :
         IsBusy ? "ActionWaitForRead" : _git is null ? "ActionSelectGit" :
-        _interaction is null || _actions is null || SelectedRepository.Snapshot is null ? "ActionInspectionNeeded" :
+        _interaction is null || _actions is null || SelectedRepository.Snapshot is null || State?.Page is null ? "ActionInspectionNeeded" :
         SelectedRepository.Snapshot.Operation != RepositoryOperation.None ? "ActionSequence" : null;
     public string BranchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleNewBranch");
     public string FetchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleFetch");
@@ -55,7 +55,12 @@ public sealed partial class ShellViewModel
         SetActionOpen(true); Status = UiText.Get("ActionPreparing");
         try
         {
-            var model = new GitActionViewModel(tab.Directory, action, _actions!, async () =>
+            if (tab.History.Page is not { } page || !_knownIdentities.TryGetValue(tab.Directory, out var identity))
+                throw new GitActionException("ActionInspectionNeeded");
+            var cached = new ActionContext(_git!, new RepositoryIdentity(tab.Snapshot!.Worktree, tab.Snapshot.GitDirectory,
+                tab.Snapshot.CommonDirectory, identity.Fingerprint), tab.Snapshot, page.Session,
+                tab.Snapshot!.RemoteNames.Select(name => new GitRemote(name, name, name)).ToArray(), "");
+            var model = new GitActionViewModel(cached, action, _actions!, async () =>
             {
                 foreach (var related in Repositories.Where(item => string.Equals(item.Snapshot?.CommonDirectory, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
                 { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; }
@@ -64,20 +69,21 @@ public sealed partial class ShellViewModel
                 await WaitForIdleAsync();
                 if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0)
                     throw new System.IO.IOException(); // Localized separately from the Git outcome; no raw exception logging.
-            }, _interaction);
-            model.Prepare(async token =>
+            }, branch, _interaction, async token =>
             {
                 var context = await _actions!.PrepareAsync(_git!, tab.Directory, token);
                 if (!_knownIdentities.TryGetValue(tab.Directory, out var known) || known.Fingerprint != context.Identity.Fingerprint)
                     throw new GitActionException("ActionIdentityChanged");
+                if (context.Repository.Commit != cached.Repository.Commit || context.Repository.Branch != cached.Repository.Branch ||
+                    context.History.Fingerprint != cached.History.Fingerprint)
+                    throw new GitActionException("ActionChanged");
                 return context;
-            }, branch);
+            });
             var previous = _lastAction;
             _preparingAction = false;
             SetLastAction(model);
             _interaction!.ShowGitAction(model);
             model.DismissOptions();
-            await model.PreparationTask;
             if (!model.HasAttempt) SetLastAction(previous);
             else
             {

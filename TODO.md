@@ -4,7 +4,7 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.11.0 complete: prompt operation dialogs and real Pull with default rebase, merge alternative and optional auto-stash. [Verification](docs/roadmap.md#prompt-dialogs-and-pull-strategies-2026-10-28) records measured timings, 106 passing checks and the matching ignored preview. Next feature: Local Changes/status. Desktop/live-provider validation remains separate.
+0.11.1 complete: fixed-size close-only operation dialogs, immediately editable from cached local targets with zero opening-time Git work. Post-submission validation retains progress/errors and stale-context protection. [Evidence](docs/roadmap.md#cached-operation-dialogs-2026-10-28): 109 passing checks, headless timings/layouts and matching ignored preview. Next feature: Local Changes/status; desktop/live-provider validation remains separate.
 
 ## Next priorities
 
@@ -33,6 +33,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.11.1 / 2026-10-28:** cached editable/close-only operation dialogs, zero opening-time Git calls, post-submit validation/cancellation/stale-ref errors. 109 checks, headless first/warm measurements and offscreen review; 16 preview checksums/seven matching tested files.
 
 - [x] **F2d / 0.11.0 / 2026-10-28:** dialogs open before async target preparation; default Rebase/alternative Merge/optional tracked auto-stash, sparse/superproject Pull, retained conflicts/recovery guidance. 106 checks, normal/minimum offscreen review, seven-sample timing runs, 16 checksums/seven matching tested files. Headless harness isolated from production startup; intended source/docs committed with preview ignored.
 - [x] **F2c / 0.10.0 / 2026-10-27:** options close on submission; shell-owned Git execution/top-center phase/cancel/retained output through reinspection. Real incoming-commit/file Pull, refreshed history/counts, failures/cancellation; 93 checks, normal/minimum offscreen review, 16 preview checksums/seven matching tested files.

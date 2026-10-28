@@ -315,4 +315,5 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionStageUpdatingBranch" xml:space="preserve"><value>Updating branch</value></data>
   <data name="ActionReviewing" xml:space="preserve"><value>Review operation options</value></data>
   <data name="ActionUnexpectedFailure" xml:space="preserve"><value>The operation could not finish because of an unexpected error. Changes may already have applied. Review the output and refreshed repository state before retrying.</value></data>
+  <data name="ActionCachedTargets" xml:space="preserve"><value>Locally known targets. Use Fetch for new remote branches; execution uses the remote's current Git configuration.</value></data>
 </root>
