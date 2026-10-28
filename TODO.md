@@ -4,12 +4,10 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.16.0 complete: fast file actions and old/new binary comparisons, promoted ahead of sequence recovery by the user's request. [Verification](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28).
+0.16.1 complete: native title bars matching the dark chrome; release checks and preview verified. Broader theme work remains P2.
 
-- [x] **P1 — Fast file actions.** Publish real scoped results; move wider scanning off the action path, reject late reads and preserve Git checks.
-- [x] **P1 — Binary comparison.** Old/new extension/size cards, LFS pointer metadata, absent-side state and localized/accessibility meanings.
-- [x] **P1 — Quiet background reads.** Remove bottom activity bars/ticking footer; retain cancellation and failures.
-- [x] **P1 — Deliver.** Regressions, final timing/render review, docs and matching preview verified; source/docs included in the release commit.
+- [x] **P1 — Native title bars.** Match shared dark chrome on app-owned windows; retain native controls/high-contrast defaults and documented Windows 10 fallback.
+- [x] **P1 — Deliver.** Release checks and matching preview verified; source/docs included in the release commit. Desktop title-bar paint remains separately unverified.
 
 
 ## Next priorities
@@ -25,7 +23,7 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Backlog
 
-- [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, native title-bar integration where supported, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
+- [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Local MVP remainder.** Init, branch deletion/tracking and stashes; broaden signing and failure recovery. Whole-hunk staging is delivered in 0.14.0.
@@ -42,6 +40,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.16.1 / 2026-10-28:** native dark title bars on app-owned windows, system high-contrast defaults and Windows 10 fallback. 157 checks passed on fresh rerun; hidden HWND API acceptance verified, visible paint unverified. Preview checksums/build/tested assemblies match. [Evidence](docs/roadmap.md#current-status).
 
 - [x] **0.16.0 / 2026-10-28:** scoped file-action results/quiet background scanning, Old/New binary extension/size cards and local LFS metadata. Fixture median affected rows: Stage 1.88→0.50 s, Unstage 1.71→0.51 s; user's exact 11.5-second case unverified. 156 checks, normal/minimum offscreen review, 16 preview checksums/nine build files/four tested assemblies matched. [Evidence](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28).
 

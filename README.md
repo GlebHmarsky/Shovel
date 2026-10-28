@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.16.0** adds old/new binary/LFS cards and faster file Stage/Unstage feedback, with wider checks running quietly afterward. The modal Local Changes/Commit workspace includes file/hunk staging, commit/amend and Shift Commit and Push over retained history. Committed files/diffs, shared dark styling, branch/network actions and Pull-Rebase/Merge/auto-stash remain.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.16.1** also matches native title bars to the dark chrome. 0.16.0 adds old/new binary/LFS cards and faster file Stage/Unstage feedback, with wider checks running quietly afterward. The modal Local Changes/Commit workspace includes file/hunk staging, commit/amend and Shift Commit and Push over retained history. Committed files/diffs, shared dark styling, branch/network actions and Pull-Rebase/Merge/auto-stash remain.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -106,7 +106,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.16.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.16.1-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -126,4 +126,4 @@ Current identity supports root on local fixed drive/no reparse components; UNC/r
 
 History uses one read chain/max two children; the modal has bounded cancelling status/diff chains. Mutations cancel old reads without waiting for their drain; close drains them. Bare repos rejected, linked actions coordinated within Shovel, external clients independent. Shallow ends distinct, missing partial objects fail without fetch. Marker observation is not sequence recovery.
 
-History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared dark theme](docs/theme.md) applies to the client area; native OS title bars/pickers/message boxes remain system-owned. Light mode and further theme polish are deferred. Pending: arbitrary-line staging, image/text side-by-side diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.
+History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared dark theme](docs/theme.md) applies to the client area; Shovel title bars use native dark styling (exact colors on Windows 11, best effort on Windows 10); pickers/message boxes remain system-owned. Light mode and further theme polish are deferred. Pending: arbitrary-line staging, image/text side-by-side diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.

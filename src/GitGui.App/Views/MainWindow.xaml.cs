@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     public ShellViewModel ViewModel { get; }
     public MainWindow(ShellViewModel viewModel)
     {
-        InitializeComponent();
+        InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         DataContext = ViewModel = viewModel;
         HighContrast = SystemParameters.HighContrast;
         SystemParameters.StaticPropertyChanged += OnSystemPropertyChanged;

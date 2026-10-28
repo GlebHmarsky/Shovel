@@ -12,7 +12,7 @@ public partial class AuthenticationWindow : Window
     private AuthenticationAnswer? _answer;
     public AuthenticationWindow(string context, AuthenticationPrompt prompt)
     {
-        InitializeComponent(); _kind = prompt.Kind;
+        InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this); _kind = prompt.Kind;
         ContextText.Text = context; PromptText.Text = GitActions.Redact(prompt.Message);
         ResponsePanel.Visibility = _kind == AuthenticationPromptKind.Secret ? Visibility.Visible : Visibility.Collapsed;
         Submit.Content = UiText.Get(_kind == AuthenticationPromptKind.Confirmation ? "AuthApprove" : "AuthSubmit");

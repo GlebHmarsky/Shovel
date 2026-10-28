@@ -8,7 +8,7 @@ public partial class GitActionWindow : Window
     private readonly GitActionViewModel _model;
     public GitActionWindow(GitActionViewModel model)
     {
-        _model = model; DataContext = model; InitializeComponent();
+        _model = model; DataContext = model; InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         _model.ExecutionStarting += OnExecutionStarting;
         Closed += (_, _) => { _model.ExecutionStarting -= OnExecutionStarting; _model.DismissOptions(); };
     }

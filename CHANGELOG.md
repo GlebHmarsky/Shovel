@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.1 — 2026-10-28
+
+- Match native title bars to the dark toolbar on the main, commit, branch/network and authentication windows. Preserve native caption controls; restore system defaults in high contrast. Windows 11 supports exact palette colors; Windows 10 uses a best-effort native dark request.
+
 ## 0.16.0 — 2026-10-28
 
 - Show old/new binary file cards with extension, readable size, exact bytes and LFS labels in Local Changes and historical Changes. Read LFS pointer sizes locally without downloading assets or invoking filters.

@@ -10,6 +10,24 @@ internal static partial class Program
 {
     private static void RunThemeChecks()
     {
+        Check("Native title bars use dark colors and release overrides for high contrast without showing a window", () =>
+        {
+            var window = new Window(); TitleBarTheme.Attach(window);
+            try
+            {
+                var handle = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+                {
+                    Expect(TitleBarTheme.Apply(window, false), "DWM accepts shared dark caption/text/border attributes");
+                    Expect(TitleBarTheme.Apply(window, true), "DWM accepts restoration of system defaults for high contrast");
+                }
+                Expect(!window.IsVisible && window.WindowStyle == WindowStyle.SingleBorderWindow && window.ResizeMode == ResizeMode.CanResize,
+                    "No Show or replacement of native chrome");
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        }).GetAwaiter().GetResult();
+
         Check("Dark surfaces retain readable text and system high-contrast mapping", () =>
         {
             var resources = Application.Current.Resources;

@@ -12,7 +12,7 @@ public partial class CommitWindow : Window
     private bool _closing, _allowClose;
     public CommitWindow(CommitViewModel model)
     {
-        _model = model; DataContext = model; InitializeComponent();
+        _model = model; DataContext = model; InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         Loaded += async (_, _) => await _model.StartLoading();
         PreviewKeyDown += OnKeyState; PreviewKeyUp += OnKeyState;
         Deactivated += (_, _) => _model.ShiftHeld = false;
