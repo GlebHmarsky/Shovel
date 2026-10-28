@@ -1,6 +1,6 @@
 # Requirements and acceptance
 
-Updated 2026-10-27. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
+Updated 2026-10-28. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
 
 ## Git functionality and compatibility
 
@@ -18,7 +18,7 @@ Updated 2026-10-27. Confirmed unless marked proposed. IDs remain stable. [Produc
 | G10 | Exact ordinal raw author name/email peers: nonblank email, blank-name equality, no committer/mailmap. Light-yellow peer text/accessibility relationship; normal selection, graph/ref colors, virtualization/keyboard/high contrast preserved. |
 | G11 | Tab menu targets placement tab: refresh/move/close/close others; MMB closes clicked tab. Active close cancels/drains/rejects late reads; inactive close preserves active work. Current Git action blocks repository navigation until completion/cancel+reinspection, even after its options modal closes; closing never deletes data. |
 | G12 | History directly below tabs; standard menus/toolbar, centered repo/branch/timer. Older prototype-retention mandate is superseded by G1. Pull/Push badges show real local-upstream behind/ahead after rows, handling unavailable/stale/cancelled states; never fetch implicitly or substitute zero. |
-| G13 | Real Branch create/start/checkout and switch; target-specific Fetch/Pull/Push options. Normal Execute closes options and starts the action, no separate trust checkbox; opening/dismissing does not execute. Top-center phase/progress/duration/cancel and retained Operation output/result survive modal closure; refresh files/history/counts after Pull. Initial Pull is clean-worktree fast-forward only. Rebase/autostash/force require implementation before exposure as working options. |
+| G13 | Real Branch create/start/checkout and switch; target-specific Fetch/Pull/Push options. Open dialogs before asynchronous target preparation; show loading/error, prevent premature execution and late completion after dismissal. Normal Execute closes options and starts the action, no separate trust checkbox; opening/dismissing does not execute. Top-center phase/progress/duration/cancel and retained output survive closure; refresh history/counts after Pull. Pull defaults to rebase with merge alternative and optional tracked auto-stash (2026-10-28). Preserve Git protections and recoverable conflicts; zero exit with unmerged files is not success. Force remains deferred. |
 | G14 | Original local/tag/remote badges, current-tip mark, grouping only configured same-tip upstream; full accessible meaning. Local tracking tip is not a live-server guarantee. |
 
 ## Execution and data handling
@@ -78,6 +78,7 @@ Historical phase gates below preserve regression coverage; old prototype/trust b
 | F2a branch/network | Real create/switch/fetch/push/tags/upstream/fast-forward and rejected divergence on disposable remotes. Invalid/duplicate/dirty/sequence/stale refs/config/identity, hooks/remote failure, cancellation/shared exclusion. Exercise each dialog's normal Execute without a trust checkbox; missing targets have localized disabled-action help and unfinished options are absent. Reinspection/badges/headless layouts; live auth/Windows 10/accessibility separate. |
 | F2b askpass | Operation-only packaged helper; real credential round-trip incl. Unicode/spaces. Endpoint/nonce/server validation, oversized/multiline rejection, bounded lifetime/count, cleared replies/no persistence. Cancel/exit/timeout closes prompts/reconciles. Masked accessible prompts and offscreen review; real provider/host/signing/focus separate. |
 | F2c workspace actions | Pull through the actual bound dialog command closes options, shows main progress and imports a real peer commit/file; history/upstream counts update. Retain dirty/unavailable-remote errors and cancellation; no duplicate launch, premature admission or other-tab result leakage. Refresh failure distinguished; auth survives options closure; normal/minimum offscreen layouts. |
+| F2d prompt dialogs/Pull | Measure subprocess preparation separately from first/warm offscreen layout. Show before preparation completes; cancel/dismiss/failure/late results do not execute. Real divergent rebase and merge, tracked staged/unstaged auto-stash restoration, untracked/ignored protection, config overrides, conflicts surviving reinspection/reopen, zero-exit stash conflicts and recovery guidance. Verify superproject pointer updates preserve dirty submodule worktrees and existing cone sparse patterns remain unchanged. Preserve F2c cancellation/admission checks; no desktop timing claim from headless evidence. |
 | Reads | CLI-matching status/index/worktree/files/diffs: empty/detached/binary/rename/delete/ignored/EOL/unusual paths. |
 | Mutations/recovery | Expected refs/index/files, unrelated data intact; stale hunks/external edits; conflicts/interrupted sequences survive reopen with valid actions. Owned cancellation/reinspection. |
 | Failures | Hook/signing/auth/network/disk/permission/lock failures preserve usable UI/diagnostics without destructive retry. |
@@ -95,6 +96,7 @@ Document 4-core/8-GB/SSD reference host, antivirus/cache conditions and child pe
 | Idle private bytes | <=180 MiB one repo; <=300 MiB ten tabs/inactive views unloaded |
 | Idle CPU | <=0.2% total average/5 min; zero periodic Git launches unchanged |
 | Input | p95 <=100 ms; no app UI-thread stall >200 ms |
+| Operation options (2,500 commits/one remote) | Warm offscreen open <=100 ms, first construction <=1 s, targets ready <=1.5 s after opening; desktop/p95 validation still required |
 | Installer | Self-contained compressed x64 <=100 MiB, excluding Git |
 | Scaling | Interactive million commits, bounded caches/no full-history UI allocation |
 

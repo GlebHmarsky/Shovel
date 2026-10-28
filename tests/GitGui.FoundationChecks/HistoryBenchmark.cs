@@ -18,7 +18,7 @@ internal static partial class Program
     {
         var samples = new List<object>();
         var watch = Stopwatch.StartNew();
-        var app = new GitGui.App.App(); app.InitializeComponent();
+        var app = new HeadlessApplication(); app.InitializeComponent();
         var applicationMs = watch.Elapsed.TotalMilliseconds;
         for (var i = 0; i < 3; i++)
         {
@@ -97,7 +97,7 @@ internal static partial class Program
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
             var result = await _inner.RunAsync(request, token, output);
-            var operation = request.Arguments.FirstOrDefault(arg => new[] { "--version", "rev-parse", "symbolic-ref", "for-each-ref", "log" }.Contains(arg)) ?? "fixture";
+            var operation = request.Arguments.FirstOrDefault(arg => new[] { "--version", "rev-parse", "symbolic-ref", "for-each-ref", "log", "config", "remote", "check-ref-format" }.Contains(arg)) ?? "fixture";
             lock (Calls) Calls.Add(new { operation, milliseconds = result.Duration.TotalMilliseconds });
             return result;
         }

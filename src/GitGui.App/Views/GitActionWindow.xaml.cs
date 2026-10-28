@@ -10,7 +10,7 @@ public partial class GitActionWindow : Window
     {
         _model = model; DataContext = model; InitializeComponent();
         _model.ExecutionStarting += OnExecutionStarting;
-        Closed += (_, _) => _model.ExecutionStarting -= OnExecutionStarting;
+        Closed += (_, _) => { _model.ExecutionStarting -= OnExecutionStarting; _model.DismissOptions(); };
     }
     private void OnExecutionStarting(object? sender, EventArgs e) => Close();
     private void OnCancel(object sender, RoutedEventArgs e) => Close();

@@ -215,7 +215,19 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionExplainNewBranch" xml:space="preserve"><value>Create a local branch from the selected commit or reference. No existing branch is replaced. Checking it out requires a clean worktree.</value></data>
   <data name="ActionExplainSwitchBranch" xml:space="preserve"><value>Switch to an existing local branch. Requires a clean worktree; changes are never discarded.</value></data>
   <data name="ActionExplainFetch" xml:space="preserve"><value>Download remote branches into their remote-tracking refs. Rewritten remote tips are reflected locally; local branches are unchanged. No pruning. Reachable tags may be downloaded.</value></data>
-  <data name="ActionExplainPull" xml:space="preserve"><value>Fetch the selected remote branch and fast-forward the current local branch. Requires a clean worktree; divergence stops without a merge or rebase.</value></data>
+  <data name="ActionExplainPull" xml:space="preserve"><value>Fetch the selected remote branch, then integrate it into your current branch.</value></data>
+  <data name="ActionPullRebase" xml:space="preserve"><value>Pull with rebase (default)</value></data>
+  <data name="ActionPreparationOutput" xml:space="preserve"><value>Target preparation error output</value></data>
+  <data name="ActionPullMerge" xml:space="preserve"><value>Pull with merge</value></data>
+  <data name="ActionPullStrategyHelp" xml:space="preserve"><value>Rebase replays local commits on the remote tip and changes their hashes. Merge preserves local commits and creates a merge commit when branches diverge.</value></data>
+  <data name="ActionAutoStash" xml:space="preserve"><value>Automatically stash and reapply local changes</value></data>
+  <data name="ActionAutoStashHelp" xml:space="preserve"><value>Includes tracked changes only; untracked files stay in place. Reapplying can conflict, and staged changes may return unstaged. Submodule contents are not stashed or updated.</value></data>
+  <data name="ActionIgnoredCollision" xml:space="preserve"><value>Incoming files overlap ignored local files. Move those local files before rebasing. They have not been overwritten.</value></data>
+  <data name="ActionRebaseConflict" xml:space="preserve"><value>Rebase stopped and needs attention. Review Git output, resolve and stage conflicts, then use git rebase --continue in a terminal, or git rebase --abort to abandon the rebase. Any auto-stash remains under Git's control until recovery finishes. Refresh Shovel afterward.</value></data>
+  <data name="ActionMergeConflict" xml:space="preserve"><value>Merge stopped and needs attention. Review Git output, resolve and stage conflicts, then use git merge --continue in a terminal, or git merge --abort to abandon the merge. Auto-stash recovery can also conflict. Refresh Shovel afterward.</value></data>
+  <data name="ActionStashConflict" xml:space="preserve"><value>Pull left unresolved file conflicts, possibly while reapplying the auto-stash. Inspect git status and git stash list in a terminal. Resolve the files before further work; keep the recovery stash until your changes are verified. Refresh Shovel afterward.</value></data>
+  <data name="ActionStageRebasing" xml:space="preserve"><value>Rebasing local commits</value></data>
+  <data name="ActionStageMerging" xml:space="preserve"><value>Merging remote changes</value></data>
   <data name="ActionExplainPush" xml:space="preserve"><value>Publish the selected local branch to the named branch on the selected remote. Existing remote commits are not overwritten by force.</value></data>
   <data name="ActionBranchNameLabel" xml:space="preserve"><value>New branch name</value></data>
   <data name="ActionStart" xml:space="preserve"><value>Start at</value></data>
@@ -248,7 +260,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionChanged" xml:space="preserve"><value>Repository refs, HEAD or configuration changed while this dialog was open. Nothing was started. Reopen the dialog to review current targets.</value></data>
   <data name="ActionChangedAfterFetch" xml:space="preserve"><value>Fetch completed, but repository state changed before fast-forwarding. The local branch was not advanced by Shovel. Review history and reopen the dialog.</value></data>
   <data name="ActionSequence" xml:space="preserve"><value>A merge, rebase, cherry-pick, revert or other sequence is already in progress. Resolve or abort it with your terminal before starting this operation.</value></data>
-  <data name="ActionWorktreeUnsupported" xml:space="preserve"><value>Checkout and Pull are not supported yet for repositories with submodules or sparse checkouts. Use your existing Git tools.</value></data>
+  <data name="ActionWorktreeUnsupported" xml:space="preserve"><value>Branch checkout is not supported yet for repositories with submodules or sparse checkouts. Use your existing Git tools for switching branches.</value></data>
   <data name="ActionDirty" xml:space="preserve"><value>The worktree or index has changes, including untracked files. Commit, stash or move them with your existing tools before retrying. Shovel did not discard them.</value></data>
   <data name="ActionNoStart" xml:space="preserve"><value>No commit is available at the selected starting reference. Create the first commit with your existing tools, or choose another reference.</value></data>
   <data name="ActionNoRemote" xml:space="preserve"><value>No configured remote is available. Add one with your existing Git tools, then reopen this dialog.</value></data>
@@ -258,7 +270,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionCustomSsh" xml:space="preserve"><value>Custom core.sshCommand configurations require an interactive transport design that is not available yet. Use your terminal; configuration was not changed.</value></data>
   <data name="ActionSshMissing" xml:space="preserve"><value>The selected Git installation has no recognized bundled OpenSSH executable. Use your terminal or select a standard Git for Windows installation.</value></data>
   <data name="ActionReadFailed" xml:space="preserve"><value>Operation preparation or validation failed. Check repository availability, Git ownership, permissions and locks, then reopen the dialog. Shovel never deletes lock files automatically.</value></data>
-  <data name="ActionCustomMergeOptions" xml:space="preserve"><value>This branch has custom merge options that may change fast-forward behavior. Use your terminal for this Pull; Shovel has not changed the configuration or started fetching.</value></data>
+  <data name="ActionConflictShort" xml:space="preserve"><value>Needs conflict resolution</value></data>
   <data name="ActionAskPassMissing" xml:space="preserve"><value>The authentication helper is missing. Keep all preview files together, then reopen this dialog. No network operation was started.</value></data>
   <data name="ActionWaitingAuthentication" xml:space="preserve"><value>Waiting for authentication input. Cancelling the prompt stops this operation; changes already applied are not undone.</value></data>
   <data name="AuthTitle" xml:space="preserve"><value>Git authentication</value></data>
@@ -299,7 +311,6 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionStageValidating" xml:space="preserve"><value>Checking targets</value></data>
   <data name="ActionStageFetching" xml:space="preserve"><value>Fetching</value></data>
   <data name="ActionStageCheckingFetchedTip" xml:space="preserve"><value>Checking fetched commit</value></data>
-  <data name="ActionStageFastForwarding" xml:space="preserve"><value>Updating local branch</value></data>
   <data name="ActionStagePushing" xml:space="preserve"><value>Pushing</value></data>
   <data name="ActionStageUpdatingBranch" xml:space="preserve"><value>Updating branch</value></data>
   <data name="ActionReviewing" xml:space="preserve"><value>Review operation options</value></data>

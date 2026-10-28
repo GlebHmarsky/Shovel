@@ -6,16 +6,21 @@ using GitGui.Core.Processes;
 namespace GitGui.Core.Git;
 
 public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push }
-public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, FastForwarding, Pushing, UpdatingBranch }
+public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch }
+public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
 public sealed record ActionContext(GitInstallation Git, RepositoryIdentity Identity, RepositorySnapshot Repository,
     HistorySession History, IReadOnlyList<GitRemote> Remotes, string ConfigStamp);
 public sealed record ActionOptions(GitAction Action, string Branch = "", string StartRef = "HEAD",
     string Remote = "", string RemoteBranch = "", bool Checkout = true, bool AllRemotes = false,
-    bool AllTags = false, bool SetUpstream = false);
+    bool AllTags = false, bool SetUpstream = false, PullStrategy PullStrategy = PullStrategy.Rebase, bool AutoStash = false);
 public sealed class GitActionException(string code) : Exception(code) { public string Code { get; } = code; }
 public sealed record ActionResult(ProcessOutcome Outcome, int? ExitCode, string Output)
-{ public bool Success => Outcome == ProcessOutcome.Exited && ExitCode == 0; }
+{
+    public RepositoryOperation Operation { get; init; }
+    public bool HasConflicts { get; init; }
+    public bool Success => Outcome == ProcessOutcome.Exited && ExitCode == 0 && Operation == RepositoryOperation.None && !HasConflicts;
+}
 
 /// <summary>Explicit user actions. Never used by startup/history reads. No persistent raw output.</summary>
 public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, IRepositoryIdentityProvider identities)
@@ -26,7 +31,7 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
         var initialConfig = await ConfigStamp(git, path, token);
         var repository = await reader.InspectAsync(git, path, token).ConfigureAwait(false);
         if (!SamePaths(identity, repository)) throw new GitActionException("ActionIdentityChanged");
-        var history = await reader.OpenHistoryAsync(git, repository, HistoryScope.AllCommits, token).ConfigureAwait(false);
+        var history = await reader.OpenInspectedHistoryAsync(git, repository, HistoryScope.AllCommits, token).ConfigureAwait(false);
         var remotes = new List<GitRemote>();
         var names = Decode(await Read(git, path, ["remote"], token)).TrimEnd('\r', '\n');
         foreach (var name in names.Split('\n', StringSplitOptions.RemoveEmptyEntries))
@@ -34,8 +39,10 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
             if (remotes.Count >= 32 || name.StartsWith('-') || name.Contains('\r') || name.Any(char.IsControl))
                 throw new GitActionException("ActionUnsupportedRemote");
             await Read(git, path, ["check-ref-format", "refs/remotes/" + name + "/check"], token);
-            var fetch = Decode(await Read(git, path, ["remote", "get-url", "--all", name], token)).TrimEnd('\r', '\n');
-            var push = Decode(await Read(git, path, ["remote", "get-url", "--push", "--all", name], token)).TrimEnd('\r', '\n');
+            var addresses = await Task.WhenAll(Read(git, path, ["remote", "get-url", "--all", name], token),
+                Read(git, path, ["remote", "get-url", "--push", "--all", name], token));
+            var fetch = Decode(addresses[0]).TrimEnd('\r', '\n');
+            var push = Decode(addresses[1]).TrimEnd('\r', '\n');
             // Do not expose URL credentials. Multiple push destinations need a separate scope UI.
             if (fetch.Contains('\n') || push.Contains('\n')) throw new GitActionException("ActionUnsupportedRemote");
             remotes.Add(new(name, Redact(fetch), Redact(push)));
@@ -72,23 +79,16 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
             if ((await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint)
                 throw new GitActionException("ActionIdentityChanged");
             var fresh = await reader.InspectAsync(git, path, token);
-            var history = await reader.OpenHistoryAsync(git, fresh, HistoryScope.AllCommits, token);
+            var history = await reader.OpenInspectedHistoryAsync(git, fresh, HistoryScope.AllCommits, token);
             if (!SamePaths(context.Identity, fresh) || history.Fingerprint != context.History.Fingerprint ||
                 fresh.Branch != context.Repository.Branch || fresh.Commit != context.Repository.Commit ||
                 await ConfigStamp(git, path, token) != context.ConfigStamp)
                 throw new GitActionException("ActionChanged");
             if (fresh.Operation != RepositoryOperation.None) throw new GitActionException("ActionSequence");
-            if (options.Action == GitAction.Pull && fresh.Branch is not null)
+            if (options.Action == GitAction.Pull && !Enum.IsDefined(options.PullStrategy)) throw new GitActionException("ActionReadFailed");
+            if (options.Action == GitAction.SwitchBranch || options.Action == GitAction.NewBranch && options.Checkout)
             {
-                var mergeOptions = await Raw(git, path, ["config", "--get", "branch." + fresh.Branch + ".mergeOptions"], token);
-                if (mergeOptions.Outcome != ProcessOutcome.Exited || mergeOptions.ExitCode is not (0 or 1))
-                    throw new GitActionException("ActionReadFailed");
-                if (mergeOptions.ExitCode == 0 && !string.IsNullOrWhiteSpace(Decode(mergeOptions)))
-                    throw new GitActionException("ActionCustomMergeOptions");
-            }
-            if (options.Action is GitAction.Pull or GitAction.SwitchBranch || options.Action == GitAction.NewBranch && options.Checkout)
-            {
-                // Reject sparse checkouts and submodule worktrees until their update/recovery semantics are supported.
+                // Branch switching has not yet been validated for these worktree modes.
                 if (File.Exists(Path.Combine(path, ".gitmodules")) || File.Exists(Path.Combine(fresh.GitDirectory, "info", "sparse-checkout")))
                     throw new GitActionException("ActionWorktreeUnsupported");
                 var status = await Read(git, path, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], token);
@@ -167,10 +167,37 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
                 if (!Regex.IsMatch(tip, "^[0-9a-f]{40}([0-9a-f]{24})?$")) throw new GitActionException("ActionChangedAfterFetch");
                 var trackingTip = Decode(await Read(git, path, ["rev-parse", "--verify", "refs/remotes/" + options.Remote + "/" + options.RemoteBranch + "^{commit}"], token)).Trim();
                 if (tip != trackingTip) throw new GitActionException("ActionChangedAfterFetch");
-                if ((await Read(git, path, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], token)).StandardOutput.Length != 0)
-                    throw new GitActionException("ActionDirty");
-                stage?.Invoke(GitActionStage.FastForwarding);
-                last = await Write(["merge", "--ff-only", "--no-overwrite-ignore", "--no-autostash", "--no-edit", tip]);
+                var stash = options.AutoStash ? "--autostash" : "--no-autostash";
+                if (options.PullStrategy == PullStrategy.Rebase)
+                {
+                    // Rebase's internal checkout may overwrite ignored paths. Check incoming additions
+                    // against ignored files first; ordinary untracked/dirty conflicts remain Git's decision.
+                    var additions = Decode(await Read(git, path, ["diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "--diff-filter=A", "-z", fresh.Commit!, tip, "--"], token))
+                        .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+                    if (additions.Length != 0)
+                    {
+                        // Collapse wholly ignored directories instead of enumerating generated build trees.
+                        var ignored = Decode(await Read(git, path, ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "--no-empty-directory", "-z"], token))
+                            .Split('\0', StringSplitOptions.RemoveEmptyEntries).Select(file => file.TrimEnd('/')).ToArray();
+                        if (PathsOverlap(ignored, additions))
+                            throw new GitActionException("ActionIgnoredCollision");
+                    }
+                    stage?.Invoke(GitActionStage.Rebasing);
+                    last = await Write(["-c", "submodule.recurse=false", "rebase", "--merge", "--no-fork-point", "--no-update-refs", "--no-rebase-merges", stash, tip]);
+                }
+                else
+                {
+                    stage?.Invoke(GitActionStage.Merging);
+                    // The explicit choice defines strategy; branch.mergeOptions must not turn it into squash/no-commit/ff-only.
+                    last = await Write(["-c", "submodule.recurse=false", "-c", "branch." + fresh.Branch + ".mergeOptions=", "merge", "--ff", "--no-squash", "--commit", "--no-overwrite-ignore", stash, "--no-edit", tip]);
+                }
+                // Autostash application can conflict even when Git exits zero. Never report that as clean success.
+                if (last.Outcome == ProcessOutcome.Exited)
+                {
+                    var observed = await reader.InspectAsync(git, path, token);
+                    var unmerged = await Read(git, path, ["ls-files", "--unmerged", "-z"], token);
+                    last = last with { Operation = observed.Operation, HasConflicts = unmerged.StandardOutput.Length != 0 };
+                }
             }
             return last! with { Output = output.ToString() };
 
@@ -218,6 +245,19 @@ public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, I
         string.Equals(identity.Worktree, repository.Worktree, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(identity.GitDirectory, repository.GitDirectory, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(identity.CommonDirectory, repository.CommonDirectory, StringComparison.OrdinalIgnoreCase);
+    private static bool PathsOverlap(string[] existing, string[] incoming)
+    {
+        var files = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+        var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in existing)
+            for (var i = file.IndexOf('/'); i >= 0; i = file.IndexOf('/', i + 1)) directories.Add(file[..i]);
+        foreach (var file in incoming)
+        {
+            if (files.Contains(file) || directories.Contains(file)) return true;
+            for (var i = file.IndexOf('/'); i >= 0; i = file.IndexOf('/', i + 1)) if (files.Contains(file[..i])) return true;
+        }
+        return false;
+    }
     private async Task<string> ConfigStamp(GitInstallation git, string path, CancellationToken token) =>
         Convert.ToHexString(SHA256.HashData((await Read(git, path, ["config", "--null", "--list"], token)).StandardOutput));
     private async Task<ProcessResult> Read(GitInstallation git, string path, string[] args, CancellationToken token)

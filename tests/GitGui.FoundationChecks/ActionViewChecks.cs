@@ -96,13 +96,23 @@ internal static partial class Program
                 {
                     var content = (FrameworkElement)window.Content;
                     Arrange(content, 650, 520); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                    if (action == GitAction.Pull)
+                    {
+                        var radios = VisualDescendants<RadioButton>(content).ToArray();
+                        Expect(model.Strategy == PullStrategy.Rebase && radios.Single(radio => Equals(radio.Content, UiText.Get("ActionPullRebase"))).IsChecked == true,
+                            "Default rebase survives actual WPF binding and layout");
+                        radios.Single(radio => Equals(radio.Content, UiText.Get("ActionPullMerge"))).IsChecked = true;
+                        Expect(model.Strategy == PullStrategy.Merge && !model.Rebase, "Merge radio selects real merge strategy");
+                        radios.Single(radio => Equals(radio.Content, UiText.Get("ActionPullRebase"))).IsChecked = true;
+                        Expect(model.Strategy == PullStrategy.Rebase && !model.Merge, "Rebase can be selected again");
+                    }
                     SaveRender(content, "action-" + action + ".png", 650, 520);
                     Arrange(content, 520, 440); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                     SaveRender(content, "action-" + action + "-minimum.png", 520, 440);
                     Expect(VisualDescendants<Button>(content).Any(button => button.Command == model.RunCommand && button.IsEnabled), "Ordinary action button is enabled for valid targets");
                     var options = VisualDescendants<CheckBox>(content).Where(box => box.Visibility == Visibility.Visible && box.IsVisible).ToArray();
                     Expect(options.All(box => box.IsEnabled), "No disabled prototype options remain");
-                    Expect(Descendants<CheckBox>(window).Count() == 4, "Only checkout, all remotes, all tags and upstream options exist; no routine consent control");
+                    Expect(Descendants<CheckBox>(window).Count() == 5, "Checkout, all remotes, all tags, upstream and auto-stash; no routine consent control");
                     Expect(!VisualDescendants<TextBox>(content).Any(box => AutomationProperties.GetName(box) == UiText.Get("ActionOutput")), "Options dialog no longer owns operation output");
                 }
                 finally { window.Close(); }
@@ -175,10 +185,21 @@ internal static partial class Program
     private sealed class ActionInteraction : IUserInteraction
     {
         public Action<GitActionViewModel>? Show { get; set; }
+        public Action<GitActionViewModel>? Opening { get; set; }
         public TaskCompletionSource Done { get; } = new();
         public string? ChooseRepository() => null;
         public string? ChooseGit() => null;
-        public void ShowGitAction(GitActionViewModel model) => Show?.Invoke(model);
+        public void ShowGitAction(GitActionViewModel model)
+        {
+            Opening?.Invoke(model);
+            // Model the nested ShowDialog dispatcher without displaying a desktop window.
+            var frame = new DispatcherFrame();
+            var dispatcher = Dispatcher.CurrentDispatcher;
+            _ = model.PreparationTask.ContinueWith(_ => dispatcher.BeginInvoke(() => frame.Continue = false), TaskScheduler.Default);
+            if (!model.PreparationTask.IsCompleted) Dispatcher.PushFrame(frame);
+            model.PreparationTask.GetAwaiter().GetResult();
+            Show?.Invoke(model);
+        }
         public void ShowActionError(string message) => Done.TrySetException(new InvalidOperationException(message));
     }
     private sealed class ControlledActionRunner(GitGui.Core.Processes.IProcessRunner inner, bool waitForCancel) : GitGui.Core.Processes.IProcessRunner

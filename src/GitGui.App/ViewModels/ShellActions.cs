@@ -55,24 +55,29 @@ public sealed partial class ShellViewModel
         SetActionOpen(true); Status = UiText.Get("ActionPreparing");
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-            var context = await _actions!.PrepareAsync(_git!, tab.Directory, timeout.Token);
-            if (!_knownIdentities.TryGetValue(tab.Directory, out var known) || known.Fingerprint != context.Identity.Fingerprint)
-                throw new GitActionException("ActionIdentityChanged");
-            var model = new GitActionViewModel(context, action, _actions, async () =>
+            var model = new GitActionViewModel(tab.Directory, action, _actions!, async () =>
             {
-                foreach (var related in Repositories.Where(item => string.Equals(item.Snapshot?.CommonDirectory, context.Repository.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
+                foreach (var related in Repositories.Where(item => string.Equals(item.Snapshot?.CommonDirectory, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
                 { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; }
                 // Keep navigation blocked through reconciliation. Internal refresh explicitly bypasses that UI gate.
                 BeginInspection(tab, force: true, actionReconcile: true);
                 await WaitForIdleAsync();
                 if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0)
                     throw new System.IO.IOException(); // Localized separately from the Git outcome; no raw exception logging.
-            }, branch, _interaction);
+            }, _interaction);
+            model.Prepare(async token =>
+            {
+                var context = await _actions!.PrepareAsync(_git!, tab.Directory, token);
+                if (!_knownIdentities.TryGetValue(tab.Directory, out var known) || known.Fingerprint != context.Identity.Fingerprint)
+                    throw new GitActionException("ActionIdentityChanged");
+                return context;
+            }, branch);
             var previous = _lastAction;
             _preparingAction = false;
             SetLastAction(model);
             _interaction!.ShowGitAction(model);
+            model.DismissOptions();
+            await model.PreparationTask;
             if (!model.HasAttempt) SetLastAction(previous);
             else
             {

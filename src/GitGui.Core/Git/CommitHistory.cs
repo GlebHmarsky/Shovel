@@ -82,7 +82,7 @@ public sealed partial class RepositoryReader
         return await ReadPageAsync(git, session, cursor, token, HistoryPageSize, freshSession: true).ConfigureAwait(false);
     }
 
-    private Task<HistorySession> OpenInspectedHistoryAsync(GitInstallation git, RepositorySnapshot repository, HistoryScope scope, CancellationToken token) =>
+    internal Task<HistorySession> OpenInspectedHistoryAsync(GitInstallation git, RepositorySnapshot repository, HistoryScope scope, CancellationToken token) =>
         // Inspection already read HEAD/refs together. Reuse once, with post-log validation.
         // Parsing/peeling also runs off-thread when no fresh enumeration is needed.
         Task.Run(async () => await CreateHistorySessionAsync(git, repository, scope,

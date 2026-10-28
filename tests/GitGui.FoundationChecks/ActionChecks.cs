@@ -48,21 +48,20 @@ internal static partial class Program
         });
         var peer = Fixture("action peer"); await Git(peer, "clone", remote, ".");
         await Git(peer, "config", "user.name", "Peer"); await Git(peer, "config", "user.email", "peer@example.invalid");
-        await Check("Pull fast-forwards, then rejects divergence without rewriting local commits", async () =>
+        await Check("Pull merge overrides configured squash and default rebase integrates divergence", async () =>
         {
             await Git(peer, "commit", "--allow-empty", "-m", "Peer one"); await Git(peer, "push", "origin", "main");
             await Git(repo, "config", "branch.main.mergeOptions", "--squash");
-            await Reject("ActionCustomMergeOptions", async () => await Run(await Prepare(), new(GitAction.Pull, Remote: "origin", RemoteBranch: "main")));
-            await Git(repo, "config", "--unset", "branch.main.mergeOptions");
             var previous = (await Prepare()).Repository.Commit;
-            var result = await Run(await Prepare(), new(GitAction.Pull, Remote: "origin", RemoteBranch: "main"));
+            var result = await Run(await Prepare(), new(GitAction.Pull, Remote: "origin", RemoteBranch: "main", PullStrategy: PullStrategy.Merge));
             Expect(result.Success && (await Prepare()).Repository.Commit != previous, "Real fast-forward changes local HEAD");
+            await Git(repo, "config", "--unset", "branch.main.mergeOptions");
             await Git(repo, "commit", "--allow-empty", "-m", "Local divergence");
             await Git(peer, "commit", "--allow-empty", "-m", "Peer divergence"); await Git(peer, "push", "origin", "main");
             previous = (await Prepare()).Repository.Commit;
-            result = await Run(await Prepare(), new(GitAction.Pull, Remote: "origin", RemoteBranch: "main"));
-            Expect(!result.Success && (await Prepare()).Repository.Commit == previous, "Divergence retains local tip");
             Expect(!(await Run(await Prepare(), new(GitAction.Push, "main", Remote: "origin", RemoteBranch: "main"))).Success, "Non-fast-forward push rejected");
+            result = await Run(await Prepare(), new(GitAction.Pull, Remote: "origin", RemoteBranch: "main"));
+            Expect(result.Success && (await Prepare()).Repository.Commit != previous, "Default rebase integrates diverged branch");
         });
         await Check("Dirty/sequence/stale identity/config gates preserve repository state", async () =>
         {

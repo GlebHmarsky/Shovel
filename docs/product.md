@@ -1,6 +1,6 @@
 # Product
 
-Updated 2026-10-27. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
+Updated 2026-10-28. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
 
 ## Purpose and delivery
 
@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.10.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.11.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -31,11 +31,15 @@ Same-author peers use light-yellow text, matching exact raw name/email ordinally
 
 Branch split button defaults to New branch (name, start reference, optional checkout); arrow lists local branches for switching. Start points bind observed commits. New branches do not inherit tracking; Push can set upstream. Unborn repositories need an initial commit through existing tools.
 
-Fetch/Pull/Push dialogs asynchronously load actual remotes and redacted effective addresses. Opening never executes. Fetch chooses one/all remotes. Pull chooses a remote branch and fast-forwards the current branch with clean index/worktree. Push chooses source, remote and destination, with unchecked all-tags/set-upstream options. Rebase/autostash/force remain unimplemented.
+Operation dialogs open before Git preparation, show loading/error in place and enable execution when actual targets are ready. Closing cancels preparation and rejects late results. Opening never executes. Fetch chooses one/all remotes; Push chooses source, remote and destination with unchecked all-tags/set-upstream options.
+
+**Confirmed 2026-10-28:** Pull defaults to **Rebase**, with **Merge** as the alternative. Rebase replays local commits and changes their hashes; Merge preserves them and creates a merge commit for divergence. An initially unchecked **Automatically stash and reapply local changes** checkbox uses Git's tracked-file auto-stash. Untracked files remain in place; staged content can return unstaged. Git protects ordinary collisions/dirty state; Shovel no longer rejects all untracked files. Conflicts retain Git recovery state and original output, with terminal continue/abort guidance; a conflict during stash restoration must not appear as successful completion. In-app conflict recovery remains deferred.
+
+Pull preserves existing sparse-checkout patterns and only updates superproject references to submodules. Submodule contents are neither updated nor included in auto-stash; use existing tools for those workflows. Branch switching in these repository modes remains deferred.
 
 Normal action buttons execute without an additional trust checkbox. **Submitting Pull closes the options modal immediately**; the same shared flow applies to Fetch/Push/branch actions. The main window shows the actual phase (checking targets, fetching, checking fetched commit, updating local branch), elapsed time and indeterminate progress at top center. Existing history stays visible/selectable. Cancel is available there and in Repository; cancellation is unavailable during fresh inspection. Missing targets/dependencies disable actions with localized help.
 
-Operation details opens below with the repository, full result explanation and bounded original/redacted Git output. Success/failure/cancellation persists at top center and in details after reinspection. A failed refresh is distinct from Git success. One last result is kept in memory, only shown on its repository tab; cancelling a later options dialog preserves it. No percentage is invented. Authentication prompts are owned by the main window after options close. Preparation/execution/reconciliation still blocks tab navigation/new Git actions/window close; attempting close shows operation details. Cancellation stops owned work and reinspects; it does not undo changes. Related caches become stale after every attempt; retry uses fresh targets. No automatic retries/stash/abort/lock removal.
+Operation details opens below with the repository, full result explanation and bounded original/redacted Git output. Success/failure/cancellation persists at top center and in details after reinspection. A failed refresh is distinct from Git success. One last result is kept in memory, only shown on its repository tab; cancelling a later options dialog preserves it. No percentage is invented. Authentication prompts are owned by the main window after options close. Preparation/execution/reconciliation still blocks tab navigation/new Git actions/window close; attempting close shows operation details. Cancellation stops owned work and reinspects; it does not undo changes. Related caches become stale after every attempt; retry uses fresh targets. No automatic retries/abort/lock removal; auto-stash occurs only when selected for Pull.
 
 Badges distinguish local/tag/remote refs with original drawings. Check marks current tip, including detached HEAD. Only a local branch and its configured same-tip upstream share a local-name badge with remote icon; unrelated remotes stay separate. Full refs and relationship appear in help/accessibility. Remote icons describe local tracking tips.
 
@@ -49,7 +53,7 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 Current frame: File/View/Repository/Window/Help; Open/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; All Commits sidebar heading; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 
-0.9.3 omits unfinished Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and rebase/autostash/force options. These workflows remain in scope for later functional deliveries; removing their entry points does not implement them. Status/diffs, other mutations/tools and sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
+Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Pull rebase/merge/auto-stash ship in 0.11.0. Status/diffs, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
 
 **Proposed refinements:** separate History/Changes workspaces within this frame; Changes has staged/unstaged lists, diff and commit editor, with independent worktree view state. Single selection inspects; right-click targets clicked object while preserving a containing multiselection. Shared commands serve menus/toolbar/shortcuts. Compact owned operation dialogs restore focus; inspection/output can be non-modal; large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately.
 

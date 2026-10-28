@@ -33,8 +33,17 @@ internal static partial class Program
         {
             var task = RunAsync();
             var frame = new DispatcherFrame();
-            _ = task.ContinueWith(_ => dispatcher.BeginInvoke(() => frame.Continue = false), TaskScheduler.Default);
+            // Complete on the dispatcher that owns this frame, including faulted test tasks.
+            // A bounded watchdog makes a harness/lifetime regression fail instead of hanging packaging.
+            var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(8) };
+            watchdog.Tick += (_, _) => { watchdog.Stop(); frame.Continue = false; };
+            watchdog.Start();
+            async Task CompleteFrameAsync() { try { await task; } finally { frame.Continue = false; } }
+            var completion = CompleteFrameAsync();
             Dispatcher.PushFrame(frame);
+            watchdog.Stop();
+            Expect(task.IsCompleted, "View-model checks exceeded the dispatcher deadline");
+            completion.GetAwaiter().GetResult();
             task.GetAwaiter().GetResult();
         }
         finally
@@ -221,6 +230,7 @@ internal static partial class Program
             await RunDivergenceViewChecksAsync();
             await RunActionViewChecksAsync();
             await RunWorkspaceActionChecksAsync();
+            await RunPullChecksAsync();
             await RunAuthenticationViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)

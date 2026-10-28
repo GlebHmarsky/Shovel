@@ -38,6 +38,8 @@ internal static partial class Program
         var expected = await reader.InspectAsync(git, peer, default);
         var gate = new PausedFetchRunner(inner);
         var interaction = new ActionInteraction();
+        interaction.Opening = model => Expect(model.IsPreparing && !model.PreparationTask.IsCompleted,
+            "Shell opens options before asynchronous Git preparation completes");
         var shell = new ShellViewModel(reader, interaction, identities, actions: new GitActions(gate, reader, identities));
         shell.CompleteStartup(new(new() { RepositoryPaths = [repo, peer], SelectedRepositoryPath = repo }, SettingsLoadStatus.Loaded));
         await shell.WaitForIdleAsync();
@@ -95,7 +97,7 @@ internal static partial class Program
         {
             await File.WriteAllTextAsync(Path.Combine(repo, "base.txt"), "local changes to preserve");
             shell.PullCommand.Execute(null); await shell.ActionTask.WaitAsync(TimeSpan.FromSeconds(25));
-            Expect(shell.CurrentAction?.Status == UiText.Get("ActionDirty") && !shell.ActionOpen && shell.HasAction, "Dirty worktree failure is visible after options close");
+            Expect(shell.CurrentAction?.Status == UiText.Get("ActionResultExited") && !shell.CurrentAction.Succeeded && !shell.ActionOpen && shell.HasAction, "Git's dirty-worktree rejection is visible after options close");
             Expect(await File.ReadAllTextAsync(Path.Combine(repo, "base.txt")) == "local changes to preserve", "Local changes preserved");
             await File.WriteAllTextAsync(Path.Combine(repo, "base.txt"), "base");
             await Git(repo, "remote", "set-url", "origin", Path.Combine(_root, "unavailable-workspace-remote.git"));

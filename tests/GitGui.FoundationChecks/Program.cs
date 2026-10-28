@@ -23,9 +23,10 @@ internal static partial class Program
     {
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
-        _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() is "--measure-history" or "--measure-large-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
+        _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() == "--measure-actions" ? "artifacts/action-benchmarks" : args.FirstOrDefault() is "--measure-history" or "--measure-large-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
+        if (args.FirstOrDefault() == "--measure-actions") { MeasureActions(); return 0; }
         if (args.FirstOrDefault() == "--measure-history") { MeasureShellConstruction(); RunHistoryBenchmarkAsync().GetAwaiter().GetResult(); return 0; }
         if (args.FirstOrDefault() == "--measure-large-history") { RunLargeHistoryBenchmarkAsync().GetAwaiter().GetResult(); return 0; }
         RunCoreChecksAsync().GetAwaiter().GetResult();
@@ -33,6 +34,8 @@ internal static partial class Program
         RunAuthenticationChecksAsync().GetAwaiter().GetResult();
         RunWpfChecks();
         RunViewModelChecks();
+        Expect(Application.Current is HeadlessApplication { StartupSuppressed: true }, "Headless dispatcher must suppress production startup");
+        Expect(!Application.Current.Windows.OfType<Window>().Any(window => window.IsVisible), "Headless checks must not display windows");
         Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}");
         return _failed == 0 ? 0 : 1;
     }
@@ -173,7 +176,7 @@ internal static partial class Program
     {
         Check("WPF resources load and the empty shell has no enabled Git action", () =>
         {
-            var app = new GitGui.App.App();
+            var app = new HeadlessApplication();
             app.InitializeComponent();
             var model = new ShellViewModel();
             var window = new MainWindow(model);
@@ -208,6 +211,17 @@ internal static partial class Program
             if (child is T match) yield return match;
             foreach (var descendant in Descendants<T>(child)) yield return descendant;
         }
+    }
+
+    // WPF queues Startup when Application is constructed, even without Application.Run.
+    // Dispatcher-based checks must load resources without composing the user's real app/profile.
+    private sealed class HeadlessApplication : Application
+    {
+        public bool StartupSuppressed { get; private set; }
+        public HeadlessApplication() => ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        public void InitializeComponent() => Resources.MergedDictionaries.Add((ResourceDictionary)LoadComponent(
+            new Uri("/Shovel;component/Resources/AppStyles.xaml", UriKind.Relative)));
+        protected override void OnStartup(StartupEventArgs e) => StartupSuppressed = true;
     }
 
     private static string Fixture(string name)

@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-27. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.10.0: shell-owned Git execution after options close. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.11.0: prompt dialogs, default Pull-Rebase/optional Merge and auto-stash, shell-owned execution. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -26,6 +26,7 @@ Historical platform baseline: x64 Windows 10 22H2/11, ARM64 later, no x86 plan; 
 | App/Views/CommitGraphCell.cs | Draw precomputed segments for realized rows |
 | App/Services/UserInteraction.cs | Owned folder/executable selection/confirmation |
 | App/Localization/UiText.cs; Resources/Strings.resx | Resource lookup/formatting/XAML extension/English text |
+| App/Resources/AppStyles.xaml | Shared application styles, also loaded by the isolated headless harness |
 | Core/Settings; Diagnostics | Schema-4 store; typed bounded events/stage timings |
 | Core/Git/RepositoryReader.cs; CommitHistory.cs | Discovery/metadata; ref snapshots/paged NUL parser |
 | Core/Git/GitActions.cs; CommitGraph.cs | Command plans/revalidation/shared lock; parent lanes/cursors |
@@ -115,7 +116,9 @@ Input-wait state exists only while prompt callback active. Prompt cancel/expiry 
 
 ## Explicit Git actions (F2a, 0.8.0)
 
-`GitActions` prepares immutable identity/HEAD/refs/effective redacted fetch-push addresses/config hash off-thread on dialog opening, not startup. <=32 remotes, single fetch/push URL each; unsupported config explained. GitActionViewModel freezes options on Run, emits ExecutionStarting to close its view, then yields the dispatcher before Git/authentication work. ShellActions awaits RunningTask after ShowDialog returns; its admission flag covers the whole action and reconciliation. No fire-and-forget Git lifetime.
+0.11.0 constructs the operation view immediately; GitActionViewModel yields for layout then prepares immutable identity/HEAD/refs/effective redacted fetch-push addresses/config hash off-thread. Controls enable only with a complete context; errors remain in the dialog. Dismissal cancels/drains preparation and rejects late completion. <=32 remotes, single fetch/push URL each. Reuse inspection's ref observation instead of a second enumeration; paired URL reads use the runner's two-child bound. No startup action queries/cache/preloading. Execute still revalidates observed targets/config/identity under the shared-worktree gate.
+
+GitActionViewModel freezes options on Run, emits ExecutionStarting to close its view, then yields the dispatcher before Git/authentication work. ShellActions awaits preparation and RunningTask after ShowDialog returns; its admission flag covers the whole action and reconciliation. No fire-and-forget Git lifetime.
 
 Core reports typed GitActionStage values at real command boundaries; dispatcher callbacks are ignored after Git finishes/cancels. A 250 ms timer publishes bounded decoded output/duration only while active; no guessed percentage or input-wait inference. MainWindow binds progress/summary and Operation details to CurrentAction. The shell retains one last model, exposes it only on the matching repository tab, and preserves it if new options are dismissed. Git outcome survives failed refresh; cancellation is disabled during reconciliation. AuthenticationWindow is owned by MainWindow, never the disposed options window. Related caches invalidate and fresh inspection completes before admission reopens.
 
@@ -125,12 +128,16 @@ Normal Execute authorizes the selected operation and configured hooks/helpers; n
 | --- | --- |
 | New branch | branch --no-track or switch --create --no-track; validated name/immutable start hash, duplicates fail. |
 | Switch | --no-guess, no force/discard; --no-overwrite-ignore. |
-| Checkout/Pull | Require clean index/worktree incl. untracked; protect ignored collisions, reject submodule/sparse; Git enforces other-worktree occupancy. |
+| Checkout/Pull | Git enforces other-worktree occupancy. Branch checkout still requires clean index/worktree including untracked and rejects submodule/sparse repositories. Pull delegates tracked dirt/untracked collisions to Git and the explicit auto-stash choice, respects existing sparse patterns, and uses submodule.recurse=false for integration (superproject pointers only; no submodule checkout/stashing). |
 | Fetch | Explicit remote and +refs/heads/*:refs/remotes/<remote>/*, empty --refmap=, no prune/submodule recursion; rewritten tips update tracking only. |
-| Pull | Fetch selected branch, recheck HEAD/config/identity/clean state, cross-check FETCH_HEAD/tracking tip, merge --ff-only --no-autostash --no-edit. Reject nonempty branch.mergeOptions before fetch (could change semantics). |
+| Pull | Fetch selected branch, recheck HEAD/config/identity/sequence, cross-check immutable FETCH_HEAD/tracking tip. Default rebase --merge --no-fork-point --no-update-refs --no-rebase-merges; alternative merge --ff --no-squash --commit --no-overwrite-ignore --no-edit. Explicit --autostash/--no-autostash overrides config. Merge clears branch.mergeOptions only in that command so configured squash/no-commit/ff-only cannot contradict the selection; no configuration file changes. |
 | Push | Explicit source/destination refs, no implicit mirror/follow-tags/submodule push/force. Tags/upstream opt-in; hooks/filters preserved. |
 
-Pull's two commands are not transactional; failed merge may leave fetched objects/refs. Sequential fetch-all/multiple push refs can partially succeed. Git 2.51.1 local remotes tested; sources checked 2026-10-25: [fetch](https://git-scm.com/docs/git-fetch), [merge](https://git-scm.com/docs/git-merge), [push](https://git-scm.com/docs/git-push), [switch](https://git-scm.com/docs/git-switch).
+Pull is not transactional; failed integration may leave fetched objects/refs, conflicts or a pending sequence. Rebase checks bounded NUL ignored-file/incoming-addition lists before checkout because Git may overwrite ignored files; hash sets also detect file/directory collisions. Existing untracked files use Git's protections. After an exited integration, inspect operation markers and the unmerged index: auto-stash application can conflict with exit zero. Retain recovery state/output; never automatically abort, reset or drop a stash. In-app continue/abort is pending; localized terminal instructions describe the observed state. Rebase changes current local commit hashes, does not update other branches or enable interactive rebase; user selects this explicitly via default strategy. Auto-stash uses Git's native temporary state; tracked content only, no promise of preserved staging or automatic undo. Sources checked 2026-10-28: [pull](https://git-scm.com/docs/git-pull), [rebase](https://git-scm.com/docs/git-rebase), [merge](https://git-scm.com/docs/git-merge). Hook/signing behavior remains configured; no bypass, no interactive editor requested.
+
+Ignored-path checking skips enumeration when there are no incoming additions and collapses wholly ignored directories to avoid walking generated build trees; limits remain explicit. Basic cone sparse checkout and superproject pointer updates have disposable tests; conflicts may still materialize files outside a sparse cone as Git requires. No sparse pattern editing/submodule management is added. Sources checked 2026-10-28: [sparse behavior](https://git-scm.com/docs/git-sparse-checkout), [submodule recursion](https://git-scm.com/docs/git-config#Documentation/git-config.txt-submodulerecurse).
+
+Sequential fetch-all/multiple push refs can partially succeed. Git 2.51.1 local remotes tested; other action sources checked 2026-10-25: [fetch](https://git-scm.com/docs/git-fetch), [push](https://git-scm.com/docs/git-push), [switch](https://git-scm.com/docs/git-switch).
 
 Writes: existing runner, 5 min/command, 1 MiB output; decode/redact off dispatcher, bounded session Operation details only. HTTP(S) userinfo/query secrets redacted; arbitrary helper output may still contain secrets. Show running/duration/cancel; no wait inference from silence, automatic retry or rollback claim.
 

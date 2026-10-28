@@ -1,10 +1,10 @@
 # Implementation checklist
 
-Updated 2026-10-27. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
 
-0.10.0 main-window Pull/action delivery complete; see [verification](docs/roadmap.md#workspace-pull-verification-2026-10-27). Next implementation priority is Local Changes/status, ahead of broader authentication work. Desktop/live-provider validation remains separate.
+0.11.0 complete: prompt operation dialogs and real Pull with default rebase, merge alternative and optional auto-stash. [Verification](docs/roadmap.md#prompt-dialogs-and-pull-strategies-2026-10-28) records measured timings, 106 passing checks and the matching ignored preview. Next feature: Local Changes/status. Desktop/live-provider validation remains separate.
 
 ## Next priorities
 
@@ -20,7 +20,7 @@ Updated 2026-10-27. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Backlog
 
 - [ ] **P1 — Local MVP.** Init, file/hunk stage/unstage, commit/amend, branch deletion/tracking, stashes; real hooks/signing and failure recovery.
-- [ ] **P1 — Network MVP.** Clone/remote editing, broader pull strategies, valid sequence recovery and visible auth/input.
+- [ ] **P1 — Network MVP.** Clone/remote editing, valid sequence recovery and visible auth/input; Pull rebase/merge/auto-stash is in 0.11.0.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor; disposable destructive fixtures.
 - [ ] **P2 — Extended compatibility.** Submodule/worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization.
@@ -34,6 +34,7 @@ Updated 2026-10-27. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Completed
 
+- [x] **F2d / 0.11.0 / 2026-10-28:** dialogs open before async target preparation; default Rebase/alternative Merge/optional tracked auto-stash, sparse/superproject Pull, retained conflicts/recovery guidance. 106 checks, normal/minimum offscreen review, seven-sample timing runs, 16 checksums/seven matching tested files. Headless harness isolated from production startup; intended source/docs committed with preview ignored.
 - [x] **F2c / 0.10.0 / 2026-10-27:** options close on submission; shell-owned Git execution/top-center phase/cancel/retained output through reinspection. Real incoming-commit/file Pull, refreshed history/counts, failures/cancellation; 93 checks, normal/minimum offscreen review, 16 preview checksums/seven matching tested files.
 - [x] **0.9.3 / 2026-10-27:** ordinary branch/network actions without extra program consent; omitted unfinished toolbar/sidebar/dialog controls; localized unavailability help. 89 checks, normal/minimum offscreen review, 16 preview checksums/seven matching tested files.
 - [x] **0.9.2 / 2026-10-27:** compact all ten maintained Markdown files; require working features and normal operation consent; remove routine trust/prototype mandates. Documentation/version delivery; verification recorded in roadmap.

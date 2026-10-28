@@ -1,10 +1,10 @@
 # Roadmap and decision register
 
-Updated 2026-10-27. [Product](product.md): UX; [requirements](requirements.md): acceptance; [architecture](architecture.md): implementation; [TODO](../TODO.md): only task checklist. This file holds milestone/evidence history and unresolved decisions.
+Updated 2026-10-28. [Product](product.md): UX; [requirements](requirements.md): acceptance; [architecture](architecture.md): implementation; [TODO](../TODO.md): only task checklist. This file holds milestone/evidence history and unresolved decisions.
 
 ## Current status
 
-**0.10.0: main-window Git execution.** Pull and the shared action flow close options on submission, show top-center progress/cancellation and retain results/output in Operation details. Status/diffs, other mutations, browser/signing/interactive hooks and distribution remain pending. Working Git features take priority over broad authentication expansion; Local Changes/status is next.
+**0.11.0: prompt dialogs and usable Pull strategies.** The 2026-10-28 request advances default Rebase, optional Merge and auto-stash ahead of Local Changes. Options open before Git preparation; execution retains the main-window progress/output flow. In-app conflict recovery, status/diffs, browser/signing/interactive hooks and distribution remain pending. Verification for this increment is recorded below; Local Changes/status remains the next feature.
 
 **Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 recorded the policy; 0.9.3 applies it in code. The user also explicitly reconfirmed removing the gate for configured hooks/helpers during this delivery.
 
@@ -30,6 +30,7 @@ Proposed remaining order; requests can reprioritize. Each increment must work en
 | 0.9.2 | Compact docs/working-feature and normal-consent policy | Documentation-only; verification below |
 | 0.9.3 | Normal action execution/no routine consent; implemented controls only | Local Git workflow and headless verification below |
 | F2c / 0.10.0 | Shell-owned Pull/action execution after options close | Real incoming-commit/error/cancellation and offscreen verification below |
+| F2d / 0.11.0 | Immediate options shell; default rebase/merge/auto-stash Pull | Disposable real-Git integration and headless timing/layout evidence below |
 | F1g onward | Real status/files/tree/diffs; filtering when requested | Bounded parsers/content and relevant read tests |
 | 2: Local MVP | Init/stage/hunks/commit/amend/branch delete/tracking/stashes | Mutation/hook/signing/stale-hunk coverage |
 | 3: Network MVP | Clone/remotes/broader network/recovery continue/skip/abort | Visible auth/input, failures/external races |
@@ -195,6 +196,24 @@ Restore/Release build/publish passed with zero warnings/errors; **93 passed, 0 f
 Reviewed final offscreen running/completed workspace at 1200×760/900×580 and retained the normal/minimum action-dialog checks. Log: `artifacts/preview-0.10.0-verification.txt`; fixtures/renders: `artifacts/foundation-checks/20261027-211310-1127f0a6756f4f7d9dc644e81c8b3b9d`. Initial run also exited successfully with 93 checks after delayed completion; a persistent runner hang was not established. Preview: `Build/0.10.0-win-x64/Shovel.exe`; 16 checksums/seven tested-published files match, both executable versions 0.10.0.0. Build stays ignored/untracked; earlier versions retained.
 
 No interactive launch, desktop input/focus, live HTTPS/SSH/GCM, Windows 10 or new performance certification. Pull still requires a clean worktree and fast-forward; no merge/rebase/autostash. No dependency installation, push or distribution work. Next implementation: Local Changes/status, before broader authentication expansion.
+
+## Prompt dialogs and Pull strategies (2026-10-28)
+
+Diagnosis: 0.10.0 awaited nine sequential Git subprocesses before constructing the options window, including a duplicated ref enumeration. Pull separately rejected divergence, any untracked/dirty state and repositories with submodule/sparse metadata. These restrictions explain reproducible failures; the user's particular remote/authentication error has not been observed.
+
+0.11.0 opens the loading/options shell before preparation, reuses inspected refs and overlaps the two URL reads within the existing concurrency bound (eight subprocesses for one remote). Preparation errors stay in place; dismissal cancels/drains and rejects late data. Pull defaults to Rebase with Merge/optional tracked auto-stash; native Git handles dirty/conflicting state, with additional ignored-collision protection. Conflicted sequences/stash restoration retain recovery state and terminal guidance. Basic sparse pulls and superproject pointer updates no longer hit a blanket unsupported gate; submodule worktrees remain unchanged.
+
+Seven-sample headless benchmark, isolated 2,500 commits/one local remote, Git 2.51.1 and existing .NET 10 SDK/runtime. Original preparation: 498–706 ms (median 626), nine launches; first preparation + layout 1,179 ms, later 509–733 ms. First revised run: preparation 357–414 ms (median 391), first loading layout 314 ms, warm 11–27 ms. A later repeat varied to preparation 799–1,063 ms and first layout 800 ms, warm 12–32 ms. Final default-radio regression benchmark: first loading layout 511 ms, warm 17–35 ms, background preparation 818–1,073 ms. This variation prevents a universal preparation-speed claim; the removed blocking dependency and launch count are verified. No run measured desktop click-to-paint, reboot-cold startup, a real server or p95. [Requirements](requirements.md#proposed-performance-budgets-not-measurements) owns proposed budgets; verify on representative Windows machines before adopting guarantees.
+
+Timing evidence: `artifacts/action-benchmarks-before-0.11.0/20261027-221550-a974991cb4b445c8ba5d992b80e564fc/action-timings.json`; revised `artifacts/action-benchmarks/20261027-222456-8e75324eb7284a8ab4647d2f605737ea/action-timings.json` and `artifacts/action-benchmarks/20261027-223943-90ed839f51a6460fbbdcd117ef2476af/action-timings.json`.
+
+Final dialog/timing images: `artifacts/action-benchmarks/20261027-224531-c84e0cad648d4fe1932f56160e26b2fa`. Offscreen review caught and fixed radio initialization changing the default to Merge; the final view/model tests verify Rebase is visibly selected and both choices switch the actual strategy.
+
+Verification uncovered a pre-existing harness defect: constructing the production WPF App queues its Startup even without Run/Show, potentially entering normal profile/window startup. The final harness uses a plain test Application/shared styles, asserts suppressed production startup/no visible windows and bounds its dispatcher lifetime. Earlier aborted/failed attempts are not acceptance evidence. No deliberate desktop interaction or live-provider test was performed; desktop behavior remains unverified.
+
+Final restore/Release build/publish passed with zero warnings/errors; **106 passed, 0 failed**. Disposable Git checks cover real divergent file integration for both strategies, staged/unstaged auto-stash restoration, zero-exit stash conflicts, sequence reopen/terminal abort, unrelated untracked files/ignored collisions, sparse pattern preservation and dirty submodule contents. Existing hook/authentication/cancellation/stale-state/admission/history checks also pass. WPF checks cover opening before preparation, dismissal/late completion, errors, radio bindings and normal/minimum layouts. Reviewed final Pull 650×520/520×440 and running/completed workspace 1200×760/900×580 offscreen; options scroll at minimum size, primary buttons stay outside the scroll region. This does not establish desktop focus/input, live HTTPS/SSH/GCM, Windows 10 or OS accessibility behavior.
+
+Log: `artifacts/preview-0.11.0-verification.txt`; final fixtures/renders: `artifacts/foundation-checks/20261027-224618-6b0649aa2e654eba924bacf3245cc953`. Preview: `Build/0.11.0-win-x64/Shovel.exe`; all 16 checksums and seven tested/published app/helper files match, both executable versions 0.11.0.0. Build is ignored/untracked and earlier previews retained. No dependencies installed, push or distribution work. Source/docs committed as requested. Next: Local Changes/status, then in-app recovery actions; broader auth is not a prerequisite for independent features.
 
 ## Initial compatibility boundaries
 

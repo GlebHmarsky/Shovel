@@ -19,7 +19,14 @@ public sealed class GitActionViewModel : ObservableObject
     private readonly List<byte> _output = [];
     private int _publishedBytes;
     private Task _outputTask = Task.CompletedTask;
-    public ActionContext Context { get; }
+    private ActionContext? _context;
+    public ActionContext Context => _context ?? throw new InvalidOperationException();
+    private readonly string _repository;
+    private CancellationTokenSource? _preparation;
+    private bool _preparing, _dismissed;
+    public bool IsPreparing { get => _preparing; private set { Set(ref _preparing, value); Changed(nameof(CanEdit)); Refresh(); } }
+    public bool HasPreparationError => !IsPreparing && _context is null;
+    public Task PreparationTask { get; private set; } = Task.CompletedTask;
     public GitAction Action { get; }
     public bool IsNew => Action == GitAction.NewBranch;
     public bool IsSwitch => Action == GitAction.SwitchBranch;
@@ -31,13 +38,13 @@ public sealed class GitActionViewModel : ObservableObject
     public bool ChooseRemoteBranch => IsPush || IsPull;
     public string Title => UiText.Get("ActionTitle" + Action);
     public string Explanation => UiText.Get("ActionExplain" + Action);
-    public string Into => Context.Repository.Branch ?? UiText.Get("NoBranch");
-    public string CurrentRepository => Context.Repository.Worktree;
-    public IReadOnlyList<GitRemote> Remotes => Context.Remotes;
-    public IReadOnlyList<string> Branches { get; }
-    public IReadOnlyList<string> StartRefs { get; }
-    public string[] RemoteBranches => Context.History.References.Where(item => item.Name.StartsWith("refs/remotes/" + Remote?.Name + "/", StringComparison.Ordinal))
-        .Select(item => item.Name[(14 + Remote!.Name.Length)..]).ToArray();
+    public string Into => _context?.Repository.Branch ?? UiText.Get("NoBranch");
+    public string CurrentRepository => _repository;
+    public IReadOnlyList<GitRemote> Remotes => _context?.Remotes ?? [];
+    public IReadOnlyList<string> Branches { get; private set; } = [];
+    public IReadOnlyList<string> StartRefs { get; private set; } = [];
+    public string[] RemoteBranches => _context?.History.References.Where(item => item.Name.StartsWith("refs/remotes/" + Remote?.Name + "/", StringComparison.Ordinal))
+        .Select(item => item.Name[(14 + Remote!.Name.Length)..]).ToArray() ?? [];
     private GitRemote? _remote;
     public GitRemote? Remote { get => _remote; set { if (Set(ref _remote, value)) { Changed(nameof(Target)); Changed(nameof(RemoteBranches)); Refresh(); } } }
     public string Target => Remote is null ? UiText.Get("ActionNoRemote") : IsPush ? Remote.PushAddress : Remote.FetchAddress;
@@ -51,17 +58,25 @@ public sealed class GitActionViewModel : ObservableObject
     public bool AllRemotes { get => _allRemotes; set => Set(ref _allRemotes, value); }
     public bool AllTags { get => _allTags; set => Set(ref _allTags, value); }
     public bool SetUpstream { get => _setUpstream; set => Set(ref _setUpstream, value); }
+    private bool _autoStash;
+    private PullStrategy _strategy = PullStrategy.Rebase;
+    public bool AutoStash { get => _autoStash; set => Set(ref _autoStash, value); }
+    public PullStrategy Strategy { get => _strategy; set { if (Set(ref _strategy, value)) { Changed(nameof(Rebase)); Changed(nameof(Merge)); } } }
+    // Radio groups uncheck the previous item before checking the next. Only a positive
+    // selection changes strategy, so binding initialization cannot select Merge accidentally.
+    public bool Rebase { get => Strategy == PullStrategy.Rebase; set { if (value) Strategy = PullStrategy.Rebase; } }
+    public bool Merge { get => Strategy == PullStrategy.Merge; set { if (value) Strategy = PullStrategy.Merge; } }
     public bool IsRunning { get => _running; private set { if (Set(ref _running, value)) { Changed(nameof(CanEdit)); Changed(nameof(CanCancel)); Refresh(); } } }
-    public bool CanEdit => !IsRunning && !_attempted;
+    public bool CanEdit => !IsPreparing && _context is not null && !_dismissed && !IsRunning && !_attempted;
     public bool HasAttempt => _attempted;
-    public string RunUnavailableReason => UiText.Get(IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
+    public string RunUnavailableReason => UiText.Get(IsPreparing ? "ActionPreparing" : _context is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
         IsNetwork && Remote is null ? "ActionNoRemote" :
         IsNew && string.IsNullOrWhiteSpace(NewName) ? "ActionEnterBranchName" :
         IsNew && !StartRefs.Contains(StartRef) ? "ActionNoStart" :
         ChooseBranch && !Branches.Contains(Branch) ? "ActionChooseBranch" :
         ChooseRemoteBranch && string.IsNullOrWhiteSpace(RemoteBranch) ? "ActionChooseRemoteBranch" : "ActionReady");
     public event EventHandler? ExecutionStarting;
-    private bool _reconciling, _gitFinished, _cancelled;
+    private bool _reconciling, _gitFinished, _cancelled, _needsResolution;
     public bool IsReconciling { get => _reconciling; private set { if (Set(ref _reconciling, value)) Changed(nameof(CanCancel)); } }
     public bool CanCancel => IsRunning && !IsReconciling && !_cancel.IsCancellationRequested;
     public bool Succeeded { get; private set; }
@@ -77,9 +92,47 @@ public sealed class GitActionViewModel : ObservableObject
     public Task RunningTask { get; private set; } = Task.CompletedTask;
 
     public GitActionViewModel(ActionContext context, GitAction action, GitActions actions, Func<Task> reconcile, string? initialBranch = null,
-        IUserInteraction? interaction = null)
+        IUserInteraction? interaction = null) : this(context.Repository.Worktree, action, actions, reconcile, interaction)
     {
-        Context = context; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
+        ApplyContext(context, initialBranch);
+    }
+    public GitActionViewModel(string repository, GitAction action, GitActions actions, Func<Task> reconcile, IUserInteraction? interaction = null)
+    {
+        _repository = repository; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
+        _preparing = true;
+        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!IsNetwork || Remote is not null) &&
+            (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
+            (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
+        _timer.Tick += (_, _) => { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
+    }
+    public void Prepare(Func<CancellationToken, Task<ActionContext>> prepare, string? initialBranch = null)
+    {
+        if (_context is not null || _preparation is not null) throw new InvalidOperationException();
+        _preparation = new(TimeSpan.FromSeconds(45));
+        PreparationTask = PrepareCoreAsync(prepare, initialBranch);
+    }
+    private async Task PrepareCoreAsync(Func<CancellationToken, Task<ActionContext>> prepare, string? initialBranch)
+    {
+        try
+        {
+            // Open/layout the options view before starting even local Git preparation.
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            var context = await prepare(_preparation!.Token);
+            if (!_dismissed && !_preparation.IsCancellationRequested) ApplyContext(context, initialBranch);
+        }
+        catch (GitActionException exception) { if (!_dismissed) Status = UiText.Get(exception.Code); }
+        catch (GitReadException exception) { if (!_dismissed) { Status = UiText.Get("ActionReadFailed"); RawOutput = GitActions.Redact(exception.RawOutput); } }
+        catch (Exception) { if (!_dismissed) Status = UiText.Get("ActionReadFailed"); }
+        finally { IsPreparing = false; Changed(nameof(HasPreparationError)); _preparation!.Dispose(); _preparation = null; }
+    }
+    public void DismissOptions()
+    {
+        if (HasAttempt) return;
+        _dismissed = true; _preparation?.Cancel(); Refresh();
+    }
+    private void ApplyContext(ActionContext context, string? initialBranch)
+    {
+        _context = context;
         Branches = context.History.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray();
         StartRefs = context.History.References.Select(item => item.Name).OrderBy(item => item == "HEAD" ? "" : item, StringComparer.Ordinal).ToArray();
         _branch = initialBranch ?? context.Repository.Branch ?? Branches.FirstOrDefault() ?? "";
@@ -87,10 +140,9 @@ public sealed class GitActionViewModel : ObservableObject
         _remote = Remotes.FirstOrDefault(item => context.Repository.UpstreamRef?.StartsWith("refs/remotes/" + item.Name + "/", StringComparison.Ordinal) == true) ?? Remotes.FirstOrDefault();
         _remoteBranch = context.Repository.UpstreamRef is { } upstream && _remote is not null && upstream.StartsWith("refs/remotes/" + _remote.Name + "/", StringComparison.Ordinal)
             ? upstream[(14 + _remote.Name.Length)..] : _branch;
-        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!IsNetwork || Remote is not null) &&
-            (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
-            (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
-        _timer.Tick += (_, _) => { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
+        IsPreparing = false; Status = UiText.Get("ActionReady");
+        foreach (var property in new[] { nameof(Into), nameof(Remotes), nameof(Branches), nameof(StartRefs), nameof(Remote), nameof(RemoteBranches),
+            nameof(Branch), nameof(RemoteBranch), nameof(StartRef), nameof(Target), nameof(HasPreparationError) }) Changed(property);
     }
     private void Refresh() { RunCommand?.Refresh(); Changed(nameof(RunUnavailableReason)); }
     public void Cancel() { if (CanCancel) { Status = UiText.Get("ActionCancelling"); Phase = UiText.Get("ActionStopping"); _cancel.Cancel(); Changed(nameof(CanCancel)); } }
@@ -112,7 +164,7 @@ public sealed class GitActionViewModel : ObservableObject
     {
         // Freeze the reviewed options before the view closes or any asynchronous work starts.
         var options = new ActionOptions(Action, IsNew ? NewName : Branch, StartRef,
-            Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream);
+            Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream, Strategy, AutoStash);
         _attempted = true; Changed(nameof(HasAttempt)); IsRunning = true; _elapsed.Restart(); _timer.Start(); Status = UiText.Get("ActionRunning");
         try
         {
@@ -146,8 +198,11 @@ public sealed class GitActionViewModel : ObservableObject
                 }));
             _gitFinished = true; await _outputTask; RawOutput = result.Output;
             Succeeded = result.Success && authentication?.Failure is null;
+            _needsResolution = result.HasConflicts || result.Operation != RepositoryOperation.None;
             _cancelled = result.Outcome == GitGui.Core.Processes.ProcessOutcome.Cancelled;
             Status = UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure :
+                result.Operation.HasFlag(RepositoryOperation.Rebase) ? "ActionRebaseConflict" : result.Operation.HasFlag(RepositoryOperation.Merge) ? "ActionMergeConflict" :
+                result.HasConflicts ? "ActionStashConflict" :
                 result.Success ? "ActionSucceeded" : "ActionResult" + result.Outcome);
         }
         catch (GitActionException exception) { _gitFinished = true; await _outputTask; await PublishOutputAsync(); Status = UiText.Get(exception.Code); }
@@ -172,7 +227,7 @@ public sealed class GitActionViewModel : ObservableObject
             finally
             {
                 _timer.Stop(); _elapsed.Stop();
-                Phase = UiText.Get(!refreshed ? "ActionRefreshFailedShort" : Succeeded ? "ActionCompletedShort" : _cancelled ? "ActionStoppedShort" : "ActionFailedShort");
+                Phase = UiText.Get(!refreshed ? "ActionRefreshFailedShort" : _needsResolution ? "ActionConflictShort" : Succeeded ? "ActionCompletedShort" : _cancelled ? "ActionStoppedShort" : "ActionFailedShort");
                 IsReconciling = false; IsRunning = false; Changed(nameof(Duration)); Changed(nameof(Summary)); _cancel.Dispose();
             }
         }
