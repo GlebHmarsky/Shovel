@@ -41,7 +41,7 @@ public sealed partial class ShellViewModel
     private void InitializeActions(GitActions? actions)
     {
         _actions = actions;
-        ShowActionDetailsCommand = new(() => DetailsIndex = 3, () => HasAction);
+        ShowActionDetailsCommand = new(() => RevealDetails(3), () => HasAction);
         NewBranchCommand = new(() => OpenAction(GitAction.NewBranch), () => CanAct);
         FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanAct);
         PullCommand = new(() => OpenAction(GitAction.Pull), () => CanAct && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
@@ -63,12 +63,13 @@ public sealed partial class ShellViewModel
             var model = new GitActionViewModel(cached, action, _actions!, async () =>
             {
                 foreach (var related in Repositories.Where(item => string.Equals(item.Snapshot?.CommonDirectory, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
-                { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; }
+                { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; related.Changes.ReadAt = default; }
                 // Keep navigation blocked through reconciliation. Internal refresh explicitly bypasses that UI gate.
                 BeginInspection(tab, force: true, actionReconcile: true);
                 await WaitForIdleAsync();
                 if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0)
                     throw new System.IO.IOException(); // Localized separately from the Git outcome; no raw exception logging.
+                if (tab.LocalChangesView) { BeginChanges(tab, force: true, actionReconcile: true); await WaitForIdleAsync(); if (tab.Changes.ReadAt == default) throw new System.IO.IOException(); }
             }, branch, _interaction, async token =>
             {
                 var context = await _actions!.PrepareAsync(_git!, tab.Directory, token);

@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.11.1 � 2026-10-28
+## 0.12.0 — 2026-10-28
+
+- Add read-only Local Changes with real staged, unstaged, untracked and conflicted entries; ignored paths are opt-in. Preserve rename origins and show both index/worktree changes for partially staged files.
+- Switch views immediately; scan asynchronously with cancellation, cached per-tab rows/selection, explicit stale/errors/limits, virtualization and no polling or startup preloading. Preserve history while navigating.
+- Suppress configured clean/process filters and fsmonitor during status reads without changing Git configuration or index bytes. Submodule status is pointer-only; content diffs and staging remain next.
+
+
+## 0.11.1 — 2026-10-28
 
 - Pull/Fetch/Push/branch dialogs use cached local targets immediately; removed opening-time Git preparation and loading/error shells. Fresh validation runs after submission with main-window progress and retained errors.
 - All operation options are fixed-size with Close only in the title bar; content remains scrollable. Pull keeps default Rebase, optional Merge and auto-stash.

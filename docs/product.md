@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.11.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.12.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -26,6 +26,14 @@ Implemented through **0.11.0**; ordinary action buttons authorize their configur
 Pull shows **behind**, Push **ahead**, comparing the configured upstream from the local snapshot, even with a separate push destination. Counts load after rows. Zero is measured; dash means pending/unavailable/cancelled/failed. Help includes upstream/time/reason. Detached/unborn/no-upstream/missing-upstream/shallow cannot imply synchronization. Failed refresh retains stale counts; no server freshness claim without fetch.
 
 Same-author peers use light-yellow text, matching exact raw name/email ordinally and case-sensitively, without mailmap/committer. Nonblank email required; blank name matches only blank name. Selected row keeps selection colors; unrelated text stays white on dark history, graph/ref colors independent. High contrast uses system colors; accessible text explains the relation.
+
+## Local Changes (0.12.0)
+
+Select Local changes in the sidebar for a read-only table ordered by Conflicted, Staged, Unstaged, Untracked and optional Ignored. A partially staged path appears independently in both groups. Rows show change kind and exact relative path; selected-file details retain rename origins. Control characters are escaped in rows and preserved in details. No staging, commit, discard or diff controls are claimed in this increment.
+
+The view switches synchronously, then scans off-thread after dispatcher layout. First load shows a loading state; later visits show the tab's cached rows/selection immediately. Repository → Refresh rereads after external edits; Cancel stops the read, retaining explicitly stale rows. Tab/window activation revalidates snapshots older than 30 seconds; there is no polling, startup status scan or preload of other tabs. Workspace choice is per-tab for the session; restart still opens history. Empty, loading, failed/cancelled/stale and conflicted states are explicit; Read output preserves Git errors. Limits fail visibly rather than silently truncating.
+
+Show ignored paths opts into ignored entries (Git may collapse ignored directories). Submodules show changed pointers only, not nested modified/untracked files. Configured clean/process filters are suppressed for automatic read safety, so filter-managed content can differ from ordinary Git status; this is not full LFS/filter parity. [Architecture](architecture.md#local-changes-0120) owns read safeguards and bounds. File details are metadata, not content diffs.
 
 ## Explicit branch and remote workflows (0.8.0)
 
@@ -53,9 +61,9 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 ## Interface and remaining workflows
 
-Current frame: File/View/Repository/Window/Help; Open/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; All Commits sidebar heading; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
+Current frame: File/View/Repository/Window/Help; Open/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; Local changes/All Commits sidebar navigation; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 
-Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Pull rebase/merge/auto-stash ship in 0.11.0. Status/diffs, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
+Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Pull rebase/merge/auto-stash ship in 0.11.0. Diffs/staging, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
 
 **Proposed refinements:** separate History/Changes workspaces within this frame; Changes has staged/unstaged lists, diff and commit editor, with independent worktree view state. Single selection inspects; right-click targets clicked object while preserving a containing multiselection. Shared commands serve menus/toolbar/shortcuts. Compact owned operation dialogs restore focus; inspection/output can be non-modal; large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately.
 

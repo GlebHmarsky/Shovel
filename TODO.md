@@ -4,11 +4,12 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.11.1 complete: fixed-size close-only operation dialogs, immediately editable from cached local targets with zero opening-time Git work. Post-submission validation retains progress/errors and stale-context protection. [Evidence](docs/roadmap.md#cached-operation-dialogs-2026-10-28): 109 passing checks, headless timings/layouts and matching ignored preview. Next feature: Local Changes/status; desktop/live-provider validation remains separate.
+0.12.0 complete: real read-only Local Changes with staged/unstaged/untracked/conflicted entries, optional ignored paths and immediate cached navigation. No staging/commit/diff affordances yet. [Evidence](docs/roadmap.md#local-changes-2026-10-28): 117 passing checks, offscreen review and a matching ignored preview. Next: selected-file diffs, then staging/unstaging.
 
 ## Next priorities
 
-- [ ] **P1 — Implement Local Changes/status.** Real porcelain-v2/NUL staged, unstaged, untracked, ignored/conflicted data; preserve history responsiveness. Disposable fixtures; staging/commit is separate scope.
+- [ ] **P1 — Working-tree/index file diffs.** Read the selected Local Changes entry against the correct side; bounded binary/EOL/large-file handling, filter policy and stale-content checks.
+- [ ] **P1 — Stage/unstage files.** Real targeted index changes with reinspection and preserved selection; hunks/commit follow separately.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
 - [ ] **P1 — Extend performance fixtures.** Merge-heavy/million-commit cases, cancellation under load, app/child peak memory, five-minute idle CPU; retain F1e baseline.
@@ -33,6 +34,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **F1g / 0.12.0 / 2026-10-28:** read-only Local Changes, separate index/worktree/untracked/conflicted rows, optional ignored paths, immediate cached navigation, stale-result/cancellation handling and virtualization. 117 checks, normal/minimum offscreen review; 16 preview checksums/seven matching tested files.
 
 - [x] **0.11.1 / 2026-10-28:** cached editable/close-only operation dialogs, zero opening-time Git calls, post-submit validation/cancellation/stale-ref errors. 109 checks, headless first/warm measurements and offscreen review; 16 preview checksums/seven matching tested files.
 

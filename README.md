@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.11.1** opens fixed-size operation dialogs immediately from cached local targets and retains default Pull-Rebase, Pull-Merge and optional auto-stash. Follow execution at top center and in retained Operation details. Automatic All Commits/graph/paging and Git/OpenSSH askpass remain.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.12.0** adds read-only Local Changes with real staged, unstaged, untracked and conflicted files, plus optional ignored paths. History, branch/network actions and default Pull-Rebase/Merge/auto-stash remain.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -32,7 +32,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#cached-operation-dialogs-2026-10-28) distinguishes integration/headless from desktop.
+Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#local-changes-2026-10-28) distinguishes integration/headless from desktop.
 
 ## Run
 
@@ -58,7 +58,15 @@ Cached switch publishes immediately/validates identity off-thread. >30 s snapsho
 
 Pull badge = behind, Push = ahead of configured upstream **locally**, loaded after rows; separate push target not compared. Zero measured, dash pending/unavailable/failed; tooltip reason/time/upstream. Missing/detached/unborn/shallow cannot claim synchronized; failed refresh keeps stale counts, no implicit fetch.
 
-Menus, working toolbar actions and center timer remain; unfinished Stash/Explorer/Terminal/Editor/Tools/sidebar controls are omitted. All Commits is the current sidebar heading. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers yellow, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
+Menus, working toolbar actions and center timer remain; unfinished Stash/Explorer/Terminal/Editor/Tools/sidebar controls are omitted. Local changes and All Commits are working sidebar views. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers yellow, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
+
+## Local Changes
+
+Choose Local changes in the sidebar. The view opens before its background scan; warm visits reuse rows. See separate staged/unstaged entries (including the same path in both), untracked files, conflicts, rename origins and optional ignored paths. Repository → Refresh/Cancel controls reads. Selected-file details show metadata only; no staging, discard, commit or diff yet.
+
+Failed/cancelled reads retain explicitly stale rows; changed identity clears them. Current limits: 4 MiB/20,000 entries with explicit errors, 45 s/read chain; submodule pointers only. Suppressed clean/process filters can make filter-managed status differ from normal Git. Ignored directories may be collapsed. No status scan on startup/polling. [Mechanisms](docs/architecture.md#local-changes-0120).
+
+Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local`. Full preview checks include these fixtures.
 
 ## Branch and remote actions
 
@@ -86,7 +94,7 @@ Third: seven samples on an isolated 2,500-commit/one-remote fixture; separate ca
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.11.1-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.12.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -106,4 +114,4 @@ Current identity supports root on local fixed drive/no reparse components; UNC/r
 
 One UI read chain/max two children; bare repos rejected, linked actions coordinated within Shovel, external clients independent. Shallow ends distinct, missing partial objects fail without fetch. Marker observation is not sequence recovery.
 
-History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. Pending: status/files/diffs/broader mutations/filtering, auth routes, locales/themes/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.
+History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. Pending: files/diffs/broader mutations/filtering, auth routes, locales/themes/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.

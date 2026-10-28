@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.11.1: prompt dialogs, default Pull-Rebase/optional Merge and auto-stash, shell-owned execution. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.12.0: read-only Local Changes, prompt dialogs, default Pull-Rebase/optional Merge and auto-stash, shell-owned execution. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -72,7 +72,7 @@ Current `WindowsRepositoryIdentity` validates before Git: root on local fixed dr
 
 Open/restored tabs read without consent. Schema-3 approval fingerprints become stamps; schemas 1/2 and formerly unapproved tabs load automatically. Save stamp after successful read. Tab activation validates off-thread; missing/inaccessible/mismatched clears rows/stops. Explicit reopen binds replacement without another question; closing removes stamp/tab only. Check Git-reported directories against identity and validate after read. No earlier stamp exists on first read.
 
-Read audit: version/rev-parse/symbolic-ref/for-each-ref/log/rev-list and local `remote` name enumeration only. Structured arguments, fixed executable, closed stdin, no pager/optional locks/lazy fetch/fsmonitor/auto-maintenance. Suppress patch/external diff/textconv/signatures/notes/mailmap; request no hooks/filters/credential helpers/editors/transports. Config/includes can be read; strip inherited redirects/traces except deliberate config locations. Git ownership checks remain, no safe.directory edits. Marker helpers/missing partial-clone objects tested; no implicit fetch/repair. Sources checked 2026-10-25: [Git invocation](https://git-scm.com/docs/git), [rev-parse](https://git-scm.com/docs/git-rev-parse).
+History read audit: version/rev-parse/symbolic-ref/for-each-ref/log/rev-list and local `remote` name enumeration only. Structured arguments, fixed executable, closed stdin, no pager/optional locks/lazy fetch/fsmonitor/auto-maintenance. Suppress patch/external diff/textconv/signatures/notes/mailmap; request no hooks/filters/credential helpers/editors/transports. Config/includes can be read; strip inherited redirects/traces except deliberate config locations. Git ownership checks remain, no safe.directory edits. Marker helpers/missing partial-clone objects tested; no implicit fetch/repair. Sources checked 2026-10-25: [Git invocation](https://git-scm.com/docs/git), [rev-parse](https://git-scm.com/docs/git-rev-parse).
 
 `rev-parse` reads locations once; `for-each-ref --include-root-refs` observes HEAD/full symbolic branch/upstream/named refs together. Unborn HEAD falls back to symbolic-ref. Operation markers before/after enter fingerprint. Initial/refresh reuse initial refs, validate HEAD/refs/boundaries/markers after log. Normal first page: six Git launches including discovery; refresh five (0.11.1 adds local remote names in parallel with refs); available upstream comparison adds one after rows. Nested tags/unborn add calls. No loose/packed/reftable parser. Bare repos rejected. Snapshots detect observed changes, not ABA/atomic transactions. [2.47 include-root-refs](https://git-scm.com/docs/git-for-each-ref/2.47.0).
 
@@ -98,7 +98,7 @@ Tab context menu passes placement RepositoryTab to parameterized commands. Code-
 
 ### Deferred execution work
 
-Status/diffs need porcelain-v2/NUL/literal pathspecs and bounded content without external diff/textconv/lazy fetch. Broader browser/signing/interactive-hook/editor/tools need visible input and tracked lifecycle; do not silently bypass hooks. F2a provides serialization/revalidation/reinspection, F2b askpass. These dependencies apply to those workflows, not a blanket prohibition on other requests.
+Status is implemented below. File diffs still need literal pathspecs and bounded content without external diff/textconv/lazy fetch. Broader browser/signing/interactive-hook/editor/tools need visible input and tracked lifecycle; do not silently bypass hooks. F2a provides serialization/revalidation/reinspection, F2b askpass. These dependencies apply to those workflows, not a blanket prohibition on other requests.
 
 ## Authentication bridge (F2b, 0.9.1)
 
@@ -144,6 +144,16 @@ Sequential fetch-all/multiple push refs can partially succeed. Git 2.51.1 local 
 Writes: existing runner, 5 min/command, 1 MiB output; decode/redact off dispatcher, bounded session Operation details only. HTTP(S) userinfo/query secrets redacted; arbitrary helper output may still contain secrets. Show running/duration/cancel; no wait inference from silence, automatic retry or rollback claim.
 
 F2b supersedes cached-only auth. Core without broker stays noninteractive/strict known-host; custom core.sshCommand/unrecognized bundled layout rejected. Default transports file/http/https/ssh/git allowed, others denied unless explicit Git per-protocol permission overrides. Startup requests none. RefBadge reuses CommitRef.Upstream, no extra startup query; original vectors inherit row/system colors, preserve virtualization. No provider/avatar network assets.
+
+## Local Changes (0.12.0)
+
+`Core/Git/LocalChanges.cs` reads porcelain v2 with NUL boundaries, `--untracked-files=all`, explicit rename detection and optional `--ignored=matching`. Strict UTF-8/field-boundary parsing preserves spaces/control characters and consumes rename origins as the following NUL field. Index/worktree columns become separate rows; unmerged records stay exclusively Conflicted. Parsing/sorting and row preparation run off-thread. Invalid UTF-8, 4 MiB output or 20,000-entry limits fail visibly without publishing a partial list. Existing runner: 15 s/command; whole read chain 45 s.
+
+Status can compare file content through clean/process filters. Enumerate only matching effective filter key names with a bounded NUL config read, then override clean/process to empty and required to false for this command. Existing read arguments disable fsmonitor, optional index writes, paging, maintenance and lazy fetch. No configuration edits or external diff/textconv. `--ignore-submodules=dirty`/disabled submodule summary avoids nested content scans, showing pointer changes only. Filter normalization is deliberately not run: filter/LFS-sensitive paths may differ from ordinary status. These limits are disclosed in UI help. Config can change between commands; this is not isolation against a hostile concurrent configuration edit. Status is an observation, not an atomic snapshot of arbitrary external edits. [Official porcelain-v2 and background-status documentation](https://git-scm.com/docs/git-status), checked 2026-10-28.
+
+`ShellChanges` uses the existing single read chain, cancellation/generation admission and identity checks before/after reads. The view changes before a dispatcher yield; a new scan drains prior work, discovers Git if needed, inspects metadata and reads status without traversing history. Warm cache validates identity without Git. Cache stores at most three nonempty lists (bounded by per-read limits); no status preloads/polling. Failure/cancellation retains stale rows; replacement/inaccessible identity clears them. Per-tab workspace, selection and ignored preference are session-only. History page/selection/scroll remain independent. Refresh and stale activation use the active view; mutation reconciliation invalidates related caches and refreshes active status after history. Operation Details/Diagnostics can reveal their history detail pane without extra Git work.
+
+UI: virtualized read-only table with localized category/kind columns and counts, exact selected-path/rename metadata, optional ignored paths and retained error output. No mutation or content-diff affordances. Binary/EOL content is not read or previewed. Status scans of huge untracked trees may still time out; never reduce scope silently for speed.
 
 ## Local preview delivery (implemented)
 

@@ -316,4 +316,41 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionReviewing" xml:space="preserve"><value>Review operation options</value></data>
   <data name="ActionUnexpectedFailure" xml:space="preserve"><value>The operation could not finish because of an unexpected error. Changes may already have applied. Review the output and refreshed repository state before retrying.</value></data>
   <data name="ActionCachedTargets" xml:space="preserve"><value>Locally known targets. Use Fetch for new remote branches; execution uses the remote's current Git configuration.</value></data>
+  <data name="ChangesConflicted" xml:space="preserve"><value>Conflicted</value></data>
+  <data name="ChangesStaged" xml:space="preserve"><value>Staged</value></data>
+  <data name="ChangesUnstaged" xml:space="preserve"><value>Unstaged</value></data>
+  <data name="ChangesUntracked" xml:space="preserve"><value>Untracked</value></data>
+  <data name="ChangesIgnored" xml:space="preserve"><value>Ignored</value></data>
+  <data name="ChangeCodeM" xml:space="preserve"><value>Modified</value></data>
+  <data name="ChangeCodeA" xml:space="preserve"><value>Added</value></data>
+  <data name="ChangeCodeD" xml:space="preserve"><value>Deleted</value></data>
+  <data name="ChangeCodeR" xml:space="preserve"><value>Renamed</value></data>
+  <data name="ChangeCodeC" xml:space="preserve"><value>Copied</value></data>
+  <data name="ChangeCodeU" xml:space="preserve"><value>Unmerged</value></data>
+  <data name="ChangeCodeT" xml:space="preserve"><value>Type changed</value></data>
+  <data name="ChangeCode?" xml:space="preserve"><value>Untracked</value></data>
+  <data name="ChangeCode!" xml:space="preserve"><value>Ignored</value></data>
+  <data name="ChangeNoOriginal" xml:space="preserve"><value>Not applicable</value></data>
+  <data name="ChangeDetails" xml:space="preserve"><value>{0} — {1}
+Path: {2}
+Original path: {3}
+Git submodule state: {4}</value></data>
+  <data name="ChangesNotLoaded" xml:space="preserve"><value>Local Changes has not been read yet.</value></data>
+  <data name="ChangesNoRepository" xml:space="preserve"><value>Open a repository to see local changes.</value></data>
+  <data name="ChangesCounts" xml:space="preserve"><value>Staged: {0}   Unstaged: {1}   Untracked: {2}   Conflicted: {3}   Ignored shown: {4}</value></data>
+  <data name="ChangesLoading" xml:space="preserve"><value>Reading local changes… Previous rows, if shown, are stale.</value></data>
+  <data name="ChangesChecking" xml:space="preserve"><value>Checking cached local changes…</value></data>
+  <data name="ChangesLoaded" xml:space="preserve"><value>Local snapshot: {0:G}. Refresh after external edits.</value></data>
+  <data name="ChangesClean" xml:space="preserve"><value>No changes in this snapshot ({0:G}).</value></data>
+  <data name="ChangesFailed" xml:space="preserve"><value>Status read failed; previous rows, if shown, are stale. {0}</value></data>
+  <data name="ChangesCancelled" xml:space="preserve"><value>Status read cancelled; previous rows, if shown, are stale. Use Refresh to retry.</value></data>
+  <data name="ChangesDuration" xml:space="preserve"><value>Reading local changes · {0:F1} s</value></data>
+  <data name="ChangesShowIgnored" xml:space="preserve"><value>Show ignored paths</value></data>
+  <data name="ChangesFiles" xml:space="preserve"><value>Changed files</value></data>
+  <data name="ChangesGroup" xml:space="preserve"><value>Group</value></data>
+  <data name="ChangesKind" xml:space="preserve"><value>Change</value></data>
+  <data name="ChangesPath" xml:space="preserve"><value>Path</value></data>
+  <data name="ChangesFileDetails" xml:space="preserve"><value>File details</value></data>
+  <data name="ChangesReadOutput" xml:space="preserve"><value>Read output</value></data>
+  <data name="ChangesLimits" xml:space="preserve"><value>Read-only snapshot; Refresh and Cancel are under Repository. Up to 4 MiB / 20,000 entries; exceeding a limit shows an error, not a partial result. Configured clean filters are suppressed. Submodule pointers are shown; nested worktree changes are not scanned. Ignored directories may be collapsed.</value></data>
 </root>

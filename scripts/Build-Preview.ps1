@@ -40,6 +40,8 @@ Requires the .NET 10 Desktop Runtime and Git for Windows 2.47.0 or newer.
 Use Repository > Open to select a local worktree root; history loads without an approval prompt.
 The selected saved tab loads automatically at startup; switching tabs reuses bounded cached pages.
 Select a row for its message, author/committer, dates, hash and parents below.
+Local Changes shows staged/unstaged/untracked/conflicted files; Show ignored paths is optional. Opening paints before its background scan and reuses cached rows. Repository > Refresh / Cancel controls reads. This is read-only: no staging, commit or file diff yet.
+Status suppresses clean/process filters (results may differ for filter-managed content) and reports submodule pointers only. Limits: 4 MiB / 20,000 entries, with explicit failure rather than truncation.
 All Commits includes local branches, remote-tracking branches, tags and current HEAD. No scope/filter selector.
 Use Older / Newer to navigate 200-row pages without a total commit-count limit.
 The footer shows row range/status; tooltips expose read/graph limits. Detached HEAD is included.
@@ -52,7 +54,7 @@ Branch opens create/switch dialogs. Pull defaults to Rebase with a Merge alterna
 Submitting closes the options window. Follow progress/elapsed time at top center, Cancel there or under Repository, and use Details to see the retained Operation result/output. Pull updates local files/history/counts; divergent branches integrate using the selected strategy. Conflicts retain Git recovery state and show terminal instructions; auto-stash can conflict and staged changes can return unstaged. Repository navigation/exit waits for completion or cancellation and reinspection.
 Pull respects existing sparse patterns and updates superproject submodule pointers only; submodule files are not updated or auto-stashed.
 Git/OpenSSH askpass prompts are available during explicit network actions. Keep Shovel.AskPass.exe and its companion files here. Verify SSH host fingerprints independently before accepting; Shovel does not save credentials, but configured Git helpers may do so.
-Credential Manager browser sign-in, signing, interactive hooks, custom SSH commands, in-app conflict recovery, force-push, search/filter, file status, diffs, installer and updates remain deferred. Use existing terminal tools for those workflows; cancellation is not undo. Local history needs no approval.
+Credential Manager browser sign-in, signing, interactive hooks, custom SSH commands, in-app conflict recovery, force-push, search/filter, diffs, installer and updates remain deferred. Use existing terminal tools for those workflows; cancellation is not undo. Local history needs no approval.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.
 Settings are outside this folder: %LOCALAPPDATA%\GitGui\Foundation.

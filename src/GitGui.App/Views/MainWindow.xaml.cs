@@ -51,12 +51,13 @@ public partial class MainWindow : Window
     }
     private void CaptureHistoryScroll(object? sender, EventArgs e)
     {
-        if (!_restoringScroll && FindScroll(HistoryTable) is { } scroll)
+        if (ViewModel.IsHistory && !_restoringScroll && FindScroll(HistoryTable) is { } scroll)
             ViewModel.SaveHistoryScroll(scroll.VerticalOffset, scroll.HorizontalOffset);
     }
     private void RestoreHistoryScroll(object? sender, EventArgs e)
     {
         var version = ++_viewGeneration;
+        if (!ViewModel.IsHistory) { _restoringScroll = false; return; }
         var offsets = ViewModel.HistoryScroll;
         _restoringScroll = true;
         Dispatcher.InvokeAsync(() =>

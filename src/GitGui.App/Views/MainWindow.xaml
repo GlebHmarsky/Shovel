@@ -168,14 +168,37 @@
       </Grid.ColumnDefinitions>
       <DockPanel Margin="10,14">
         <TextBlock DockPanel.Dock="Top" Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" Margin="8,0,0,12" />
-        <Border Padding="8,9" VerticalAlignment="Top" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
-          <TextBlock Text="{Binding AreaTitle}" AutomationProperties.Name="{Binding AreaTitle}" AutomationProperties.AutomationId="CurrentWorkspace" />
-        </Border>
+        <StackPanel VerticalAlignment="Top">
+          <RadioButton Content="{loc:Text Key=LocalChanges}" IsChecked="{Binding IsLocalChanges, Mode=OneWay}" Command="{Binding ShowChangesCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.AutomationId="LocalChangesNavigation"/>
+          <RadioButton Content="{loc:Text Key=AllCommits}" IsChecked="{Binding IsHistory, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.Name="{loc:Text Key=AllCommits}" AutomationProperties.AutomationId="CurrentWorkspace"/>
+        </StackPanel>
       </DockPanel>
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" ResizeDirection="Columns"
                     Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
                     AutomationProperties.Name="{loc:Text Key=ResizeSidebar}" AutomationProperties.AutomationId="SidebarSplitter" />
-      <Grid x:Name="WorkspacePanel" Grid.Column="2" SizeChanged="OnWorkspaceSizeChanged">
+      <Grid Grid.Column="2" Visibility="{Binding IsLocalChanges, Converter={StaticResource BoolToVisibility}}" Margin="12,8" AutomationProperties.Name="{loc:Text Key=LocalChanges}">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="110"/></Grid.RowDefinitions>
+        <DockPanel><CheckBox DockPanel.Dock="Right" Content="{loc:Text Key=ChangesShowIgnored}" IsChecked="{Binding ShowIgnored}" IsEnabled="{Binding CanNavigate}"/>
+          <TextBlock Text="{loc:Text Key=LocalChanges}" FontSize="18" FontWeight="SemiBold"/></DockPanel>
+        <TextBlock Grid.Row="1" Text="{Binding ChangesCounts}" Margin="0,8" TextWrapping="Wrap"/>
+        <DataGrid Grid.Row="2" ItemsSource="{Binding Changes}" SelectedItem="{Binding SelectedChange}" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserResizeRows="False"
+                  SelectionMode="Single" HeadersVisibility="Column" RowHeaderWidth="0" RowHeight="28" EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True" AutomationProperties.Name="{loc:Text Key=ChangesFiles}" AutomationProperties.AutomationId="ChangesFiles">
+          <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="AutomationProperties.Name" Value="{Binding Details}"/></Style></DataGrid.RowStyle>
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="{loc:Text Key=ChangesGroup}" Binding="{Binding Group}" Width="110"/>
+            <DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="105"/>
+            <DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="200"/>
+          </DataGrid.Columns>
+        </DataGrid>
+        <TextBlock Grid.Row="3" Text="{Binding ChangesNotice}" Margin="0,8" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" ToolTip="{loc:Text Key=ChangesLimits}"/>
+        <TabControl Grid.Row="4">
+          <TabItem Header="{loc:Text Key=ChangesFileDetails}"><TextBox Text="{Binding SelectedChange.Details, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ChangesFileDetails}"/></TabItem>
+          <TabItem Header="{loc:Text Key=ChangesReadOutput}"><TextBox Text="{Binding ChangesOutput, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ChangesReadOutput}"/></TabItem>
+        </TabControl>
+      </Grid>
+      <Grid x:Name="WorkspacePanel" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}" Grid.Column="2" SizeChanged="OnWorkspaceSizeChanged">
         <Grid.RowDefinitions>
           <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="300" />
           <RowDefinition Height="5" />

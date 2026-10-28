@@ -189,7 +189,7 @@ internal static partial class Program
                 var content = (FrameworkElement)window.Content;
                 watch.Restart(); Arrange(content, 1200, 760); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 timings.Add(new { scenario = "offscreen window creation and first layout", creationMs, layoutMs = watch.Elapsed.TotalMilliseconds });
-                var table = VisualDescendants<DataGrid>(content).Single();
+                var table = VisualDescendants<DataGrid>(content).Single(grid => System.Windows.Automation.AutomationProperties.GetAutomationId(grid) == "CommitHistory");
                 Expect(VisualDescendants<Menu>(content).Any() && !VisualDescendants<Button>(content).Any(button => button.Command == rendered.RefreshRepositoryCommand), "No inspection toolbar; a real menu exists");
                 var normalPeer = VisualDescendants<TextBlock>(table).First(text => text.Text == rendered.Commits[0].Description);
                 var unrelatedText = VisualDescendants<TextBlock>(table).First(text => text.Text == rendered.Commits[1].Description);

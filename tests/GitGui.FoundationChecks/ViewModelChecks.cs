@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks()
+    private static void RunViewModelChecks(bool localOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -55,6 +55,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (localOnly) { await RunLocalChangesChecksAsync(); return; }
             var first = Fixture("model-first");
             var second = Fixture("model-second");
             await Check("Restored tabs automatically load without approval and preserve order/selection", async () =>
@@ -170,7 +171,7 @@ internal static partial class Program
                         Arrange(content, 1200, 760);
                         await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                                                 Expect(!VisualDescendants<ComboBox>(content).Any(), "No prototype filter or scope selector consumes history space");
-                        var table = VisualDescendants<DataGrid>(content).Single();
+                        var table = VisualDescendants<DataGrid>(content).Single(grid => System.Windows.Automation.AutomationProperties.GetAutomationId(grid) == "CommitHistory");
                         var tabs = VisualDescendants<ListBox>(content).Single(list => list.ItemsSource == model.Repositories);
                         var tableTop = table.TranslatePoint(new Point(0, 0), content).Y;
                         var tabsBottom = tabs.TranslatePoint(new Point(0, tabs.ActualHeight), content).Y;
@@ -229,6 +230,7 @@ internal static partial class Program
             await RunTabInteractionChecksAsync();
             await RunDivergenceViewChecksAsync();
             await RunActionViewChecksAsync();
+            await RunLocalChangesChecksAsync();
             await RunWorkspaceActionChecksAsync();
             await RunPullChecksAsync();
             await RunAuthenticationViewChecksAsync();
