@@ -18,18 +18,20 @@ public sealed partial class RepositoryReader
     public const int MaximumStatusBytes = 4 * 1024 * 1024;
     public const int MaximumStatusEntries = 20000;
 
-    public Task<LocalChanges> ReadLocalChangesAsync(GitInstallation git, string path, bool ignored, CancellationToken token) => Task.Run(async () =>
+    public Task<LocalChanges> ReadLocalChangesAsync(GitInstallation git, string path, bool ignored, CancellationToken token,
+        IReadOnlyList<string>? paths = null, string[]? filterOverrides = null) => Task.Run(async () =>
     {
-        var overrides = await FilterOverridesAsync(git, path, token);
+        var overrides = filterOverrides ?? await FilterOverridesAsync(git, path, token);
+        foreach (var item in paths ?? []) WorkingCopyPath(path, item);
         var result = await RunAsync(git.Executable, path, ReadArguments([.. overrides,
-            "-c", "status.submoduleSummary=false", "status", "--porcelain=v2", "-z", "--untracked-files=all",
-            "--ignore-submodules=dirty", "--renames", ignored ? "--ignored=matching" : "--ignored=no"]), token, MaximumStatusBytes);
+            "--literal-pathspecs", "-c", "status.submoduleSummary=false", "status", "--porcelain=v2", "-z", "--untracked-files=all",
+            "--ignore-submodules=dirty", "--renames", ignored ? "--ignored=matching" : "--ignored=no", "--", .. paths ?? []]), token, MaximumStatusBytes);
         RequireSuccess(result);
         return new LocalChanges(ParseLocalChanges(result.StandardOutput, token), DateTimeOffset.Now, ignored);
     }, token);
 
     // Shared by automatic status/diff reads. Explicit staging still honors configured filters.
-    private async Task<string[]> FilterOverridesAsync(GitInstallation git, string path, CancellationToken token)
+    internal async Task<string[]> FilterOverridesAsync(GitInstallation git, string path, CancellationToken token)
     {
         var config = await RunAsync(git.Executable, path, ReadArguments(["config", "--null", "--name-only", "--get-regexp", @"^filter\..*\.(clean|process|required)$"]), token);
         RequireSuccess(config, allowOne: true);

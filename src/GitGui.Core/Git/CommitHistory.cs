@@ -137,7 +137,7 @@ public sealed partial class RepositoryReader
     }, token);
 
     private async Task<HistoryState> ReadHistoryStateAsync(
-        GitInstallation git, RepositorySnapshot repository, CancellationToken token, bool headOnly = false)
+        GitInstallation git, RepositorySnapshot repository, CancellationToken token, bool headOnly = false, bool includeUpstream = true)
     {
         using var timing = trace?.Measure(TimingStage.References);
         if (headOnly)
@@ -151,7 +151,7 @@ public sealed partial class RepositoryReader
             var branchName = branchResult.ExitCode == 0 ? Line(branchResult.StandardOutput) : null;
             if (tip is not null && !IsObjectId(tip) || tip is null && branchName is null) throw new GitReadException(GitFailure.InvalidOutput);
             string? trackingName = null;
-            if (tip is not null && branchName is not null)
+            if (includeUpstream && tip is not null && branchName is not null)
             {
                 var tracking = await RunAsync(git.Executable, repository.Worktree, ReadArguments(["rev-parse", "--symbolic-full-name", "@{upstream}"]), token);
                 if (tracking.Outcome != Processes.ProcessOutcome.Exited) RequireSuccess(tracking);

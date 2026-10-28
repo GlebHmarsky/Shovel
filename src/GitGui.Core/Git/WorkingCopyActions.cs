@@ -6,7 +6,10 @@ using GitGui.Core.Processes;
 namespace GitGui.Core.Git;
 
 public sealed record WorkingCopyContext(GitInstallation Git, RepositoryIdentity Identity, RepositorySnapshot Repository,
-    LocalChanges Changes, string IndexStamp, string ConfigStamp, string HeadMessage, string MergeMessage);
+    LocalChanges Changes, string IndexStamp, string ConfigStamp, string HeadMessage, string MergeMessage)
+{
+    internal string[]? FilterOverrides { get; init; }
+}
 public enum WorkingCopyAction { Stage, Unstage, Commit, StageHunks, UnstageHunks }
 public sealed record WorkingCopyOptions(WorkingCopyAction Action, IReadOnlyList<LocalChange> Entries, string Message = "", bool Amend = false,
     HunkSelection? Hunks = null);
@@ -14,6 +17,8 @@ public sealed record WorkingCopyResult(ActionResult Result, string? CommitHash =
 {
     public double ValidationMilliseconds { get; init; }
     public double CommandMilliseconds { get; init; }
+    public double RefreshMilliseconds { get; init; }
+    public WorkingCopyContext? UpdatedContext { get; init; }
 }
 
 public sealed partial class GitActions
@@ -24,7 +29,8 @@ public sealed partial class GitActions
         var repository = await reader.InspectAsync(git, path, token, includeHistory: false);
         if (!SamePaths(identity, repository)) throw new GitActionException("ActionIdentityChanged");
         var stamp = await IndexStampAsync(repository, token);
-        var changesTask = reader.ReadLocalChangesAsync(git, path, false, token);
+        var filterOverrides = await reader.FilterOverridesAsync(git, path, token);
+        var changesTask = reader.ReadLocalChangesAsync(git, path, false, token, filterOverrides: filterOverrides);
         var configTask = ConfigStamp(git, path, token);
         var messageTask = repository.Commit is null ? Task.FromResult<ProcessResult?>(null) : ReadMessage();
         await Task.WhenAll(changesTask, configTask, messageTask);
@@ -42,7 +48,7 @@ public sealed partial class GitActions
         }
         if (stamp != await IndexStampAsync(repository, token) || (await identities.ReadAsync(path, token)).Fingerprint != identity.Fingerprint)
             throw new GitActionException("CommitStale");
-        return new WorkingCopyContext(git, identity, repository, changes, stamp, await configTask, message, mergeMessage);
+        return new WorkingCopyContext(git, identity, repository, changes, stamp, await configTask, message, mergeMessage) { FilterOverrides = filterOverrides };
     }, token);
 
     // Content hash also catches index-only edits with unchanged file names/status codes. Split-index
@@ -77,7 +83,8 @@ public sealed partial class GitActions
             token.ThrowIfCancellationRequested();
             var git = context.Git; var path = context.Identity.Worktree;
             if ((await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint) throw new GitActionException("ActionIdentityChanged");
-            var inspection = reader.InspectAsync(git, path, token, includeHistory: false);
+            var inspection = options.Action == WorkingCopyAction.Commit ? reader.InspectAsync(git, path, token, includeHistory: false)
+                : reader.ReadWorkingCopyHeadAsync(git, context.Repository, token);
             var configuration = ConfigStamp(git, path, token);
             await Task.WhenAll(inspection, configuration);
             var fresh = await inspection;
@@ -89,6 +96,7 @@ public sealed partial class GitActions
             try
             {
                 string[] args;
+                string[]? affectedPaths = null;
                 if (options.Action is WorkingCopyAction.StageHunks or WorkingCopyAction.UnstageHunks)
                 {
                     var selection = options.Hunks ?? throw new GitActionException("HunkSelectChange");
@@ -139,6 +147,7 @@ public sealed partial class GitActions
                         throw new GitActionException("CommitStale");
                     var paths = options.Entries.SelectMany(entry => entry.OriginalPath is { } old &&
                         (options.Action == WorkingCopyAction.Unstage || entry.Code == 'R') ? new[] { entry.Path, old } : [entry.Path]).Distinct(StringComparer.Ordinal).ToArray();
+                    if (paths.Length <= 128 && paths.Sum(item => item.Length + 3) < 16000) affectedPaths = paths;
                     foreach (var relative in paths) RepositoryReader.WorkingCopyPath(path, relative);
                     var pathFile = Path.Combine(temporary.FullName, "paths.nul");
                     await File.WriteAllTextAsync(pathFile, string.Join('\0', paths) + "\0", new UTF8Encoding(false), token);
@@ -146,7 +155,7 @@ public sealed partial class GitActions
                     args = options.Action == WorkingCopyAction.Stage ? ["add", "--all", .. pathArgs] : fresh.Commit is null
                         // Unborn index removal, including partially staged content. --cached never removes worktree files.
                         ? ["rm", "--cached", "--ignore-unmatch", "-r", "-f", .. pathArgs]
-                        : ["restore", "--staged", "--source=" + fresh.Commit, .. pathArgs];
+                        : ["reset", "--quiet", "--no-refresh", fresh.Commit, .. pathArgs];
                 }
                 var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null;
                 // Supplied message removes the editor dependency; hooks/signing are still Git's configured tools.
@@ -166,7 +175,30 @@ public sealed partial class GitActions
                     try { commit = (await reader.InspectAsync(git, path, inspect.Token)).Commit; }
                     catch (Exception error) when (error is GitReadException or IOException or UnauthorizedAccessException or OperationCanceledException) { }
                 }
-                return new WorkingCopyResult(action, commit) { ValidationMilliseconds = validationMilliseconds, CommandMilliseconds = result.Duration.TotalMilliseconds };
+                WorkingCopyContext? updated = null; var refresh = Stopwatch.StartNew();
+                if (action.Success && affectedPaths is not null)
+                {
+                    // Publish actual selected-path status first. A full background scan can be
+                    // expensive, especially for asset repositories with invalidated stat caches.
+                    // Failure here must not turn a successful index write into a failed command.
+                    using var reconcile = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                    try
+                    {
+                        var stamp = await IndexStampAsync(fresh, reconcile.Token);
+                        var changed = await reader.ReadLocalChangesAsync(git, path, false, reconcile.Token, affectedPaths, context.FilterOverrides);
+                        if (stamp == await IndexStampAsync(fresh, reconcile.Token))
+                        {
+                            var selected = affectedPaths.ToHashSet(StringComparer.Ordinal);
+                            var entries = context.Changes.Entries.Where(entry => !selected.Contains(entry.Path) &&
+                                (entry.OriginalPath is null || !selected.Contains(entry.OriginalPath))).Concat(changed.Entries)
+                                .OrderBy(entry => entry.Group).ThenBy(entry => entry.Path, StringComparer.Ordinal).ToArray();
+                            updated = context with { Repository = fresh, IndexStamp = stamp, Changes = new(entries, changed.ReadAt, false) };
+                        }
+                    }
+                    catch (Exception error) when (error is GitReadException or GitActionException or IOException or UnauthorizedAccessException or OperationCanceledException) { }
+                }
+                return new WorkingCopyResult(action, commit) { ValidationMilliseconds = validationMilliseconds, CommandMilliseconds = result.Duration.TotalMilliseconds,
+                    UpdatedContext = updated, RefreshMilliseconds = refresh.Elapsed.TotalMilliseconds };
             }
             finally
             {

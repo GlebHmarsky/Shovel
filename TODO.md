@@ -4,18 +4,18 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.15.0 delivered: selected-commit files/diffs, shared colored file markers and measured stage/unstage latency improvements. See the completed milestone below for verification; next priorities follow.
+0.16.0 complete: fast file actions and old/new binary comparisons, promoted ahead of sequence recovery by the user's request. [Verification](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28).
 
-- [x] **P1 — Committed content.** Real parent-aware files/diffs, binary sizes, cancellation and bounded reads.
-- [x] **P1 — File markers.** Shared modified/added/deleted symbols, accessible meanings and theme colors.
-- [x] **P1 — Diagnose and reduce local-action delay.** Repeatable before/after fixture, narrower metadata reads and visible phase timings; preserve mutation checks.
-- [x] **P1 — Deliver.** Complete regressions/offscreen review, documentation, matching preview and commit.
+- [x] **P1 — Fast file actions.** Publish real scoped results; move wider scanning off the action path, reject late reads and preserve Git checks.
+- [x] **P1 — Binary comparison.** Old/new extension/size cards, LFS pointer metadata, absent-side state and localized/accessibility meanings.
+- [x] **P1 — Quiet background reads.** Remove bottom activity bars/ticking footer; retain cancellation and failures.
+- [x] **P1 — Deliver.** Regressions, final timing/render review, docs and matching preview verified; source/docs included in the release commit.
 
 
 ## Next priorities
 
 - [ ] **P1 — In-app sequence recovery.** Show valid Continue/Skip/Abort for merge/rebase/cherry-pick/revert state; preserve conflict details after reopen, confirm destructive abort targets and verify disposable interrupted/conflicted cases. Keep command progress/cancellation visible.
-- [ ] **P1 — Remaining stage/unstage latency.** Use the new phase timings if the reported 10-second case persists; then reproduce its dominant phase in a disposable fixture. Keep working Git validations and the current measured baseline.
+- [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
 - [ ] **P1 — Extend performance fixtures.** Merge-heavy/million-commit cases, cancellation under load, app/child peak memory, five-minute idle CPU; retain F1e baseline.
@@ -26,7 +26,7 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Backlog
 
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, native title-bar integration where supported, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
-- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
+- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Local MVP remainder.** Init, branch deletion/tracking and stashes; broaden signing and failure recovery. Whole-hunk staging is delivered in 0.14.0.
 - [ ] **P1 — Network MVP.** Clone/remote editing and visible auth/input; sequence recovery is prioritized above. Pull rebase/merge/auto-stash is in 0.11.0.
@@ -42,6 +42,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.16.0 / 2026-10-28:** scoped file-action results/quiet background scanning, Old/New binary extension/size cards and local LFS metadata. Fixture median affected rows: Stage 1.88→0.50 s, Unstage 1.71→0.51 s; user's exact 11.5-second case unverified. 156 checks, normal/minimum offscreen review, 16 preview checksums/nine build files/four tested assemblies matched. [Evidence](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28).
 
 - [x] **0.15.0 / 2026-10-28:** historical files/diffs with selectable merge parents, binary sizes and shared M/+/− markers; narrowed working-copy metadata and exposed phase timings. Fixture median fresh rows: Stage 2.21→1.11 s, Unstage 2.67→1.26 s; user's 10-second case not reproduced. 150 checks, normal/minimum offscreen review, 16 preview checksums/nine build files/four tested assemblies matched. [Evidence](docs/roadmap.md#committed-files-and-local-action-latency-2026-10-28).
 

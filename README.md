@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.15.0** adds committed files/diffs, colored file markers and faster local-action validation to the modal Local Changes/Commit workspace with file diffs, file/all stage/unstage, commit/amend and Shift Commit and Push. History remains visible behind it. Shared dark styling, branch/network actions and Pull-Rebase/Merge/auto-stash remain.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.16.0** adds old/new binary/LFS cards and faster file Stage/Unstage feedback, with wider checks running quietly afterward. The modal Local Changes/Commit workspace includes file/hunk staging, commit/amend and Shift Commit and Push over retained history. Committed files/diffs, shared dark styling, branch/network actions and Pull-Rebase/Merge/auto-stash remain.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -32,7 +32,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#committed-files-and-local-action-latency-2026-10-28) distinguishes integration/headless from desktop.
+Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28) distinguishes integration/headless from desktop.
 
 Focused theme resource/control/offscreen checks (no window shown): `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-theme`. The full suite also runs these checks.
 
@@ -68,13 +68,13 @@ Menus, working toolbar actions and center timer remain; unfinished Stash/Explore
 
 Choose toolbar **Commit (count)** or sidebar Local changes. The resizable modal binds cached rows/draft before its background scan, while history stays behind it. Select unstaged or staged files for the appropriate diff. Ctrl/Shift selects multiple files; hold Shift while clicking the existing Stage/Unstage buttons for all listed files. Enter subject/body to Commit; Amend can preload the last message and confirms the actual tip. Hold Shift on Commit for Commit and Push to the configured upstream. Push failure retains the successful commit. Drafts survive closing/reopening this modal during the session, but not closing the tab/app.
 
-The right side shows colored, numbered unified text, whitespace/whole-file options and hunk navigation; binary files show before/after bytes. Refresh/Cancel and retained Git output are inside the modal. Failed reads keep rows but disable stale writes. Commit count runs once after selected-tab history, never delays those rows or polls/preloads other tabs. [Product](docs/product.md#local-changes--commit-0130) owns the full workflow; [architecture](docs/architecture.md#local-changes-and-commit-0130) owns limits/filter and submodule restrictions. Image previews, arbitrary-line staging and conflict editing are deferred; resolve files externally, then stage/commit a resolved merge here.
+The right side shows colored, numbered unified text, whitespace/whole-file options and hunk navigation. Binary files show Old/New cards, extension and size with exact bytes; recognized LFS pointers show asset size without downloading content. Refresh/Cancel and retained Git output are inside the modal. Failed status reads keep rows but disable stale writes. Commit count runs once after selected-tab history, never delays those rows or polls/preloads other tabs. [Product](docs/product.md#local-changes--commit-0130) owns the full workflow; [architecture](docs/architecture.md#local-changes-and-commit-0130) owns limits/filter and submodule restrictions. Image previews, arbitrary-line staging and conflict editing are deferred; resolve files externally, then stage/commit a resolved merge here.
 
 Select a line inside a change block, or Ctrl/Shift-select multiple blocks, then use **Stage hunk(s)** / **Unstage hunk(s)** beside the diff. This stages complete blocks, not individual lines. Ordinary tracked text modifications are supported; unavailable file types/options explain their whole-file alternative. [Hunk implementation and limits](docs/architecture.md#selected-hunks-0140).
 
-After a local action, expand **Git output** for milliseconds spent waiting for earlier reads, validating, executing Git and refreshing rows. The selected diff loads separately. These in-memory timings expose remaining delays without logging paths, arguments or content.
+File Stage/Unstage publishes freshly checked target rows before a coalesced full scan; other rows can remain stale until that background scan. The next action does not wait for an obsolete diff/scan. Selection follows the same file across lists. Bottom activity bars and the ticking footer are removed; static results/errors and cancellation remain. Expand **Git output** for validation, command and refresh timings. The selected diff loads separately; timings remain in memory without diagnostic logging of paths/arguments/content.
 
-Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for hunk checks and `--check-commit-files` for historical files/diffs and local metadata validation. The full preview checks include all of them.
+Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for hunks, `--check-commit-files` for historical files/diffs and `--check-fast-changes` for scoped/background action results, delayed reads, LFS sizes and binary cards. The full preview checks include all of them.
 
 ## Branch and remote actions
 
@@ -91,13 +91,14 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --me
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-large-history
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-actions
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-working-copy
+dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-working-copy-assets
 ```
 
 First: three samples/isolated 2,500 commits, separate settings/discovery/inspection/ref/page/graph/format/process timings, first/warm offscreen construction. Second: packed 100k commits/1,201 refs, first/last page before/after fixture-only commit-graph/packed-ref maintenance. App never maintains user repos for a benchmark. Regular checks cover auto-start/tab/refresh/render timing. Outputs artifacts/history-benchmarks; [roadmap](docs/roadmap.md) records comparisons. Not cold desktop/Windows 10/p95 certification.
 
 Third: seven samples on an isolated 2,500-commit/one-remote fixture; separate cached editable-dialog layout, post-submission preparation/subprocess cost and prepared-dialog layout. Writes artifacts/action-benchmarks. First construction includes WPF/JIT initialization; later samples are warm. No window is shown, no network fetch or user repository is read.
 
-Fourth: three stage/unstage samples on a disposable 2,000-file/1,001-branch fixture. Reports validation/command completion, fresh rows, then selected diff, plus subprocess names/durations. Writes artifacts/working-copy-benchmarks; no content/arguments in timing output. First process sample plus two warm samples, without OS cache flushing; not desktop responsiveness or p95 evidence.
+Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branch fixture. The asset variant adds 64 unchanged 4 MiB assets and invalidates their stat cache each sample. Reports validation/command completion, fresh affected rows, then selected diff, plus subprocess names/durations. Wider background scans are excluded from the new target-row measurement. Writes artifacts/working-copy-benchmarks; no content/arguments in timing output. No reboot or OS cache flushing; not desktop responsiveness or p95 evidence.
 
 ## Build a local preview
 
@@ -105,7 +106,7 @@ Fourth: three stage/unstage samples on a disposable 2,000-file/1,001-branch fixt
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.15.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.16.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -123,6 +124,6 @@ Close app, copy settings/backup first; inspect schema before restoring or move i
 
 Current identity supports root on local fixed drive/no reparse components; UNC/removable/junction/symlink/subfolder opening unsupported. Missing/replaced targets require explicit reopen without trust modal; identity is not an in-place-hostile-change/atomic-race guarantee. [Read audit](docs/architecture.md#automatic-local-history).
 
-History uses one read chain/max two children; the modal has bounded cancelling status/diff chains, and writes wait for both. Bare repos rejected, linked actions coordinated within Shovel, external clients independent. Shallow ends distinct, missing partial objects fail without fetch. Marker observation is not sequence recovery.
+History uses one read chain/max two children; the modal has bounded cancelling status/diff chains. Mutations cancel old reads without waiting for their drain; close drains them. Bare repos rejected, linked actions coordinated within Shovel, external clients independent. Shallow ends distinct, missing partial objects fail without fetch. Marker observation is not sequence recovery.
 
-History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared dark theme](docs/theme.md) applies to the client area; native OS title bars/pickers/message boxes remain system-owned. Light mode and further theme polish are deferred. Pending: hunk staging, image/selected-commit diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.
+History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared dark theme](docs/theme.md) applies to the client area; native OS title bars/pickers/message boxes remain system-owned. Light mode and further theme polish are deferred. Pending: arbitrary-line staging, image/text side-by-side diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.

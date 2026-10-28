@@ -27,6 +27,12 @@ public sealed record RepositorySnapshot(string Worktree, string GitDirectory, st
 /// <summary>Read-only metadata commands. Caller validates repository identity before automatic reads; no helper/script permission is implied.</summary>
 public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceTrace? trace = null)
 {
+    internal async Task<RepositorySnapshot> ReadWorkingCopyHeadAsync(GitInstallation git, RepositorySnapshot previous, CancellationToken token)
+    {
+        var state = await ReadHistoryStateAsync(git, previous, token, headOnly: true, includeUpstream: false);
+        return previous with { Branch = state.Branch, Commit = state.Commit, Operation = ReadOperation(previous.GitDirectory),
+            HeadKind = state.Branch is null ? HeadKind.Detached : state.Commit is null ? HeadKind.Unborn : HeadKind.Branch };
+    }
     public static Version MinimumVersion { get; } = new(2, 47, 0);
 
     public Task<GitInstallation> DiscoverAsync(string? explicitExecutable, CancellationToken token) => Task.Run(async () =>

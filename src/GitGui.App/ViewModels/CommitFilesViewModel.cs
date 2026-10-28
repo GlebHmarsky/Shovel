@@ -17,6 +17,9 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
     private IReadOnlyList<DiffRow> _lines = [];
     private string _status = UiText.Get("CommitFilesLoading"), _output = "", _notice = UiText.Get("DiffChooseFile");
     private bool _busy;
+    private BinaryComparison? _binary;
+    public BinaryComparison? Binary { get => _binary; private set { if (Set(ref _binary, value)) Changed(nameof(HasBinary)); } }
+    public bool HasBinary => Binary is not null;
     public IReadOnlyList<ParentChoice> Parents { get; } = commit.Parents.Count == 0
         ? [new(null, UiText.Get("CommitFilesRoot"))]
         : commit.Parents.Select((hash, i) => new ParentChoice(hash, UiText.Format("CommitFilesParent", i + 1, hash))).ToArray();
@@ -38,7 +41,7 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
     {
         if (_closed || Parent is null) return;
         var priorParent = _comparison?.Parent; var parent = Parent.Hash;
-        if (_comparison is not null && priorParent != parent) { Files = []; Lines = []; _selected = null; Changed(nameof(Selected)); }
+        if (_comparison is not null && priorParent != parent) { Files = []; Lines = []; Binary = null; _selected = null; Changed(nameof(Selected)); }
         _comparison = null;
         Queue(async token =>
         {
@@ -50,12 +53,12 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
     private void LoadDiff()
     {
         if (_closed || Selected is not { } row || _comparison is not { } comparison) return;
-        Lines = []; Notice = UiText.Get("DiffLoading");
+        Lines = []; Binary = null; Notice = UiText.Get("DiffLoading");
         Queue(async token =>
         {
             var diff = await reader.ReadCommitFileDiffAsync(git, path, comparison, row.Change, token);
             var lines = await Task.Run(() => diff.Lines.Where(line => line.Kind != DiffLineKind.Metadata || line.Text.StartsWith("\\ No newline", StringComparison.Ordinal)).Select(line => new DiffRow(line)).ToArray(), token);
-            return () => { Lines = lines; Output = diff.RawPatch; Notice = UiText.Format("DiffSummary" + diff.Kind,
+            return () => { Lines = lines; Binary = BinaryComparison.Create(diff, row.Change); Output = diff.RawPatch; Notice = UiText.Format("DiffSummary" + diff.Kind,
                 diff.OldBytes?.ToString("N0") ?? UiText.Get("CountUnavailable"), diff.NewBytes?.ToString("N0") ?? UiText.Get("CountUnavailable"), diff.Added, diff.Removed); };
         });
     }

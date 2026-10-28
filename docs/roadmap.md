@@ -4,7 +4,7 @@ Updated 2026-10-28. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
-**0.15.0: committed files/diffs and local-action latency.** The selected history commit has a parent-aware Changes panel; historical and local file rows share M/+/− markers. Working-copy actions avoid unrelated history ref enumeration and expose phase timings. Further theme polish stays P2; arbitrary-line staging and side-by-side/image previews remain future work. Verification and measured limits are recorded below.
+**0.16.0: fast file actions and binary cards.** Stage/Unstage publishes real affected rows before a coalesced background scan; obsolete reads no longer hold up the write. Binary comparisons show Old/New extensions and sizes, including local LFS metadata. Bottom activity bars/ticking footer are removed; static results/errors/cancellation remain. Further theme polish stays P2; arbitrary-line staging and text side-by-side/image previews remain future work. Verification and measured limits are recorded below.
 
 **Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 recorded the policy; 0.9.3 applies it in code. The user also explicitly reconfirmed removing the gate for configured hooks/helpers during this delivery.
 
@@ -297,6 +297,31 @@ Final restore/Release build/publish passed with **zero warnings/errors; 150 chec
 Reviewed final offscreen main window at 1200×760/900×580 and Changes pane at 950×360/650×260, plus the shared-marker commit modal. Review caught and fixed minimum-size details overflowing the footer; a bound-layout assertion now covers it. Changes expands its details area and leaving it restores the earlier height. Final log: `artifacts/preview-0.15.0-release.txt`; fixtures/renders: `artifacts/foundation-checks/20261028-133159-7e8ba5b14ddc4840ba10845d859f7ded`. Earlier interrupted runs are not release verification.
 
 Preview: `Build/0.15.0-win-x64/Shovel.exe`; all **16 checksums**, nine published/build files and four tested assemblies match; both executable versions are 0.15.0.0. Evidence: `artifacts/preview-0.15.0-package-check.txt`. Build remains ignored/untracked and earlier previews remain. No interactive launch, live network/auth, user-repository mutation or dependency installation performed; desktop speed, keyboard/screen reader, OS high contrast and Windows 10 remain unverified. Next: in-app sequence recovery, with any remaining reported stage/unstage delay isolated using the new phase timings.
+
+## Fast file actions and binary cards 2026-10-28
+
+0.16.0 advances the user's binary comparison/Unstage request ahead of sequence recovery. Confirmed delays in 0.15: file writes waited for obsolete diff/status reads, and action completion included a full repository status scan. Index-action preflight also repeated location/remote/upstream queries. The actual index write was a small fraction of the measured wait. The user's exact **11.5-second** case was not reproduced; no user repository was inspected or mutated for these tests.
+
+The action now cancels stale read generations, validates the current index/HEAD/config/identity, uses literal path-limited `reset --no-refresh` for Unstage, and publishes actual affected-path status. A trailing background full scan refreshes other rows. LFS/binary metadata avoids unnecessary content diffing. [Architecture](architecture.md#fast-file-results-and-binary-metadata-0160) owns bounds, failure handling and external-writer limitations; no synthetic row movement or success is used.
+
+Repeatable isolated fixture: 2,000 text files/1,001 branches plus 64 unchanged 4 MiB binary assets (256 MiB), asset mtimes invalidated each sample, one modified text path. Three Stage/Unstage samples per version, Windows x64/Git 2.51.1/.NET 10.0.12 on this host; no reboot/cache flush, live network or user repository. Medians:
+
+| Elapsed to | 0.15.0 | 0.16.0 final |
+| --- | --- | --- |
+| Stage: fresh affected rows | 1,880 ms | 503 ms |
+| Unstage: fresh affected rows | 1,709 ms | 514 ms |
+| Stage: selected text diff | 2,440 ms | 1,200 ms |
+| Unstage: selected text diff | 2,178 ms | 999 ms |
+
+The old row metric waited for the **entire scan**; the new metric publishes freshly checked affected paths and retains unrelated cached rows until a subsequent full scan. This measures the user's file-action feedback, not identical whole-repository completion. Baseline full status alone took 811–916 ms; Unstage's actual Git command took 71–94 ms. Final affected-row ranges: Stage 503–552 ms, Unstage 495–602 ms. Intermediate runs ranged lower (about 300 ms), so use the final results rather than the best run. Small samples, process/cache/host-load variance and selected large assets/filters preclude desktop p95 or universal subsecond claims. Proposed fixture budgets: median affected rows ≤750 ms, selected diff ≤1.75 s; representative desktop/asset-repository validation remains open.
+
+Baseline: `artifacts/0.16-assets-before.txt`, fixture `artifacts/working-copy-benchmarks/20261028-150105-d29c23d87811402983e641f499d96ed2`. Final: `artifacts/0.16-assets-release.txt`, fixture `artifacts/working-copy-benchmarks/20261028-153350-0b47ee7c89004e56a122a97042a1656c`. A separate gated view-model check holds obsolete diff/full-status reads despite cancellation, proving new file actions complete independently and late results cannot replace fresh rows.
+
+Final restore/Release build/publish passed with **zero warnings/errors; 156 checks passed, 0 failed**. New checks cover scoped real status, HEAD/worktree/unrelated-file preservation, held obsolete reads, late-result rejection, failed full refresh retaining successful rows, logical LFS/index/worktree/parent sizes with no helper execution, malformed pointers, absent vs empty files, binary→text selection, and errors remaining visible over retained binary cards. Existing hunk/commit/branch/network/authentication/cancellation regressions pass. Full-run gated Stage/Unstage completed in 459/495 ms while the old read was still held; this proves removal of that dependency, not desktop latency.
+
+Reviewed final offscreen binary modal at 1200×760 and 900×580 plus compact cards: Old/New/LFS/extension/size fit and bottom activity bars are absent. Log: `artifacts/preview-0.16.0-final.txt`; fixtures/renders: `artifacts/foundation-checks/20261028-154234-44b64798ea964e7b952a26bdfc1b9912`. Earlier stopped runs are not release verification. Preview: `Build/0.16.0-win-x64/Shovel.exe`; **16 checksums, nine build files and four tested assemblies** match, both executable versions 0.16.0.0 (`artifacts/preview-0.16.0-package-check.txt`). Build/artifacts remain ignored and earlier previews remain intact.
+
+No interactive launch, desktop control, live authentication/network test, user-repository mutation, dependency installation or deployment was performed. Native input/paint/accessibility/Windows 10 and the reported asset-repository delay remain unverified. Hunk/commit/larger-selection reconciliation still takes the full-scan path. Next functional priority: in-app sequence recovery; representative latency validation remains separately authorized work.
 
 ## Initial compatibility boundaries
 

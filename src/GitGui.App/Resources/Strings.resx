@@ -460,4 +460,20 @@ This rewrites its hash and may require coordinating published history. Reflog ca
   <data name="GitErrorIncompleteHistory" xml:space="preserve"><value>This commit has parents outside the available history snapshot. It cannot be compared with an empty tree. Fetch missing history explicitly before comparing it.</value></data>
   <data name="CommitTimings" xml:space="preserve"><value>Read drain: {0:N0} ms · Validation: {1:N0} ms · Git command: {2:N0} ms · Refresh: {3:N0} ms. File diff loads separately.</value></data>
   <data name="CommittedFileDetails" xml:space="preserve"><value>{0}: {1}. Original path: {2}.</value></data>
+  <data name="BinaryOld" xml:space="preserve"><value>Old</value></data>
+  <data name="BinaryNew" xml:space="preserve"><value>New</value></data>
+  <data name="BinaryAbsent" xml:space="preserve"><value>No file</value></data>
+  <data name="BinaryNoExtension" xml:space="preserve"><value>No extension</value></data>
+  <data name="BinaryLfs" xml:space="preserve"><value>LFS</value></data>
+  <data name="BinaryStoredFile" xml:space="preserve"><value>File</value></data>
+  <data name="BinarySideAccessible" xml:space="preserve"><value>{0}: {1}, {2}. {3}.</value></data>
+  <data name="BinaryComparison" xml:space="preserve"><value>Old and new binary file sizes</value></data>
+  <data name="BinaryBytes" xml:space="preserve"><value>B</value></data>
+  <data name="BinaryKiB" xml:space="preserve"><value>KiB</value></data>
+  <data name="BinaryMiB" xml:space="preserve"><value>MiB</value></data>
+  <data name="BinaryGiB" xml:space="preserve"><value>GiB</value></data>
+  <data name="BinaryTiB" xml:space="preserve"><value>TiB</value></data>
+  <data name="BinaryExactBytes" xml:space="preserve"><value>{0:N0} B</value></data>
+  <data name="BinarySize" xml:space="preserve"><value>{0:N1} {1} ({2:N0} B)</value></data>
+  <data name="CommitBackgroundRefreshFailed" xml:space="preserve"><value>{0} The full refresh failed; retained rows may be stale. Use Refresh in this window to check them.</value></data>
 </root>

@@ -12,6 +12,8 @@ public sealed record FileDiff(FileDiffKind Kind, IReadOnlyList<DiffLine> Lines, 
 {
     public HunkAvailability HunkAvailability { get; init; } = HunkAvailability.ContentType;
     public HunkPreview? HunkPreview { get; init; }
+    public bool OldLfs { get; init; }
+    public bool NewLfs { get; init; }
 }
 public sealed record DiffOptions(bool IgnoreWhitespace = false, bool WholeFile = false);
 
@@ -36,8 +38,18 @@ public sealed partial class RepositoryReader
         var hunkCandidate = CanPreviewHunks(entry) && !options.IgnoreWhitespace && !options.WholeFile;
         var contentStamp = "";
         if (await GitActions.IndexStampAsync(context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
-        long? oldBytes = submodule ? null : isNew ? 0 : await BlobSize(oldHash);
-        long? newBytes = submodule ? null : isIndex ? await BlobSize(entry.IndexObject) : before.Length;
+        var oldSummary = submodule ? Task.FromResult(new BlobSummary(null)) : isNew ? Task.FromResult(new BlobSummary(0)) : ReadBlobSummaryAsync(git, path, oldHash, token);
+        var newSummary = submodule ? Task.FromResult(new BlobSummary(null)) : isIndex ? ReadBlobSummaryAsync(git, path, entry.IndexObject, token) : ReadWorktreeSummaryAsync(file, token);
+        await Task.WhenAll(oldSummary, newSummary);
+        var oldInfo = await oldSummary; var newInfo = await newSummary;
+        var oldBytes = oldInfo.Bytes; var newBytes = newInfo.Bytes;
+        if (entry.Group != ChangeGroup.Conflicted && (oldInfo.Binary || newInfo.Binary))
+        {
+            if (await GitActions.IndexStampAsync(context.Repository, token) != context.IndexStamp || !isIndex && FileStamp(file) != before)
+                throw new GitActionException("CommitStale");
+            return new FileDiff(FileDiffKind.Binary, [], oldBytes, newBytes, 0, 0, "")
+            { OldLfs = oldInfo.Lfs, NewLfs = newInfo.Lfs || !isIndex && oldInfo.Lfs && File.Exists(file) };
+        }
         string[] overrides = ["-c", "core.quotepath=false", .. await FilterOverridesAsync(git, path, token)];
         var scope = isNew ? new[] { "--no-index" } : isIndex
             ? context.Repository.Commit is { } head ? new[] { "--cached", head } : ["--cached"] : Array.Empty<string>();
@@ -80,18 +92,7 @@ public sealed partial class RepositoryReader
             if (availability == HunkAvailability.Available)
                 preview = new(context, entry, patch, contentStamp, attributes.Stamp, hunks!);
         }
-        return new FileDiff(kind, lines, oldBytes, newBytes, added, removed, patch) { HunkAvailability = availability, HunkPreview = preview };
-
-        async Task<long?> BlobSize(string hash)
-        {
-            if (hash.Length == 0) return null;
-            if (hash.All(c => c == '0')) return 0;
-            if (!Regex.IsMatch(hash, "^[0-9a-f]{40}([0-9a-f]{24})?$")) throw new GitReadException(GitFailure.InvalidOutput);
-            var result = await RunAsync(git.Executable, path, ReadArguments(["cat-file", "-s", hash]), token);
-            RequireSuccess(result);
-            if (!long.TryParse(Text(result.StandardOutput).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var size)) throw new GitReadException(GitFailure.InvalidOutput);
-            return size;
-        }
+        return new FileDiff(kind, lines, oldBytes, newBytes, added, removed, patch) { HunkAvailability = availability, HunkPreview = preview, OldLfs = oldInfo.Lfs, NewLfs = newInfo.Lfs };
     }, token);
 
     internal static string WorkingCopyPath(string root, string relative)

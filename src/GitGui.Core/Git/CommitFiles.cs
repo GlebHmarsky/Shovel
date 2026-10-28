@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 
 namespace GitGui.Core.Git;
@@ -56,17 +55,12 @@ public sealed partial class RepositoryReader
         var stat = await RunAsync(git.Executable, path, ReadArguments([.. args, "--numstat", "-z", .. revisions, "--", .. paths]), token, MaximumDiffBytes);
         RequireSuccess(stat); var (binary, added, removed) = ParseDiffStats(Text(stat.StandardOutput));
         var submodule = file.HeadMode == "160000" || file.IndexMode == "160000";
-        async Task<long?> Size(string hash, string mode)
-        {
-            if (hash.All(c => c == '0')) return 0;
-            if (mode == "160000") return null;
-            var value = await RunAsync(git.Executable, path, ReadArguments(["cat-file", "-s", hash]), token);
-            RequireSuccess(value);
-            if (!long.TryParse(Text(value.StandardOutput).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var length)) throw new GitReadException(GitFailure.InvalidOutput);
-            return length;
-        }
-        var before = await Size(file.HeadObject, file.HeadMode); var after = await Size(file.IndexObject, file.IndexMode);
-        if (binary) return new FileDiff(FileDiffKind.Binary, [], before, after, added, removed, "");
+        var oldSummary = file.HeadMode == "160000" ? Task.FromResult(new BlobSummary(null)) : ReadBlobSummaryAsync(git, path, file.HeadObject, token);
+        var newSummary = file.IndexMode == "160000" ? Task.FromResult(new BlobSummary(null)) : ReadBlobSummaryAsync(git, path, file.IndexObject, token);
+        await Task.WhenAll(oldSummary, newSummary);
+        var oldInfo = await oldSummary; var newInfo = await newSummary;
+        var before = oldInfo.Bytes; var after = newInfo.Bytes;
+        if (binary || oldInfo.Lfs || newInfo.Lfs) return new FileDiff(FileDiffKind.Binary, [], before, after, added, removed, "") { OldLfs = oldInfo.Lfs, NewLfs = newInfo.Lfs };
         var patch = await RunAsync(git.Executable, path, ReadArguments([.. args, "--patch", "--unified=3", .. revisions, "--", .. paths]), token, MaximumDiffBytes);
         if (patch.Outcome == Processes.ProcessOutcome.OutputLimit) return new FileDiff(FileDiffKind.TooLarge, [], before, after, added, removed, "");
         RequireSuccess(patch);

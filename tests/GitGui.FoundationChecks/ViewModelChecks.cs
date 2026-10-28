@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false)
+    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -59,6 +59,7 @@ internal static partial class Program
             if (commitOnly) { await RunCommitWorkspaceChecksAsync(); return; }
             if (hunksOnly) { await RunHunkChecksAsync(); return; }
             if (commitFilesOnly) { await RunCommitFilesChecksAsync(); return; }
+            if (fastChangesOnly) { await RunFastChangesChecksAsync(); return; }
             var first = Fixture("model-first");
             var second = Fixture("model-second");
             await Check("Restored tabs automatically load without approval and preserve order/selection", async () =>
@@ -237,6 +238,7 @@ internal static partial class Program
             await RunCommitWorkspaceChecksAsync();
             await RunHunkChecksAsync();
             await RunCommitFilesChecksAsync();
+            await RunFastChangesChecksAsync();
             await RunWorkspaceActionChecksAsync();
             await RunPullChecksAsync();
             await RunAuthenticationViewChecksAsync();

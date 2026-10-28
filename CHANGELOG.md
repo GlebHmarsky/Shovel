@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.0 — 2026-10-28
+
+- Show old/new binary file cards with extension, readable size, exact bytes and LFS labels in Local Changes and historical Changes. Read LFS pointer sizes locally without downloading assets or invoking filters.
+- Return file Stage/Unstage results from path-scoped status, then coalesce a full refresh in the background. Cancel obsolete reads without waiting for them before a write; retain generation checks, index/config/HEAD validation, real Git results and failures. Unstage uses index-only, literal path-limited reset with no worktree refresh.
+- Remove bottom activity bars and the commit window's ticking footer. Keep cancellation, static results/errors and diagnostic phase timings; retain useful content during background refresh and selection across staged/unstaged moves.
+
 ## 0.15.0 — 2026-10-28
 
 - Add a Changes tab for the selected history commit: real changed files, numbered colored diffs, rename paths and binary size changes. Compare merge commits against a selectable parent; initial commits compare with an empty tree. Reads stay bounded, cancellable and independent of working files.
