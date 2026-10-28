@@ -142,6 +142,8 @@ public sealed class CommitViewModel : ObservableObject
     public Task LoadingTask { get; private set; } = Task.CompletedTask;
     public Task DiffTask { get; private set; } = Task.CompletedTask;
     public Task OperationTask { get; private set; } = Task.CompletedTask;
+    private string _timingSummary = "";
+    public string TimingSummary { get => _timingSummary; private set => Set(ref _timingSummary, value); }
     public event EventHandler? SnapshotChanged;
 
     public CommitViewModel(string directory, GitInstallation? git, RepositoryReader reader, GitActions actions, IUserInteraction interaction,
@@ -301,10 +303,14 @@ public sealed class CommitViewModel : ObservableObject
         async Task RunAsync()
         {
             string? committed = null;
+            WorkingCopyResult? measured = null; var timing = Stopwatch.StartNew(); double waitMilliseconds = 0;
+            TimingSummary = "";
             try
             {
                 await Dispatcher.Yield(DispatcherPriority.Background); await LoadingTask; await DiffTask;
+                waitMilliseconds = timing.Elapsed.TotalMilliseconds;
                 var result = await _actions.ExecuteWorkingCopyAsync(context, options, _actionCancel.Token, CollectOutput);
+                measured = result;
                 await _outputTask; RawOutput = result.Result.Output; committed = result.CommitHash;
                 Status = UiText.Get(result.Result.Success ? "CommitSucceeded" + action : "ActionResult" + result.Result.Outcome);
                 if (result.Result.Success && action == WorkingCopyAction.Commit)
@@ -323,7 +329,9 @@ public sealed class CommitViewModel : ObservableObject
             finally
             {
                 var outcome = Status; var output = RawOutput;
+                timing.Restart();
                 await LoadAsync(reconcile: true);
+                if (measured is not null) TimingSummary = UiText.Format("CommitTimings", waitMilliseconds, measured.ValidationMilliseconds, measured.CommandMilliseconds, timing.Elapsed.TotalMilliseconds);
                 Status = _state.ReadAt == default ? UiText.Format("ActionReinspectionFailed", outcome) : outcome;
                 RawOutput = output; _state.LastResult = Status; _state.LastOutput = output;
                 _actionCancel.Dispose(); _actionCancel = null; _mutating = false; UpdateBusy();

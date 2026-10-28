@@ -28,6 +28,8 @@ internal static partial class Program
                     Contrast(ColorOf("AuthorPeer"), ColorOf("Canvas")) >= 4.5, "Accent and author text remain readable");
                 Expect(Contrast(ColorOf("DiffAddedText"), ColorOf("DiffAddedBackground")) >= 4.5 &&
                     Contrast(ColorOf("DiffRemovedText"), ColorOf("DiffRemovedBackground")) >= 4.5, "Added/removed text contrast");
+                foreach (var marker in new[] { "FileModified", "FileAdded", "FileDeleted" })
+                    Expect(Contrast(ColorOf(marker), ColorOf("Canvas")) >= 4.5, "File marker contrast: " + marker);
                 var button = new Button { Content = "Existing control" };
                 var host = new Border { Child = button };
                 var window = new Window { Content = host };
@@ -39,6 +41,8 @@ internal static partial class Program
                     "High contrast follows Windows text, selection and disabled colors");
                 Expect(resources["Theme.DiffAddedText"] == SystemColors.WindowTextBrush && resources["Theme.DiffRemovedBackground"] == SystemColors.WindowBrush,
                     "Diff colors yield to system contrast; line markers retain the relationship");
+                foreach (var marker in new[] { "FileModified", "FileAdded", "FileDeleted" })
+                    Expect(resources["Theme." + marker] == SystemColors.WindowTextBrush, "File markers yield to high contrast: " + marker);
                 AppTheme.Apply(resources, false); host.UpdateLayout();
                 Expect(((SolidColorBrush)button.Foreground).Color == ColorOf("Text"), "Existing controls return to dark colors without recreation");
                 window.Close();

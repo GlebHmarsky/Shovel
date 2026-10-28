@@ -23,4 +23,7 @@
   <SolidColorBrush x:Key="Theme.DiffRemovedBackground" Color="#46252A" />
   <SolidColorBrush x:Key="Theme.DiffAddedText" Color="#B8E6C4" />
   <SolidColorBrush x:Key="Theme.DiffRemovedText" Color="#FFB8BD" />
+  <SolidColorBrush x:Key="Theme.FileModified" Color="#E5C07B"/>
+  <SolidColorBrush x:Key="Theme.FileAdded" Color="#80C58B"/>
+  <SolidColorBrush x:Key="Theme.FileDeleted" Color="#FF8B93"/>
 </ResourceDictionary>

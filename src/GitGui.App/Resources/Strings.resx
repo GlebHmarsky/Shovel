@@ -450,4 +450,14 @@ This rewrites its hash and may require coordinating published history. Reflog ca
   <data name="CommitSucceededStageHunks" xml:space="preserve"><value>Selected change blocks staged; worktree files preserved.</value></data>
   <data name="CommitSucceededUnstageHunks" xml:space="preserve"><value>Selected change blocks unstaged; worktree files preserved.</value></data>
   <data name="DiffHunkAccessible" xml:space="preserve"><value>Change block {0}; {1}; old line {2}; new line {3}; {4}. Hunk action includes the complete block.</value></data>
+  <data name="CommitFilesTitle" xml:space="preserve"><value>Changes</value></data>
+  <data name="CommitFilesCompare" xml:space="preserve"><value>Compare with</value></data>
+  <data name="CommitFilesRoot" xml:space="preserve"><value>Empty tree (initial commit)</value></data>
+  <data name="CommitFilesParent" xml:space="preserve"><value>Parent {0}: {1}</value></data>
+  <data name="CommitFilesLoading" xml:space="preserve"><value>Reading committed changes…</value></data>
+  <data name="CommitFilesCount" xml:space="preserve"><value>Changed files: {0}. Comparison uses stored commit objects; working files are not included.</value></data>
+  <data name="CommitFilesResize" xml:space="preserve"><value>Resize committed file list and diff</value></data>
+  <data name="GitErrorIncompleteHistory" xml:space="preserve"><value>This commit has parents outside the available history snapshot. It cannot be compared with an empty tree. Fetch missing history explicitly before comparing it.</value></data>
+  <data name="CommitTimings" xml:space="preserve"><value>Read drain: {0:N0} ms · Validation: {1:N0} ms · Git command: {2:N0} ms · Refresh: {3:N0} ms. File diff loads separately.</value></data>
+  <data name="CommittedFileDetails" xml:space="preserve"><value>{0}: {1}. Original path: {2}.</value></data>
 </root>

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Diagnostics;
 using System.Text;
 using GitGui.Core.Processes;
 
@@ -9,19 +10,27 @@ public sealed record WorkingCopyContext(GitInstallation Git, RepositoryIdentity 
 public enum WorkingCopyAction { Stage, Unstage, Commit, StageHunks, UnstageHunks }
 public sealed record WorkingCopyOptions(WorkingCopyAction Action, IReadOnlyList<LocalChange> Entries, string Message = "", bool Amend = false,
     HunkSelection? Hunks = null);
-public sealed record WorkingCopyResult(ActionResult Result, string? CommitHash = null);
+public sealed record WorkingCopyResult(ActionResult Result, string? CommitHash = null)
+{
+    public double ValidationMilliseconds { get; init; }
+    public double CommandMilliseconds { get; init; }
+}
 
 public sealed partial class GitActions
 {
     public Task<WorkingCopyContext> ReadWorkingCopyAsync(GitInstallation git, string path, CancellationToken token) => Task.Run(async () =>
     {
         var identity = await identities.ReadAsync(path, token);
-        var repository = await reader.InspectAsync(git, path, token);
+        var repository = await reader.InspectAsync(git, path, token, includeHistory: false);
         if (!SamePaths(identity, repository)) throw new GitActionException("ActionIdentityChanged");
         var stamp = await IndexStampAsync(repository, token);
-        var changes = await reader.ReadLocalChangesAsync(git, path, false, token);
-        var messageResult = repository.Commit is null ? null : await Raw(git, path,
-            ["-c", "log.showSignature=false", "log", "-1", "--no-show-signature", "--no-notes", "--format=%B", repository.Commit, "--"], token);
+        var changesTask = reader.ReadLocalChangesAsync(git, path, false, token);
+        var configTask = ConfigStamp(git, path, token);
+        var messageTask = repository.Commit is null ? Task.FromResult<ProcessResult?>(null) : ReadMessage();
+        await Task.WhenAll(changesTask, configTask, messageTask);
+        var changes = await changesTask; var messageResult = await messageTask;
+        async Task<ProcessResult?> ReadMessage() => await Raw(git, path,
+            ["-c", "log.showSignature=false", "log", "-1", "--no-show-signature", "--no-notes", "--format=%B", repository.Commit!, "--"], token);
         var message = messageResult is { Outcome: ProcessOutcome.Exited, ExitCode: 0 } ? Decode(messageResult).TrimEnd('\r', '\n') : "";
         if (Encoding.UTF8.GetByteCount(message) > 65536) message = "";
         var mergeMessage = "";
@@ -33,7 +42,7 @@ public sealed partial class GitActions
         }
         if (stamp != await IndexStampAsync(repository, token) || (await identities.ReadAsync(path, token)).Fingerprint != identity.Fingerprint)
             throw new GitActionException("CommitStale");
-        return new WorkingCopyContext(git, identity, repository, changes, stamp, await ConfigStamp(git, path, token), message, mergeMessage);
+        return new WorkingCopyContext(git, identity, repository, changes, stamp, await configTask, message, mergeMessage);
     }, token);
 
     // Content hash also catches index-only edits with unchanged file names/status codes. Split-index
@@ -64,13 +73,17 @@ public sealed partial class GitActions
 
         async Task<WorkingCopyResult> ExecuteLocked()
         {
+            var timing = Stopwatch.StartNew();
             token.ThrowIfCancellationRequested();
             var git = context.Git; var path = context.Identity.Worktree;
             if ((await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint) throw new GitActionException("ActionIdentityChanged");
-            var fresh = await reader.InspectAsync(git, path, token);
+            var inspection = reader.InspectAsync(git, path, token, includeHistory: false);
+            var configuration = ConfigStamp(git, path, token);
+            await Task.WhenAll(inspection, configuration);
+            var fresh = await inspection;
             if (!SamePaths(context.Identity, fresh) || fresh.Branch != context.Repository.Branch || fresh.Commit != context.Repository.Commit ||
                 fresh.Operation != context.Repository.Operation || await IndexStampAsync(fresh, token) != context.IndexStamp ||
-                await ConfigStamp(git, path, token) != context.ConfigStamp) throw new GitActionException("CommitStale");
+                await configuration != context.ConfigStamp) throw new GitActionException("CommitStale");
             if (!Enum.IsDefined(options.Action)) throw new GitActionException("ActionReadFailed");
             var temporary = Directory.CreateTempSubdirectory("shovel-git-");
             try
@@ -102,7 +115,7 @@ public sealed partial class GitActions
                         await ConfigStamp(git, path, token) != context.ConfigStamp ||
                         (await reader.ReadHunkAttributesAsync(git, path, preview.Change.Path, token)).Stamp != preview.AttributeStamp)
                         throw new GitActionException("HunkStale");
-                    var currentRepository = await reader.InspectAsync(git, path, token);
+                    var currentRepository = await reader.InspectAsync(git, path, token, includeHistory: false);
                     if (currentRepository.Commit != fresh.Commit || currentRepository.Branch != fresh.Branch || currentRepository.Operation != fresh.Operation ||
                         (await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint) throw new GitActionException("HunkStale");
                     args = apply;
@@ -139,6 +152,7 @@ public sealed partial class GitActions
                 // Supplied message removes the editor dependency; hooks/signing are still Git's configured tools.
                 // Terminal stdin is closed by the runner. Visible progress/cancel/timeout cover owned work.
                 environment["GIT_EDITOR"] = "false";
+                var validationMilliseconds = timing.Elapsed.TotalMilliseconds;
                 var result = await runner.RunAsync(new(git.Executable, path,
                     ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", .. args])
                     { Environment = environment, Timeout = TimeSpan.FromMinutes(5), MaximumOutputBytes = 1024 * 1024 }, token, progress);
@@ -152,7 +166,7 @@ public sealed partial class GitActions
                     try { commit = (await reader.InspectAsync(git, path, inspect.Token)).Commit; }
                     catch (Exception error) when (error is GitReadException or IOException or UnauthorizedAccessException or OperationCanceledException) { }
                 }
-                return new WorkingCopyResult(action, commit);
+                return new WorkingCopyResult(action, commit) { ValidationMilliseconds = validationMilliseconds, CommandMilliseconds = result.Duration.TotalMilliseconds };
             }
             finally
             {

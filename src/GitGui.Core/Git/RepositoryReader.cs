@@ -5,7 +5,7 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitFailure { MissingGit, UnsupportedGit, StartFailed, CommandFailed, Cancelled, TimedOut, OutputLimit, NotWorktree, InvalidOutput, ChangedDuringRead, HistoryTooWide }
+public enum GitFailure { MissingGit, UnsupportedGit, StartFailed, CommandFailed, Cancelled, TimedOut, OutputLimit, NotWorktree, InvalidOutput, ChangedDuringRead, HistoryTooWide, IncompleteHistory }
 public sealed class GitReadException(GitFailure failure, string rawOutput = "") : Exception(failure.ToString())
 {
     public GitFailure Failure { get; } = failure;
@@ -50,7 +50,7 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         return new GitInstallation(executable, match.Groups[1].Value);
     }, token);
 
-    public Task<RepositorySnapshot> InspectAsync(GitInstallation git, string repositoryPath, CancellationToken token) => Task.Run(async () =>
+    public Task<RepositorySnapshot> InspectAsync(GitInstallation git, string repositoryPath, CancellationToken token, bool includeHistory = true) => Task.Run(async () =>
     {
         using var timing = trace?.Measure(TimingStage.Inspection);
         token.ThrowIfCancellationRequested();
@@ -68,14 +68,14 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         var location = new RepositorySnapshot(worktree, gitDirectory, common, null, null, HeadKind.Unborn, operation, DateTimeOffset.Now);
         // Local names only: no URL resolution, helpers or network. Run alongside the ref read.
         var remotesTask = Command("remote");
-        var stateTask = ReadHistoryStateAsync(git, location, token);
+        var stateTask = ReadHistoryStateAsync(git, location, token, headOnly: !includeHistory);
         await Task.WhenAll(remotesTask, stateTask).ConfigureAwait(false);
         var state = await stateTask;
         var remotes = Text((await remotesTask).StandardOutput).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (operation != ReadOperation(gitDirectory)) throw new GitReadException(GitFailure.ChangedDuringRead);
         return location with { Branch = state.Branch, Commit = state.Commit,
             HeadKind = state.Branch is null ? HeadKind.Detached : state.Commit is null ? HeadKind.Unborn : HeadKind.Branch,
-            InitialHistoryState = state, UpstreamRef = state.UpstreamRef, RemoteNames = remotes };
+            InitialHistoryState = includeHistory ? state : null, UpstreamRef = state.UpstreamRef, RemoteNames = remotes };
 
         async Task<ProcessResult> Command(params string[] args)
         {

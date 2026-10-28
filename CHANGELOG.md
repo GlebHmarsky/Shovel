@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.0 — 2026-10-28
+
+- Add a Changes tab for the selected history commit: real changed files, numbered colored diffs, rename paths and binary size changes. Compare merge commits against a selectable parent; initial commits compare with an empty tree. Reads stay bounded, cancellable and independent of working files.
+- Share amber M, green + and red − file markers between history changes and Local Changes, with text/accessibility meanings and system high-contrast colors.
+- Remove full-history ref enumeration from working-copy validation and refresh. Run independent reads within the existing two-process bound; retain index/HEAD/config/identity checks and reconcile real Git outcomes. Display read-drain, validation, Git-command and refresh timings in the commit window output section.
+
 ## 0.14.0 — 2026-10-28
 
 - Stage or unstage selected complete change blocks from the commit modal's diff. Ctrl/Shift selects multiple blocks; one context-aware button shows the action and count, with accessible block descriptions.

@@ -6,10 +6,13 @@ namespace GitGui.App.ViewModels;
 
 public sealed record ChangeRow(LocalChange Change)
 {
+    public string Code => Change.Code.ToString();
+    public string Marker => Change.Code switch { 'A' or '?' => "+", 'D' => "−", 'R' => "→", _ => Code };
     public string Group => UiText.Get("Changes" + Change.Group);
     public string Kind => UiText.Get("ChangeCode" + Change.Code);
     public string Path => string.Concat(Change.Path.Select(c => char.IsControl(c) ? "\\u" + ((int)c).ToString("X4") : c.ToString()));
     public string Details => UiText.Format("ChangeDetails", Group, Kind, Change.Path, Change.OriginalPath ?? UiText.Get("ChangeNoOriginal"), Change.Submodule);
+    public string CommittedDetails => UiText.Format("CommittedFileDetails", Kind, Change.Path, Change.OriginalPath ?? UiText.Get("ChangeNoOriginal"));
 }
 public sealed partial class ShellViewModel
 {

@@ -22,6 +22,7 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 | AuthorPeer | #FFF2A8 | Existing same-author relationship, never the selected row |
 | DiffAddedBackground / DiffAddedText | #213A2B / #B8E6C4 | Added lines, accompanied by + and new line number |
 | DiffRemovedBackground / DiffRemovedText | #46252A / #FFB8BD | Removed lines, accompanied by − and old line number |
+| FileModified / FileAdded / FileDeleted | #E5C07B / #80C58B / #FF8B93 | M / + / − file markers in committed and working-copy lists; selected text/system high contrast overrides colors |
 
 ## State rules
 

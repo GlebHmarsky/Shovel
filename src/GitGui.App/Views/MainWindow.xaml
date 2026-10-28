@@ -40,7 +40,7 @@
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
   </Window.Resources>
-  <Grid Background="{DynamicResource Theme.Chrome}">
+  <Grid x:Name="ShellLayout" Background="{DynamicResource Theme.Chrome}" SizeChanged="OnWorkspaceSizeChanged">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
@@ -183,7 +183,7 @@
         <Grid.RowDefinitions>
           <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="300" />
           <RowDefinition Height="5" />
-          <RowDefinition x:Name="DetailsRow" Height="180" MinHeight="80" MaxHeight="360" />
+          <RowDefinition x:Name="DetailsRow" Height="180" MinHeight="80" />
         </Grid.RowDefinitions>
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -258,7 +258,7 @@
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows"
                       Background="{DynamicResource Theme.Border}"
                       AutomationProperties.Name="{loc:Text Key=ResizeDetails}" AutomationProperties.AutomationId="DetailsSplitter" />
-        <TabControl SelectedIndex="{Binding DetailsIndex}" Grid.Row="2" Margin="0" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
+        <TabControl SelectedIndex="{Binding DetailsIndex}" SelectionChanged="OnDetailsSelection" Grid.Row="2" Margin="0" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
           <TabItem Header="{loc:Text Key=Commit}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="14,10">
@@ -313,7 +313,8 @@
               <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MinHeight="60" MaxHeight="250" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}" />
             </StackPanel></ScrollViewer>
           </TabItem>
-        </TabControl>
+          <TabItem Header="{loc:Text Key=CommitFilesTitle}"><views:CommitFilesView DataContext="{Binding CommitFiles}"/></TabItem>
+</TabControl>
       </Grid>
     </Grid>
     <Border Grid.Row="4" Padding="14,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Theme.Border}">

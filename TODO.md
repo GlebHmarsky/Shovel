@@ -4,26 +4,32 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.14.0 complete: selected whole-hunk stage/unstage for tracked text modifications, revalidated index-only application and retained working files/drafts. 140 checks, normal/minimum offscreen review and a matching ignored preview; no interactive launch. Whole-file actions remain available for other change types.
+0.15.0 delivered: selected-commit files/diffs, shared colored file markers and measured stage/unstage latency improvements. See the completed milestone below for verification; next priorities follow.
+
+- [x] **P1 — Committed content.** Real parent-aware files/diffs, binary sizes, cancellation and bounded reads.
+- [x] **P1 — File markers.** Shared modified/added/deleted symbols, accessible meanings and theme colors.
+- [x] **P1 — Diagnose and reduce local-action delay.** Repeatable before/after fixture, narrower metadata reads and visible phase timings; preserve mutation checks.
+- [x] **P1 — Deliver.** Complete regressions/offscreen review, documentation, matching preview and commit.
 
 
 ## Next priorities
 
+- [ ] **P1 — In-app sequence recovery.** Show valid Continue/Skip/Abort for merge/rebase/cherry-pick/revert state; preserve conflict details after reopen, confirm destructive abort targets and verify disposable interrupted/conflicted cases. Keep command progress/cancellation visible.
+- [ ] **P1 — Remaining stage/unstage latency.** Use the new phase timings if the reported 10-second case persists; then reproduce its dominant phase in a disposable fixture. Keep working Git validations and the current measured baseline.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
 - [ ] **P1 — Extend performance fixtures.** Merge-heavy/million-commit cases, cancellation under load, app/child peak memory, five-minute idle CPU; retain F1e baseline.
 - [ ] **P1 — Validate accessibility/layout.** Mixed DPI, OS high contrast/screen reader, keyboard/focus, +40%/RTL, themes. Offscreen colors do not certify OS accessibility.
-- [ ] **P2 — Selected-commit files/diffs.** Bounded real data, exact paths, binary/EOL/large-content cases.
 - [ ] **P2 — External reconciliation/tools.** Focus/resume/external-client races and tracked tool sessions.
 - [ ] **P2 — Filtering when requested.** Ref/search ancestry, default All Commits, retained selection/scroll.
 
 ## Backlog
 
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, native title-bar integration where supported, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
-- [ ] **P2 — Diff/editor extensions.** Individual-line staging, broader hunk file types, side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
+- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Local MVP remainder.** Init, branch deletion/tracking and stashes; broaden signing and failure recovery. Whole-hunk staging is delivered in 0.14.0.
-- [ ] **P1 — Network MVP.** Clone/remote editing, valid sequence recovery and visible auth/input; Pull rebase/merge/auto-stash is in 0.11.0.
+- [ ] **P1 — Network MVP.** Clone/remote editing and visible auth/input; sequence recovery is prioritized above. Pull rebase/merge/auto-stash is in 0.11.0.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor; disposable destructive fixtures.
 - [ ] **P2 — Extended compatibility.** Submodule/worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization.
@@ -36,6 +42,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.15.0 / 2026-10-28:** historical files/diffs with selectable merge parents, binary sizes and shared M/+/− markers; narrowed working-copy metadata and exposed phase timings. Fixture median fresh rows: Stage 2.21→1.11 s, Unstage 2.67→1.26 s; user's 10-second case not reproduced. 150 checks, normal/minimum offscreen review, 16 preview checksums/nine build files/four tested assemblies matched. [Evidence](docs/roadmap.md#committed-files-and-local-action-latency-2026-10-28).
 
 - [x] **0.14.0 / 2026-10-28:** complete-block stage/unstage, multi-hunk selection, stale preview/file/index/attribute checks, clear unsupported states and retained drafts. 140 checks, normal/minimum offscreen review, 16 preview checksums/seven matching tested files. [Evidence](docs/roadmap.md#selected-hunks-2026-10-28).
 

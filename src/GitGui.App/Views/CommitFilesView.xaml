@@ -1,0 +1,37 @@
+<UserControl x:Class="GitGui.App.Views.CommitFilesView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="clr-namespace:GitGui.App.Localization" Foreground="{DynamicResource Theme.Text}">
+ <Grid Background="{DynamicResource Theme.Canvas}">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="6,3">
+   <Button DockPanel.Dock="Right" Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Margin="6,0" IsEnabled="{Binding Busy}"/>
+   <Button DockPanel.Dock="Right" Content="{loc:Text Key=CommitRefresh}" Command="{Binding RefreshCommand}"/>
+   <TextBlock DockPanel.Dock="Left" Text="{loc:Text Key=CommitFilesCompare}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+   <ComboBox ItemsSource="{Binding Parents}" SelectedItem="{Binding Parent}" DisplayMemberPath="Label" MaxWidth="580" HorizontalAlignment="Left" AutomationProperties.Name="{loc:Text Key=CommitFilesCompare}"/>
+  </DockPanel>
+  <Grid Grid.Row="1">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="260" MinWidth="130"/><ColumnDefinition Width="5"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <DataGrid ItemsSource="{Binding Files}" SelectedItem="{Binding Selected}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="None" RowHeaderWidth="0" RowHeight="24" SelectionUnit="FullRow" SelectionMode="Single" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" AutomationProperties.Name="{loc:Text Key=CommitFilesTitle}" AutomationProperties.AutomationId="CommitFiles">
+    <DataGrid.Columns>
+     <DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Style="{StaticResource FileChangeMarker}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+     <DataGridTextColumn Binding="{Binding Path}" Width="*"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding CommittedDetails}"/><Setter Property="AutomationProperties.Name" Value="{Binding CommittedDetails}"/></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
+    </DataGrid.Columns>
+   </DataGrid>
+   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitFilesResize}"/>
+   <DockPanel Grid.Column="2">
+    <TextBlock DockPanel.Dock="Top" Text="{Binding Notice, TargetNullValue={loc:Text Key=SelectCommit}}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Notice}" Margin="5,2" Foreground="{DynamicResource Theme.Muted}" AutomationProperties.LiveSetting="Polite"/>
+    <DataGrid ItemsSource="{Binding Lines}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" HeadersVisibility="None" RowHeaderWidth="0" RowHeight="22" SelectionUnit="FullRow" SelectionMode="Extended" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" RowStyle="{StaticResource DiffRow}" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.AutomationId="CommitFileDiff">
+     <DataGrid.Columns>
+      <DataGridTextColumn Binding="{Binding OldLine}" Width="45" ElementStyle="{StaticResource DiffText}"/>
+      <DataGridTextColumn Binding="{Binding NewLine}" Width="45" ElementStyle="{StaticResource DiffText}"/>
+      <DataGridTextColumn Binding="{Binding Marker}" Width="24" ElementStyle="{StaticResource DiffText}"/>
+      <DataGridTextColumn Binding="{Binding Text}" Width="SizeToCells" MinWidth="300" ElementStyle="{StaticResource DiffText}"/>
+     </DataGrid.Columns>
+    </DataGrid>
+   </DockPanel>
+  </Grid>
+  <StackPanel Grid.Row="2">
+   <ProgressBar Height="2" IsIndeterminate="{Binding Busy}"/>
+   <TextBlock Text="{Binding Status, TargetNullValue={loc:Text Key=SelectCommit}}" Margin="6,2" AutomationProperties.LiveSetting="Polite"/>
+   <Expander Header="{loc:Text Key=ActionOutput}"><TextBox Text="{Binding Output, Mode=OneWay}" IsReadOnly="True" MaxHeight="70" VerticalScrollBarVisibility="Auto"/></Expander>
+  </StackPanel>
+ </Grid>
+</UserControl>

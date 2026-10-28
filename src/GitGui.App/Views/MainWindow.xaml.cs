@@ -15,6 +15,8 @@ public partial class MainWindow : Window
     public bool HighContrast { get => (bool)GetValue(HighContrastProperty); set => SetValue(HighContrastProperty, value); }
     private bool _restoringScroll;
     private int _viewGeneration;
+    private bool _changesLayout;
+    private GridLength _previousDetailsHeight;
     public ShellViewModel ViewModel { get; }
     public MainWindow(ShellViewModel viewModel)
     {
@@ -101,10 +103,27 @@ public partial class MainWindow : Window
         SelectedSection = NavigationSection.History
     };
 
+    private void OnDetailsSelection(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.OriginalSource != sender || HistoryRow is null || DetailsRow is null) return;
+        var changes = ((TabControl)sender).SelectedIndex == 4;
+        if (changes && !_changesLayout) { _previousDetailsHeight = DetailsRow.Height; DetailsRow.Height = new(Math.Max(260, DetailsRow.Height.Value)); }
+        else if (!changes && _changesLayout) DetailsRow.Height = _previousDetailsHeight;
+        _changesLayout = changes;
+        HistoryRow.MinHeight = changes ? 160 : 300;
+        DetailsRow.MinHeight = changes ? 200 : 80;
+        FitDetails();
+    }
     private void OnWorkspaceSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // A restored fixed-height details panel must not push content beneath the status bar.
-        DetailsRow.MaxHeight = Math.Max(DetailsRow.MinHeight,
-            Math.Min(360, WorkspacePanel.ActualHeight - HistoryRow.MinHeight - 5));
+        FitDetails();
+    }
+    private void FitDetails()
+    {
+        if (ShellLayout is null || DetailsRow is null || ShellLayout.ActualHeight <= 0) return;
+        // A child's desired height can exceed its viewport. Use the finite shell height,
+        // excluding chrome/footer, so the details panel cannot cover the status bar.
+        var available = ShellLayout.ActualHeight - ShellLayout.RowDefinitions.Where((_, index) => index != 3).Sum(row => row.ActualHeight);
+        DetailsRow.MaxHeight = Math.Max(DetailsRow.MinHeight, Math.Min(360, available - HistoryRow.MinHeight - 5));
     }
 }

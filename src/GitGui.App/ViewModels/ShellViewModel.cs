@@ -64,7 +64,7 @@ public sealed partial class ShellViewModel : ObservableObject
         set
         {
             if (_publishingState || State is not { } state || state.Selected == value || (value is not null && !state.Rows.Contains(value))) return;
-            state.Selected = value; HighlightAuthors(); Changed();
+            state.Selected = value; HighlightAuthors(); Changed(); UpdateCommitFiles();
         }
     }
     public string HistoryNotice => State?.Notice ?? UiText.Get("HistoryNotLoaded");
@@ -96,7 +96,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public string AreaTitle => UiText.Get("AllCommits");
     public SettingsLoadResult? LoadedSettings { get; private set; }
     private int _detailsIndex;
-    public int DetailsIndex { get => _detailsIndex; set => Set(ref _detailsIndex, value); }
+    public int DetailsIndex { get => _detailsIndex; set { if (Set(ref _detailsIndex, value)) UpdateCommitFiles(); } }
     public RelayCommand<RepositoryTab> CloseTabCommand { get; }
     public RelayCommand<RepositoryTab> CloseOtherTabsCommand { get; }
     public RelayCommand<RepositoryTab> MoveTabLeftCommand { get; }
@@ -390,7 +390,7 @@ public sealed partial class ShellViewModel : ObservableObject
             {
                 PublishChanges(); HighlightAuthors();
                 foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(PullCount), nameof(PushCount), nameof(DivergenceHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
-                RefreshCommands(); HistoryViewChanged?.Invoke(this, EventArgs.Empty);
+                RefreshCommands(); HistoryViewChanged?.Invoke(this, EventArgs.Empty); UpdateCommitFiles();
             } finally { _publishingState = false; }
         }
     }
@@ -424,7 +424,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
-    public void BeginShutdown() { _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
-    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _countTask; }
+    public void BeginShutdown() { StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
+    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _countTask; await _oldCommitFiles; }
     public void ResumeAfterSaveFailure() { _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }

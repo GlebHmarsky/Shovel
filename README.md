@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.14.0** adds selected-hunk staging/unstaging to the modal Local Changes/Commit workspace with file diffs, file/all stage/unstage, commit/amend and Shift Commit and Push. History remains visible behind it. Shared dark styling, branch/network actions and Pull-Rebase/Merge/auto-stash remain.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.15.0** adds committed files/diffs, colored file markers and faster local-action validation to the modal Local Changes/Commit workspace with file diffs, file/all stage/unstage, commit/amend and Shift Commit and Push. History remains visible behind it. Shared dark styling, branch/network actions and Pull-Rebase/Merge/auto-stash remain.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -32,7 +32,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#selected-hunks-2026-10-28) distinguishes integration/headless from desktop.
+Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#committed-files-and-local-action-latency-2026-10-28) distinguishes integration/headless from desktop.
 
 Focused theme resource/control/offscreen checks (no window shown): `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-theme`. The full suite also runs these checks.
 
@@ -56,6 +56,8 @@ Open a local worktree root; selected saved tab restores automatically, others lo
 
 Headerless graph/refs/description/author/date/hash begins below tabs. Select row for full parsed metadata/message/parents/refs. Older/Newer: 200-row pages/no total count cap. Range/status/help exposes limits. Three cached tabs/character budget, 128 back cursors/First history page; page/selection/scroll session-only. Cache eviction reloads first page.
 
+Select a commit, then **Changes** in the bottom panel for its committed files and numbered text diffs or binary byte sizes. Merge commits default to the first parent; choose another parent to compare that side. Initial commits compare with the empty tree; missing history objects report an error without fetching. Shared file markers are yellow **M**, green **+** and red **−**, with textual/accessibility descriptions. The panel reads committed objects, not your working files.
+
 Cached switch publishes immediately/validates identity off-thread. >30 s snapshots refresh on tab/window activation; Refresh forces read. No polling/preload. Refresh retains rows on failure/cancel, changed refs restart page one/retain selected hash if present; changed boundaries block paging. Identity errors clear rows. Right-click tab: refresh/move/close/close others; MMB closes clicked tab, active read cancels/neighbour selected, inactive close preserves active work.
 
 Pull badge = behind, Push = ahead of configured upstream **locally**, loaded after rows; separate push target not compared. Zero measured, dash pending/unavailable/failed; tooltip reason/time/upstream. Missing/detached/unborn/shallow cannot claim synchronized; failed refresh keeps stale counts, no implicit fetch.
@@ -70,7 +72,9 @@ The right side shows colored, numbered unified text, whitespace/whole-file optio
 
 Select a line inside a change block, or Ctrl/Shift-select multiple blocks, then use **Stage hunk(s)** / **Unstage hunk(s)** beside the diff. This stages complete blocks, not individual lines. Ordinary tracked text modifications are supported; unavailable file types/options explain their whole-file alternative. [Hunk implementation and limits](docs/architecture.md#selected-hunks-0140).
 
-Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for focused hunk integration/UI checks. Full preview checks include all three.
+After a local action, expand **Git output** for milliseconds spent waiting for earlier reads, validating, executing Git and refreshing rows. The selected diff loads separately. These in-memory timings expose remaining delays without logging paths, arguments or content.
+
+Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for hunk checks and `--check-commit-files` for historical files/diffs and local metadata validation. The full preview checks include all of them.
 
 ## Branch and remote actions
 
@@ -86,11 +90,14 @@ After build:
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-history
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-large-history
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-actions
+dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --measure-working-copy
 ```
 
 First: three samples/isolated 2,500 commits, separate settings/discovery/inspection/ref/page/graph/format/process timings, first/warm offscreen construction. Second: packed 100k commits/1,201 refs, first/last page before/after fixture-only commit-graph/packed-ref maintenance. App never maintains user repos for a benchmark. Regular checks cover auto-start/tab/refresh/render timing. Outputs artifacts/history-benchmarks; [roadmap](docs/roadmap.md) records comparisons. Not cold desktop/Windows 10/p95 certification.
 
 Third: seven samples on an isolated 2,500-commit/one-remote fixture; separate cached editable-dialog layout, post-submission preparation/subprocess cost and prepared-dialog layout. Writes artifacts/action-benchmarks. First construction includes WPF/JIT initialization; later samples are warm. No window is shown, no network fetch or user repository is read.
+
+Fourth: three stage/unstage samples on a disposable 2,000-file/1,001-branch fixture. Reports validation/command completion, fresh rows, then selected diff, plus subprocess names/durations. Writes artifacts/working-copy-benchmarks; no content/arguments in timing output. First process sample plus two warm samples, without OS cache flushing; not desktop responsiveness or p95 evidence.
 
 ## Build a local preview
 
@@ -98,7 +105,7 @@ Third: seven samples on an isolated 2,500-commit/one-remote fixture; separate ca
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.14.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.15.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

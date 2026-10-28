@@ -4,7 +4,7 @@ Updated 2026-10-28. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
-**0.14.0: selected-hunk staging/unstaging.** Complete change blocks can be applied to the index from the existing commit modal, preserving working files, unrelated staged changes and drafts. Shared dark styling continues; further theme polish stays P2. Release verification is recorded below; selected-commit files/diffs and arbitrary-line staging remain future work.
+**0.15.0: committed files/diffs and local-action latency.** The selected history commit has a parent-aware Changes panel; historical and local file rows share M/+/− markers. Working-copy actions avoid unrelated history ref enumeration and expose phase timings. Further theme polish stays P2; arbitrary-line staging and side-by-side/image previews remain future work. Verification and measured limits are recorded below.
 
 **Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 recorded the policy; 0.9.3 applies it in code. The user also explicitly reconfirmed removing the gate for configured hooks/helpers during this delivery.
 
@@ -34,7 +34,8 @@ Proposed remaining order; requests can reprioritize. Each increment must work en
 | 0.12.1 | Requested first dark-theme pass/shared state conventions | 119 checks/offscreen review; further polish P2 |
 | 0.13.0 | Modal Local Changes/Commit; real file diffs, file/all stage/unstage, commit/amend/Shift push | Disposable Git, modifier/failure/cancellation and offscreen evidence below |
 | 0.14.0 | Selected whole-hunk stage/unstage for tracked text modifications | Exact-preview validation, disposable Git and bound UI/offscreen evidence below |
-| F1g onward | Selected-commit files/tree/diffs; filtering when requested | Bounded parsers/content and relevant read tests |
+| 0.15.0 | Selected-commit files/diffs, file markers, narrower local-action metadata | Immutable tree comparisons and repeatable before/after measurements below |
+| F1g onward | Historical file tree; filtering when requested | Bounded content and relevant read tests |
 | 2: Local MVP remainder | Init/branch delete/tracking/stashes | Signing/recovery coverage |
 | 3: Network MVP | Clone/remotes/broader network/recovery continue/skip/abort | Visible auth/input, failures/external races |
 | 3R: Pilot distribution | Install once/update/channels/pilot/migration/repair | Updater/IT/signing decisions and installed U/D tests before ~30-user rollout |
@@ -269,6 +270,33 @@ Verification uncovered a pre-existing harness defect: constructing the productio
 Final restore/Release build/publish passed with zero warnings/errors; **106 passed, 0 failed**. Disposable Git checks cover real divergent file integration for both strategies, staged/unstaged auto-stash restoration, zero-exit stash conflicts, sequence reopen/terminal abort, unrelated untracked files/ignored collisions, sparse pattern preservation and dirty submodule contents. Existing hook/authentication/cancellation/stale-state/admission/history checks also pass. WPF checks cover opening before preparation, dismissal/late completion, errors, radio bindings and normal/minimum layouts. Reviewed final Pull 650×520/520×440 and running/completed workspace 1200×760/900×580 offscreen; options scroll at minimum size, primary buttons stay outside the scroll region. This does not establish desktop focus/input, live HTTPS/SSH/GCM, Windows 10 or OS accessibility behavior.
 
 Log: `artifacts/preview-0.11.0-verification.txt`; final fixtures/renders: `artifacts/foundation-checks/20261027-224618-6b0649aa2e654eba924bacf3245cc953`. Preview: `Build/0.11.0-win-x64/Shovel.exe`; all 16 checksums and seven tested/published app/helper files match, both executable versions 0.11.0.0. Build is ignored/untracked and earlier previews retained. No dependencies installed, push or distribution work. Source/docs committed as requested. Next: Local Changes/status, then in-app recovery actions; broader auth is not a prerequisite for independent features.
+
+## Committed files and local-action latency 2026-10-28
+
+0.15.0 adds real historical file lists and selected text/binary diffs, initial/merge-parent comparisons and shared semantic M/+/− markers. It reads stored objects; dirty working files/index are excluded. A shallow boundary cannot pretend to be an initial commit. Submodule changes stay pointer-only even with configured expanded/ignored diffs. Limits and ownership are in [architecture](architecture.md#committed-files-and-local-action-latency-0150).
+
+The measured bottleneck was repeated **full ref enumeration** during working-copy preflight and again during reconciliation, plus independent serialized reads. Baseline `for-each-ref` calls took 534–1,106 ms on the fixture; the actual unstage command took 76–85 ms. Direct HEAD/branch/upstream reads replace those enumerations; status/config/message and preflight metadata/config overlap within the existing two-process limit. Index/HEAD/config/identity checks and real-result reconciliation remain. More narrow processes can be faster than fewer expensive ones: measured totals were 18→22 for Stage and 17→21 for Unstage, including the selected diff.
+
+Repeatable baseline 0.14.0 versus optimized implementation: same host, three samples/version, disposable **2,000 tracked files / 1,001 loose local branch refs**, one modified file, first process sample plus two warm samples. Fresh fixtures, unchanged machine configuration, no cache flush/reboot or user repositories. Read/validation work is timed separately from the final diff; no WPF/desktop input in this benchmark. Reproduce with README's `--measure-working-copy` command. Values below are medians:
+
+| Measured interval from submission | 0.14.0 | Optimized | Improvement |
+| --- | --- | --- | --- |
+| Stage validation + command | 996 ms | 462 ms | 54% |
+| Stage + refreshed rows | 2,214 ms | 1,113 ms | 50% |
+| Stage + selected diff | 2,622 ms | 1,594 ms | 39% |
+| Unstage validation + command | 953 ms | 450 ms | 53% |
+| Unstage + refreshed rows | 2,672 ms | 1,261 ms | 53% |
+| Unstage + selected diff | 3,151 ms | 1,661 ms | 47% |
+
+Fresh-row ranges: Stage 2,010–2,900→992–1,514 ms; Unstage 2,120–2,677→978–1,325 ms. Timing logs: `artifacts/working-copy-before.txt`, `artifacts/working-copy-after.txt`; fixture roots `artifacts/working-copy-benchmarks/20261028-124650-068f08089455479e88ef8e2bf4909bcd` and `20261028-125956-d00aa67adc0f41b8b89fb52b5a720583`. These samples preceded only final timing-display/submodule/layout-check refinements, not another local-action algorithm change.
+
+**Proposed regression budgets for this fixture:** median fresh rows ≤1.5 s, selected diff ≤2 s, with command time reported separately. This is not a p95/large-repository or desktop guarantee; the user's 10-second unstage was not reproduced. Index size/status scans, filesystem/security software and configured filters/hooks can still dominate other repositories. The commit window's output section now exposes wait/validation/command/refresh milliseconds in memory to distinguish those cases; diff follows separately. No speculative successful row movement was added.
+
+Final restore/Release build/publish passed with **zero warnings/errors; 150 checks passed, 0 failed**. Disposable integration covers the new root/empty/merge-parent, text/binary/rename/delete/Unicode/EOF/large/missing-object/submodule cases, immutable content despite dirty index/worktree, helper suppression, obsolete parent results, failed refresh retention and minimal working-copy metadata for attached/detached/unborn HEAD. Existing file/hunk/commit/network failures, locks, cancellation and conflict cases still pass. Marker contrast and system-color mapping are checked headlessly; historical accessibility text does not mislabel files as staged.
+
+Reviewed final offscreen main window at 1200×760/900×580 and Changes pane at 950×360/650×260, plus the shared-marker commit modal. Review caught and fixed minimum-size details overflowing the footer; a bound-layout assertion now covers it. Changes expands its details area and leaving it restores the earlier height. Final log: `artifacts/preview-0.15.0-release.txt`; fixtures/renders: `artifacts/foundation-checks/20261028-133159-7e8ba5b14ddc4840ba10845d859f7ded`. Earlier interrupted runs are not release verification.
+
+Preview: `Build/0.15.0-win-x64/Shovel.exe`; all **16 checksums**, nine published/build files and four tested assemblies match; both executable versions are 0.15.0.0. Evidence: `artifacts/preview-0.15.0-package-check.txt`. Build remains ignored/untracked and earlier previews remain. No interactive launch, live network/auth, user-repository mutation or dependency installation performed; desktop speed, keyboard/screen reader, OS high contrast and Windows 10 remain unverified. Next: in-app sequence recovery, with any remaining reported stage/unstage delay isolated using the new phase timings.
 
 ## Initial compatibility boundaries
 

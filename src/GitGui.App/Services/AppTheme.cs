@@ -26,6 +26,7 @@ public sealed class AppTheme : IDisposable
             resources[key] = key switch
             {
                 "Theme.Text" or "Theme.HistoryText" or "Theme.Muted" or "Theme.AuthorPeer" or "Theme.DiffAddedText" or "Theme.DiffRemovedText" => SystemColors.WindowTextBrush,
+                "Theme.FileModified" or "Theme.FileAdded" or "Theme.FileDeleted" => SystemColors.WindowTextBrush,
                 "Theme.Disabled" => SystemColors.GrayTextBrush,
                 "Theme.ActiveSelection" or "Theme.Selected" or "Theme.Pressed" or "Theme.Hover" => SystemColors.HighlightBrush,
                 "Theme.SelectionText" => SystemColors.HighlightTextBrush,

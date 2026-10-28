@@ -18,21 +18,6 @@
    <Setter Property="RowStyle"><Setter.Value><Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}"><Setter Property="ToolTip" Value="{Binding Details}"/><Setter Property="AutomationProperties.Name" Value="{Binding Details}"/></Style></Setter.Value></Setter>
   </Style>
   <Style x:Key="FileText" TargetType="TextBlock"><Setter Property="Margin" Value="6,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style>
-  <Style x:Key="DiffText" TargetType="TextBlock"><Setter Property="Margin" Value="5,0"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
-  <Style x:Key="DiffRow" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-   <Setter Property="AutomationProperties.Name" Value="{Binding Accessibility}"/>
-   <Style.Triggers>
-    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Added}"/><Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="False"/></MultiDataTrigger.Conditions>
-     <Setter Property="Background" Value="{DynamicResource Theme.DiffAddedBackground}"/><Setter Property="Foreground" Value="{DynamicResource Theme.DiffAddedText}"/>
-    </MultiDataTrigger>
-    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Removed}"/><Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="False"/></MultiDataTrigger.Conditions>
-     <Setter Property="Background" Value="{DynamicResource Theme.DiffRemovedBackground}"/><Setter Property="Foreground" Value="{DynamicResource Theme.DiffRemovedText}"/>
-    </MultiDataTrigger>
-    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Hunk}"/><Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="False"/></MultiDataTrigger.Conditions>
-     <Setter Property="Background" Value="{DynamicResource Theme.Raised}"/><Setter Property="Foreground" Value="{DynamicResource Theme.Focus}"/>
-    </MultiDataTrigger>
-   </Style.Triggers>
-  </Style>
  </Window.Resources>
  <Grid Background="{DynamicResource Theme.Panel}">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -51,7 +36,7 @@
      </DockPanel></Border>
      <Grid>
       <DataGrid x:Name="UnstagedTable" Style="{StaticResource FileTable}" ItemsSource="{Binding Unstaged}" SelectedItem="{Binding SelectedUnstaged}" SelectionChanged="OnUnstagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesUnstaged}" AutomationProperties.AutomationId="UnstagedFiles">
-       <DataGrid.Columns><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
+       <DataGrid.Columns><DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Style="{StaticResource FileChangeMarker}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
       </DataGrid>
       <TextBlock Text="{loc:Text Key=CommitNoUnstaged}" Margin="14" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Unstaged.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
      </Grid>
@@ -64,7 +49,7 @@
      </DockPanel></Border>
      <Grid>
       <DataGrid x:Name="StagedTable" Style="{StaticResource FileTable}" ItemsSource="{Binding Staged}" SelectedItem="{Binding SelectedStaged}" SelectionChanged="OnStagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesStaged}" AutomationProperties.AutomationId="StagedFiles">
-       <DataGrid.Columns><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
+       <DataGrid.Columns><DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Style="{StaticResource FileChangeMarker}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
       </DataGrid>
       <TextBlock Text="{loc:Text Key=CommitNoStaged}" Margin="14" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Staged.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
      </Grid>
@@ -111,7 +96,7 @@
   <StackPanel Grid.Row="2" Background="{DynamicResource Theme.Chrome}">
    <ProgressBar Height="3" IsIndeterminate="{Binding IsBusy}" Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" AutomationProperties.Name="{Binding Summary}"/>
    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="10,6" AutomationProperties.LiveSetting="Polite"/>
-   <Expander Header="{loc:Text Key=ActionOutput}" Margin="10,0,10,5"><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" MaxHeight="120" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/></Expander>
+   <Expander Header="{loc:Text Key=ActionOutput}" Margin="10,0,10,5"><StackPanel><TextBlock Text="{Binding TimingSummary}" TextWrapping="Wrap" Margin="0,3"/><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" MaxHeight="120" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/></StackPanel></Expander>
   </StackPanel>
  </Grid>
 </Window>

@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.14.0: modal Local Changes/diffs/file and hunk staging/commit/amend/Commit and Push, prompt options and default Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.15.0: committed files/diffs and measured local-action latency improvements; modal Local Changes/diffs/file and hunk staging/commit/amend/Commit and Push, prompt options and default Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -100,7 +100,7 @@ Tab context menu passes placement RepositoryTab to parameterized commands. Code-
 
 ### Deferred execution work
 
-Status and working-copy diffs/actions are implemented below. Selected-commit files remain deferred. Broader browser/signing/interactive-hook/editor/tools need visible input and tracked lifecycle; do not silently bypass hooks. F2a provides serialization/revalidation/reinspection, F2b askpass. These dependencies apply to those workflows, not a blanket prohibition on other requests.
+Status and working-copy diffs/actions are implemented below. Selected-commit files are implemented below. Broader browser/signing/interactive-hook/editor/tools need visible input and tracked lifecycle; do not silently bypass hooks. F2a provides serialization/revalidation/reinspection, F2b askpass. These dependencies apply to those workflows, not a blanket prohibition on other requests.
 
 ## Authentication bridge (F2b, 0.9.1)
 
@@ -164,6 +164,14 @@ File actions use global `--literal-pathspecs` with UTF-8 NUL pathspec files, nev
 One status chain and one latest-selection diff chain per dialog; selection changes cancel/drain prior diff, generations reject old results, repeated bound selection does not restart the read. WPF grids recycle rows; selected list/side and draft persist for the session. Failure retains rows but removes write readiness. Refresh/Cancel share one control; 250 ms active-only output/duration timer, bounded redacted in-memory output, no content diagnostic logging. Message maximum 64 KiB UTF-8; UI text fields also have character bounds. Closing cancels/drains and reinspects after writes, then shell refreshes related history. Dialog opening itself never fetches. Commit and Push performs a real commit first, revalidates its new tip/config/identity, then uses existing normal Push/askpass to the configured upstream. Missing upstream disables that variant; push failure does not retry/undo a successful commit. Successful Git commit with failed tip inspection clears the draft and reports uncertainty without pushing.
 
 Raw action output is <=1 MiB per command, combined commit/push retained output <=2 MiB; at most 20 open-tab session drafts/results. A cancelled process may already have changed Git state; reconciliation uses a fresh token, never replay/rollback. Existing browser/signing/interactive-hook limitations remain: closed terminal input, visible running/cancel/timeout, no claim to detect arbitrary helper input waits. Status scans of huge trees can still time out. No image preview, side-by-side diff, arbitrary-line staging, ignored-file UI, discard or in-app conflict editor in this release.
+
+## Committed files and local-action latency (0.15.0)
+
+`CommitFiles.cs` reads NUL-delimited raw `diff-tree --root -r --no-commit-id --no-abbrev` records between immutable commit/parent IDs. Rename records preserve both exact paths. A root comparison checks actual commit-object parent headers, refusing shallow boundaries. The selected-file read uses literal paths, NUL numstat, bounded strict UTF-8 patches and stored object sizes (`cat-file -s`), with external diff/textconv/color and lazy fetch disabled. No index/worktree content or scripts are needed; configured diff attributes can affect presentation. Missing objects fail locally. Lists cap at 4 MiB/20,000 entries; existing 2 MiB/20,000-line/16,384-character diff limits apply. Submodule sizes are unavailable and diffs show pointers. [diff-tree](https://git-scm.com/docs/git-diff-tree), [cat-file](https://git-scm.com/docs/git-cat-file), checked 2026-10-28.
+
+`ShellCommitFiles` owns one active `CommitFilesViewModel`; reads start only while Changes is selected, after dispatcher yield. Parent/file/commit changes cancel and drain prior work; generation checks reject obsolete results. Navigation/shutdown drain the old model. File/line formatting runs on workers and the shared diff styles/virtualized grids render bounded rows. Same-comparison refresh errors retain content; changing comparison clears it. No cross-repository cache or polling. The raw patch remains in bounded in-memory output; no persistent repository logging.
+
+Working-copy inspection now requests HEAD/branch/upstream metadata via direct `rev-parse`/`symbolic-ref` reads instead of enumerating every history ref. Location/operation/ownership checks remain; partial metadata never seeds a history session. Independent status/config/message reads and preflight config/inspection overlap within the existing two-process limit. Full history retains its original scope and read path. Mutation validation, common-directory exclusion, Git locking, cancellation and fresh status reconciliation remain; no speculative row movement or synthetic success. The commit output section exposes in-memory wait/validation/Git/refresh durations (diff follows separately). Large scans, index I/O, antivirus and configured helpers can still take time; timings do not imply a Fork implementation or desktop guarantee. [Measured evidence](roadmap.md#committed-files-and-local-action-latency-2026-10-28).
 
 ## Selected hunks (0.14.0)
 

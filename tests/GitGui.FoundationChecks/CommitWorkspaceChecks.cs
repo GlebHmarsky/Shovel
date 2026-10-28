@@ -126,7 +126,7 @@ internal static partial class Program
             model.ShiftHeld = true;
             Expect(model.StageLabel == UiText.Get("CommitStageAll") && model.UnstageLabel == UiText.Get("CommitUnstageAll") && model.CommitLabel == UiText.Get("CommitAndPush"), "Compact modifier labels");
             model.StageCommand.Execute(null); await model.OperationTask; await model.DiffTask;
-            Expect(model.Unstaged.Count == 0 && model.Staged.Count >= 2, "Stage all completed");
+            Expect(model.Unstaged.Count == 0 && model.Staged.Count >= 2 && model.TimingSummary.Length > 0, "Stage all completed with phase timings");
             model.UnstageCommand.Execute(null); await model.OperationTask; await model.DiffTask;
             Expect(model.Staged.Count == 0 && model.Unstaged.Count >= 2, "Unstage all completed");
             model.StageCommand.Execute(null); await model.OperationTask; await model.DiffTask; model.Subject = "UI commit";

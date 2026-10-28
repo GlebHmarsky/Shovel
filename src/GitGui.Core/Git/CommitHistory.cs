@@ -137,9 +137,29 @@ public sealed partial class RepositoryReader
     }, token);
 
     private async Task<HistoryState> ReadHistoryStateAsync(
-        GitInstallation git, RepositorySnapshot repository, CancellationToken token)
+        GitInstallation git, RepositorySnapshot repository, CancellationToken token, bool headOnly = false)
     {
         using var timing = trace?.Measure(TimingStage.References);
+        if (headOnly)
+        {
+            var hashTask = RunAsync(git.Executable, repository.Worktree, ReadArguments(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]), token);
+            var branchTask = RunAsync(git.Executable, repository.Worktree, ReadArguments(["symbolic-ref", "--quiet", "--short", "HEAD"]), token);
+            await Task.WhenAll(hashTask, branchTask);
+            var hashResult = await hashTask; var branchResult = await branchTask;
+            RequireSuccess(hashResult, allowOne: true); RequireSuccess(branchResult, allowOne: true);
+            var tip = hashResult.ExitCode == 0 ? Line(hashResult.StandardOutput) : null;
+            var branchName = branchResult.ExitCode == 0 ? Line(branchResult.StandardOutput) : null;
+            if (tip is not null && !IsObjectId(tip) || tip is null && branchName is null) throw new GitReadException(GitFailure.InvalidOutput);
+            string? trackingName = null;
+            if (tip is not null && branchName is not null)
+            {
+                var tracking = await RunAsync(git.Executable, repository.Worktree, ReadArguments(["rev-parse", "--symbolic-full-name", "@{upstream}"]), token);
+                if (tracking.Outcome != Processes.ProcessOutcome.Exited) RequireSuccess(tracking);
+                if (tracking.ExitCode == 0) trackingName = Line(tracking.StandardOutput);
+                else if (tracking.ExitCode != 128) RequireSuccess(tracking);
+            }
+            return new("", "", false, branchName, tip, trackingName);
+        }
         var result = await RunAsync(git.Executable, repository.Worktree, ReadArguments([
             "for-each-ref", "--include-root-refs", "--sort=refname", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref)%00%(upstream)",
             "HEAD", "refs/heads/", "refs/remotes/", "refs/tags/", "refs/replace/"

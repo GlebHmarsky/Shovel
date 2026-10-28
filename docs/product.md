@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.14.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.15.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -26,6 +26,12 @@ Implemented through **0.14.0**; ordinary action buttons authorize their configur
 Pull shows **behind**, Push **ahead**, comparing the configured upstream from the local snapshot, even with a separate push destination. Counts load after rows. Zero is measured; dash means pending/unavailable/cancelled/failed. Help includes upstream/time/reason. Detached/unborn/no-upstream/missing-upstream/shallow cannot imply synchronization. Failed refresh retains stale counts; no server freshness claim without fetch.
 
 Same-author peers use light-yellow text, matching exact raw name/email ordinally and case-sensitively, without mailmap/committer. Nonblank email required; blank name matches only blank name. Selected row keeps selection colors; unrelated text stays white on dark history, graph/ref colors independent. High contrast uses system colors; accessible text explains the relation.
+
+## Committed changes (0.15.0)
+
+Select a history commit and open the lower **Changes** tab. Its file list and colored/numbered unified diff load asynchronously, starting with the first file. The selected commit's metadata remains in **Commit**. Compare with parent 1 by default; merge commits offer each parent explicitly. Initial commits compare with the empty tree, while incomplete/shallow ancestry reports a limitation rather than pretending to be an initial commit. Empty commits show zero changed files. Binary files show stored old/new byte sizes; submodules remain pointer-only.
+
+Amber **M**, green **+**, red **−** mark modified, added and deleted files here and in Local Changes; rename arrows and tooltips expose original names. Selection uses normal selection text; high contrast uses system colors and retains symbols/accessibility labels. Working files/index do not supply committed content. Raw patches/errors remain in the output expander. Changed commit/parent/tab cancels obsolete reads; same-comparison refresh failure retains useful content with an error. No preload/polling or startup history delay. Resize the lower panel/file-list divider; Changes reserves usable space at minimum window size.
 
 ## Local Changes / Commit (0.13.0)
 
@@ -73,7 +79,7 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 Current frame: File/View/Repository/Window/Help; Open/Commit/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; Local changes modal entry/All Commits sidebar; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 
-Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Selected-commit files/diffs, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
+Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Historical file-tree browsing, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
 
 **Proposed refinements:** context menus target the clicked object while preserving a containing multiselection; shared commands serve menus/toolbar/shortcuts. Large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately. The previously proposed separate embedded Changes workspace is superseded by the confirmed modal design above.
 
