@@ -77,13 +77,14 @@
      <StackPanel DockPanel.Dock="Top" Background="{DynamicResource Theme.Sidebar}">
       <TextBlock Text="{Binding DiffTitle}" Margin="10,6" TextTrimming="CharacterEllipsis" ToolTip="{Binding DiffTitle}" FontWeight="SemiBold" FlowDirection="LeftToRight"/>
       <DockPanel Margin="8,0,8,5">
-       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="↑" Command="{Binding PreviousHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffPreviousHunk}" AutomationProperties.Name="{loc:Text Key=DiffPreviousHunk}"/><Button Content="↓" Command="{Binding NextHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffNextHunk}" AutomationProperties.Name="{loc:Text Key=DiffNextHunk}"/></StackPanel>
+       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="{Binding HunkActionLabel}" Command="{Binding ApplyHunksCommand}" Padding="7,2" Margin="0,0,6,0" ToolTip="{Binding HunkHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding HunkHelp}" AutomationProperties.AutomationId="ApplyHunks"/><Button Content="↑" Command="{Binding PreviousHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffPreviousHunk}" AutomationProperties.Name="{loc:Text Key=DiffPreviousHunk}"/><Button Content="↓" Command="{Binding NextHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffNextHunk}" AutomationProperties.Name="{loc:Text Key=DiffNextHunk}"/></StackPanel>
        <WrapPanel><CheckBox Content="{loc:Text Key=DiffIgnoreWhitespace}" IsChecked="{Binding IgnoreWhitespace}" Margin="0,0,16,0"/><CheckBox Content="{loc:Text Key=DiffWholeFile}" IsChecked="{Binding WholeFile}"/></WrapPanel>
       </DockPanel>
       <TextBlock Text="{Binding DiffNotice}" Margin="10,0,10,6" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" ToolTip="{loc:Text Key=DiffLimits}"/>
+      <TextBlock Text="{Binding HunkHelp}" Margin="10,0,10,6" TextTrimming="CharacterEllipsis" ToolTip="{Binding HunkHelp}" Foreground="{DynamicResource Theme.Muted}" FontSize="11" AutomationProperties.LiveSetting="Polite"/>
      </StackPanel>
      <DataGrid x:Name="DiffTable" Style="{StaticResource FileTable}" ItemsSource="{Binding DiffRows}" SelectedItem="{Binding SelectedDiff}" RowStyle="{StaticResource DiffRow}" SelectionChanged="OnDiffSelection"
-      SelectionMode="Single" FontFamily="Consolas" FontSize="12" RowHeight="22" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.AutomationId="FileDiff">
+      SelectionMode="Extended" FontFamily="Consolas" FontSize="12" RowHeight="22" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.HelpText="{loc:Text Key=HunkSelectionHelp}" AutomationProperties.AutomationId="FileDiff">
       <DataGrid.Columns>
        <DataGridTextColumn Header="{loc:Text Key=DiffOldLine}" Binding="{Binding OldLine}" Width="48" ElementStyle="{StaticResource DiffText}"/>
        <DataGridTextColumn Header="{loc:Text Key=DiffNewLine}" Binding="{Binding NewLine}" Width="48" ElementStyle="{StaticResource DiffText}"/>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.0 — 2026-10-28
+
+- Stage or unstage selected complete change blocks from the commit modal's diff. Ctrl/Shift selects multiple blocks; one context-aware button shows the action and count, with accessible block descriptions.
+- Apply only the selected hunks to the index, preserving working files and unrelated staged edits. Revalidate the exact preview, file content, index, attributes, configuration and repository state; report failures/cancellation and refresh without a whole-file fallback.
+- Keep drafts and selected file after hunk actions. Explain unavailable actions for binary/filter-managed content, additions/deletions/renames and display-only comparison options. Ordinary tracked UTF-8 text modifications support CRLF normalization and missing final newlines; arbitrary line selection remains deferred.
+
 ## 0.13.0 — 2026-10-28
 
 - Open Local Changes as a resizable modal commit workspace over retained history. Add a Commit count after the selected tab's history is visible; opening binds available rows before asynchronous inspection, without polling other repositories.

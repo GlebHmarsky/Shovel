@@ -21,14 +21,15 @@ public sealed class CommitWorkspaceState
     public string LastResult { get; set; } = "";
     public void Clear() { Context = null; Rows = []; Selected = null; ReadAt = default; }
 }
-public sealed record DiffRow(DiffLine Line)
+public sealed record DiffRow(DiffLine Line, int HunkId = -1)
 {
     public DiffLineKind Kind => Line.Kind;
     public string OldLine => Line.OldLine?.ToString(System.Globalization.CultureInfo.CurrentCulture) ?? "";
     public string NewLine => Line.NewLine?.ToString(System.Globalization.CultureInfo.CurrentCulture) ?? "";
     public string Marker => Kind == DiffLineKind.Added ? "+" : Kind == DiffLineKind.Removed ? "−" : "";
     public string Text { get; } = string.Concat(Line.Text.Select(c => char.IsControl(c) && c != '\t' ? "\\u" + ((int)c).ToString("X4") : c.ToString()));
-    public string Accessibility => UiText.Format("DiffAccessible", UiText.Get("DiffLine" + Kind), OldLine, NewLine, Text);
+    public string Accessibility => HunkId < 0 ? UiText.Format("DiffAccessible", UiText.Get("DiffLine" + Kind), OldLine, NewLine, Text)
+        : UiText.Format("DiffHunkAccessible", HunkId + 1, UiText.Get("DiffLine" + Kind), OldLine, NewLine, Text);
 }
 
 public sealed class CommitViewModel : ObservableObject
@@ -53,6 +54,9 @@ public sealed class CommitViewModel : ObservableObject
     private IReadOnlyList<ChangeRow> _unstaged = [], _staged = [];
     private IReadOnlyList<DiffRow> _diffRows = [];
     private DiffRow? _selectedDiff;
+    private FileDiff? _fileDiff;
+    private ChangeRow? _diffChange;
+    private int[] _selectedHunks = [];
     private string? _automaticAmendMessage;
     private bool _publishing;
     private Task _outputTask = Task.CompletedTask;
@@ -114,7 +118,18 @@ public sealed class CommitViewModel : ObservableObject
     public ChangeRow? SelectedUnstaged { get => _selectedUnstaged; set { if (Set(ref _selectedUnstaged, value) && !_publishing) Select(false, value is null ? [] : [value]); } }
     public ChangeRow? SelectedStaged { get => _selectedStaged; set { if (Set(ref _selectedStaged, value) && !_publishing) Select(true, value is null ? [] : [value]); } }
     public IReadOnlyList<DiffRow> DiffRows { get => _diffRows; private set => Set(ref _diffRows, value); }
-    public DiffRow? SelectedDiff { get => _selectedDiff; set => Set(ref _selectedDiff, value); }
+    public DiffRow? SelectedDiff
+    {
+        get => _selectedDiff;
+        set { if (Set(ref _selectedDiff, value)) SelectDiffRows(value is null ? [] : [value]); }
+    }
+    public bool CanApplyHunks => Ready && !_diffLoading && _fileDiff?.HunkPreview is not null &&
+        _diffChange == _state.Selected && _selectedHunks.Length > 0;
+    public string HunkActionLabel => _selectedHunks.Length > 1 ? UiText.Format(_diffChange?.Change.Group == ChangeGroup.Staged ? "HunkUnstageMany" : "HunkStageMany", _selectedHunks.Length)
+        : UiText.Get(_diffChange?.Change.Group == ChangeGroup.Staged ? "HunkUnstage" : "HunkStage");
+    public string HunkHelp => !Ready || _diffLoading ? UiText.Get("HunkWaitForDiff") : _fileDiff is null ? UiText.Get("HunkSelectFile") :
+        _fileDiff.HunkAvailability != HunkAvailability.Available ? UiText.Get("HunkUnavailable" + _fileDiff.HunkAvailability) :
+        _selectedHunks.Length == 0 ? UiText.Get("HunkSelectChange") : UiText.Format("HunkSelectedHelp", _selectedHunks.Length);
     public string DiffNotice { get => _diffNotice; private set => Set(ref _diffNotice, value); }
     public string DiffTitle { get => _diffTitle; private set => Set(ref _diffTitle, value); }
     public RelayCommand StageCommand { get; }
@@ -123,6 +138,7 @@ public sealed class CommitViewModel : ObservableObject
     public RelayCommand RefreshCommand { get; }
     public RelayCommand NextHunkCommand { get; }
     public RelayCommand PreviousHunkCommand { get; }
+    public RelayCommand ApplyHunksCommand { get; }
     public Task LoadingTask { get; private set; } = Task.CompletedTask;
     public Task DiffTask { get; private set; } = Task.CompletedTask;
     public Task OperationTask { get; private set; } = Task.CompletedTask;
@@ -138,6 +154,11 @@ public sealed class CommitViewModel : ObservableObject
         RefreshCommand = new(() => { if (IsBusy) Cancel(); else StartLoading(); }, () => !_closed);
         NextHunkCommand = new(() => MoveHunk(1), () => DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
         PreviousHunkCommand = new(() => MoveHunk(-1), () => DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
+        ApplyHunksCommand = new(() =>
+        {
+            if (CanApplyHunks) StartAction(_diffChange!.Change.Group == ChangeGroup.Staged ? WorkingCopyAction.UnstageHunks : WorkingCopyAction.StageHunks,
+                new(_fileDiff!.HunkPreview!, _selectedHunks.ToArray()));
+        }, () => CanApplyHunks);
         _timer.Tick += (_, _) => { Changed(nameof(Summary)); if (_mutating && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
         PublishRows(); RawOutput = _state.LastOutput;
         if (_state.LastResult.Length != 0) Status = _state.LastResult;
@@ -146,6 +167,7 @@ public sealed class CommitViewModel : ObservableObject
     private async Task LoadAsync(bool reconcile = false)
     {
         _readCancel?.Cancel(); var previous = LoadingTask; var generation = ++_readGeneration;
+        _diffCancel?.Cancel(); _diffCancel = null; _diffGeneration++; _diffLoading = false; _fileDiff = null; _selectedHunks = [];
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45)); _readCancel = cancellation;
         _loading = true; _state.ReadAt = default; _phase = UiText.Get(reconcile ? "ActionReinspecting" : "ChangesLoading"); UpdateBusy();
         try
@@ -157,9 +179,9 @@ public sealed class CommitViewModel : ObservableObject
             var context = await _actions.ReadWorkingCopyAsync(_git, Directory, cancellation.Token);
             if (_closed || cancellation.IsCancellationRequested || generation != _readGeneration) return;
             if (_identity is not null && context.Identity.Fingerprint != _identity) { _state.Clear(); PublishRows(); throw new GitActionException("ActionIdentityChanged"); }
-            _state.Context = context; _state.ReadAt = context.Changes.ReadAt;
-            _state.Rows = await Task.Run(() => context.Changes.Entries.Select(entry => new ChangeRow(entry)).ToArray(), cancellation.Token);
+            var rows = await Task.Run(() => context.Changes.Entries.Select(entry => new ChangeRow(entry)).ToArray(), cancellation.Token);
             if (_closed || cancellation.IsCancellationRequested || generation != _readGeneration) return;
+            _state.Context = context; _state.ReadAt = context.Changes.ReadAt; _state.Rows = rows;
             PublishRows();
             if (!reconcile) Status = UiText.Format(_state.Rows.Count == 0 ? "ChangesClean" : "ChangesLoaded", context.Changes.ReadAt.LocalDateTime);
             if (string.IsNullOrWhiteSpace(Message) && context.MergeMessage.Length != 0) SetMessage(context.MergeMessage);
@@ -215,6 +237,7 @@ public sealed class CommitViewModel : ObservableObject
     private void QueueDiff(ChangeRow? row)
     {
         _diffCancel?.Cancel(); var previous = DiffTask; var generation = ++_diffGeneration;
+        _fileDiff = null; _diffChange = row; _selectedHunks = [];
         DiffRows = []; SelectedDiff = null; DiffTitle = row?.Path ?? ""; DiffNotice = UiText.Get(row is null ? "DiffChooseFile" : "DiffLoading");
         if (_closed || _mutating || row is null || _state.Context is not { } context) { _diffLoading = false; UpdateBusy(); return; }
         var options = new DiffOptions(IgnoreWhitespace, WholeFile);
@@ -227,9 +250,15 @@ public sealed class CommitViewModel : ObservableObject
                 await Dispatcher.Yield(DispatcherPriority.Background); await previous;
                 cancellation.Token.ThrowIfCancellationRequested();
                 var diff = await _reader.ReadFileDiffAsync(context, row.Change, options, cancellation.Token);
-                var lines = await Task.Run(() => diff.Lines.Select(line => new DiffRow(line)).ToArray(), cancellation.Token);
+                var lines = await Task.Run(() =>
+                {
+                    var hunkIds = Enumerable.Repeat(-1, diff.Lines.Count).ToArray();
+                    foreach (var hunk in diff.HunkPreview?.Hunks ?? [])
+                        Array.Fill(hunkIds, hunk.Id, hunk.StartRow, hunk.RowCount);
+                    return diff.Lines.Select((line, index) => new DiffRow(line, hunkIds[index])).ToArray();
+                }, cancellation.Token);
                 if (_closed || generation != _diffGeneration || cancellation.IsCancellationRequested) return;
-                DiffRows = lines;
+                _fileDiff = diff; DiffRows = lines;
                 var oldBytes = diff.OldBytes?.ToString("N0", System.Globalization.CultureInfo.CurrentCulture) ?? UiText.Get("CountUnavailable");
                 var newBytes = diff.NewBytes?.ToString("N0", System.Globalization.CultureInfo.CurrentCulture) ?? UiText.Get("CountUnavailable");
                 DiffNotice = UiText.Format("DiffSummary" + diff.Kind, oldBytes, newBytes, diff.Added, diff.Removed);
@@ -252,13 +281,19 @@ public sealed class CommitViewModel : ObservableObject
         SelectedDiff = (direction > 0 ? hunks.FirstOrDefault(item => item.index > current).row ?? hunks[0].row
             : hunks.LastOrDefault(item => item.index < current).row ?? hunks[^1].row);
     }
-    private void StartAction(WorkingCopyAction action)
+    public void SelectDiffRows(IReadOnlyList<DiffRow> rows)
+    {
+        var current = new HashSet<DiffRow>(DiffRows, ReferenceEqualityComparer.Instance);
+        _selectedHunks = rows.Where(row => row.HunkId >= 0 && current.Contains(row)).Select(row => row.HunkId).Distinct().Order().ToArray();
+        RefreshCommands();
+    }
+    private void StartAction(WorkingCopyAction action, HunkSelection? hunks = null)
     {
         if (!Ready) return;
         var context = _state.Context!; var push = action == WorkingCopyAction.Commit && ShiftHeld;
         if (action == WorkingCopyAction.Commit && Amend && !_interaction.ConfirmAmend(context.Repository.Branch ?? UiText.Get("NoBranch"), context.Repository.Commit!)) return;
-        var entries = action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : [];
-        var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), Message, Amend);
+        var entries = hunks is not null ? new[] { _diffChange! } : action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : [];
+        var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), Message, Amend, hunks);
         _mutating = true; HasMutation = true; _diffCancel?.Cancel(); _readCancel?.Cancel(); _state.ReadAt = default;
         _elapsed.Restart(); _phase = UiText.Get("CommitPhase" + action); Status = _phase; RawOutput = "";
         lock (_output) { _output.Clear(); _publishedBytes = 0; }
@@ -349,6 +384,8 @@ public sealed class CommitViewModel : ObservableObject
     private void RefreshCommands()
     {
         StageCommand?.Refresh(); UnstageCommand?.Refresh(); CommitCommand?.Refresh(); RefreshCommand?.Refresh(); NextHunkCommand?.Refresh(); PreviousHunkCommand?.Refresh();
+        ApplyHunksCommand?.Refresh();
+        Changed(nameof(CanApplyHunks)); Changed(nameof(HunkActionLabel)); Changed(nameof(HunkHelp));
         foreach (var name in new[] { nameof(StageLabel), nameof(UnstageLabel), nameof(CommitLabel), nameof(CommitUnavailable), nameof(StageHelp), nameof(UnstageHelp) }) Changed(name);
     }
     public void Cancel() { _readCancel?.Cancel(); _diffCancel?.Cancel(); _actionCancel?.Cancel(); }

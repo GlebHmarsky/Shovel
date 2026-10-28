@@ -426,7 +426,28 @@ This rewrites its hash and may require coordinating published history. Reflog ca
   <data name="DiffConflict" xml:space="preserve"><value>Unmerged file: combined Git diff. Resolve with your editor, then Stage the resolved file.</value></data>
   <data name="DiffNoWhitespaceChanges" xml:space="preserve"><value>No changes remain with whitespace ignored.</value></data>
   <data name="DiffNoTextChanges" xml:space="preserve"><value>No text changes; metadata, mode or line-ending normalization may differ.</value></data>
-  <data name="DiffLimits" xml:space="preserve"><value>Unified Git diff; Ctrl+C copies selected rows. At most 2 MiB, 20,000 lines and 16,384 characters per line. External diff, text conversion and clean/process filters are suppressed for reads. Staging uses configured filters. Binary sizes compare stored blobs with on-disk worktree bytes; submodules show pointers only.</value></data>
+  <data name="DiffLimits" xml:space="preserve"><value>Unified Git diff; Ctrl+C copies selected rows. At most 2 MiB, 20,000 lines and 16,384 characters per line. External diff, text conversion and clean/process filters are suppressed for reads. Whole-file staging uses configured filters; filtered files do not support hunk staging. Binary sizes compare stored blobs with on-disk worktree bytes; submodules show pointers only.</value></data>
   <data name="CommitSucceededUnknownTip" xml:space="preserve"><value>Git completed the commit, but its new hash could not be read. No push was attempted. Refresh and inspect history before doing anything else.</value></data>
   <data name="CommitRefresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="HunkStage" xml:space="preserve"><value>Stage hunk</value></data>
+  <data name="HunkUnstage" xml:space="preserve"><value>Unstage hunk</value></data>
+  <data name="HunkStageMany" xml:space="preserve"><value>Stage hunks ({0})</value></data>
+  <data name="HunkUnstageMany" xml:space="preserve"><value>Unstage hunks ({0})</value></data>
+  <data name="HunkWaitForDiff" xml:space="preserve"><value>Wait for a fresh file diff before selecting change blocks.</value></data>
+  <data name="HunkSelectFile" xml:space="preserve"><value>Select a modified text file to stage or unstage change blocks.</value></data>
+  <data name="HunkSelectChange" xml:space="preserve"><value>Select a line inside a change block. Ctrl/Shift selects multiple blocks.</value></data>
+  <data name="HunkSelectedHelp" xml:space="preserve"><value>Selected change blocks: {0}. This action includes every change in those blocks and leaves worktree files unchanged.</value></data>
+  <data name="HunkSelectionHelp" xml:space="preserve"><value>Selecting a line selects its complete change block for Stage/Unstage hunk. Ctrl/Shift selects several blocks; this is not individual-line staging.</value></data>
+  <data name="HunkUnavailableChangeType" xml:space="preserve"><value>Hunks require a tracked text modification without a rename or mode change. Use Stage/Unstage for the whole file.</value></data>
+  <data name="HunkUnavailableContentType" xml:space="preserve"><value>This content cannot be staged by hunk. Use the whole-file action when available.</value></data>
+  <data name="HunkUnavailablePreviewOptions" xml:space="preserve"><value>Turn off Ignore whitespace and Whole file to select exact change blocks.</value></data>
+  <data name="HunkUnavailableFiltered" xml:space="preserve"><value>This path uses a filter, working-tree encoding or ident conversion. Use the whole-file action to preserve Git's conversion.</value></data>
+  <data name="HunkUnavailableNoChanges" xml:space="preserve"><value>No text change blocks are available.</value></data>
+  <data name="HunkStale" xml:space="preserve"><value>The file, index or comparison settings changed after this preview. Refresh and select the change blocks again; no stale patch was applied.</value></data>
+  <data name="HunkUnsupportedPath" xml:space="preserve"><value>This linked path or directory does not support hunk staging.</value></data>
+  <data name="CommitPhaseStageHunks" xml:space="preserve"><value>Validating and staging selected change blocks</value></data>
+  <data name="CommitPhaseUnstageHunks" xml:space="preserve"><value>Validating and unstaging selected change blocks</value></data>
+  <data name="CommitSucceededStageHunks" xml:space="preserve"><value>Selected change blocks staged; worktree files preserved.</value></data>
+  <data name="CommitSucceededUnstageHunks" xml:space="preserve"><value>Selected change blocks unstaged; worktree files preserved.</value></data>
+  <data name="DiffHunkAccessible" xml:space="preserve"><value>Change block {0}; {1}; old line {2}; new line {3}; {4}. Hunk action includes the complete block.</value></data>
 </root>

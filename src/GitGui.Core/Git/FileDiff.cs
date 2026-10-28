@@ -8,7 +8,11 @@ public enum DiffLineKind { Metadata, Hunk, Context, Added, Removed }
 public enum FileDiffKind { Text, Binary, Submodule, Directory, UnsupportedPath, UnsupportedEncoding, TooLarge }
 public sealed record DiffLine(DiffLineKind Kind, string Text, int? OldLine = null, int? NewLine = null);
 public sealed record FileDiff(FileDiffKind Kind, IReadOnlyList<DiffLine> Lines, long? OldBytes, long? NewBytes,
-    int Added, int Removed, string RawPatch);
+    int Added, int Removed, string RawPatch)
+{
+    public HunkAvailability HunkAvailability { get; init; } = HunkAvailability.ContentType;
+    public HunkPreview? HunkPreview { get; init; }
+}
 public sealed record DiffOptions(bool IgnoreWhitespace = false, bool WholeFile = false);
 
 public sealed partial class RepositoryReader
@@ -29,6 +33,8 @@ public sealed partial class RepositoryReader
         if (!isIndex && HasReparseComponent(path, file)) return new(FileDiffKind.UnsupportedPath, [], null, null, 0, 0, "");
         if (!isIndex && Directory.Exists(file) && !submodule) return new(FileDiffKind.Directory, [], null, null, 0, 0, "");
         var before = FileStamp(file);
+        var hunkCandidate = CanPreviewHunks(entry) && !options.IgnoreWhitespace && !options.WholeFile;
+        var contentStamp = "";
         if (await GitActions.IndexStampAsync(context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
         long? oldBytes = submodule ? null : isNew ? 0 : await BlobSize(oldHash);
         long? newBytes = submodule ? null : isIndex ? await BlobSize(entry.IndexObject) : before.Length;
@@ -37,7 +43,9 @@ public sealed partial class RepositoryReader
             ? context.Repository.Commit is { } head ? new[] { "--cached", head } : ["--cached"] : Array.Empty<string>();
         var paths = isNew ? new[] { "/dev/null", entry.Path } : isIndex && entry.OriginalPath is { } oldPath
             ? new[] { entry.Path, oldPath } : [entry.Path];
-        var common = new[] { "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", "--submodule=short", "--ignore-submodules=dirty" };
+        var common = new[] { "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", "--submodule=short", "--ignore-submodules=dirty",
+            "--src-prefix=a/", "--dst-prefix=b/", "--no-relative", "--inter-hunk-context=0",
+            "--output-indicator-new=+", "--output-indicator-old=-", "--output-indicator-context= " };
         var stat = await RunAsync(git.Executable, path, ReadArguments([.. overrides, "--literal-pathspecs", "diff", .. scope,
             .. common, .. options.IgnoreWhitespace ? new[] { "--ignore-all-space" } : [], "--numstat", "-z", "--", .. paths]), token, MaximumDiffBytes);
         RequireSuccess(stat, allowOne: isNew);
@@ -45,6 +53,7 @@ public sealed partial class RepositoryReader
         string patch = ""; IReadOnlyList<DiffLine> lines = []; var kind = binary ? FileDiffKind.Binary : submodule ? FileDiffKind.Submodule : FileDiffKind.Text;
         if (!binary)
         {
+            if (hunkCandidate) contentStamp = await WorktreeContentStampAsync(path, entry.Path, token);
             var result = await RunAsync(git.Executable, path, ReadArguments([.. overrides, "--literal-pathspecs", "diff", .. scope,
                 .. common, .. options.IgnoreWhitespace ? new[] { "--ignore-all-space" } : [], "--patch", options.WholeFile ? "--unified=20000" : "--unified=3", "--", .. paths]), token, MaximumDiffBytes);
             if (result.Outcome == Processes.ProcessOutcome.OutputLimit) kind = FileDiffKind.TooLarge;
@@ -58,7 +67,20 @@ public sealed partial class RepositoryReader
         }
         if (await GitActions.IndexStampAsync(context.Repository, token) != context.IndexStamp || !isIndex && FileStamp(file) != before)
             throw new GitActionException("CommitStale");
-        return new FileDiff(kind, lines, oldBytes, newBytes, added, removed, patch);
+        HunkPreview? preview = null;
+        var availability = kind != FileDiffKind.Text ? HunkAvailability.ContentType : !CanPreviewHunks(entry) ? HunkAvailability.ChangeType :
+            options.IgnoreWhitespace || options.WholeFile ? HunkAvailability.PreviewOptions : HunkAvailability.NoChanges;
+        if (hunkCandidate && kind == FileDiffKind.Text && patch.Length != 0)
+        {
+            if (contentStamp != await WorktreeContentStampAsync(path, entry.Path, token)) throw new GitActionException("HunkStale");
+            var attributes = await ReadHunkAttributesAsync(git, path, entry.Path, token);
+            var hunks = ParsePatchHunks(patch, token);
+            availability = !attributes.Supported ? HunkAvailability.Filtered : hunks is null ? HunkAvailability.ChangeType :
+                hunks.Count == 0 ? HunkAvailability.NoChanges : HunkAvailability.Available;
+            if (availability == HunkAvailability.Available)
+                preview = new(context, entry, patch, contentStamp, attributes.Stamp, hunks!);
+        }
+        return new FileDiff(kind, lines, oldBytes, newBytes, added, removed, patch) { HunkAvailability = availability, HunkPreview = preview };
 
         async Task<long?> BlobSize(string hash)
         {

@@ -28,7 +28,8 @@ public partial class CommitWindow : Window
     private void OnStagedSelection(object sender, SelectionChangedEventArgs e) => _model.Select(true, ((DataGrid)sender).SelectedItems.Cast<ChangeRow>().ToArray());
     private void OnDiffSelection(object sender, SelectionChangedEventArgs e)
     {
-        if (((DataGrid)sender).SelectedItem is { } row) ((DataGrid)sender).ScrollIntoView(row);
+        _model.SelectDiffRows(((DataGrid)sender).SelectedItems.Cast<DiffRow>().ToArray());
+        if (((DataGrid)sender).SelectedItems.Count == 1 && ((DataGrid)sender).SelectedItem is { } row) ((DataGrid)sender).ScrollIntoView(row);
     }
     private async void OnClosing(object? sender, CancelEventArgs e)
     {

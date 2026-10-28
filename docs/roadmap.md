@@ -4,7 +4,7 @@ Updated 2026-10-28. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
-**0.13.0: modal commit workspace.** Real working-copy diffs, file/all stage/unstage, commit/amend and Shift Commit and Push over retained history. Shared dark styling continues; further theme polish stays P2. Release verification is recorded below; hunk staging and selected-commit files/diffs remain future work.
+**0.14.0: selected-hunk staging/unstaging.** Complete change blocks can be applied to the index from the existing commit modal, preserving working files, unrelated staged changes and drafts. Shared dark styling continues; further theme polish stays P2. Release verification is recorded below; selected-commit files/diffs and arbitrary-line staging remain future work.
 
 **Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 recorded the policy; 0.9.3 applies it in code. The user also explicitly reconfirmed removing the gate for configured hooks/helpers during this delivery.
 
@@ -33,8 +33,9 @@ Proposed remaining order; requests can reprioritize. Each increment must work en
 | F2d / 0.11.0 | Immediate options shell; default rebase/merge/auto-stash Pull | Disposable real-Git integration and headless timing/layout evidence below |
 | 0.12.1 | Requested first dark-theme pass/shared state conventions | 119 checks/offscreen review; further polish P2 |
 | 0.13.0 | Modal Local Changes/Commit; real file diffs, file/all stage/unstage, commit/amend/Shift push | Disposable Git, modifier/failure/cancellation and offscreen evidence below |
+| 0.14.0 | Selected whole-hunk stage/unstage for tracked text modifications | Exact-preview validation, disposable Git and bound UI/offscreen evidence below |
 | F1g onward | Selected-commit files/tree/diffs; filtering when requested | Bounded parsers/content and relevant read tests |
-| 2: Local MVP remainder | Init/hunks/branch delete/tracking/stashes | Signing/stale-hunk/recovery coverage |
+| 2: Local MVP remainder | Init/branch delete/tracking/stashes | Signing/recovery coverage |
 | 3: Network MVP | Clone/remotes/broader network/recovery continue/skip/abort | Visible auth/input, failures/external races |
 | 3R: Pilot distribution | Install once/update/channels/pilot/migration/repair | Updater/IT/signing decisions and installed U/D tests before ~30-user rollout |
 | 4: Advanced | Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor | Relevant sequence/destructive/recovery tests |
@@ -198,6 +199,16 @@ Restore/Release build/publish passed with zero warnings/errors; **93 passed, 0 f
 Reviewed final offscreen running/completed workspace at 1200×760/900×580 and retained the normal/minimum action-dialog checks. Log: `artifacts/preview-0.10.0-verification.txt`; fixtures/renders: `artifacts/foundation-checks/20261027-211310-1127f0a6756f4f7d9dc644e81c8b3b9d`. Initial run also exited successfully with 93 checks after delayed completion; a persistent runner hang was not established. Preview: `Build/0.10.0-win-x64/Shovel.exe`; 16 checksums/seven tested-published files match, both executable versions 0.10.0.0. Build stays ignored/untracked; earlier versions retained.
 
 No interactive launch, desktop input/focus, live HTTPS/SSH/GCM, Windows 10 or new performance certification. Pull still requires a clean worktree and fast-forward; no merge/rebase/autostash. No dependency installation, push or distribution work. Next implementation: Local Changes/status, before broader authentication expansion.
+
+## Selected hunks (2026-10-28)
+
+0.14.0 adds complete-block stage/unstage from the existing diff, including multiple disjoint hunks and partially staged files. One localized action changes with the selected side/count; draft/path remain, block selection resets after reinspection. [Architecture](architecture.md#selected-hunks-0140) owns supported content and external-client race limits.
+
+Focused real-Git checks cover chosen/reversed blocks and offset changes, preserved worktree/unrelated index content, invalid selection without fallback, same-size/mtime and index/HEAD/config/attribute changes, suppressed filters, custom diff/apply config, CRLF and EOF markers, unsupported types/options, existing locks, rejected validation and cancellation. Bound WPF commands exercise multi-block selection, draft/path retention and stale-action recovery. Reviewed offscreen 1200×760 and 900×580 client areas; controls remain available at minimum size. No interactive launch, live authentication/network, OS accessibility/DPI or desktop timing claim.
+
+Restore/Release build/publish passed with zero warnings/errors; **140 passed, 0 failed**, including 11 new hunk checks and an external edit injected during patch validation before the cached write. Existing history, local/network actions, hooks/authentication, cancellation, modal responsiveness and virtualization regressions passed. The first restricted run failed in an existing local Push fixture; direct reproduction showed MSYS `NtCreateDirectoryObject` access denied (0xC0000022). That run is retained as failed evidence; the authorized rerun allowed the required local test subprocesses.
+
+Log: `artifacts/preview-0.14.0-verification.txt`; final fixtures/renders: `artifacts/foundation-checks/20261028-120923-e2eddc4a61934d6fbac14e458e788980`. Preview: `Build/0.14.0-win-x64/Shovel.exe`; 16 valid checksums/seven matching tested-published files, app/helper versions 0.14.0.0. Build remains ignored/untracked; earlier previews preserved. No dependency install, interactive launch, live remote or deployment. The next independent functional item is selected-commit files/diffs; conditional authentication and desktop validation priorities remain in TODO.
 
 ## Modal commit workspace (2026-10-28)
 

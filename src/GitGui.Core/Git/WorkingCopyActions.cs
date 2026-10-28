@@ -6,8 +6,9 @@ namespace GitGui.Core.Git;
 
 public sealed record WorkingCopyContext(GitInstallation Git, RepositoryIdentity Identity, RepositorySnapshot Repository,
     LocalChanges Changes, string IndexStamp, string ConfigStamp, string HeadMessage, string MergeMessage);
-public enum WorkingCopyAction { Stage, Unstage, Commit }
-public sealed record WorkingCopyOptions(WorkingCopyAction Action, IReadOnlyList<LocalChange> Entries, string Message = "", bool Amend = false);
+public enum WorkingCopyAction { Stage, Unstage, Commit, StageHunks, UnstageHunks }
+public sealed record WorkingCopyOptions(WorkingCopyAction Action, IReadOnlyList<LocalChange> Entries, string Message = "", bool Amend = false,
+    HunkSelection? Hunks = null);
 public sealed record WorkingCopyResult(ActionResult Result, string? CommitHash = null);
 
 public sealed partial class GitActions
@@ -75,7 +76,38 @@ public sealed partial class GitActions
             try
             {
                 string[] args;
-                if (options.Action == WorkingCopyAction.Commit)
+                if (options.Action is WorkingCopyAction.StageHunks or WorkingCopyAction.UnstageHunks)
+                {
+                    var selection = options.Hunks ?? throw new GitActionException("HunkSelectChange");
+                    var preview = selection.Preview;
+                    if (preview.Context != context || options.Entries.Count != 1 || options.Entries[0] != preview.Change ||
+                        preview.Change.Group != (options.Action == WorkingCopyAction.StageHunks ? ChangeGroup.Unstaged : ChangeGroup.Staged))
+                        throw new GitActionException("HunkStale");
+                    var current = await reader.ReadFileDiffAsync(context, preview.Change, new(), token);
+                    if (current.HunkPreview is not { } verified || verified.RawPatch != preview.RawPatch ||
+                        verified.WorktreeStamp != preview.WorktreeStamp || verified.AttributeStamp != preview.AttributeStamp)
+                        throw new GitActionException("HunkStale");
+                    var patchFile = Path.Combine(temporary.FullName, "hunks.patch");
+                    await File.WriteAllTextAsync(patchFile, verified.Select(selection.HunkIds), new UTF8Encoding(false), token);
+                    string[] apply = ["-c", "apply.ignoreWhitespace=false", "apply", "--cached", "--whitespace=nowarn",
+                        .. options.Action == WorkingCopyAction.UnstageHunks ? new[] { "--reverse" } : [], "--", patchFile];
+                    // Check first, then revalidate immediately before the real cached-only write.
+                    // No --reject/--3way, worktree checkout, whitespace fixing or automatic fallback.
+                    var check = await Raw(git, path, ["-c", "apply.ignoreWhitespace=false", "apply", "--check", "--cached", "--whitespace=nowarn",
+                        .. options.Action == WorkingCopyAction.UnstageHunks ? new[] { "--reverse" } : [], "--", patchFile], token);
+                    if (check.Outcome != ProcessOutcome.Exited || check.ExitCode != 0)
+                        return new(new(check.Outcome, check.ExitCode, Redact(Decode(check) + Encoding.UTF8.GetString(check.StandardError))));
+                    if (await IndexStampAsync(fresh, token) != context.IndexStamp ||
+                        await RepositoryReader.WorktreeContentStampAsync(path, preview.Change.Path, token) != preview.WorktreeStamp ||
+                        await ConfigStamp(git, path, token) != context.ConfigStamp ||
+                        (await reader.ReadHunkAttributesAsync(git, path, preview.Change.Path, token)).Stamp != preview.AttributeStamp)
+                        throw new GitActionException("HunkStale");
+                    var currentRepository = await reader.InspectAsync(git, path, token);
+                    if (currentRepository.Commit != fresh.Commit || currentRepository.Branch != fresh.Branch || currentRepository.Operation != fresh.Operation ||
+                        (await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint) throw new GitActionException("HunkStale");
+                    args = apply;
+                }
+                else if (options.Action == WorkingCopyAction.Commit)
                 {
                     if (string.IsNullOrWhiteSpace(options.Message) || Encoding.UTF8.GetByteCount(options.Message) > 65536 || options.Message.Contains('\0'))
                         throw new GitActionException("CommitMessageRequired");
@@ -124,8 +156,8 @@ public sealed partial class GitActions
             }
             finally
             {
-                // Only this call's two known temporary files; never recursively clean a computed repository path.
-                foreach (var name in new[] { "paths.nul", "message.txt" })
+                // Only this call's known temporary files; never recursively clean a computed repository path.
+                foreach (var name in new[] { "paths.nul", "message.txt", "hunks.patch" })
                     try { File.Delete(Path.Combine(temporary.FullName, name)); } catch (IOException) { } catch (UnauthorizedAccessException) { }
                 try { temporary.Delete(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
