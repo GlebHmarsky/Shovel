@@ -1,6 +1,6 @@
 # Requirements and acceptance
 
-Updated 2026-10-28. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
+Updated 2026-10-29. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
 
 ## Git functionality and compatibility
 
@@ -73,6 +73,7 @@ Historical phase gates below preserve regression coverage; old prototype/trust b
 | Gate | Acceptance |
 | --- | --- |
 | F0 foundation | Clean restore/build; resizable shell, resources, async profile I/O, bounded diagnostics; invalid/newer schemas and failed/cancelled saves preserve bytes. Actual launch/layout/save/relaunch separately verified. |
+| Local init (0.21) | Zero preparation on opening/editing/dismissing options. Real new/populated-folder initialization; configured/default/explicit initial branch, templates, no implicit commit/staging/remote, preserved files/config. Existing exact root opens without reinit; unsupported nested/bare/metadata/reparse destinations and invalid branch fail clearly. Isolated fixtures cover missing Git, redirection, partial failure, cancellation/reinspection and same-destination exclusion. Bound Create opens/selects/persists the repository and shows empty history/local count; failure retains prior tab/output, active operation blocks competing navigation. Headless normal/minimum renders; desktop timing/focus remains separate. |
 | F1a metadata | Argument/stream caps, timeout/cancellation/descendant/inherited-pipe handling; valid Git discovery. Real unborn/detached/linked/conflicted metadata; automatic restored/open reads, replacement errors, drained shutdown, no stale tab completions. Published files/launch checked separately. |
 | F1b history | CLI-equal topology/parent graph/columns/details, pinned bounded expansion/selection; empty/shallow/failure/malformed cases. No signature helpers/stale rows. Headless graph/virtualization plus separate desktop review. |
 | F1c All Commits | Multi-ref/merge/annotated/nested-tag/packed-ref fixtures; all 2,005 commits reachable without duplicates/broken page edges. Detached/unborn/empty distinctions, no checkout from scope; changed refs require refresh; failed pages retain rows; full details/labels. |

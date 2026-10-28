@@ -10,6 +10,8 @@ namespace GitGui.App.Services;
 
 public interface IUserInteraction
 {
+    RepositoryInitOptions? ChooseRepositoryInitialization() => null;
+    string? ChooseInitializationFolder() => null;
     string? ChooseRepository();
     string? ChooseGit();
     void ShowGitAction(GitActionViewModel model) { }
@@ -30,6 +32,17 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public RepositoryInitOptions? ChooseRepositoryInitialization()
+    {
+        var model = new RepositoryInitViewModel(this);
+        var window = new RepositoryInitWindow(model) { Owner = Owner };
+        return window.ShowDialog() == true ? model.Options : null;
+    }
+    public string? ChooseInitializationFolder()
+    {
+        var picker = new OpenFolderDialog { Title = UiText.Get("InitChooseFolder"), Multiselect = false };
+        return picker.ShowDialog(Owner) == true ? picker.FolderName : null;
+    }
     public string? ConfirmFileAction(FileActionPrompt prompt)
     {
         var window = new FileActionWindow(prompt) { Owner = Owner };

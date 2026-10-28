@@ -32,7 +32,9 @@ internal static partial class Program
         if (args.FirstOrDefault() == "--check-stashes") _root = Path.Combine(Path.GetFullPath("artifacts/stash-checks"), Path.GetFileName(_root));
         if (args.FirstOrDefault() == "--check-file-menus") _root = Path.Combine(Path.GetFullPath("artifacts/file-menu-checks"), Path.GetFileName(_root));
         if (args.FirstOrDefault() == "--check-file-actions") _root = Path.Combine(Path.GetFullPath("artifacts/file-action-checks"), Path.GetFileName(_root));
+        if (args.FirstOrDefault() == "--check-init") _root = Path.Combine(Path.GetFullPath("artifacts/init-checks"), Path.GetFileName(_root));
         Directory.CreateDirectory(_root);
+        if (args.FirstOrDefault() == "--check-init") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(initOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--check-file-actions") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(fileActionsOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--check-file-menus") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(fileMenusOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--check-stashes") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(stashesOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }

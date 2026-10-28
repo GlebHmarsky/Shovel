@@ -658,4 +658,27 @@ Parents: {7}
   <data name="FileHistoryFirst" xml:space="preserve"><value>Newest</value></data>
   <data name="FileActionPath" xml:space="preserve"><value>{0} (rename origin: {1})</value></data>
   <data name="FileRulesEncoding" xml:space="preserve"><value>The existing rule file is not UTF-8. It was not rewritten; edit its encoding with your existing tools.</value></data>
+  <data name="NewRepository" xml:space="preserve"><value>New repository…</value></data>
+  <data name="ActionTitleInit" xml:space="preserve"><value>New repository</value></data>
+  <data name="ActionExplainInit" xml:space="preserve"><value>Create a local Git repository in a new or existing folder. Existing files stay in place. Nothing is staged, committed or published.</value></data>
+  <data name="InitDirectory" xml:space="preserve"><value>Repository folder</value></data>
+  <data name="InitChooseFolder" xml:space="preserve"><value>Choose a folder for the repository</value></data>
+  <data name="InitBrowse" xml:space="preserve"><value>Browse…</value></data>
+  <data name="InitBranch" xml:space="preserve"><value>Initial branch (optional)</value></data>
+  <data name="InitBranchHelp" xml:space="preserve"><value>Leave blank to use Git’s configured default. Git’s template settings also apply. If this folder is already a repository, Shovel opens it without reinitializing it.</value></data>
+  <data name="InitCreate" xml:space="preserve"><value>Create</value></data>
+  <data name="InitEnterDirectory" xml:space="preserve"><value>Enter an absolute folder path, or choose an existing folder.</value></data>
+  <data name="InitReady" xml:space="preserve"><value>Ready. The folder and branch will be checked when you choose Create.</value></data>
+  <data name="InitInvalidDirectory" xml:space="preserve"><value>Choose a valid absolute folder path. A file cannot be used as a repository folder.</value></data>
+  <data name="InitInvalidBranch" xml:space="preserve"><value>Git does not accept this initial branch name. Choose a literal branch name without control characters or a leading dash.</value></data>
+  <data name="InitNestedRepository" xml:space="preserve"><value>This folder is inside another repository. Open its root instead, or choose a folder outside it for the new repository.</value></data>
+  <data name="InitBareRepository" xml:space="preserve"><value>This destination belongs to a bare repository. Choose a normal working folder outside it.</value></data>
+  <data name="InitMetadataDirectory" xml:space="preserve"><value>A Git metadata folder cannot be used as the repository destination.</value></data>
+  <data name="InitLinkedDirectory" xml:space="preserve"><value>Creating through a symbolic link or junction is not supported. Choose the actual folder path.</value></data>
+  <data name="InitDestinationChanged" xml:space="preserve"><value>The destination changed while it was being checked. Inspect the folder before trying again.</value></data>
+  <data name="InitAlreadyExists" xml:space="preserve"><value>The existing repository was opened without reinitializing it. The initial branch option was not applied.</value></data>
+  <data name="InitSucceeded" xml:space="preserve"><value>Repository created and inspected. Use Commit to review and stage your files.</value></data>
+  <data name="InitIncomplete" xml:space="preserve"><value>Initialization did not finish successfully. Any created files were kept. Inspect the command output and destination before trying again.</value></data>
+  <data name="InitUnexpectedLayout" xml:space="preserve"><value>The resulting worktree is outside the requested destination. It was not opened; inspect Git’s output and configured templates.</value></data>
+  <data name="InitCreatedUnverified" xml:space="preserve"><value>Git reported success, but the new repository could not be inspected. Files were kept. Inspect the output and open the folder when it is accessible.</value></data>
 </root>

@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.20.0** extends Local Changes menus with confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.21.0** adds local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -32,7 +32,7 @@ dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (one empty nonrepo in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28) distinguishes integration/headless from desktop.
+Fixtures under ignored artifacts/foundation-checks (initialization destinations and empty nonrepo fixtures in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28) distinguishes integration/headless from desktop.
 
 Focused theme resource/control/offscreen checks (no window shown): `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-theme`. The full suite also runs these checks.
 
@@ -51,6 +51,10 @@ Data-directory must be absolute; default %LOCALAPPDATA%\GitGui\Foundation preser
 Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build/publish copies them). Askpass handles explicit network credentials/passphrases/host confirmation; browser/GCM/signing/interactive hooks/custom SSH still use existing tools. Shovel saves no prompt/credential data; configured helpers may store credentials. Live sign-in/focus/input unverified.
 
 ## Using the workspace
+
+**File / Repository → New repository…** creates a local repository in a new or existing folder. Enter an absolute path and optional initial branch (blank uses Git's default), then Create. Options open without preparation; execution/progress/output stays in the shell and the resulting repository opens automatically. Existing files remain unstaged; no commit or remote is added. An existing root opens without reinitializing. Partial failure/cancellation preserves files; inspect the result before retrying. [Destination restrictions and workflow](docs/product.md#new-local-repository-0210).
+
+Focused initialization checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-init`. Included in full verification. These use isolated configuration and disposable temp repositories outside the source checkout (nested init is unsupported), with their location recorded in the artifact folder.
 
 Open a local worktree root; selected saved tab restores automatically, others load on selection, no read consent. Fixed All Commits includes local/remote/tag/current-HEAD ancestry, detached included; no reflog-only/unreachable/stash-only history or scope selector. Legacy narrow scope ignored.
 
@@ -120,7 +124,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.20.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.21.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

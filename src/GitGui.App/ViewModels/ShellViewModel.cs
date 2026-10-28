@@ -76,15 +76,19 @@ public sealed partial class ShellViewModel : ObservableObject
         set
         {
             if (_selectedRepository == value || ActionOpen) return;
-            HistoryViewChanging?.Invoke(this, EventArgs.Empty);
-            _operationCancellation?.Cancel(); _generation++; CancelCountRead();
-            _selectedRepository = value;
-            if (value is not null) value.History.LastUse = ++_useCounter;
-            Status = value?.History.Error is { Length: > 0 } error ? error : UiText.Get(value?.History.Page is null ? "HistoryNotLoaded" : "HistoryCheckingCached");
-            Changed(); Changed(nameof(RepositoryTitle)); PublishState();
-            if (CanNavigate && value is not null) BeginCurrentRead(value);
-            else if (value is null) { _timer.Stop(); _elapsed.Stop(); IsBusy = false; }
+            SelectRepository(value);
         }
+    }
+    private void SelectRepository(RepositoryTab? value)
+    {
+        HistoryViewChanging?.Invoke(this, EventArgs.Empty);
+        _operationCancellation?.Cancel(); _generation++; CancelCountRead();
+        _selectedRepository = value;
+        if (value is not null) value.History.LastUse = ++_useCounter;
+        Status = value?.History.Error is { Length: > 0 } error ? error : UiText.Get(value?.History.Page is null ? "HistoryNotLoaded" : "HistoryCheckingCached");
+        Changed(nameof(SelectedRepository)); Changed(nameof(RepositoryTitle)); PublishState();
+        if (CanNavigate && value is not null) BeginCurrentRead(value);
+        else if (value is null) { _timer.Stop(); _elapsed.Stop(); IsBusy = false; }
     }
     // View-only scroll offsets are captured/restored by code-behind; no filesystem/UI coupling.
     public event EventHandler? HistoryViewChanging;
@@ -409,6 +413,8 @@ public sealed partial class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        NewRepositoryCommand?.Refresh();
+        Changed(nameof(NewRepositoryHelp));
         StashesCommand?.Refresh();
         ContinueCommand?.Refresh(); SkipCommand?.Refresh(); AbortCommand?.Refresh();
         Changed(nameof(HasRecovery)); Changed(nameof(CanSkipRecovery)); Changed(nameof(RecoveryHelp));

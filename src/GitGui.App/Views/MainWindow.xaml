@@ -50,6 +50,7 @@
     </Grid.RowDefinitions>
     <Menu AutomationProperties.Name="{loc:Text Key=MainMenu}">
       <MenuItem Header="{loc:Text Key=FileMenu}">
+        <MenuItem Header="{loc:Text Key=NewRepository}" Command="{Binding NewRepositoryCommand}" ToolTip="{Binding NewRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
       </MenuItem>
@@ -58,6 +59,7 @@
         <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
       </MenuItem>
       <MenuItem Header="{loc:Text Key=RepositoryMenu}">
+        <MenuItem Header="{loc:Text Key=NewRepository}" Command="{Binding NewRepositoryCommand}" ToolTip="{Binding NewRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=RefreshRepository}" Command="{Binding RefreshRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=Stashes}" Command="{Binding StashesCommand}" />

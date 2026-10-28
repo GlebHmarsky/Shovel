@@ -5,7 +5,7 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop }
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init }
 public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch, Recovering }
 public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);

@@ -4,16 +4,15 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.20.0 complete: requested Local Changes file-menu actions delivered. Next implementation priority is local repository initialization; broader theme work remains P2.
+0.21.0 completed: local repository initialization. Broader theme work remains P2.
 
-- [x] **P1 — Selected Discard and Stash.** Exact scope confirmation, staged/unstaged/untracked semantics, preserved unrelated content, stale-target refusal, cancellation and targeted refresh.
-- [x] **P1 — Remaining screenshot actions.** Configured external diff, first-parent file history/blame, ignore paths/extensions, LFS tracking attributes and binary-capable patch export; cached menu/options opening and real outcomes.
-- [x] **P1 — Deliver 0.20.0.** 207 checks passed, normal/minimum offscreen review, documented limits, matching ignored preview and intended local commit; no interactive launch.
+- [x] **P1 — Initialize local repositories.** Fast options, new/existing nonrepo folders, optional initial branch, preserved files, automatic opening and real progress/errors/cancellation. Nine focused checks pass.
+- [x] **P1 — Deliver 0.21.0.** 216 full checks and nine focused checks passed; offscreen review, owning docs, matching ignored preview and local commit. No interactive launch. [Evidence](docs/roadmap.md#current-status).
 
 
 ## Next priorities
 
-- [ ] **P1 — Local MVP remainder.** Init, then branch deletion/tracking; broaden signing and failure recovery. Whole-hunk staging, sequence recovery and stashes are delivered. Advanced stash variants remain backlog, not prerequisites for basic stash use.
+- [ ] **P1 — Local MVP remainder.** Branch deletion/tracking next; broaden signing and failure recovery. Init, whole-hunk staging, sequence recovery and stashes are delivered. Advanced stash variants remain backlog, not prerequisites for basic stash use.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
@@ -41,6 +40,8 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.21.0 / 2026-10-29:** local repository initialization with fast options, optional initial branch, preserved files/partial results and automatic opening. 216 full checks; focused 9/9; normal/minimum offscreen review and package hashes verified. Next: branch deletion/tracking. [Evidence and limits](docs/roadmap.md#current-status).
 
 - [x] **0.20.0 / 2026-10-29:** confirmed selected Discard/Stash, configured External Diff, first-parent file History/Blame, Ignore/LFS rules and binary patch export. 207 checks; warmed menu/history layout 10/23 ms with zero opening-time queries, selected Discard 667 ms on a disposable fixture. Normal/minimum/menu review and package hashes verified. [Evidence and limits](docs/roadmap.md#current-status).
 

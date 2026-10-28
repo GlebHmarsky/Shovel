@@ -66,9 +66,9 @@ public sealed class GitActionViewModel : ObservableObject
     public bool Rebase { get => Strategy == PullStrategy.Rebase; set { if (value) Strategy = PullStrategy.Rebase; } }
     public bool Merge { get => Strategy == PullStrategy.Merge; set { if (value) Strategy = PullStrategy.Merge; } }
     public bool IsRunning { get => _running; private set { if (Set(ref _running, value)) { Changed(nameof(CanEdit)); Changed(nameof(CanCancel)); Refresh(); } } }
-    public bool CanEdit => _context is not null && !_dismissed && !IsRunning && !_attempted;
+    public bool CanEdit => (_context is not null || _execute is not null) && !_dismissed && !IsRunning && !_attempted;
     public bool HasAttempt => _attempted;
-    public string RunUnavailableReason => UiText.Get(_context is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
+    public string RunUnavailableReason => UiText.Get(_context is null && _execute is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
         IsNetwork && Remote is null ? "ActionNoRemote" :
         IsNew && string.IsNullOrWhiteSpace(NewName) ? "ActionEnterBranchName" :
         IsNew && !StartRefs.Contains(StartRef) ? "ActionNoStart" :
@@ -101,8 +101,18 @@ public sealed class GitActionViewModel : ObservableObject
             (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
             (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
         ApplyContext(context, initialBranch);
-        _timer.Tick += (_, _) => { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
+        InitializeTimer();
     }
+    // Initialization has no repository snapshot yet, but shares command lifetime and output handling.
+    public GitActionViewModel(string repository, GitActions actions, Func<Task> reconcile,
+        Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, Task<ActionResult>> execute)
+    {
+        _repository = repository; Action = GitAction.Init; _actions = actions; _reconcile = reconcile; _execute = execute;
+        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit);
+        InitializeTimer();
+    }
+    private void InitializeTimer() => _timer.Tick += (_, _) =>
+    { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
     public void DismissOptions()
     {
         if (HasAttempt) return;

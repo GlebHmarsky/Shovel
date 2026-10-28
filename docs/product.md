@@ -1,6 +1,6 @@
 # Product
 
-Updated 2026-10-28. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
+Updated 2026-10-29. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
 
 ## Purpose and delivery
 
@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.20.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.21.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -32,6 +32,12 @@ Same-author peers use light-yellow text, matching exact raw name/email ordinally
 Select a history commit and open the lower **Changes** tab. Its file list and colored/numbered unified diff load asynchronously, starting with the first file. The selected commit's metadata remains in **Commit**. Compare with parent 1 by default; merge commits offer each parent explicitly. Initial commits compare with the empty tree, while incomplete/shallow ancestry reports a limitation rather than pretending to be an initial commit. Empty commits show zero changed files. Binary files show stored old/new byte sizes; submodules remain pointer-only.
 
 Amber **M**, green **+**, red **−** mark modified, added and deleted files here and in Local Changes; rename arrows and tooltips expose original names. Selection uses normal selection text; high contrast uses system colors and retains symbols/accessibility labels. Working files/index do not supply committed content. Raw patches/errors remain in the output expander. Changed commit/parent/tab cancels obsolete reads; same-comparison refresh failure retains useful content with an error. No preload/polling or startup history delay. Resize the lower panel/file-list divider; Changes reserves usable space at minimum window size.
+
+## New local repository (0.21.0)
+
+File or Repository → **New repository…** opens a fixed-size, close-only dialog immediately. Enter an absolute destination or Browse to an existing folder, and optionally enter the initial branch. Blank uses Git's default. Opening/editing options performs no Git or filesystem preparation; Create closes the dialog and starts validation/execution with top-center progress, Cancel and retained Operation output.
+
+Create supports missing or populated ordinary folders, preserving files without staging, committing or adding a remote. The created worktree opens automatically with an honest no-commits state and subsequent local file count. An existing worktree root opens unchanged; the initial-branch option does not rename it. Failure retains the previous tab and explains the cause. Cancellation/partial failure keeps created files and opens the result only when fresh inspection confirms it is usable; it is not rollback. [Supported destinations and limits](architecture.md#local-repository-initialization-0210).
 
 ## Local Changes / Commit (0.13.0)
 

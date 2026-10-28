@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.0 — 2026-10-29
+
+- Add File / Repository → New repository with destination and optional initial branch. Open options without Git/filesystem preparation; Create closes options and runs real initialization with shell progress, output and cancellation.
+- Preserve populated folders and Git's configured defaults/templates without adding files, staging, commits or remotes. Open existing worktree roots without reinitializing; explain invalid or unsupported destinations.
+- Automatically select/open a usable result, including one observed after cancellation. Preserve partial files and previous tabs on failure; coordinate same-destination commands and retain normal ownership checks.
+
 ## 0.20.0 — 2026-10-29
 
 - Extend Local Changes menus with confirmed selected-file Discard and Stash, configured External Diff, file History/Blame, Ignore paths/extensions, LFS tracking rules and binary-capable Save as Patch. Existing Open/Explorer, stage/all and copy actions remain.
