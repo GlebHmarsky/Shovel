@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.17.0: in-app sequence recovery; scoped file-action reconciliation, quiet background scans and binary/LFS comparison cards; modal Local Changes/diffs/file and hunk staging/commit/amend/Commit and Push, history/committed changes, branch/network options and Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.18.0: Stashes and sequence recovery; scoped file-action reconciliation, quiet background scans and binary/LFS cards; modal Local Changes/diffs/file and hunk staging/commit/amend/Commit and Push, history/committed changes, branch/network options and Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -22,6 +22,7 @@ Historical platform baseline: x64 Windows 10 22H2/11, ARM64 later, no x86 plan; 
 | App/Views/GitActionWindow.xaml; ViewModels/GitActionViewModel.cs | Options close on submission; one task with phase/output/cancel/reinspection |
 | App/Views/AuthenticationWindow.xaml | Masked/confirm/informational owned prompts |
 | App/Views/CommitWindow.xaml(.cs); ViewModels/CommitViewModel.cs; ShellChanges.cs | Owned commit workspace, Shift variants, per-tab cache/draft, diff selection/cancellation and background count |
+| App/Views/StashWindow.xaml(.cs); ViewModels/StashViewModel.cs; ShellStashes.cs; Core/Git/Stashes.cs | Cached stash modal, saved-object inspection, serialized create/apply/pop/drop and partial-success handling |
 | App/ViewModels/ShellActions.cs | Preparation/admission/reconciliation |
 | App/ViewModels/ | Shell/tab/row presentation and command/observable bases |
 | App/Views/CommitGraphCell.cs | Draw precomputed segments for realized rows |
@@ -148,6 +149,18 @@ Sequential fetch-all/multiple push refs can partially succeed. Git 2.51.1 local 
 Writes: existing runner, 5 min/command, 1 MiB output; decode/redact off dispatcher, bounded session Operation details only. HTTP(S) userinfo/query secrets redacted; arbitrary helper output may still contain secrets. Show running/duration/cancel; no wait inference from silence, automatic retry or rollback claim.
 
 F2b supersedes cached-only auth. Core without broker stays noninteractive/strict known-host; custom core.sshCommand/unrecognized bundled layout rejected. Default transports file/http/https/ssh/git allowed, others denied unless explicit Git per-protocol permission overrides. Startup requests none. RefBadge reuses CommitRef.Upstream, no extra startup query; original vectors inherit row/system colors, preserve virtualization. No provider/avatar network assets.
+
+## Stashes (0.18.0)
+
+`ShellStashes` binds the current snapshot/session and `StashCache` before showing the owned window; construction performs no Git/filesystem work. Loaded schedules bounded background list/inspection. At most three tabs retain lists, each limited to 1,000 entries / 1 MiB; exceeding either fails explicitly instead of truncating. Session-only selected hash/message survive modal reopening; tab closure discards them. No polling, startup stash reads or inactive-tab preload. Cancellation/generations reject superseded reads; failures keep cached list rows, while selected-entry writes require a successful list. Commands reuse `GitActionViewModel` for output, top-center duration, cancellation and fresh post-action inspection; related history/status/stash caches become stale.
+
+Core reads NUL-delimited `stash list`, fingerprinting the complete observed list and pairing ordinal selectors with immutable hashes. `cat-file` identifies saved base/index/optional-untracked parents; the existing immutable committed-file reader compares worktree/base, index/base, worktree/index and untracked/empty tree. Reads suppress pager/signature display/fsmonitor/maintenance/lazy fetching and reuse text/binary bounds and external-diff/textconv suppression. No worktree scan is required to open or list stashes; a selected diff loads separately.
+
+Submission rechecks repository identity, HEAD, operation state and (except Drop) the index/unmerged entries, under the common-directory mutation mutex shared by related worktrees/instances. Create uses `stash push --no-keep-index`, optional `--include-untracked` and a structured message (4 KiB maximum). Apply uses the selected object hash with explicit `--index` or `--no-index`, overriding default staging configuration. Pop applies once, observes unmerged entries with a fresh cancellation scope, then drops the reviewed selector only after success and another matching list fingerprint. If application fails/conflicts or final removal cannot be confirmed, retain/report the stash without automatic retry. Drop revalidates the full reviewed list immediately before `stash drop`; confirmation freezes its actual target before the dispatcher can update selection. Native commands retain normal Git protections and configured filters, disable recursive submodule handling and use a five-minute/1-MiB-per-command bound. Closing cancels owned work and drains; cancellation does not undo writes.
+
+Limits: unborn Create requires an initial commit; active sequences/unmerged index block Create/Apply/Pop, while explicit Drop remains available. No ignored-file inclusion, selected-file/keep-index stash creation, stash branch/rename/export/import, nested submodule stashing or automatic conflict editor. Existing text/binary/partial-clone limits apply; no implicit download. Stash conflicts are unmerged files, not a Git sequence with Continue/Abort. Git clients outside Shovel do not share the mutex: fingerprint rechecks narrow ordinal races but cannot atomically compare-and-drop against another client's final concurrent reflog write. Avoid concurrent stash mutations; Git locking remains authoritative. Recovery after cancellation/partial cleanup can need existing tools; no automatic rollback or guaranteed stash recovery.
+
+Official semantics checked 2026-10-28: [Git stash](https://git-scm.com/docs/git-stash), particularly push cleanup/untracked options, `--index`, parent structure and retaining conflicted Pop. Uses established CLI operations verified against installed Git 2.51.1; no dependency on newer export/import features.
 
 ## Sequence recovery (0.17.0)
 

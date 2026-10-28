@@ -14,6 +14,7 @@ public interface IUserInteraction
     string? ChooseGit();
     void ShowGitAction(GitActionViewModel model) { }
     Task ShowCommitAsync(CommitViewModel model) => Task.CompletedTask;
+    Task ShowStashesAsync(StashViewModel model) => Task.CompletedTask;
     bool ConfirmAmend(string branch, string hash) => false;
     bool ConfirmRecovery(string message, string title) => false;
     void ShowActionError(string message) { }
@@ -24,6 +25,7 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public Task ShowStashesAsync(StashViewModel model) { new StashWindow(model) { Owner = Owner }.ShowDialog(); return Task.CompletedTask; }
     public bool ConfirmRecovery(string message, string title) => MessageBox.Show(Owner, message, title,
         MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     private static Window Owner => Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive) ?? Application.Current.MainWindow;

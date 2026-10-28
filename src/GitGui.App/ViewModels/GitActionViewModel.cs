@@ -21,6 +21,7 @@ public sealed class GitActionViewModel : ObservableObject
     private Task _outputTask = Task.CompletedTask;
     private ActionContext? _context;
     private readonly Func<CancellationToken, Task<ActionContext>>? _prepareExecution;
+    private readonly Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, Task<ActionResult>>? _execute;
     public ActionContext Context => _context ?? throw new InvalidOperationException();
     private readonly string _repository;
     private bool _dismissed;
@@ -90,10 +91,12 @@ public sealed class GitActionViewModel : ObservableObject
     public Task RunningTask { get; private set; } = Task.CompletedTask;
 
     public GitActionViewModel(ActionContext context, GitAction action, GitActions actions, Func<Task> reconcile, string? initialBranch = null,
-        IUserInteraction? interaction = null, Func<CancellationToken, Task<ActionContext>>? prepareExecution = null)
+        IUserInteraction? interaction = null, Func<CancellationToken, Task<ActionContext>>? prepareExecution = null,
+        Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, Task<ActionResult>>? execute = null)
     {
         _repository = context.Repository.Worktree; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
         _prepareExecution = prepareExecution;
+        _execute = execute;
         RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!IsNetwork || Remote is not null) &&
             (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
             (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
@@ -170,8 +173,10 @@ public sealed class GitActionViewModel : ObservableObject
                     });
                 }
             }, _cancel.Token)) : null;
-            var result = await _actions.ExecuteAsync(Context, options, _cancel.Token, output =>
-                { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }, authentication,
+            void Output(GitGui.Core.Processes.ProcessOutput output)
+                { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }
+            if (_execute is not null) Phase = UiText.Get("ActionRunning");
+            var result = _execute is not null ? await _execute(_cancel.Token, Output) : await _actions.ExecuteAsync(Context, options, _cancel.Token, Output, authentication,
                 stage => _dispatcher.BeginInvoke(() =>
                 {
                     if (_gitFinished || _cancel.IsCancellationRequested) return;
@@ -183,6 +188,7 @@ public sealed class GitActionViewModel : ObservableObject
             _needsResolution = result.HasConflicts || result.Operation != RepositoryOperation.None;
             _cancelled = result.Outcome == GitGui.Core.Processes.ProcessOutcome.Cancelled;
             Status = UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure :
+                result.MessageCode is { } code ? code :
                 result.Operation.HasFlag(RepositoryOperation.Rebase) ? "ActionRebaseConflict" : result.Operation.HasFlag(RepositoryOperation.Merge) ? "ActionMergeConflict" :
                 result.Operation != RepositoryOperation.None ? "RecoveryPending" :
                 result.HasConflicts ? "ActionStashConflict" :

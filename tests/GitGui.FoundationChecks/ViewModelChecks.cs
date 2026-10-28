@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false)
+    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false, bool stashesOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -35,7 +35,10 @@ internal static partial class Program
             var frame = new DispatcherFrame();
             // Complete on the dispatcher that owns this frame, including faulted test tasks.
             // A bounded watchdog makes a harness/lifetime regression fail instead of hanging packaging.
-            var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(8) };
+            // The full aggregate now includes recovery and stash fixtures; keep individual
+            // operation timeouts unchanged while allowing their sequential total to finish.
+            var focused = localOnly || commitOnly || hunksOnly || commitFilesOnly || fastChangesOnly || recoveryOnly || stashesOnly;
+            var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(focused ? 8 : 12) };
             watchdog.Tick += (_, _) => { watchdog.Stop(); frame.Continue = false; };
             watchdog.Start();
             async Task CompleteFrameAsync() { try { await task; } finally { frame.Continue = false; } }
@@ -55,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (stashesOnly) { await RunStashChecksAsync(); return; }
             if (recoveryOnly) { await RunRecoveryChecksAsync(); return; }
             if (localOnly) { await RunLocalChangesChecksAsync(); return; }
             if (commitOnly) { await RunCommitWorkspaceChecksAsync(); return; }
@@ -243,6 +247,7 @@ internal static partial class Program
             await RunWorkspaceActionChecksAsync();
             await RunPullChecksAsync();
             await RunRecoveryChecksAsync();
+            await RunStashChecksAsync();
             await RunAuthenticationViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)

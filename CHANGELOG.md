@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0 — 2026-10-28
+
+- Add Stashes in the sidebar and Repository menu: create with optional untracked files, inspect saved tracked/staged/unstaged/untracked files and text/binary diffs, apply, pop and confirmed drop. Optional staged-state restoration controls Apply/Pop explicitly.
+- Open the owned modal from cached entries/draft without Git preparation; read afterward asynchronously, preserve selection by hash and retain rows on refresh failure. Share top-center progress/cancellation and retained output; refresh history/counts after mutations.
+- Apply immutable stash objects once, retain conflicted/partially restored entries, and distinguish successful application from uncertain removal. Revalidate reviewed stash selectors against the observed list, reject shifted targets, confirm exact Drop scope and preserve Git protections without automatic retry/cleanup.
+
 ## 0.17.0 — 2026-10-28
 
 - Recover interrupted merges, rebases, cherry-picks and reverts through Continue, Skip and Abort in the sidebar and Repository menu. Reopen rediscovers state; no opening-time preparation or remote queries. Resolve/stage files through Local Changes, then continue with Git's existing message.

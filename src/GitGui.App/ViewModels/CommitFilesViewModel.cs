@@ -7,6 +7,7 @@ namespace GitGui.App.ViewModels;
 public sealed record ParentChoice(string? Hash, string Label);
 public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallation git, string path, CommitRecord commit) : ObservableObject
 {
+    public bool ShowParentSelector { get; init; } = true;
     private CancellationTokenSource? _cancel;
     private long _generation;
     private CommitFiles? _comparison;

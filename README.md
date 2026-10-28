@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.17.0** adds in-app Continue/Skip/Abort for interrupted Git sequences. Native title bars match the dark chrome. 0.16.0 adds old/new binary/LFS cards and faster file Stage/Unstage feedback, with wider checks running quietly afterward. The modal Local Changes/Commit workspace includes file/hunk staging, commit/amend and Shift Commit and Push over retained history. Committed files/diffs, shared dark styling, branch/network actions and Pull-Rebase/Merge/auto-stash remain.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.18.0** adds create/inspect/apply/pop/drop in a cached Stashes modal. Includes Continue/Skip/Abort for interrupted sequences, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs, branch/network actions and Pull-Rebase/Merge/auto-stash. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -62,7 +62,7 @@ Cached switch publishes immediately/validates identity off-thread. >30 s snapsho
 
 Pull badge = behind, Push = ahead of configured upstream **locally**, loaded after rows; separate push target not compared. Zero measured, dash pending/unavailable/failed; tooltip reason/time/upstream. Missing/detached/unborn/shallow cannot claim synchronized; failed refresh keeps stale counts, no implicit fetch.
 
-Menus, working toolbar actions and center timer remain; unfinished Stash/Explorer/Terminal/Editor/Tools/sidebar controls are omitted. Local changes opens the commit modal; All Commits stays in the main workspace. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers yellow, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
+Menus, working toolbar actions and center timer remain; unfinished Explorer/Terminal/Editor/Tools/sidebar controls are omitted. Local changes and Stashes open owned modals; All Commits stays in the main workspace. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers yellow, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
 
 ## Local Changes
 
@@ -75,6 +75,14 @@ Select a line inside a change block, or Ctrl/Shift-select multiple blocks, then 
 File Stage/Unstage publishes freshly checked target rows before a coalesced full scan; other rows can remain stale until that background scan. The next action does not wait for an obsolete diff/scan. Selection follows the same file across lists. Bottom activity bars and the ticking footer are removed; static results/errors and cancellation remain. Expand **Git output** for validation, command and refresh timings. The selected diff loads separately; timings remain in memory without diagnostic logging of paths/arguments/content.
 
 Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for hunks, `--check-commit-files` for historical files/diffs and `--check-fast-changes` for scoped/background action results, delayed reads, LFS sizes and binary cards. The full preview checks include all of them.
+
+## Stashes
+
+Choose sidebar **Stashes** or **Repository → Stashes**. Cached entries/message appear before background reads. Create accepts an optional message and **Include untracked files**; ignored files and submodule contents stay excluded. Select a stash to inspect saved tracked, staged, unstaged or untracked files with real text/binary diffs. **Apply** keeps the stash; **Pop** removes it only after clean application and an unchanged list. **Restore staged state** is optional for both. **Drop** confirms the exact saved entry and its consequences.
+
+Results/output remain in the modal, with command duration at top center and Cancel available. Failed/conflicted application keeps the stash; a partially successful Pop reports applied changes separately from removal. Resolve externally and stage in Local Changes; stash conflicts do not create a Continue/Abort sequence. [Workflow](docs/product.md#stashes-0180), [bounds and concurrent-client limits](docs/architecture.md#stashes-0180).
+
+Focused checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-stashes`. Disposable repositories and offscreen renders only; included in full preview verification.
 
 ## Branch and remote actions
 
@@ -108,7 +116,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.17.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.18.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

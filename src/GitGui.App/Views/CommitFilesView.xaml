@@ -2,7 +2,7 @@
  <UserControl.Resources><BooleanToVisibilityConverter x:Key="Visible"/></UserControl.Resources>
  <Grid Background="{DynamicResource Theme.Canvas}">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <DockPanel Margin="6,3">
+  <DockPanel Margin="6,3" Visibility="{Binding ShowParentSelector, Converter={StaticResource Visible}}">
    <Button DockPanel.Dock="Right" Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Margin="6,0" IsEnabled="{Binding Busy}"/>
    <Button DockPanel.Dock="Right" Content="{loc:Text Key=CommitRefresh}" Command="{Binding RefreshCommand}"/>
    <TextBlock DockPanel.Dock="Left" Text="{loc:Text Key=CommitFilesCompare}" VerticalAlignment="Center" Margin="0,0,6,0"/>

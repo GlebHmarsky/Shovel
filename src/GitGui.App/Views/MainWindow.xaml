@@ -60,6 +60,7 @@
       <MenuItem Header="{loc:Text Key=RepositoryMenu}">
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=RefreshRepository}" Command="{Binding RefreshRepositoryCommand}" />
+        <MenuItem Header="{loc:Text Key=Stashes}" Command="{Binding StashesCommand}" />
         <MenuItem Header="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" />
         <MenuItem Header="{loc:Text Key=RecoveryMenu}" Visibility="{Binding HasRecovery, Converter={StaticResource BoolToVisibility}}">
           <MenuItem Header="{loc:Text Key=ActionTitleContinue}" Command="{Binding ContinueCommand}" />
@@ -178,6 +179,7 @@
         <TextBlock DockPanel.Dock="Top" Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" Margin="8,0,0,12" />
         <StackPanel VerticalAlignment="Top">
           <Button Content="{loc:Text Key=LocalChanges}" Command="{Binding ShowChangesCommand}" HorizontalContentAlignment="Left" Padding="8,9" Background="Transparent" BorderThickness="0" ToolTip="{loc:Text Key=CommitOpenHelp}" AutomationProperties.AutomationId="LocalChangesNavigation"/>
+          <Button Content="{loc:Text Key=Stashes}" Command="{Binding StashesCommand}" HorizontalContentAlignment="Left" Padding="8,9" Background="Transparent" BorderThickness="0"/>
           <RadioButton Style="{StaticResource NavigationItem}" Content="{loc:Text Key=AllCommits}" IsChecked="{Binding IsHistory, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.Name="{loc:Text Key=AllCommits}" AutomationProperties.AutomationId="CurrentWorkspace"/>
           <StackPanel Margin="8,16,0,0" Visibility="{Binding HasRecovery, Converter={StaticResource BoolToVisibility}}" AutomationProperties.AutomationId="RecoveryPanel">
             <TextBlock Text="{Binding RecoveryHelp}" TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite" />

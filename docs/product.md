@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.17.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.18.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -53,13 +53,23 @@ Opening binds cached rows/draft immediately, then reads after layout; it never f
 
 Draft, file selection and last output are session-only per tab; successful commit clears the draft, failed commit retains it. Closing the tab/app discards that draft; no crash-safe draft persistence yet. [Architecture](architecture.md#local-changes-and-commit-0130) owns bounds and execution details.
 
+## Stashes (0.18.0)
+
+Sidebar **Stashes** or Repository → Stashes opens a resizable owned window over retained history. Opening uses the tab's cached list/message immediately, then refreshes local stashes in the background; no remote queries, initial Git prerequisite or polling. Select an entry for its full hash/message and stored files/diffs: all tracked changes, saved staged changes, saved unstaged changes, or saved untracked files. Text/binary/LFS views are shared with historical Changes; current working files never supply saved content.
+
+**Create stash** accepts an optional message and unchecked **Include untracked files**. It saves staged/unstaged changes and removes those saved changes from the worktree; ignored files and submodule contents are excluded. **Apply** restores the selected entry and keeps it. **Pop** applies first and removes that entry only after successful application with no detected conflicts and an unchanged stash list. Unchecked **Restore staged state** controls both Apply and Pop. **Drop** confirms the exact repository, stash selector/hash/message and loss of the saved entry; it does not change working files and offers no guaranteed undo.
+
+Empty lists, loading, stale refresh failures and command results are explicit. Selection follows the saved hash across refreshed ordinal numbers; useful list rows/draft survive failures and modal reopening during the session. Failed list reads disable selected-entry writes until refresh succeeds. Commands expose top-center duration/Cancel and retained in-memory output in the modal. Close cancels/drains work; history/counts refresh afterward. No automatic retry or rollback.
+
+Conflicts or incomplete restoration keep the stash; partial Pop success explicitly says when changes were applied but removal was not confirmed. Do not blindly apply again. Resolve files externally and stage with Local Changes; stash conflicts have no Continue/Skip/Abort sequence. [Architecture](architecture.md#stashes-0180) owns limits and external-client races.
+
 ## Conflict recovery (0.17.0)
 
 Detected merge, rebase, cherry-pick and revert operations expose **Continue**, **Abort**, and **Skip** when a current replayed commit is known. Controls appear in the sidebar and Repository → Recovery from the cached snapshot; opening them performs no Git or filesystem work. Reopening a repository rediscovers Git's state rather than replaying a saved action.
 
 Open **Local Changes**, resolve files in your editor and Stage the resolutions, then close that modal and choose **Continue**. Continue uses Git's existing message; it refuses unresolved index entries. A subsequent conflict keeps recovery controls available. Abort confirms the repository, branch and observed original tip; Skip also identifies the current commit and warns that resolution edits will be discarded. Git may fail to restore all earlier uncommitted changes. Neither action promises complete undo.
 
-Commands use top-center progress/Cancel and retained Operation output. Existing history remains visible. Failures/cancellation re-read state; no automatic abort, stash deletion, lock cleanup or retry. A conflict while restoring an auto-stash remains a conflict even after the sequence ends: use Local Changes and inspect the preserved stash with existing tools. Mailbox (`git am`), ambiguous/oversized state and interactive todo/message editing remain unsupported. Hooks, signing and existing rebase exec steps remain enabled; unsupported input still requires existing tools. Recovery is not a built-in conflict editor.
+Commands use top-center progress/Cancel and retained Operation output. Existing history remains visible. Failures/cancellation re-read state; no automatic abort, stash deletion, lock cleanup or retry. A conflict while restoring an auto-stash remains a conflict even after the sequence ends: use Local Changes and inspect the preserved entry in Stashes. Mailbox (`git am`), ambiguous/oversized state and interactive todo/message editing remain unsupported. Hooks, signing and existing rebase exec steps remain enabled; unsupported input still requires existing tools. Recovery is not a built-in conflict editor.
 
 ## Explicit branch and remote workflows (0.8.0)
 
@@ -91,7 +101,7 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 Current frame: File/View/Repository/Window/Help; Open/Commit/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; Local changes modal entry/All Commits sidebar; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 
-Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Historical file-tree browsing, other mutations/tools and conflict editing remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
+Unfinished Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Stashes is available in the sidebar and Repository menu. Historical file-tree browsing, other mutations/tools and conflict editing remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
 
 **Proposed refinements:** context menus target the clicked object while preserving a containing multiselection; shared commands serve menus/toolbar/shortcuts. Large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately. The previously proposed separate embedded Changes workspace is superseded by the confirmed modal design above.
 

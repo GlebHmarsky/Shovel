@@ -409,6 +409,7 @@ public sealed partial class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        StashesCommand?.Refresh();
         ContinueCommand?.Refresh(); SkipCommand?.Refresh(); AbortCommand?.Refresh();
         Changed(nameof(HasRecovery)); Changed(nameof(CanSkipRecovery)); Changed(nameof(RecoveryHelp));
         ShowChangesCommand?.Refresh(); ShowHistoryCommand?.Refresh();

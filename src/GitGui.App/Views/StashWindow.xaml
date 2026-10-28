@@ -1,0 +1,49 @@
+<Window x:Class="GitGui.App.Views.StashWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="clr-namespace:GitGui.App.Localization" xmlns:views="clr-namespace:GitGui.App.Views"
+ Title="{loc:Text Key=Stashes}" Width="1200" Height="760" MinWidth="900" MinHeight="620" WindowStartupLocation="CenterOwner" Background="{DynamicResource Theme.Chrome}" Foreground="{DynamicResource Theme.Text}" FlowDirection="{x:Static loc:UiText.Direction}" Icon="/Shovel;component/Assets/Shovel.ico">
+ <Grid Margin="10" Background="{DynamicResource Theme.Chrome}">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel>
+   <TextBlock Text="{Binding Repository}" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
+   <DockPanel IsEnabled="{Binding CanEdit}">
+    <Button DockPanel.Dock="Right" Content="{loc:Text Key=ActionTitleStashCreate}" Command="{Binding CreateCommand}" Margin="6,0,0,0"/>
+    <CheckBox DockPanel.Dock="Right" Content="{loc:Text Key=StashIncludeUntracked}" IsChecked="{Binding IncludeUntracked}" VerticalAlignment="Center" Margin="8,0"/>
+    <TextBox Text="{Binding Message, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{loc:Text Key=StashMessage}" ToolTip="{loc:Text Key=StashMessage}"/>
+   </DockPanel>
+   <TextBlock Text="{loc:Text Key=StashCreateHelp}" TextWrapping="Wrap" Margin="0,5,0,8" Foreground="{DynamicResource Theme.Muted}"/>
+  </StackPanel>
+  <Grid Grid.Row="1">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="280" MinWidth="200"/><ColumnDefinition Width="5"/><ColumnDefinition Width="*" MinWidth="400"/></Grid.ColumnDefinitions>
+   <DockPanel>
+    <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+     <CheckBox Content="{loc:Text Key=StashRestoreIndex}" IsChecked="{Binding RestoreIndex}" IsEnabled="{Binding CanEdit}" ToolTip="{loc:Text Key=StashRestoreHelp}"/>
+     <WrapPanel Margin="0,6,0,0">
+      <Button Content="{loc:Text Key=ActionTitleStashApply}" Command="{Binding ApplyCommand}" Margin="0,0,5,0" ToolTip="{loc:Text Key=StashApplyHelp}" ToolTipService.ShowOnDisabled="True"/>
+      <Button Content="{loc:Text Key=ActionTitleStashPop}" Command="{Binding PopCommand}" Margin="0,0,5,0" ToolTip="{loc:Text Key=StashPopHelp}"/>
+      <Button Content="{loc:Text Key=ActionTitleStashDrop}" Command="{Binding DropCommand}" ToolTip="{loc:Text Key=StashDropHelp}" ToolTipService.ShowOnDisabled="True"/>
+     </WrapPanel>
+    </StackPanel>
+    <ListBox ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" IsEnabled="{Binding CanEdit}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" AutomationProperties.Name="{loc:Text Key=Stashes}">
+     <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" TextWrapping="Wrap" ToolTip="{Binding Entry.Hash}" Padding="4,6"/></DataTemplate></ListBox.ItemTemplate>
+    </ListBox>
+   </DockPanel>
+   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}"/>
+   <DockPanel Grid.Column="2" Margin="6,0,0,0">
+    <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Comparisons}" SelectedItem="{Binding Comparison}" DisplayMemberPath="Label" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="{loc:Text Key=StashComparison}" Margin="0,0,0,5"/>
+    <TextBox DockPanel.Dock="Top" Text="{Binding Details, Mode=OneWay}" IsReadOnly="True" MaxHeight="65" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=StashDetails}"/>
+    <views:CommitFilesView DataContext="{Binding Files}"/>
+   </DockPanel>
+  </Grid>
+  <StackPanel Grid.Row="2" Margin="0,8,0,0">
+   <DockPanel>
+    <Button DockPanel.Dock="Right" Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Margin="6,0,0,0"/>
+    <Button DockPanel.Dock="Right" Content="{loc:Text Key=CommitRefresh}" Command="{Binding RefreshCommand}"/>
+    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
+   </DockPanel>
+   <TextBlock Text="{Binding Action.Status}" TextWrapping="Wrap" Margin="0,5" AutomationProperties.LiveSetting="Polite"/>
+   <Expander Header="{loc:Text Key=StashOperationOutput}"><StackPanel>
+    <TextBox Text="{Binding Action.RawOutput, Mode=OneWay}" IsReadOnly="True" MaxHeight="90" VerticalScrollBarVisibility="Auto"/>
+    <TextBox Text="{Binding Output, Mode=OneWay}" IsReadOnly="True" MaxHeight="60" VerticalScrollBarVisibility="Auto"/>
+   </StackPanel></Expander>
+  </StackPanel>
+ </Grid>
+</Window>

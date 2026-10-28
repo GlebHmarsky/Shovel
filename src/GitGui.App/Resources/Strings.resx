@@ -500,4 +500,43 @@ Git will discard the current commit's resolution changes and continue with the r
   <data name="RecoveryChanged" xml:space="preserve"><value>The operation or HEAD changed since it was displayed. Shovel will refresh its state. Review the new state before trying again.</value></data>
   <data name="RecoveryUnavailable" xml:space="preserve"><value>No supported operation is available for recovery. Refresh after external changes; use your existing Git tools for mailbox, ambiguous or oversized sequence state.</value></data>
   <data name="RecoveryPending" xml:space="preserve"><value>Git still has an operation in progress. Review the output and Local Changes, resolve and stage conflicts, then choose the next recovery action.</value></data>
+  <data name="ActionTitleStashCreate" xml:space="preserve"><value>Create stash</value></data>
+  <data name="ActionTitleStashApply" xml:space="preserve"><value>Apply</value></data>
+  <data name="ActionTitleStashPop" xml:space="preserve"><value>Pop</value></data>
+  <data name="ActionTitleStashDrop" xml:space="preserve"><value>Drop…</value></data>
+  <data name="StashMessage" xml:space="preserve"><value>Stash message (optional)</value></data>
+  <data name="StashIncludeUntracked" xml:space="preserve"><value>Include untracked files</value></data>
+  <data name="StashCreateHelp" xml:space="preserve"><value>Create saves staged and unstaged changes, then removes those changes from this worktree. Ignored files and submodule contents are excluded.</value></data>
+  <data name="StashRestoreIndex" xml:space="preserve"><value>Restore staged state</value></data>
+  <data name="StashRestoreHelp" xml:space="preserve"><value>Ask Git to restore the saved index as well as working files. This can fail when changes conflict.</value></data>
+  <data name="StashPopHelp" xml:space="preserve"><value>Apply the selected stash, then remove its entry only on success. Conflicts keep the stash.</value></data>
+  <data name="StashApplyHelp" xml:space="preserve"><value>Select an entry from a successfully loaded list to restore its changes and keep the saved stash. Wait for any current operation to finish.</value></data>
+  <data name="StashDropHelp" xml:space="preserve"><value>Select an entry from a successfully loaded list to remove its saved stash after confirmation. Wait for any current operation to finish.</value></data>
+  <data name="StashOperationOutput" xml:space="preserve"><value>Stash operation output (in memory; URL credentials redacted)</value></data>
+  <data name="StashComparison" xml:space="preserve"><value>Saved changes to inspect</value></data>
+  <data name="StashDetails" xml:space="preserve"><value>Stash hash and full message</value></data>
+  <data name="StashTracked" xml:space="preserve"><value>All tracked changes — saved worktree versus base</value></data>
+  <data name="StashStaged" xml:space="preserve"><value>Staged changes — saved index versus base</value></data>
+  <data name="StashUnstaged" xml:space="preserve"><value>Unstaged changes — saved worktree versus index</value></data>
+  <data name="StashUntracked" xml:space="preserve"><value>Saved untracked files</value></data>
+  <data name="StashRow" xml:space="preserve"><value>{0} — {1}
+{2:g}</value></data>
+  <data name="StashNotLoaded" xml:space="preserve"><value>Stashes will refresh after this window opens.</value></data>
+  <data name="StashLoading" xml:space="preserve"><value>Reading local stashes…</value></data>
+  <data name="StashRefreshing" xml:space="preserve"><value>Refreshing stashes; displayed entries may be stale.</value></data>
+  <data name="StashCount" xml:space="preserve"><value>Saved stashes: {0}. Select an entry to inspect its files and diffs.</value></data>
+  <data name="StashListLimit" xml:space="preserve"><value>The stash list exceeds this view's 1,000-entry limit. No partial list was loaded. Manage older entries with your existing Git tools.</value></data>
+  <data name="StashMessageLimit" xml:space="preserve"><value>Use a stash message of at most 4 KiB without null characters.</value></data>
+  <data name="StashInvalid" xml:space="preserve"><value>This entry is not a supported stash commit. Its contents have not been changed.</value></data>
+  <data name="StashNeedsCommit" xml:space="preserve"><value>Create an initial commit before creating a stash.</value></data>
+  <data name="StashChanged" xml:space="preserve"><value>The stash list changed. Refresh and review the selected entry before trying again.</value></data>
+  <data name="StashInspectFailed" xml:space="preserve"><value>Git finished, but the resulting conflict state could not be checked. The stash was retained. Review the output and refresh Local Changes before proceeding.</value></data>
+  <data name="StashApplyFailed" xml:space="preserve"><value>Application did not complete cleanly. The stash was retained; some files may have been restored. Review Git output and Local Changes. Resolve files externally and stage resolutions in Local Changes; there is no stash Continue/Abort sequence. Do not blindly apply again.</value></data>
+  <data name="StashAppliedRetained" xml:space="preserve"><value>The stash was applied, but its entry was not confirmed removed. Refresh the list and review the output. Do not apply again; Drop the saved entry only after verifying your files.</value></data>
+  <data name="StashPopped" xml:space="preserve"><value>The stash was applied and its saved entry removed.</value></data>
+  <data name="StashConfirmDrop" xml:space="preserve"><value>Drop {1} in {0}?
+Commit: {2}
+Message: {3}
+
+This removes the saved entry without applying it. Its contents may become unrecoverable after Git cleanup. Working files are not changed. No complete undo is promised.</value></data>
 </root>

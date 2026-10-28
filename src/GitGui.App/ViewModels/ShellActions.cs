@@ -49,6 +49,7 @@ public sealed partial class ShellViewModel
     private void InitializeActions(GitActions? actions)
     {
         _actions = actions;
+        InitializeStashes();
         ContinueCommand = new(() => OpenAction(GitAction.Continue), () => CanRecover);
         SkipCommand = new(() => OpenAction(GitAction.Skip), () => CanRecover && CanSkipRecovery);
         AbortCommand = new(() => OpenAction(GitAction.Abort), () => CanRecover);

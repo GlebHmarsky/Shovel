@@ -5,7 +5,7 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort }
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop }
 public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch, Recovering }
 public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
@@ -17,6 +17,7 @@ public sealed record ActionOptions(GitAction Action, string Branch = "", string 
 public sealed class GitActionException(string code) : Exception(code) { public string Code { get; } = code; }
 public sealed record ActionResult(ProcessOutcome Outcome, int? ExitCode, string Output)
 {
+    public string? MessageCode { get; init; }
     public RepositoryOperation Operation { get; init; }
     public bool HasConflicts { get; init; }
     public bool Success => Outcome == ProcessOutcome.Exited && ExitCode == 0 && Operation == RepositoryOperation.None && !HasConflicts;
