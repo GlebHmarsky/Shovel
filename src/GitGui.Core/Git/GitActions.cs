@@ -23,7 +23,7 @@ public sealed record ActionResult(ProcessOutcome Outcome, int? ExitCode, string 
 }
 
 /// <summary>Explicit user actions. Never used by startup/history reads. No persistent raw output.</summary>
-public sealed class GitActions(IProcessRunner runner, RepositoryReader reader, IRepositoryIdentityProvider identities)
+public sealed partial class GitActions(IProcessRunner runner, RepositoryReader reader, IRepositoryIdentityProvider identities)
 {
     public Task<ActionContext> PrepareAsync(GitInstallation git, string path, CancellationToken token) => Task.Run(async () =>
     {

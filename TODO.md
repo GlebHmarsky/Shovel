@@ -4,12 +4,12 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.12.1 complete: shared dark surfaces and control states; 119 passing checks, reviewed offscreen renders and matching ignored preview. [Evidence](docs/roadmap.md#dark-theme-first-pass-2026-10-28). Local Changes remains read-only. Next functional work: selected-file diffs, then staging/unstaging. Theme polish stays P2.
+0.13.0 complete: modal Local Changes/Commit over retained history; real file diffs, file/all staging and unstaging, commit/amend and Shift Commit and Push. 129 checks and matching local preview; no interactive launch. Next focused increment is selected-hunk staging below.
+
 
 ## Next priorities
 
-- [ ] **P1 — Working-tree/index file diffs.** Read the selected Local Changes entry against the correct side; bounded binary/EOL/large-file handling, filter policy and stale-content checks.
-- [ ] **P1 — Stage/unstage files.** Real targeted index changes with reinspection and preserved selection; hunks/commit follow separately.
+- [ ] **P1 — Stage/unstage selected hunks.** Reuse the diff view; verify index/worktree baselines, reject stale patches and preserve unrelated edits. File-level actions already work.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
 - [ ] **P1 — Extend performance fixtures.** Merge-heavy/million-commit cases, cancellation under load, app/child peak memory, five-minute idle CPU; retain F1e baseline.
@@ -20,9 +20,10 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Backlog
 
-- [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, native title-bar integration where supported, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay file diffs/staging.
+- [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, native title-bar integration where supported, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
+- [ ] **P2 — Diff/editor extensions.** Side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
 
-- [ ] **P1 — Local MVP.** Init, file/hunk stage/unstage, commit/amend, branch deletion/tracking, stashes; real hooks/signing and failure recovery.
+- [ ] **P1 — Local MVP remainder.** Init, branch deletion/tracking and stashes; broaden signing and failure recovery. Hunk staging is the next focused increment above.
 - [ ] **P1 — Network MVP.** Clone/remote editing, valid sequence recovery and visible auth/input; Pull rebase/merge/auto-stash is in 0.11.0.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor; disposable destructive fixtures.
@@ -36,6 +37,8 @@ Updated 2026-10-28. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.13.0 / 2026-10-28:** modal commit workspace, colored/numbered diffs/binary sizes, file/all stage/unstage, commit/amend/Shift push, retained drafts and honest partial-success recovery. 129 checks, normal/minimum offscreen review, 16 preview checksums/seven matching tested files. [Evidence](docs/roadmap.md#modal-commit-workspace-2026-10-28).
 
 - [x] **0.12.1 / 2026-10-28:** shared dark palette/styles for workspace and existing dialogs, high-contrast mapping, documented state conventions. 119 checks; normal/minimum offscreen review; 16 preview checksums/seven matching tested files. No desktop launch.
 

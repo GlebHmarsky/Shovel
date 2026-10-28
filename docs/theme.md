@@ -20,6 +20,8 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 | SelectionText | #FFFFFF | Text on selection/interaction fills |
 | Accent / Focus | #F08060 / #7BB7F5 | Selected lower tab/default-action outline; keyboard focus |
 | AuthorPeer | #FFF2A8 | Existing same-author relationship, never the selected row |
+| DiffAddedBackground / DiffAddedText | #213A2B / #B8E6C4 | Added lines, accompanied by + and new line number |
+| DiffRemovedBackground / DiffRemovedText | #46252A / #FFB8BD | Removed lines, accompanied by − and old line number |
 
 ## State rules
 
@@ -27,6 +29,7 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 - Repository tabs: quiet inactive surface, lighter selected tab, hover feedback and a keyboard focus outline. Lower tabs: orange text plus underline; selection remains identifiable without color alone.
 - Buttons: raised or flat toolbar base, hover/pressed feedback, visible keyboard focus/default action outline. Disabled text and icon color override interaction text; retain actual command availability and its localized reason. No hover animations or theme-driven background work.
 - Rows: blue active selection, gray inactive selection, white selected text. Same-author yellow remains limited to unselected peers; graph/ref semantics and accessible relationships remain unchanged. Selection and keyboard behavior belong to native WPF controls.
+- Diff rows follow the same selection rules. Unselected additions/removals use shared green/red roles; hunk headings use Raised/Focus. Markers, old/new line numbers and localized accessible descriptions remain meaningful when high contrast removes the colors. No per-file ad hoc palette.
 - Editable fields, lists, menus, checkboxes/radio buttons and scrollbars share the palette. Use template parts required by WPF; do not replace commands, editable text, focus/selection logic or virtualization with visual-only imitations.
 - Normal/secondary text, selected text and accent text must meet 4.5:1 against their intended dark surfaces. Disabled text is intentionally lower contrast and never the only way to discover why an action is unavailable. Focus uses an outline, lower-tab selection an underline, checked options a mark.
 - Windows high contrast overrides semantic colors with system window/text/selection/disabled brushes and suppresses peer color. Never change OS settings. OS keyboard/screen-reader/high-contrast/DPI behavior still needs authorized desktop validation.

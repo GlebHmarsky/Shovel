@@ -1,6 +1,6 @@
 # Architecture and distribution
 
-Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.12.1: read-only Local Changes, prompt dialogs, default Pull-Rebase/optional Merge and auto-stash, shell-owned execution. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
+Updated 2026-10-28. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.13.0: modal Local Changes/diffs/file staging/commit/amend/Commit and Push, prompt options and default Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
 ## Product identity
 
@@ -21,6 +21,7 @@ Historical platform baseline: x64 Windows 10 22H2/11, ARM64 later, no x86 plan; 
 | App/Views/MainWindow.xaml(.cs) | Layout/view geometry/MMB dispatch |
 | App/Views/GitActionWindow.xaml; ViewModels/GitActionViewModel.cs | Options close on submission; one task with phase/output/cancel/reinspection |
 | App/Views/AuthenticationWindow.xaml | Masked/confirm/informational owned prompts |
+| App/Views/CommitWindow.xaml(.cs); ViewModels/CommitViewModel.cs; ShellChanges.cs | Owned commit workspace, Shift variants, per-tab cache/draft, diff selection/cancellation and background count |
 | App/ViewModels/ShellActions.cs | Preparation/admission/reconciliation |
 | App/ViewModels/ | Shell/tab/row presentation and command/observable bases |
 | App/Views/CommitGraphCell.cs | Draw precomputed segments for realized rows |
@@ -30,6 +31,7 @@ Historical platform baseline: x64 Windows 10 22H2/11, ARM64 later, no x86 plan; 
 | Core/Settings; Diagnostics | Schema-4 store; typed bounded events/stage timings |
 | Core/Git/RepositoryReader.cs; CommitHistory.cs | Discovery/metadata; ref snapshots/paged NUL parser |
 | Core/Git/GitActions.cs; CommitGraph.cs | Command plans/revalidation/shared lock; parent lanes/cursors |
+| Core/Git/LocalChanges.cs; FileDiff.cs; WorkingCopyActions.cs | NUL status and bounded diff reads; observed index/context and serialized file/commit actions |
 | Core/Processes/ | Typed runner request/result/contracts |
 | ProcessHost/ | Native Windows runner/jobs/filesystem identity; AskPassSession/Client/Protocol |
 | AskPass/ | Console-free Shovel.AskPass.exe protocol helper |
@@ -98,7 +100,7 @@ Tab context menu passes placement RepositoryTab to parameterized commands. Code-
 
 ### Deferred execution work
 
-Status is implemented below. File diffs still need literal pathspecs and bounded content without external diff/textconv/lazy fetch. Broader browser/signing/interactive-hook/editor/tools need visible input and tracked lifecycle; do not silently bypass hooks. F2a provides serialization/revalidation/reinspection, F2b askpass. These dependencies apply to those workflows, not a blanket prohibition on other requests.
+Status and working-copy diffs/actions are implemented below. Selected-commit files and hunk staging remain deferred. Broader browser/signing/interactive-hook/editor/tools need visible input and tracked lifecycle; do not silently bypass hooks. F2a provides serialization/revalidation/reinspection, F2b askpass. These dependencies apply to those workflows, not a blanket prohibition on other requests.
 
 ## Authentication bridge (F2b, 0.9.1)
 
@@ -145,15 +147,23 @@ Writes: existing runner, 5 min/command, 1 MiB output; decode/redact off dispatch
 
 F2b supersedes cached-only auth. Core without broker stays noninteractive/strict known-host; custom core.sshCommand/unrecognized bundled layout rejected. Default transports file/http/https/ssh/git allowed, others denied unless explicit Git per-protocol permission overrides. Startup requests none. RefBadge reuses CommitRef.Upstream, no extra startup query; original vectors inherit row/system colors, preserve virtualization. No provider/avatar network assets.
 
-## Local Changes (0.12.0)
+## Local Changes and commit (0.13.0)
 
 `Core/Git/LocalChanges.cs` reads porcelain v2 with NUL boundaries, `--untracked-files=all`, explicit rename detection and optional `--ignored=matching`. Strict UTF-8/field-boundary parsing preserves spaces/control characters and consumes rename origins as the following NUL field. Index/worktree columns become separate rows; unmerged records stay exclusively Conflicted. Parsing/sorting and row preparation run off-thread. Invalid UTF-8, 4 MiB output or 20,000-entry limits fail visibly without publishing a partial list. Existing runner: 15 s/command; whole read chain 45 s.
 
 Status can compare file content through clean/process filters. Enumerate only matching effective filter key names with a bounded NUL config read, then override clean/process to empty and required to false for this command. Existing read arguments disable fsmonitor, optional index writes, paging, maintenance and lazy fetch. No configuration edits or external diff/textconv. `--ignore-submodules=dirty`/disabled submodule summary avoids nested content scans, showing pointer changes only. Filter normalization is deliberately not run: filter/LFS-sensitive paths may differ from ordinary status. These limits are disclosed in UI help. Config can change between commands; this is not isolation against a hostile concurrent configuration edit. Status is an observation, not an atomic snapshot of arbitrary external edits. [Official porcelain-v2 and background-status documentation](https://git-scm.com/docs/git-status), checked 2026-10-28.
 
-`ShellChanges` uses the existing single read chain, cancellation/generation admission and identity checks before/after reads. The view changes before a dispatcher yield; a new scan drains prior work, discovers Git if needed, inspects metadata and reads status without traversing history. Warm cache validates identity without Git. Cache stores at most three nonempty lists (bounded by per-read limits); no status preloads/polling. Failure/cancellation retains stale rows; replacement/inaccessible identity clears them. Per-tab workspace, selection and ignored preference are session-only. History page/selection/scroll remain independent. Refresh and stale activation use the active view; mutation reconciliation invalidates related caches and refreshes active status after history. Operation Details/Diagnostics can reveal their history detail pane without extra Git work.
+`ShellChanges` now opens an owned `CommitWindow`/`CommitViewModel`, leaving the history control mounted. Construction binds available rows/draft without Git/filesystem work; Loaded yields before `ReadWorkingCopyAsync`. One selected-tab status count runs after history publication, with its own cancellation/generation and identity-before/after checks; modal opening/tab switching cancels it. No polling or inactive-tab preload. At most three populated status caches, one active diff and one action; index/status limits above remain. Full modal contexts may survive in those caches; session drafts and bounded last output survive cache eviction until the tab closes (maximum 20 tabs).
 
-UI: virtualized read-only table with localized category/kind columns and counts, exact selected-path/rename metadata, optional ignored paths and retained error output. No mutation or content-diff affordances. Binary/EOL content is not read or previewed. Status scans of huge untracked trees may still time out; never reduce scope silently for speed.
+`WorkingCopyContext` binds identity, inspected HEAD/branch/operation, status, SHA-256 index content stamp, effective config hash and bounded prior/merge messages. Reads and row/diff preparation run on workers; mutation admission waits for active reads. The common-directory named mutex is shared with branch/network actions; recheck identity, HEAD, branch, sequence, index and config before executing. This detects many external changes but is not an atomic transaction with other clients; whole-file staging intentionally uses current disk contents. No global Git config changes or stale-lock deletion.
+
+File actions use global `--literal-pathspecs` with UTF-8 NUL pathspec files, never shell text. Stage uses `add --all` for selected paths; Unstage uses `restore --staged --source=<observed HEAD>`, or unborn `rm --cached --ignore-unmatch -r -f` (index only, preserves working files). Rename origins join the path set when appropriate; ignored files are excluded. Explicit add honors clean/LFS filters. Commit uses a bounded UTF-8 message file, `--cleanup=strip`, optional `--amend`, closed stdin and no requested editor; hooks/signing remain enabled. Unresolved index blocks commit, pending resolved merge is supported, other sequences rejected. Amend confirms the actual observed tip in App. Temporary message/pathspec files are deleted in finally; no repository cleanup. [add](https://git-scm.com/docs/git-add), [restore](https://git-scm.com/docs/git-restore), [commit](https://git-scm.com/docs/git-commit), checked 2026-10-28.
+
+`FileDiff.cs` selects HEAD→index (`diff --cached <hash>`), index→worktree (`diff`) or empty→untracked (`diff --no-index`). Explicit `--no-ext-diff --no-textconv --no-color`, filter overrides, no lazy fetch, pointer-only submodules. A NUL numstat read identifies binary/add/remove counts; `cat-file -s` uses status object IDs and worktree FileInfo supplies byte sizes. Strict UTF-8 patch parsing produces typed hunk/context/add/remove lines and old/new numbers. Combined conflict diff remains raw combined text with an explicit notice, not a conflict editor. Ignore-whitespace and whole-file context change real reads. Caps: 2 MiB patch, 20,000 lines, 16,384 characters/line; fail visibly instead of displaying partial data. Reparse paths/directories and unsupported encoding have summaries. Index digest/file size+mtime are checked again before binding; same-size/same-mtime external edits remain a detection limit. [diff](https://git-scm.com/docs/git-diff), checked 2026-10-28.
+
+One status chain and one latest-selection diff chain per dialog; selection changes cancel/drain prior diff, generations reject old results, repeated bound selection does not restart the read. WPF grids recycle rows; selected list/side and draft persist for the session. Failure retains rows but removes write readiness. Refresh/Cancel share one control; 250 ms active-only output/duration timer, bounded redacted in-memory output, no content diagnostic logging. Message maximum 64 KiB UTF-8; UI text fields also have character bounds. Closing cancels/drains and reinspects after writes, then shell refreshes related history. Dialog opening itself never fetches. Commit and Push performs a real commit first, revalidates its new tip/config/identity, then uses existing normal Push/askpass to the configured upstream. Missing upstream disables that variant; push failure does not retry/undo a successful commit. Successful Git commit with failed tip inspection clears the draft and reports uncertainty without pushing.
+
+Raw action output is <=1 MiB per command, combined commit/push retained output <=2 MiB; at most 20 open-tab session drafts/results. A cancelled process may already have changed Git state; reconciliation uses a fresh token, never replay/rollback. Existing browser/signing/interactive-hook limitations remain: closed terminal input, visible running/cancel/timeout, no claim to detect arbitrary helper input waits. Status scans of huge trees can still time out. No image preview, side-by-side diff, hunk staging, ignored-file UI, discard or in-app conflict editor in this release.
 
 ## Local preview delivery (implemented)
 

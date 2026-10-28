@@ -353,4 +353,80 @@ Git submodule state: {4}</value></data>
   <data name="ChangesFileDetails" xml:space="preserve"><value>File details</value></data>
   <data name="ChangesReadOutput" xml:space="preserve"><value>Read output</value></data>
   <data name="ChangesLimits" xml:space="preserve"><value>Read-only snapshot; Refresh and Cancel are under Repository. Up to 4 MiB / 20,000 entries; exceeding a limit shows an error, not a partial result. Configured clean filters are suppressed. Submodule pointers are shown; nested worktree changes are not scanned. Ignored directories may be collapsed.</value></data>
+  <data name="CommitWorkspace" xml:space="preserve"><value>Commit workspace</value></data>
+  <data name="CommitWindowTitle" xml:space="preserve"><value>Commit — {0}</value></data>
+  <data name="CommitOpen" xml:space="preserve"><value>Commit ({0})</value></data>
+  <data name="CommitOpenUnknown" xml:space="preserve"><value>Commit (…)</value></data>
+  <data name="CommitOpenHelp" xml:space="preserve"><value>Open local changes, diffs and the commit editor. Count is the last local snapshot; a partly staged file counts once.</value></data>
+  <data name="CommitWaitForRead" xml:space="preserve"><value>Wait for the local snapshot or current operation. Refresh to retry a failed read.</value></data>
+  <data name="CommitStale" xml:space="preserve"><value>The repository or index changed. Refresh before retrying. Whole-file staging uses current on-disk contents.</value></data>
+  <data name="CommitInvalidPath" xml:space="preserve"><value>This path cannot be used as a file within the current worktree.</value></data>
+  <data name="CommitMessageRequired" xml:space="preserve"><value>Enter a commit subject.</value></data>
+  <data name="CommitMessageLimit" xml:space="preserve"><value>The complete commit message must fit within 64 KiB of UTF-8 text.</value></data>
+  <data name="CommitUnresolved" xml:space="preserve"><value>Resolve and stage all conflicted files before committing.</value></data>
+  <data name="CommitNothingStaged" xml:space="preserve"><value>Stage changes before committing.</value></data>
+  <data name="CommitReady" xml:space="preserve"><value>Commit the staged snapshot. Hold Shift to commit and push to the displayed upstream.</value></data>
+  <data name="CommitDraftHelp" xml:space="preserve"><value>Message retained while this repository tab remains open.</value></data>
+  <data name="CommitAmendTarget" xml:space="preserve"><value>Replace commit {0}. This rewrites its hash.</value></data>
+  <data name="CommitAmend" xml:space="preserve"><value>Amend</value></data>
+  <data name="CommitAmendHelp" xml:space="preserve"><value>Replace the current commit with the staged snapshot and message. A confirmation identifies the commit before execution.</value></data>
+  <data name="CommitConfirmAmend" xml:space="preserve"><value>Replace commit {1} on {0}?
+
+This rewrites its hash and may require coordinating published history. Reflog can help recover an earlier commit, but does not restore all uncommitted work. Shovel will not force-push.</value></data>
+  <data name="CommitUnstagedCount" xml:space="preserve"><value>Unstaged ({0})</value></data>
+  <data name="CommitStagedCount" xml:space="preserve"><value>Staged ({0})</value></data>
+  <data name="CommitNoUnstaged" xml:space="preserve"><value>No unstaged files in the available snapshot.</value></data>
+  <data name="CommitNoStaged" xml:space="preserve"><value>No staged files in the available snapshot.</value></data>
+  <data name="CommitStage" xml:space="preserve"><value>Stage</value></data>
+  <data name="CommitStageAll" xml:space="preserve"><value>Stage all</value></data>
+  <data name="CommitUnstage" xml:space="preserve"><value>Unstage</value></data>
+  <data name="CommitUnstageAll" xml:space="preserve"><value>Unstage all</value></data>
+  <data name="CommitAndPush" xml:space="preserve"><value>Commit and Push</value></data>
+  <data name="CommitStageHelp" xml:space="preserve"><value>Stage selected files, including their current edits. Hold Shift to stage all listed unstaged/untracked/conflicted files. Ignored files are excluded.</value></data>
+  <data name="CommitUnstageHelp" xml:space="preserve"><value>Unstage selected files without changing worktree files. Hold Shift to unstage all listed staged files.</value></data>
+  <data name="CommitNoUpstream" xml:space="preserve"><value>No configured upstream. Use Push to set one before Commit and Push.</value></data>
+  <data name="CommitPushTarget" xml:space="preserve"><value>Push to {0}/{1}</value></data>
+  <data name="CommitPhaseStage" xml:space="preserve"><value>Staging files</value></data>
+  <data name="CommitPhaseUnstage" xml:space="preserve"><value>Unstaging files</value></data>
+  <data name="CommitPhaseCommit" xml:space="preserve"><value>Committing; configured hooks and signing may run</value></data>
+  <data name="CommitSucceededStage" xml:space="preserve"><value>Files staged.</value></data>
+  <data name="CommitSucceededUnstage" xml:space="preserve"><value>Files unstaged; worktree files preserved.</value></data>
+  <data name="CommitSucceededCommit" xml:space="preserve"><value>Commit command completed. Review history before retrying if reinspection fails.</value></data>
+  <data name="CommitCreated" xml:space="preserve"><value>Created commit {0}.</value></data>
+  <data name="CommitCreatedPushed" xml:space="preserve"><value>Created and pushed commit {0}.</value></data>
+  <data name="CommitCreatedPushFailed" xml:space="preserve"><value>Commit {0} was created, but push did not complete: {1} Use Push to retry; do not repeat the commit.</value></data>
+  <data name="CommitSubject" xml:space="preserve"><value>Commit subject</value></data>
+  <data name="CommitDescription" xml:space="preserve"><value>Commit description</value></data>
+  <data name="CommitRefreshHelp" xml:space="preserve"><value>Refresh local changes when idle, or cancel the current read/operation. Cancellation does not undo changes.</value></data>
+  <data name="CommitResizeLists" xml:space="preserve"><value>Resize staged and unstaged lists</value></data>
+  <data name="CommitResizeDiff" xml:space="preserve"><value>Resize file lists and diff</value></data>
+  <data name="CommitResizeMessage" xml:space="preserve"><value>Resize diff and commit message</value></data>
+  <data name="DiffChooseFile" xml:space="preserve"><value>Select a file to view its diff.</value></data>
+  <data name="DiffLoading" xml:space="preserve"><value>Reading diff…</value></data>
+  <data name="DiffView" xml:space="preserve"><value>File diff</value></data>
+  <data name="DiffOldLine" xml:space="preserve"><value>Old line</value></data>
+  <data name="DiffNewLine" xml:space="preserve"><value>New line</value></data>
+  <data name="DiffIgnoreWhitespace" xml:space="preserve"><value>Ignore whitespace</value></data>
+  <data name="DiffWholeFile" xml:space="preserve"><value>Whole file</value></data>
+  <data name="DiffPreviousHunk" xml:space="preserve"><value>Previous change</value></data>
+  <data name="DiffNextHunk" xml:space="preserve"><value>Next change</value></data>
+  <data name="DiffAccessible" xml:space="preserve"><value>{0}; old line {1}; new line {2}; {3}</value></data>
+  <data name="DiffLineMetadata" xml:space="preserve"><value>Diff metadata</value></data>
+  <data name="DiffLineHunk" xml:space="preserve"><value>Change block</value></data>
+  <data name="DiffLineContext" xml:space="preserve"><value>Unchanged</value></data>
+  <data name="DiffLineAdded" xml:space="preserve"><value>Added</value></data>
+  <data name="DiffLineRemoved" xml:space="preserve"><value>Removed</value></data>
+  <data name="DiffSummaryText" xml:space="preserve"><value>{2:N0} added · {3:N0} removed · {0} B → {1} B</value></data>
+  <data name="DiffSummaryBinary" xml:space="preserve"><value>Binary file · {0} B → {1} B. Text diff is unavailable.</value></data>
+  <data name="DiffSummarySubmodule" xml:space="preserve"><value>Submodule pointer change; nested worktree files are not compared.</value></data>
+  <data name="DiffSummaryDirectory" xml:space="preserve"><value>Directory or nested repository; select an individual file for a text diff.</value></data>
+  <data name="DiffSummaryUnsupportedPath" xml:space="preserve"><value>A linked/reparse path cannot be previewed here.</value></data>
+  <data name="DiffSummaryUnsupportedEncoding" xml:space="preserve"><value>Text is not valid UTF-8; no decoded preview is shown. {0} B → {1} B.</value></data>
+  <data name="DiffSummaryTooLarge" xml:space="preserve"><value>Diff exceeds the preview limit. {0} B → {1} B. No partial text is presented.</value></data>
+  <data name="DiffConflict" xml:space="preserve"><value>Unmerged file: combined Git diff. Resolve with your editor, then Stage the resolved file.</value></data>
+  <data name="DiffNoWhitespaceChanges" xml:space="preserve"><value>No changes remain with whitespace ignored.</value></data>
+  <data name="DiffNoTextChanges" xml:space="preserve"><value>No text changes; metadata, mode or line-ending normalization may differ.</value></data>
+  <data name="DiffLimits" xml:space="preserve"><value>Unified Git diff; Ctrl+C copies selected rows. At most 2 MiB, 20,000 lines and 16,384 characters per line. External diff, text conversion and clean/process filters are suppressed for reads. Staging uses configured filters. Binary sizes compare stored blobs with on-disk worktree bytes; submodules show pointers only.</value></data>
+  <data name="CommitSucceededUnknownTip" xml:space="preserve"><value>Git completed the commit, but its new hash could not be read. No push was attempted. Refresh and inspect history before doing anything else.</value></data>
+  <data name="CommitRefresh" xml:space="preserve"><value>Refresh</value></data>
 </root>

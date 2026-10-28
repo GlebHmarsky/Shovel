@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.12.1**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.13.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -27,17 +27,23 @@ Pull shows **behind**, Push **ahead**, comparing the configured upstream from th
 
 Same-author peers use light-yellow text, matching exact raw name/email ordinally and case-sensitively, without mailmap/committer. Nonblank email required; blank name matches only blank name. Selected row keeps selection colors; unrelated text stays white on dark history, graph/ref colors independent. High contrast uses system colors; accessible text explains the relation.
 
-## Local Changes (0.12.0)
+## Local Changes / Commit (0.13.0)
 
-Select Local changes in the sidebar for a read-only table ordered by Conflicted, Staged, Unstaged, Untracked and optional Ignored. A partially staged path appears independently in both groups. Rows show change kind and exact relative path; selected-file details retain rename origins. Control characters are escaped in rows and preserved in details. No staging, commit, discard or diff controls are claimed in this increment.
+**Confirmed:** the toolbar's **Commit (count)** and sidebar Local changes open the same resizable owned modal, leaving history/page/selection visible behind it. A partially staged path counts once. Count is a local snapshot, read only for the selected tab after history is published, then refreshed with history or after actions; it can become stale after external edits. A pending/failed count is unknown, never a fabricated zero. No polling or inactive-tab preload. This replaces the embedded Local Changes workspace and its no-startup-status rule.
 
-The view switches synchronously, then scans off-thread after dispatcher layout. First load shows a loading state; later visits show the tab's cached rows/selection immediately. Repository → Refresh rereads after external edits; Cancel stops the read, retaining explicitly stale rows. Tab/window activation revalidates snapshots older than 30 seconds; there is no polling, startup status scan or preload of other tabs. Workspace choice is per-tab for the session; restart still opens history. Empty, loading, failed/cancelled/stale and conflicted states are explicit; Read output preserves Git errors. Limits fail visibly rather than silently truncating.
+Left: unstaged/untracked/conflicted files above staged files, each with one action button. Select files (Ctrl/Shift multiselect) for **Stage** or **Unstage**; hold Shift while activating those same buttons for **Stage all** / **Unstage all**. Ignored files are excluded; there is no force-add/discard control. Partially staged files appear in both lists with independent diffs. Rename origins and exact paths remain in help; control characters are escaped in visible rows.
 
-Show ignored paths opts into ignored entries (Git may collapse ignored directories). Submodules show changed pointers only, not nested modified/untracked files. Configured clean/process filters are suppressed for automatic read safety, so filter-managed content can differ from ordinary Git status; this is not full LFS/filter parity. [Architecture](architecture.md#local-changes-0120) owns read safeguards and bounds. File details are metadata, not content diffs.
+Right: numbered colored unified diff above subject/description and **Amend**. Added/removed markers and accessible descriptions supplement colors; selection retains normal styling. Ignore whitespace, bounded whole-file context and previous/next hunk navigation are real read options. Binary files show old/new byte sizes; submodules show pointers only. Oversized, non-UTF-8, linked paths, nested directories, unchanged content and missing objects have explicit notices; no implicit network retrieval. Image previews, side-by-side diff, hunk staging and conflict editing remain deferred. Automatic reads suppress filters/external diff/textconv; filter/LFS output can differ from normal Git. Explicit staging honors configured clean filters.
+
+**Commit** records the staged index with the entered message. **Amend** can preload the previous message when the draft is empty; execution confirms the actual branch/hash because it rewrites that tip. Hold Shift for **Commit and Push**, using the attached branch's configured upstream; a missing upstream disables that variant with a reason. No force push. Push failure retains the new commit and reports the two outcomes separately. Conflicted index entries block commit; after resolving files externally and staging them, a pending merge can be committed here. Other sequence recovery still uses existing tools.
+
+Opening binds cached rows/draft immediately, then reads after layout; it never fetches. First load, clean lists, active reads/actions, stale rows, failures and conflicts remain distinct. Refresh/Cancel is one modal control. Failed/cancelled reads keep useful rows but disable writes until a fresh context is available. New selection cancels obsolete diff work. Stage/commit progress, elapsed time and retained output stay in the modal and top-center summary; closing cancels/drains/reinspects, without claiming undo. History refreshes after the modal closes following a mutation.
+
+Draft, file selection and last output are session-only per tab; successful commit clears the draft, failed commit retains it. Closing the tab/app discards that draft; no crash-safe draft persistence yet. [Architecture](architecture.md#local-changes-and-commit-0130) owns bounds and execution details.
 
 ## Explicit branch and remote workflows (0.8.0)
 
-Branch split button defaults to New branch (name, start reference, optional checkout); arrow lists local branches for switching. Start points bind observed commits. New branches do not inherit tracking; Push can set upstream. Unborn repositories need an initial commit through existing tools.
+Branch split button defaults to New branch (name, start reference, optional checkout); arrow lists local branches for switching. Start points bind observed commits. New branches do not inherit tracking; Push can set upstream. The commit editor can create an initial commit in an unborn repository.
 
 **Confirmed 2026-10-28:** operation dialogs open fully editable from the tab's local snapshot, with no Git queries, remote checks or preparation on opening. Pull, Fetch, Push and branch options are fixed-size, with only Close in the title bar (no resizing/minimize/maximize); long content scrolls. Remote names include configured but unfetched remotes; branch choices reflect locally known refs. Use explicit Fetch to discover new remote branches, or Refresh after external local configuration changes. Target help explains that execution uses the named remote's current configuration. Fetch chooses one/all remotes; Push chooses source, remote and destination with unchecked all-tags/set-upstream options.
 
@@ -63,11 +69,11 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 **Confirmed 2026-10-28:** default dark client area inspired by the supplied screenshot: distinct chrome, repository tabs, sidebar, history and details surfaces. Shared hover/pressed/disabled/selection/focus states extend to existing dialogs; lower tabs use an orange underline. [Theme](theme.md) owns colors and conventions. Further polish is low-priority; OS title bars/pickers/message boxes remain native and light-mode selection is deferred.
 
-Current frame: File/View/Repository/Window/Help; Open/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; Local changes/All Commits sidebar navigation; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
+Current frame: File/View/Repository/Window/Help; Open/Commit/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; Local changes modal entry/All Commits sidebar; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 
-Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Pull rebase/merge/auto-stash ship in 0.11.0. Diffs/staging, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
+Unfinished standalone Stash/Explorer/Terminal/Editor/Tools buttons, sidebar destinations and force options are omitted. Selected-commit files/diffs, other mutations/tools and in-app sequence recovery remain pending. Future controls ship with functionality. Filtering is revisited only when requested.
 
-**Proposed refinements:** separate History/Changes workspaces within this frame; Changes has staged/unstaged lists, diff and commit editor, with independent worktree view state. Single selection inspects; right-click targets clicked object while preserving a containing multiselection. Shared commands serve menus/toolbar/shortcuts. Compact owned operation dialogs restore focus; inspection/output can be non-modal; large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately.
+**Proposed refinements:** context menus target the clicked object while preserving a containing multiselection; shared commands serve menus/toolbar/shortcuts. Large rebase/merge editors show real plans/context. Dragging proposes an operation, never rewrites immediately. The previously proposed separate embedded Changes workspace is superseded by the confirmed modal design above.
 
 | Target workflow | Behavior and failure states |
 | --- | --- |

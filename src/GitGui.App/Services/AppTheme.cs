@@ -25,7 +25,7 @@ public sealed class AppTheme : IDisposable
             if (!highContrast) { resources[key] = palette[key]; continue; }
             resources[key] = key switch
             {
-                "Theme.Text" or "Theme.HistoryText" or "Theme.Muted" or "Theme.AuthorPeer" => SystemColors.WindowTextBrush,
+                "Theme.Text" or "Theme.HistoryText" or "Theme.Muted" or "Theme.AuthorPeer" or "Theme.DiffAddedText" or "Theme.DiffRemovedText" => SystemColors.WindowTextBrush,
                 "Theme.Disabled" => SystemColors.GrayTextBrush,
                 "Theme.ActiveSelection" or "Theme.Selected" or "Theme.Pressed" or "Theme.Hover" => SystemColors.HighlightBrush,
                 "Theme.SelectionText" => SystemColors.HighlightTextBrush,

@@ -13,6 +13,8 @@ public interface IUserInteraction
     string? ChooseRepository();
     string? ChooseGit();
     void ShowGitAction(GitActionViewModel model) { }
+    Task ShowCommitAsync(CommitViewModel model) => Task.CompletedTask;
+    bool ConfirmAmend(string branch, string hash) => false;
     void ShowActionError(string message) { }
     IAuthenticationSession? CreateAuthenticationSession(string context,
         Func<AuthenticationPrompt, CancellationToken, Task<AuthenticationAnswer?>> prompt, CancellationToken token) => null;
@@ -21,7 +23,14 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
-    private static Window Owner => Application.Current.MainWindow;
+    private static Window Owner => Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive) ?? Application.Current.MainWindow;
+    public Task ShowCommitAsync(CommitViewModel model)
+    {
+        new CommitWindow(model) { Owner = Owner }.ShowDialog();
+        return Task.CompletedTask;
+    }
+    public bool ConfirmAmend(string branch, string hash) => MessageBox.Show(Owner,
+        UiText.Format("CommitConfirmAmend", branch, hash), UiText.Get("CommitAmend"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     public void ShowGitAction(GitActionViewModel model)
     {
         var window = new GitActionWindow(model) { Owner = Owner };

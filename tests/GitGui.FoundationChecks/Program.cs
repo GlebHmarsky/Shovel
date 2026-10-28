@@ -23,7 +23,7 @@ internal static partial class Program
     {
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
-        _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() == "--measure-actions" ? "artifacts/action-benchmarks" : args.FirstOrDefault() is "--measure-history" or "--measure-large-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() == "--check-theme" ? "artifacts/theme-checks" : args.FirstOrDefault() == "--check-local" ? "artifacts/local-changes-checks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
+        _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() == "--measure-actions" ? "artifacts/action-benchmarks" : args.FirstOrDefault() is "--measure-history" or "--measure-large-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() == "--check-commit" ? "artifacts/commit-checks" : args.FirstOrDefault() == "--check-theme" ? "artifacts/theme-checks" : args.FirstOrDefault() == "--check-local" ? "artifacts/local-changes-checks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         if (args.FirstOrDefault() == "--measure-actions") { MeasureActions(); return 0; }
@@ -37,6 +37,11 @@ internal static partial class Program
         if (args.FirstOrDefault() == "--check-local")
         {
             var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(localOnly: true);
+            Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
+        }
+        if (args.FirstOrDefault() == "--check-commit")
+        {
+            var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(commitOnly: true);
             Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
         }
         RunCoreChecksAsync().GetAwaiter().GetResult();

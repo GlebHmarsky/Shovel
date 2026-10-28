@@ -36,9 +36,9 @@ public sealed partial class ShellViewModel : ObservableObject
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(OperationStatus)); } } }
     public bool CanNavigate => IsReady && !_stopping && !ActionOpen;
-    public string OperationStatus => IsActionRunning ? CurrentAction!.Summary :
+    public string OperationStatus => _commitModel is not null ? _commitModel.Summary : IsActionRunning ? CurrentAction!.Summary :
         ActionOpen ? UiText.Get(_preparingAction ? "ActionPreparing" : "ActionReviewing") :
-        IsBusy ? UiText.Format(_readingChanges ? "ChangesDuration" : _readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) :
+        IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) :
         HasAction ? CurrentAction!.Summary : UiText.Get("NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
     public string Status { get => _status; private set => Set(ref _status, value); }
@@ -68,7 +68,7 @@ public sealed partial class ShellViewModel : ObservableObject
         }
     }
     public string HistoryNotice => State?.Notice ?? UiText.Get("HistoryNotLoaded");
-    public bool IsHistory => !IsLocalChanges;
+    public bool IsHistory => true;
     private RepositoryTab? _selectedRepository;
     public RepositoryTab? SelectedRepository
     {
@@ -77,7 +77,7 @@ public sealed partial class ShellViewModel : ObservableObject
         {
             if (_selectedRepository == value || ActionOpen) return;
             HistoryViewChanging?.Invoke(this, EventArgs.Empty);
-            _operationCancellation?.Cancel(); _generation++;
+            _operationCancellation?.Cancel(); _generation++; CancelCountRead();
             _selectedRepository = value;
             if (value is not null) value.History.LastUse = ++_useCounter;
             Status = value?.History.Error is { Length: > 0 } error ? error : UiText.Get(value?.History.Page is null ? "HistoryNotLoaded" : "HistoryCheckingCached");
@@ -93,7 +93,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public void SaveHistoryScroll(double vertical, double horizontal)
     { if (State is { } state) { state.VerticalOffset = vertical; state.HorizontalOffset = horizontal; } }
     public string RepositoryTitle => SelectedRepository?.Label ?? UiText.Get("NoRepositorySelected");
-    public string AreaTitle => UiText.Get(IsLocalChanges ? "LocalChanges" : "AllCommits");
+    public string AreaTitle => UiText.Get("AllCommits");
     public SettingsLoadResult? LoadedSettings { get; private set; }
     private int _detailsIndex;
     public int DetailsIndex { get => _detailsIndex; set => Set(ref _detailsIndex, value); }
@@ -138,7 +138,8 @@ public sealed partial class ShellViewModel : ObservableObject
         FirstHistoryCommand = new(() => BeginInspection(SelectedRepository!, force: true, firstPage: true), () => CanRead && IsHistory && !IsBusy && State?.Page?.Cursor.Offset > 0);
         CancelCommand = new(() =>
         {
-            if (ActionOpen) CurrentAction?.Cancel();
+            if (_commitModel is not null) _commitModel.Cancel();
+            else if (ActionOpen) CurrentAction?.Cancel();
             else _operationCancellation?.Cancel();
         }, () => ActionOpen ? CurrentAction?.CanCancel == true : IsBusy);
         ChooseGitCommand = new(() =>
@@ -192,7 +193,6 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public void RefreshIfStale()
     {
-        if (IsLocalChanges) { if (CanRead && !IsBusy && DateTimeOffset.UtcNow - (ChangesState?.ReadAt ?? default) >= RefreshAge) BeginChanges(SelectedRepository!); return; }
         if (CanRead && !IsBusy && State?.Page is not null && DateTimeOffset.UtcNow - State.ValidatedAt >= RefreshAge)
             BeginInspection(SelectedRepository!);
     }
@@ -205,7 +205,7 @@ public sealed partial class ShellViewModel : ObservableObject
         var generation = ++_generation;
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         _operationCancellation = cancellation;
-        _readingChanges = false; _readingDivergence = false; _elapsed.Restart(); IsBusy = true; _timer.Start();
+        _readingDivergence = false; _elapsed.Restart(); IsBusy = true; _timer.Start();
         _activeOperation = InspectAsync();
 
         async Task InspectAsync()
@@ -349,6 +349,7 @@ public sealed partial class ShellViewModel : ObservableObject
                     { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); }
                     _readingDivergence = false; _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
                     Changed(nameof(OperationStatus)); PublishState();
+                    if (historyPublished && !_stopping && !_commitOpen) BeginCountRead(tab);
                 }
             }
             void RejectChangedIdentity()
@@ -423,7 +424,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
-    public void BeginShutdown() { _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
-    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); }
+    public void BeginShutdown() { _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
+    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _countTask; }
     public void ResumeAfterSaveFailure() { _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }

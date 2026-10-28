@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.0 — 2026-10-28
+
+- Open Local Changes as a resizable modal commit workspace over retained history. Add a Commit count after the selected tab's history is visible; opening binds available rows before asynchronous inspection, without polling other repositories.
+- Show unstaged/untracked/conflicted and staged lists beside a virtualized, numbered, colored unified diff. Include whitespace comparison, whole-file context within limits, hunk navigation and binary before/after byte sizes.
+- Implement selected-file stage/unstage and commit/amend. Hold Shift on the same buttons for Stage all, Unstage all and Commit and Push to the configured upstream. Preserve hooks, confirm amend's actual target, retain drafts on failure and report a successful commit separately from a failed push.
+- Revalidate identity/HEAD/config/index before writes, serialize related operations, drain cancellation and reinspect results. Keep bounded session drafts/output, stale rows, clear limits and shared dark/high-contrast styles. Hunk staging, image previews and an interactive conflict editor remain deferred.
+
 ## 0.12.1 — 2026-10-28
 
 - Apply a restrained dark client-area theme to menus/toolbar, repository tabs, sidebar, history/Local Changes, lower details tabs and existing operation/authentication dialogs. Distinct charcoal surfaces and orange lower-tab accents follow the supplied reference without copying assets.

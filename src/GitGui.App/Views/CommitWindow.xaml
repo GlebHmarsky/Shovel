@@ -1,0 +1,116 @@
+<Window x:Class="GitGui.App.Views.CommitWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:loc="clr-namespace:GitGui.App.Localization" xmlns:git="clr-namespace:GitGui.Core.Git;assembly=GitGui.Core"
+ Title="{Binding Title}" Width="1200" Height="800" MinWidth="900" MinHeight="620" WindowStartupLocation="CenterOwner"
+ ShowInTaskbar="False" Icon="/Shovel;component/Assets/Shovel.ico" FlowDirection="{x:Static loc:UiText.Direction}"
+ Background="{DynamicResource Theme.Panel}" Foreground="{DynamicResource Theme.Text}" FontFamily="Segoe UI" FontSize="13"
+ UseLayoutRounding="True" AutomationProperties.AutomationId="CommitWindow">
+ <Window.Resources>
+  <BooleanToVisibilityConverter x:Key="Visible"/>
+  <Style x:Key="FileTable" TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+   <Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="IsReadOnly" Value="True"/>
+   <Setter Property="CanUserAddRows" Value="False"/><Setter Property="CanUserDeleteRows" Value="False"/><Setter Property="CanUserSortColumns" Value="False"/>
+   <Setter Property="CanUserReorderColumns" Value="False"/><Setter Property="CanUserResizeRows" Value="False"/>
+   <Setter Property="HeadersVisibility" Value="None"/><Setter Property="RowHeaderWidth" Value="0"/><Setter Property="RowHeight" Value="26"/>
+   <Setter Property="SelectionMode" Value="Extended"/><Setter Property="SelectionUnit" Value="FullRow"/>
+   <Setter Property="EnableRowVirtualization" Value="True"/><Setter Property="EnableColumnVirtualization" Value="True"/>
+   <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/><Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
+   <Setter Property="RowStyle"><Setter.Value><Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}"><Setter Property="ToolTip" Value="{Binding Details}"/><Setter Property="AutomationProperties.Name" Value="{Binding Details}"/></Style></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="FileText" TargetType="TextBlock"><Setter Property="Margin" Value="6,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style>
+  <Style x:Key="DiffText" TargetType="TextBlock"><Setter Property="Margin" Value="5,0"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+  <Style x:Key="DiffRow" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+   <Setter Property="AutomationProperties.Name" Value="{Binding Accessibility}"/>
+   <Style.Triggers>
+    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Added}"/><Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="False"/></MultiDataTrigger.Conditions>
+     <Setter Property="Background" Value="{DynamicResource Theme.DiffAddedBackground}"/><Setter Property="Foreground" Value="{DynamicResource Theme.DiffAddedText}"/>
+    </MultiDataTrigger>
+    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Removed}"/><Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="False"/></MultiDataTrigger.Conditions>
+     <Setter Property="Background" Value="{DynamicResource Theme.DiffRemovedBackground}"/><Setter Property="Foreground" Value="{DynamicResource Theme.DiffRemovedText}"/>
+    </MultiDataTrigger>
+    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Hunk}"/><Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="False"/></MultiDataTrigger.Conditions>
+     <Setter Property="Background" Value="{DynamicResource Theme.Raised}"/><Setter Property="Foreground" Value="{DynamicResource Theme.Focus}"/>
+    </MultiDataTrigger>
+   </Style.Triggers>
+  </Style>
+ </Window.Resources>
+ <Grid Background="{DynamicResource Theme.Panel}">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="10,6">
+   <Button DockPanel.Dock="Right" Content="{Binding RefreshLabel}" Command="{Binding RefreshCommand}" Margin="8,0,0,0" ToolTip="{loc:Text Key=CommitRefreshHelp}"/>
+   <TextBlock Text="{Binding RepositoryLabel}" TextTrimming="CharacterEllipsis" ToolTip="{Binding RepositoryLabel}" VerticalAlignment="Center" FlowDirection="LeftToRight"/>
+  </DockPanel>
+  <Grid Grid.Row="1">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="340" MinWidth="250"/><ColumnDefinition Width="5"/><ColumnDefinition Width="*" MinWidth="420"/></Grid.ColumnDefinitions>
+   <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="*" MinHeight="110"/><RowDefinition Height="5"/><RowDefinition Height="*" MinHeight="110"/></Grid.RowDefinitions>
+    <DockPanel>
+     <Border DockPanel.Dock="Top" Background="{DynamicResource Theme.Sidebar}" Padding="8,4"><DockPanel>
+      <Button DockPanel.Dock="Right" Content="{Binding StageLabel}" Command="{Binding StageCommand}" Margin="6,0,0,0" ToolTip="{Binding StageHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding StageHelp}"/>
+      <TextBlock Text="{Binding UnstagedTitle}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+     </DockPanel></Border>
+     <Grid>
+      <DataGrid x:Name="UnstagedTable" Style="{StaticResource FileTable}" ItemsSource="{Binding Unstaged}" SelectedItem="{Binding SelectedUnstaged}" SelectionChanged="OnUnstagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesUnstaged}" AutomationProperties.AutomationId="UnstagedFiles">
+       <DataGrid.Columns><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
+      </DataGrid>
+      <TextBlock Text="{loc:Text Key=CommitNoUnstaged}" Margin="14" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Unstaged.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+     </Grid>
+    </DockPanel>
+    <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitResizeLists}"/>
+    <DockPanel Grid.Row="2">
+     <Border DockPanel.Dock="Top" Background="{DynamicResource Theme.Sidebar}" Padding="8,4"><DockPanel>
+      <Button DockPanel.Dock="Right" Content="{Binding UnstageLabel}" Command="{Binding UnstageCommand}" Margin="6,0,0,0" ToolTip="{Binding UnstageHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding UnstageHelp}"/>
+      <TextBlock Text="{Binding StagedTitle}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+     </DockPanel></Border>
+     <Grid>
+      <DataGrid x:Name="StagedTable" Style="{StaticResource FileTable}" ItemsSource="{Binding Staged}" SelectedItem="{Binding SelectedStaged}" SelectionChanged="OnStagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesStaged}" AutomationProperties.AutomationId="StagedFiles">
+       <DataGrid.Columns><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
+      </DataGrid>
+      <TextBlock Text="{loc:Text Key=CommitNoStaged}" Margin="14" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Staged.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+     </Grid>
+    </DockPanel>
+   </Grid>
+   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitResizeDiff}"/>
+   <Grid Grid.Column="2">
+    <Grid.RowDefinitions><RowDefinition Height="*" MinHeight="150"/><RowDefinition Height="5"/><RowDefinition Height="220" MinHeight="180"/></Grid.RowDefinitions>
+    <DockPanel Background="{DynamicResource Theme.Canvas}">
+     <StackPanel DockPanel.Dock="Top" Background="{DynamicResource Theme.Sidebar}">
+      <TextBlock Text="{Binding DiffTitle}" Margin="10,6" TextTrimming="CharacterEllipsis" ToolTip="{Binding DiffTitle}" FontWeight="SemiBold" FlowDirection="LeftToRight"/>
+      <DockPanel Margin="8,0,8,5">
+       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="↑" Command="{Binding PreviousHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffPreviousHunk}" AutomationProperties.Name="{loc:Text Key=DiffPreviousHunk}"/><Button Content="↓" Command="{Binding NextHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffNextHunk}" AutomationProperties.Name="{loc:Text Key=DiffNextHunk}"/></StackPanel>
+       <WrapPanel><CheckBox Content="{loc:Text Key=DiffIgnoreWhitespace}" IsChecked="{Binding IgnoreWhitespace}" Margin="0,0,16,0"/><CheckBox Content="{loc:Text Key=DiffWholeFile}" IsChecked="{Binding WholeFile}"/></WrapPanel>
+      </DockPanel>
+      <TextBlock Text="{Binding DiffNotice}" Margin="10,0,10,6" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" ToolTip="{loc:Text Key=DiffLimits}"/>
+     </StackPanel>
+     <DataGrid x:Name="DiffTable" Style="{StaticResource FileTable}" ItemsSource="{Binding DiffRows}" SelectedItem="{Binding SelectedDiff}" RowStyle="{StaticResource DiffRow}" SelectionChanged="OnDiffSelection"
+      SelectionMode="Single" FontFamily="Consolas" FontSize="12" RowHeight="22" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.AutomationId="FileDiff">
+      <DataGrid.Columns>
+       <DataGridTextColumn Header="{loc:Text Key=DiffOldLine}" Binding="{Binding OldLine}" Width="48" ElementStyle="{StaticResource DiffText}"/>
+       <DataGridTextColumn Header="{loc:Text Key=DiffNewLine}" Binding="{Binding NewLine}" Width="48" ElementStyle="{StaticResource DiffText}"/>
+       <DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Marker}" Width="24" ElementStyle="{StaticResource DiffText}"/>
+       <DataGridTextColumn Header="{loc:Text Key=DiffView}" Binding="{Binding Text}" Width="SizeToCells" MinWidth="400" ElementStyle="{StaticResource DiffText}"/>
+      </DataGrid.Columns>
+     </DataGrid>
+    </DockPanel>
+    <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitResizeMessage}"/>
+    <Grid Grid.Row="2" Margin="12,8">
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+     <Label Content="{loc:Text Key=CommitSubject}" Target="{Binding ElementName=SubjectBox}" Padding="0,0,0,4"/>
+     <TextBox Grid.Row="1" x:Name="SubjectBox" Text="{Binding Subject, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditMessage}" MaxLength="16384" AutomationProperties.Name="{loc:Text Key=CommitSubject}"/>
+     <TextBox Grid.Row="2" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditMessage}" MaxLength="65536" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" Margin="0,5,0,5" AutomationProperties.Name="{loc:Text Key=CommitDescription}" ToolTip="{loc:Text Key=CommitDescription}"/>
+     <TextBlock Grid.Row="3" Text="{Binding CommitTarget}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CommitTarget}" Foreground="{DynamicResource Theme.Muted}" FontSize="11" Margin="0,0,0,5"/>
+     <DockPanel Grid.Row="4">
+      <Button DockPanel.Dock="Right" Content="{Binding CommitLabel}" Command="{Binding CommitCommand}" ToolTip="{Binding CommitUnavailable}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding CommitUnavailable}" Margin="10,0,0,0" MinWidth="95"/>
+      <CheckBox DockPanel.Dock="Left" Content="{loc:Text Key=CommitAmend}" IsChecked="{Binding Amend}" IsEnabled="{Binding CanAmend}" VerticalAlignment="Center" ToolTip="{loc:Text Key=CommitAmendHelp}" ToolTipService.ShowOnDisabled="True"/>
+      <TextBlock Text="{Binding PushTarget}" TextTrimming="CharacterEllipsis" ToolTip="{Binding PushTarget}" VerticalAlignment="Center" Margin="12,0" FontSize="11"/>
+     </DockPanel>
+    </Grid>
+   </Grid>
+  </Grid>
+  <StackPanel Grid.Row="2" Background="{DynamicResource Theme.Chrome}">
+   <ProgressBar Height="3" IsIndeterminate="{Binding IsBusy}" Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" AutomationProperties.Name="{Binding Summary}"/>
+   <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="10,6" AutomationProperties.LiveSetting="Polite"/>
+   <Expander Header="{loc:Text Key=ActionOutput}" Margin="10,0,10,5"><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" MaxHeight="120" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/></Expander>
+  </StackPanel>
+ </Grid>
+</Window>

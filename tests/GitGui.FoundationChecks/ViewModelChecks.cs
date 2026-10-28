@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks(bool localOnly = false)
+    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -56,6 +56,7 @@ internal static partial class Program
         async Task RunAsync()
         {
             if (localOnly) { await RunLocalChangesChecksAsync(); return; }
+            if (commitOnly) { await RunCommitWorkspaceChecksAsync(); return; }
             var first = Fixture("model-first");
             var second = Fixture("model-second");
             await Check("Restored tabs automatically load without approval and preserve order/selection", async () =>
@@ -231,6 +232,7 @@ internal static partial class Program
             await RunDivergenceViewChecksAsync();
             await RunActionViewChecksAsync();
             await RunLocalChangesChecksAsync();
+            await RunCommitWorkspaceChecksAsync();
             await RunWorkspaceActionChecksAsync();
             await RunPullChecksAsync();
             await RunAuthenticationViewChecksAsync();

@@ -113,6 +113,9 @@
         <Button Style="{StaticResource ToolbarButton}" Command="{Binding OpenRepositoryCommand}" AutomationProperties.Name="{loc:Text Key=OpenRepository}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M1,4 L7,4 9,6 19,6 19,17 1,17 Z"/><TextBlock Text="{loc:Text Key=OpenRepository}"/></StackPanel>
         </Button>
+        <Button Style="{StaticResource ToolbarButton}" Command="{Binding ShowChangesCommand}" ToolTip="{loc:Text Key=CommitOpenHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{Binding CommitButtonLabel}">
+          <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M2,10 L7,15 18,3"/><TextBlock Text="{Binding CommitButtonLabel}"/></StackPanel>
+        </Button>
         <Button Style="{StaticResource ToolbarButton}" Command="{Binding FetchCommand}" ToolTip="{Binding FetchActionHelp}" AutomationProperties.HelpText="{Binding FetchActionHelp}" AutomationProperties.Name="{loc:Text Key=Fetch}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M10,1 L10,14 M5,9 L10,14 15,9 M2,16 L2,20 18,20 18,16"/><TextBlock Text="{loc:Text Key=Fetch}"/></StackPanel>
         </Button>
@@ -169,35 +172,13 @@
       <DockPanel Margin="10,14" Background="{DynamicResource Theme.Sidebar}">
         <TextBlock DockPanel.Dock="Top" Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" Margin="8,0,0,12" />
         <StackPanel VerticalAlignment="Top">
-          <RadioButton Style="{StaticResource NavigationItem}" Content="{loc:Text Key=LocalChanges}" IsChecked="{Binding IsLocalChanges, Mode=OneWay}" Command="{Binding ShowChangesCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.AutomationId="LocalChangesNavigation"/>
+          <Button Content="{loc:Text Key=LocalChanges}" Command="{Binding ShowChangesCommand}" HorizontalContentAlignment="Left" Padding="8,9" Background="Transparent" BorderThickness="0" ToolTip="{loc:Text Key=CommitOpenHelp}" AutomationProperties.AutomationId="LocalChangesNavigation"/>
           <RadioButton Style="{StaticResource NavigationItem}" Content="{loc:Text Key=AllCommits}" IsChecked="{Binding IsHistory, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.Name="{loc:Text Key=AllCommits}" AutomationProperties.AutomationId="CurrentWorkspace"/>
         </StackPanel>
       </DockPanel>
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" ResizeDirection="Columns"
                     Background="{DynamicResource Theme.Border}"
                     AutomationProperties.Name="{loc:Text Key=ResizeSidebar}" AutomationProperties.AutomationId="SidebarSplitter" />
-      <Grid Background="{DynamicResource Theme.Panel}" Grid.Column="2" Visibility="{Binding IsLocalChanges, Converter={StaticResource BoolToVisibility}}" Margin="12,8" AutomationProperties.Name="{loc:Text Key=LocalChanges}">
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="110"/></Grid.RowDefinitions>
-        <DockPanel><CheckBox DockPanel.Dock="Right" Content="{loc:Text Key=ChangesShowIgnored}" IsChecked="{Binding ShowIgnored}" IsEnabled="{Binding CanNavigate}"/>
-          <TextBlock Text="{loc:Text Key=LocalChanges}" FontSize="18" FontWeight="SemiBold"/></DockPanel>
-        <TextBlock Grid.Row="1" Text="{Binding ChangesCounts}" Margin="0,8" TextWrapping="Wrap"/>
-        <DataGrid Grid.Row="2" ItemsSource="{Binding Changes}" SelectedItem="{Binding SelectedChange}" AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserResizeRows="False"
-                  SelectionMode="Single" HeadersVisibility="Column" RowHeaderWidth="0" RowHeight="28" EnableRowVirtualization="True" EnableColumnVirtualization="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True" AutomationProperties.Name="{loc:Text Key=ChangesFiles}" AutomationProperties.AutomationId="ChangesFiles">
-          <DataGrid.RowStyle><Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}"><Setter Property="AutomationProperties.Name" Value="{Binding Details}"/></Style></DataGrid.RowStyle>
-          <DataGrid.Columns>
-            <DataGridTextColumn Header="{loc:Text Key=ChangesGroup}" Binding="{Binding Group}" Width="110"/>
-            <DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="105"/>
-            <DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="200"/>
-          </DataGrid.Columns>
-        </DataGrid>
-        <TextBlock Grid.Row="3" Text="{Binding ChangesNotice}" Margin="0,8" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" ToolTip="{loc:Text Key=ChangesLimits}"/>
-        <TabControl Grid.Row="4">
-          <TabItem Header="{loc:Text Key=ChangesFileDetails}"><TextBox Text="{Binding SelectedChange.Details, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ChangesFileDetails}"/></TabItem>
-          <TabItem Header="{loc:Text Key=ChangesReadOutput}"><TextBox Text="{Binding ChangesOutput, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ChangesReadOutput}"/></TabItem>
-        </TabControl>
-      </Grid>
       <Grid Background="{DynamicResource Theme.Panel}" x:Name="WorkspacePanel" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}" Grid.Column="2" SizeChanged="OnWorkspaceSizeChanged">
         <Grid.RowDefinitions>
           <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="300" />

@@ -9,7 +9,7 @@ public sealed partial class ShellViewModel
 {
     private GitActions? _actions;
     private bool _actionOpen, _preparingAction;
-    public bool ActionOpen => _actionOpen;
+    public bool ActionOpen => _actionOpen || _commitOpen;
     private GitActionViewModel? _lastAction;
     public GitActionViewModel? CurrentAction => string.Equals(_lastAction?.CurrentRepository, SelectedRepository?.Directory, StringComparison.OrdinalIgnoreCase) ? _lastAction : null;
     public bool HasAction => CurrentAction?.HasAttempt == true;
@@ -52,6 +52,7 @@ public sealed partial class ShellViewModel
     private async Task OpenActionAsync(GitAction action, string? branch)
     {
         var tab = SelectedRepository!;
+        var attempted = false;
         SetActionOpen(true); Status = UiText.Get("ActionPreparing");
         try
         {
@@ -69,7 +70,6 @@ public sealed partial class ShellViewModel
                 await WaitForIdleAsync();
                 if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0)
                     throw new System.IO.IOException(); // Localized separately from the Git outcome; no raw exception logging.
-                if (tab.LocalChangesView) { BeginChanges(tab, force: true, actionReconcile: true); await WaitForIdleAsync(); if (tab.Changes.ReadAt == default) throw new System.IO.IOException(); }
             }, branch, _interaction, async token =>
             {
                 var context = await _actions!.PrepareAsync(_git!, tab.Directory, token);
@@ -84,7 +84,7 @@ public sealed partial class ShellViewModel
             _preparingAction = false;
             SetLastAction(model);
             _interaction!.ShowGitAction(model);
-            model.DismissOptions();
+            model.DismissOptions(); attempted = model.HasAttempt;
             if (!model.HasAttempt) SetLastAction(previous);
             else
             {
@@ -108,6 +108,7 @@ public sealed partial class ShellViewModel
         {
             if (Status == UiText.Get("ActionPreparing")) Status = UiText.Get("NoActiveOperation");
             SetActionOpen(false);
+            if (attempted) BeginCountRead(tab);
         }
     }
     private void SetActionOpen(bool value)

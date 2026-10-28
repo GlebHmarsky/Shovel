@@ -4,7 +4,7 @@ Updated 2026-10-28. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
-**0.12.1: first dark-theme pass.** Shared workspace/dialog surfaces and control states; 119 checks and matching ignored preview. Local Changes remains read-only. File diffs and staging remain next; further theme polish stays P2.
+**0.13.0: modal commit workspace.** Real working-copy diffs, file/all stage/unstage, commit/amend and Shift Commit and Push over retained history. Shared dark styling continues; further theme polish stays P2. Release verification is recorded below; hunk staging and selected-commit files/diffs remain future work.
 
 **Confirmed 2026-10-27:** deliver working features with UI; no new placeholders or permanent disabled prototypes. No repo-trust/first-use/program-consent layer for ordinary actions; normal Execute authorizes the operation. Do not add extra safety measures without concrete need. Retain normal Git data-loss handling, auth/SSH verification and destructive confirmation. Supersedes historical UI-first/prototype-retention/trust rules. 0.9.2 recorded the policy; 0.9.3 applies it in code. The user also explicitly reconfirmed removing the gate for configured hooks/helpers during this delivery.
 
@@ -32,8 +32,9 @@ Proposed remaining order; requests can reprioritize. Each increment must work en
 | F2c / 0.10.0 | Shell-owned Pull/action execution after options close | Real incoming-commit/error/cancellation and offscreen verification below |
 | F2d / 0.11.0 | Immediate options shell; default rebase/merge/auto-stash Pull | Disposable real-Git integration and headless timing/layout evidence below |
 | 0.12.1 | Requested first dark-theme pass/shared state conventions | 119 checks/offscreen review; further polish P2 |
-| F1g onward | Real status/files/tree/diffs; filtering when requested | Bounded parsers/content and relevant read tests |
-| 2: Local MVP | Init/stage/hunks/commit/amend/branch delete/tracking/stashes | Mutation/hook/signing/stale-hunk coverage |
+| 0.13.0 | Modal Local Changes/Commit; real file diffs, file/all stage/unstage, commit/amend/Shift push | Disposable Git, modifier/failure/cancellation and offscreen evidence below |
+| F1g onward | Selected-commit files/tree/diffs; filtering when requested | Bounded parsers/content and relevant read tests |
+| 2: Local MVP remainder | Init/hunks/branch delete/tracking/stashes | Signing/stale-hunk/recovery coverage |
 | 3: Network MVP | Clone/remotes/broader network/recovery continue/skip/abort | Visible auth/input, failures/external races |
 | 3R: Pilot distribution | Install once/update/channels/pilot/migration/repair | Updater/IT/signing decisions and installed U/D tests before ~30-user rollout |
 | 4: Advanced | Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor | Relevant sequence/destructive/recovery tests |
@@ -197,6 +198,16 @@ Restore/Release build/publish passed with zero warnings/errors; **93 passed, 0 f
 Reviewed final offscreen running/completed workspace at 1200×760/900×580 and retained the normal/minimum action-dialog checks. Log: `artifacts/preview-0.10.0-verification.txt`; fixtures/renders: `artifacts/foundation-checks/20261027-211310-1127f0a6756f4f7d9dc644e81c8b3b9d`. Initial run also exited successfully with 93 checks after delayed completion; a persistent runner hang was not established. Preview: `Build/0.10.0-win-x64/Shovel.exe`; 16 checksums/seven tested-published files match, both executable versions 0.10.0.0. Build stays ignored/untracked; earlier versions retained.
 
 No interactive launch, desktop input/focus, live HTTPS/SSH/GCM, Windows 10 or new performance certification. Pull still requires a clean worktree and fast-forward; no merge/rebase/autostash. No dependency installation, push or distribution work. Next implementation: Local Changes/status, before broader authentication expansion.
+
+## Modal commit workspace (2026-10-28)
+
+0.13.0 replaces the embedded read-only workspace with the user-requested modal layout, real file diffs and file/all stage/unstage/commit/amend/Shift Commit and Push. [Product](product.md#local-changes--commit-0130) owns interaction; [architecture](architecture.md#local-changes-and-commit-0130) owns the new execution/read boundaries. History remains mounted; one selected-tab count after history explicitly supersedes the older no-startup-status policy. No dependency or settings schema change.
+
+Restore/Release build/publish succeeded with zero warnings/errors; **129 checks passed**. New disposable fixtures cover unborn partially staged index removal, Unicode/dash paths, independent HEAD/index/worktree diffs, binary byte sizes, rename/delete/whitespace/oversized text, suppressed read-time helpers versus real staging filters, stale index/locks, Shift actions, failed hooks/draft retention, actual-tip amend, successful/local rejected push, cancelled commit hooks and resolved merge commit. The successful commit survives failed Push. Prior status/parser, history, branch/Pull and askpass coverage remains; old embedded-view assertions were replaced with modal/cache/lifetime assertions.
+
+Headless UI checks verify no construction-time Git calls, cached rows/draft/history, failed/cancelled refresh retaining rows and removing write readiness, late diff rejection, and virtualization for 1,500+ files/3,000+ diff rows. Normal 1200×760 and minimum 900×580 client-area renders reviewed; colors/line numbers/buttons/editor remain visible. Shared diff contrast/system-brush mapping checked. The tests exposed and fixed synchronous reentrant close and repeated layout-triggered diff reads. Cached modal construction plus offscreen layout: **16.70 ms**, one sample with Git excluded; not cold startup, desktop responsiveness or p95 evidence.
+
+Evidence: `artifacts/preview-0.13.0-verification.txt`; fixtures/renders/timing: `artifacts/foundation-checks/20261028-031130-a7647ae17615417199ede7e8e0454bff`. Preview: `Build/0.13.0-win-x64/Shovel.exe`; 16 checksum entries and seven tested/published app/helper files match; both executable versions 0.13.0.0. Build/artifacts ignored, earlier previews preserved. No interactive launch, live authentication/remote, install or deployment. Keyboard modifier/focus/OS high contrast/DPI/live signing remain unverified. Unified UTF-8 text/binary sizes ship; hunk staging, image/side-by-side previews, persistent drafts and conflict editor remain deferred. Next functional priority: selected-hunk stage/unstage with stale-patch verification.
 
 ## Dark theme first pass (2026-10-28)
 

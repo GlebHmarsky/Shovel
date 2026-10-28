@@ -78,59 +78,6 @@ internal static partial class Program
             using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
             await ExpectException<OperationCanceledException>(() => Task.Run(() => RepositoryReader.ParseLocalChanges(Encoding.UTF8.GetBytes("? name\0"), cancellation.Token)));
         });
-        var transport = new StatusGateRunner(runner); var observed = new RepositoryReader(transport);
-        var shell = new ShellViewModel(observed, new ModelInteraction(repo), new WindowsRepositoryIdentity());
-        shell.CompleteStartup(new(new() { RepositoryPaths = [repo, second], SelectedRepositoryPath = repo }, SettingsLoadStatus.Loaded));
-        await shell.WaitForIdleAsync();
-        await Check("Local Changes paints before scans and reuses warm rows; failure/cancellation retain useful content", async () =>
-        {
-            transport.Hold = true;
-            var watch = Stopwatch.StartNew(); shell.ShowChangesCommand.Execute(null); var openMs = watch.Elapsed.TotalMilliseconds;
-            Expect(shell.IsLocalChanges && !transport.Started.Task.IsCompleted, "View switches before starting a status subprocess");
-            await transport.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            var window = new MainWindow(shell);
-            try
-            {
-                var content = (FrameworkElement)window.Content;
-                Arrange(content, 1200, 760); SaveRender(content, "changes-loading.png", 1200, 760);
-                transport.Release.TrySetResult(); await shell.WaitForIdleAsync();
-                var rows = shell.Changes; var historyRows = shell.Commits; var selection = shell.SelectedChange; var calls = transport.StatusCalls;
-                Expect(selection is not null && rows.Count >= 5 && shell.ChangesCounts.Contains("2"), "Real staged, unstaged, untracked rows exposed");
-                shell.ShowHistoryCommand.Execute(null); await shell.WaitForIdleAsync();
-                watch.Restart(); shell.ShowChangesCommand.Execute(null); var warmMs = watch.Elapsed.TotalMilliseconds;
-                Expect(ReferenceEquals(rows, shell.Changes), "Warm rows visible synchronously");
-                await shell.WaitForIdleAsync(); Expect(ReferenceEquals(historyRows, shell.Commits), "History page survives Local Changes navigation");
-                Expect(transport.StatusCalls == calls && shell.SelectedChange == selection, "No warm scan and selection retained");
-                transport.Fail = true; shell.RefreshRepositoryCommand.Execute(null); await shell.WaitForIdleAsync();
-                Expect(ReferenceEquals(rows, shell.Changes) && shell.ChangesOutput.Contains("fixture failure"), "Failed refresh retains rows and stderr");
-                transport.Fail = false; transport.ResetGate(); shell.RefreshRepositoryCommand.Execute(null);
-                await transport.Started.Task; shell.CancelCommand.Execute(null); await shell.WaitForIdleAsync();
-                Expect(ReferenceEquals(rows, shell.Changes) && shell.ChangesNotice == UiText.Get("ChangesCancelled"), "Cancelled refresh retains rows and marks stale");
-                transport.Hold = false;
-                await File.WriteAllTextAsync(Path.Combine(repo, "external.txt"), "external");
-                shell.RefreshRepositoryCommand.Execute(null); await shell.WaitForIdleAsync();
-                Expect(shell.SelectedChange?.Change.Path == selection?.Change.Path && shell.SelectedChange?.Change.Group == selection?.Change.Group, "Live grid retains selection across replacement rows");
-                Expect(shell.Changes.Any(row => row.Change.Path == "external.txt"), "Refresh observes external changes");
-                Arrange(content, 1200, 760); SaveRender(content, "changes-loaded.png", 1200, 760);
-                Arrange(content, 900, 580); SaveRender(content, "changes-minimum.png", 900, 580);
-                File.WriteAllText(Path.Combine(_root, "changes-timings.txt"), $"First view switch: {openMs:F2} ms; warm: {warmMs:F2} ms. Headless, scan excluded.");
-            }
-            finally { transport.Release.TrySetResult(); window.Close(); }
-        });
-        await Check("Late status results cannot appear in another tab; cache retains first tab state", async () =>
-        {
-            var first = shell.SelectedRepository!; var rows = shell.Changes;
-            transport.ResetGate(); transport.IgnoreCancellation = true;
-            shell.RefreshRepositoryCommand.Execute(null); await transport.Started.Task;
-            shell.SelectedRepository = shell.Repositories[1];
-            Expect(shell.IsHistory && shell.Changes.Count == 0, "Another tab never shows old status rows");
-            transport.Release.TrySetResult(); await shell.WaitForIdleAsync();
-            Expect(shell.Changes.Count == 0 && shell.SelectedRepository != first, "Obsolete completion ignored");
-            transport.Hold = false; transport.IgnoreCancellation = false;
-            shell.SelectedRepository = first;
-            Expect(shell.IsLocalChanges && ReferenceEquals(rows, shell.Changes), "Per-tab workspace and cached content retained");
-            await shell.WaitForIdleAsync();
-        });
         await Check("Conflicted status is distinct from normal staged files", async () =>
         {
             await File.WriteAllTextAsync(Path.Combine(second, "conflict.txt"), "base");
@@ -142,25 +89,10 @@ internal static partial class Program
             Expect(result.ExitCode != 0, "Disposable merge conflicts");
             Expect((await reader.ReadLocalChangesAsync(git, second, false, default)).Entries.Single().Group == ChangeGroup.Conflicted, "Unmerged record appears only in conflict group");
         });
-        await Check("Large status lists remain complete and virtualized", async () =>
-        {
-            await Task.Run(() => { for (var i = 0; i < 1500; i++) File.WriteAllText(Path.Combine(repo, $"large-{i:D4}.txt"), "untracked"); });
-            var watch = Stopwatch.StartNew(); shell.RefreshRepositoryCommand.Execute(null); await shell.WaitForIdleAsync(); var scanMs = watch.Elapsed.TotalMilliseconds;
-            Expect(shell.Changes.Count(row => row.Change.Path.StartsWith("large-")) == 1500, "No silent path truncation");
-            var window = new MainWindow(shell);
-            try
-            {
-                var content = (FrameworkElement)window.Content; Arrange(content, 1200, 760); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                var table = VisualDescendants<DataGrid>(content).Single(grid => System.Windows.Automation.AutomationProperties.GetAutomationId(grid) == "ChangesFiles");
-                Expect(table.Items.Count >= 1500 && VisualDescendants<DataGridRow>(table).Count() < 80, "Offscreen rows virtualized");
-                File.AppendAllText(Path.Combine(_root, "changes-timings.txt"), $"\n1500-file refresh including metadata: {scanMs:F2} ms.");
-            }
-            finally { window.Close(); }
-        });
     }
     private sealed class StatusGateRunner(IProcessRunner inner) : IProcessRunner
     {
-        public bool Hold, Fail, IgnoreCancellation;
+        public bool Hold, Fail;
         public int StatusCalls;
         public TaskCompletionSource Started { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -170,9 +102,9 @@ internal static partial class Program
             if (request.Arguments.Contains("status"))
             {
                 StatusCalls++; Started.TrySetResult();
-                if (Hold) await Release.Task.WaitAsync(IgnoreCancellation ? default : token);
+                if (Hold) await Release.Task.WaitAsync(token);
                 if (Fail) return new(ProcessOutcome.Exited, 128, [], Encoding.UTF8.GetBytes("fixture failure"), TimeSpan.Zero);
-                if (IgnoreCancellation) token = default;
+
             }
             return await inner.RunAsync(request, token, output);
         }

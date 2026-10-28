@@ -4,7 +4,13 @@ using System.Text.RegularExpressions;
 namespace GitGui.Core.Git;
 
 public enum ChangeGroup { Conflicted, Staged, Unstaged, Untracked, Ignored }
-public sealed record LocalChange(ChangeGroup Group, string Path, char Code, string? OriginalPath = null, string Submodule = "N...");
+public sealed record LocalChange(ChangeGroup Group, string Path, char Code, string? OriginalPath = null, string Submodule = "N...")
+{
+    public string HeadObject { get; init; } = "";
+    public string IndexObject { get; init; } = "";
+    public string HeadMode { get; init; } = "";
+    public string IndexMode { get; init; } = "";
+}
 public sealed record LocalChanges(IReadOnlyList<LocalChange> Entries, DateTimeOffset ReadAt, bool IncludesIgnored);
 
 public sealed partial class RepositoryReader
@@ -14,8 +20,17 @@ public sealed partial class RepositoryReader
 
     public Task<LocalChanges> ReadLocalChangesAsync(GitInstallation git, string path, bool ignored, CancellationToken token) => Task.Run(async () =>
     {
-        // Status may compare content through clean/process filters. Suppress configured filters
-        // for this read only; never alter repository/global configuration or refresh the index on disk.
+        var overrides = await FilterOverridesAsync(git, path, token);
+        var result = await RunAsync(git.Executable, path, ReadArguments([.. overrides,
+            "-c", "status.submoduleSummary=false", "status", "--porcelain=v2", "-z", "--untracked-files=all",
+            "--ignore-submodules=dirty", "--renames", ignored ? "--ignored=matching" : "--ignored=no"]), token, MaximumStatusBytes);
+        RequireSuccess(result);
+        return new LocalChanges(ParseLocalChanges(result.StandardOutput, token), DateTimeOffset.Now, ignored);
+    }, token);
+
+    // Shared by automatic status/diff reads. Explicit staging still honors configured filters.
+    private async Task<string[]> FilterOverridesAsync(GitInstallation git, string path, CancellationToken token)
+    {
         var config = await RunAsync(git.Executable, path, ReadArguments(["config", "--null", "--name-only", "--get-regexp", @"^filter\..*\.(clean|process|required)$"]), token);
         RequireSuccess(config, allowOne: true);
         var overrides = new List<string>();
@@ -25,12 +40,8 @@ public sealed partial class RepositoryReader
             if (Regex.IsMatch(key, @"^filter\..+\.(clean|process|required)$", RegexOptions.CultureInvariant | RegexOptions.Singleline))
             { overrides.Add("-c"); overrides.Add(key + (key.EndsWith(".required", StringComparison.Ordinal) ? "=false" : "=")); }
         }
-        var result = await RunAsync(git.Executable, path, ReadArguments([.. overrides,
-            "-c", "status.submoduleSummary=false", "status", "--porcelain=v2", "-z", "--untracked-files=all",
-            "--ignore-submodules=dirty", "--renames", ignored ? "--ignored=matching" : "--ignored=no"]), token, MaximumStatusBytes);
-        RequireSuccess(result);
-        return new LocalChanges(ParseLocalChanges(result.StandardOutput, token), DateTimeOffset.Now, ignored);
-    }, token);
+        return overrides.ToArray();
+    }
 
     public static IReadOnlyList<LocalChange> ParseLocalChanges(byte[] bytes, CancellationToken token = default)
     {
@@ -57,11 +68,13 @@ public sealed partial class RepositoryReader
                 if (++i >= records.Length - 1 || records[i].Length == 0) throw new GitReadException(GitFailure.InvalidOutput);
                 original = records[i];
             }
+            LocalChange Entry(ChangeGroup group, char code) => new(group, fields[^1], code, original, fields[2])
+            { HeadObject = fields[6], IndexObject = fields[7], HeadMode = fields[3], IndexMode = fields[4] };
             if (record[0] == 'u') Add(new(ChangeGroup.Conflicted, fields[^1], 'U', Submodule: fields[2]));
             else
             {
-                if (fields[1][0] != '.') Add(new(ChangeGroup.Staged, fields[^1], fields[1][0], original, fields[2]));
-                if (fields[1][1] != '.') Add(new(ChangeGroup.Unstaged, fields[^1], fields[1][1], original, fields[2]));
+                if (fields[1][0] != '.') Add(Entry(ChangeGroup.Staged, fields[1][0]));
+                if (fields[1][1] != '.') Add(Entry(ChangeGroup.Unstaged, fields[1][1]));
             }
         }
         return entries.OrderBy(entry => entry.Group).ThenBy(entry => entry.Path, StringComparer.Ordinal).ToArray();

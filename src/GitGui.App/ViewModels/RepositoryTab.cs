@@ -6,8 +6,7 @@ namespace GitGui.App.ViewModels;
 
 public sealed class RepositoryTab(string directory) : ObservableObject
 {
-    internal ChangesViewState Changes { get; } = new();
-    internal bool LocalChangesView { get; set; }
+    internal CommitWorkspaceState Changes { get; } = new();
     internal HistoryViewState History { get; } = new();
     public string Directory { get; } = directory;
     public string Label => Path.GetFileName(Path.TrimEndingDirectorySeparator(Directory)) is { Length: > 0 } label ? label : Directory;
