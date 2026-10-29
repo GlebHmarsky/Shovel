@@ -4,12 +4,13 @@ using System.Windows.Threading;
 using GitGui.App.Localization;
 using GitGui.App.Services;
 using GitGui.Core.Git;
+using GitGui.Core.Drafts;
 using GitGui.Core.Processes;
 
 namespace GitGui.App.ViewModels;
 
-/// <summary>Session-only bounded snapshot/draft. No repository content enters diagnostic logs.</summary>
-public sealed class CommitWorkspaceState
+/// <summary>Bounded session snapshot and editor text. Draft persistence is coordinated separately; never logged.</summary>
+public sealed partial class CommitWorkspaceState
 {
     public WorkingCopyContext? Context { get; set; }
     public IReadOnlyList<ChangeRow> Rows { get; set; } = [];
@@ -69,7 +70,7 @@ public sealed partial class CommitViewModel : ObservableObject
     public string Directory { get; }
     public string Title => UiText.Format("CommitWindowTitle", _state.Context?.Repository.Branch ?? UiText.Get("NoBranch"));
     public string RepositoryLabel => Directory;
-    public string Status { get => _status; private set => Set(ref _status, value); }
+    public string Status { get => WithDraftProblem(_status); private set => Set(ref _status, value); }
     public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
     public string Summary => _mutating ? UiText.Format("ActionSummary", UiText.Get("CommitWorkspace"), _phase, _elapsed.Elapsed.TotalSeconds) : Status;
     public bool IsBusy => _loading || _mutating || _diffLoading || _fileBusy;
@@ -93,10 +94,10 @@ public sealed partial class CommitViewModel : ObservableObject
             Changed(nameof(CommitTarget)); RefreshCommands();
         }
     }
-    public string Subject { get => _state.Subject; set { _state.Subject = value; Changed(); RefreshCommands(); } }
-    public string Description { get => _state.Description; set { _state.Description = value; Changed(); RefreshCommands(); } }
+    public string Subject { get => _state.Subject; set { if (_state.Subject == value) return; _state.Subject = value; DraftEdited(); Changed(); RefreshCommands(); } }
+    public string Description { get => _state.Description; set { if (_state.Description == value) return; _state.Description = value; DraftEdited(); Changed(); RefreshCommands(); } }
     public string Message => Description.Length == 0 ? Subject : Subject + "\n\n" + Description;
-    public string CommitTarget => Amend && _state.Context?.Repository.Commit is { } hash ? UiText.Format("CommitAmendTarget", hash) : UiText.Get("CommitDraftHelp");
+    public string CommitTarget => Amend && _state.Context?.Repository.Commit is { } hash ? UiText.Format("CommitAmendTarget", hash) : DraftHelp;
     public IReadOnlyList<ChangeRow> Unstaged => _unstaged;
     public IReadOnlyList<ChangeRow> Staged => _staged;
     public string UnstagedTitle => UiText.Format("CommitUnstagedCount", Unstaged.Count);
@@ -152,9 +153,9 @@ public sealed partial class CommitViewModel : ObservableObject
     public event EventHandler? SnapshotChanged;
 
     public CommitViewModel(string directory, GitInstallation? git, RepositoryReader reader, GitActions actions, IUserInteraction interaction,
-        CommitWorkspaceState? state = null, string? identity = null)
+        CommitWorkspaceState? state = null, string? identity = null, ICommitDraftStore? draftStore = null)
     {
-        Directory = directory; _git = git; _reader = reader; _actions = actions; _interaction = interaction; _identity = identity; _state = state ?? new();
+        Directory = directory; _git = git; _reader = reader; _actions = actions; _interaction = interaction; _identity = identity; _state = state ?? new(); InitializeDrafts(draftStore);
         StageCommand = new(() => StartAction(WorkingCopyAction.Stage), () => Ready && (ShiftHeld ? Unstaged.Count : _unstagedSelection.Count) > 0);
         UnstageCommand = new(() => StartAction(WorkingCopyAction.Unstage), () => Ready && (ShiftHeld ? Staged.Count : _stagedSelection.Count) > 0);
         CommitCommand = new(() => StartAction(WorkingCopyAction.Commit), () => CommitUnavailable == UiText.Get("CommitReady"));
@@ -170,7 +171,7 @@ public sealed partial class CommitViewModel : ObservableObject
         PublishRows(); RawOutput = _state.LastOutput;
         if (_state.LastResult.Length != 0) Status = _state.LastResult;
     }
-    public Task StartLoading() { if (!_closed && !_mutating) LoadingTask = LoadAsync(); return LoadingTask; }
+    public Task StartLoading() { if (!_closed && !_mutating) { _ = _draft?.StartOrRetryAsync(); LoadingTask = LoadAsync(); } return LoadingTask; }
     private async Task LoadAsync(bool reconcile = false, bool background = false)
     {
         _readCancel?.Cancel(); var previous = LoadingTask; var generation = ++_readGeneration;
@@ -195,7 +196,7 @@ public sealed partial class CommitViewModel : ObservableObject
             _state.Context = context; _state.ReadAt = context.Changes.ReadAt; _state.Rows = rows;
             PublishRows();
             if (!reconcile && !background) Status = UiText.Format(_state.Rows.Count == 0 ? "ChangesClean" : "ChangesLoaded", context.Changes.ReadAt.LocalDateTime);
-            if (string.IsNullOrWhiteSpace(Message) && context.MergeMessage.Length != 0) SetMessage(context.MergeMessage);
+            ScheduleMergeMessage(context);
             if (context.Repository.Commit is null || context.Repository.Operation != RepositoryOperation.None) { _amend = false; Changed(nameof(Amend)); }
             SnapshotChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -309,6 +310,7 @@ public sealed partial class CommitViewModel : ObservableObject
         var context = _state.Context!; var push = action == WorkingCopyAction.Commit && ShiftHeld;
         if (action == WorkingCopyAction.Commit && Amend && !_interaction.ConfirmAmend(context.Repository.Branch ?? UiText.Get("NoBranch"), context.Repository.Commit!)) return;
         var entries = explicitEntries ?? (hunks is not null ? new[] { _diffChange! } : action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : []);
+        var submittedDraft = CaptureDraft();
         var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), actionMessage ?? Message, Amend, hunks);
         _mutating = true; HasMutation = true; _diffCancel?.Cancel(); _readCancel?.Cancel(); _state.ReadAt = default;
         // Cancel obsolete read generations, but do not put their drain on the write's critical
@@ -333,7 +335,7 @@ public sealed partial class CommitViewModel : ObservableObject
                 Status = UiText.Get(result.Result.MessageCode ?? (result.Result.Success ? "CommitSucceeded" + action : "ActionResult" + result.Result.Outcome));
                 if (result.Result.Success && action == WorkingCopyAction.Commit)
                 {
-                    SetMessage(""); _amend = false; _automaticAmendMessage = null; Changed(nameof(Amend));
+                    await CompleteSubmittedDraftAsync(submittedDraft); _amend = false; _automaticAmendMessage = null; Changed(nameof(Amend));
                     if (push && committed is not null) await PushAsync(context, committed, _actionCancel.Token);
                     else if (committed is not null) Status = UiText.Format("CommitCreated", committed);
                     else Status = UiText.Get("CommitSucceededUnknownTip");
@@ -346,7 +348,7 @@ public sealed partial class CommitViewModel : ObservableObject
             }
             finally
             {
-                var outcome = Status; var output = RawOutput;
+                var outcome = _status; var output = RawOutput;
                 timing.Restart();
                 if (!_closed && measured?.UpdatedContext is { } updated)
                 {
@@ -357,7 +359,7 @@ public sealed partial class CommitViewModel : ObservableObject
                 else await LoadAsync(reconcile: true);
                 if (measured is not null) TimingSummary = UiText.Format("CommitTimings", waitMilliseconds, measured.ValidationMilliseconds, measured.CommandMilliseconds, measured.RefreshMilliseconds + timing.Elapsed.TotalMilliseconds);
                 Status = _state.ReadAt == default ? UiText.Format("ActionReinspectionFailed", outcome) : outcome;
-                RawOutput = output; _state.LastResult = Status; _state.LastOutput = output;
+                RawOutput = output; _state.LastResult = _status; _state.LastOutput = output;
                 _actionCancel.Dispose(); _actionCancel = null; _mutating = false; UpdateBusy();
                 if (!_closed) QueueDiff(_state.Selected);
                 if (!_closed && measured?.UpdatedContext is not null) LoadingTask = LoadAsync(background: true);
@@ -426,6 +428,6 @@ public sealed partial class CommitViewModel : ObservableObject
     {
         _closed = true; ShiftHeld = false; _fileCancel?.Cancel(); Cancel();
         await FileTask;
-        await LoadingTask; await DiffTask; await OperationTask; _timer.Stop();
+        await LoadingTask; await DiffTask; await OperationTask; await CloseDraftAsync(); _timer.Stop();
     }
 }

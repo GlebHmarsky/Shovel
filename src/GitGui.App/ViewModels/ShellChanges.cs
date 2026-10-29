@@ -1,6 +1,7 @@
 using System.Windows.Threading;
 using GitGui.App.Localization;
 using GitGui.Core.Git;
+using GitGui.Core.Drafts;
 
 namespace GitGui.App.ViewModels;
 
@@ -17,6 +18,7 @@ public sealed record ChangeRow(LocalChange Change)
 public sealed partial class ShellViewModel
 {
     private bool _commitOpen;
+    public ICommitDraftStore? DraftStore { private get; set; }
     private CommitViewModel? _commitModel;
     private CancellationTokenSource? _countCancel;
     private Task _countTask = Task.CompletedTask;
@@ -42,7 +44,7 @@ public sealed partial class ShellViewModel
         var tab = SelectedRepository!;
         CancelCountRead(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
         var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
-            _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint);
+            _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities));
         _commitModel = model;
         void OnChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args) { if (args.PropertyName == nameof(CommitViewModel.Summary)) Changed(nameof(OperationStatus)); }
         void OnSnapshot(object? sender, EventArgs args) { TrimChangesCache(tab); PublishChanges(); if (tab.Changes.Context is { } context) tab.Apply(context.Repository); }

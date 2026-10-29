@@ -681,4 +681,19 @@ Parents: {7}
   <data name="InitIncomplete" xml:space="preserve"><value>Initialization did not finish successfully. Any created files were kept. Inspect the command output and destination before trying again.</value></data>
   <data name="InitUnexpectedLayout" xml:space="preserve"><value>The resulting worktree is outside the requested destination. It was not opened; inspect Git’s output and configured templates.</value></data>
   <data name="InitCreatedUnverified" xml:space="preserve"><value>Git reported success, but the new repository could not be inspected. Files were kept. Inspect the output and open the folder when it is accessible.</value></data>
+  <data name="CommitDraftStatus" xml:space="preserve"><value>{0}
+{1}</value></data>
+  <data name="CommitDraftUnavailable" xml:space="preserve"><value>The commit draft could not be loaded or saved. Your editor text is retained for this session. Refresh retries; copy the text before closing the tab or app if saving still fails. Local drafts: {0}</value></data>
+  <data name="CommitDraftInvalid" xml:space="preserve"><value>The saved commit draft is corrupt or unsupported and was preserved. Refresh retries after you move the affected file aside. Copy your editor text if no recovery copy can be saved. Local drafts: {0}</value></data>
+  <data name="CommitDraftNewerSchema" xml:space="preserve"><value>A newer Shovel version owns this saved draft; its bytes were preserved. Use that version or move the file aside, then Refresh. Local drafts: {0}</value></data>
+  <data name="CommitDraftChanged" xml:space="preserve"><value>Another Shovel profile changed this draft. Its text was preserved. Copy your editor text if no recovery copy can be saved; Refresh retries without overwriting either version. Local drafts: {0}</value></data>
+  <data name="CommitDraftIdentityChanged" xml:space="preserve"><value>This repository identity changed. Draft storage is suspended for this editor. Copy your text, close the editor and explicitly reopen the repository. Local drafts: {0}</value></data>
+  <data name="CommitDraftTooLarge" xml:space="preserve"><value>This draft exceeds the local storage limit. Shorten the subject or description, or copy the text before closing. Local drafts: {0}</value></data>
+  <data name="CommitDraftRecovery" xml:space="preserve"><value>The main draft could not be replaced. This editor's text was saved in a separate .recovery.json copy; other draft data was preserved. Review the local copies before deleting them. Refresh retries. Local drafts: {0}</value></data>
+  <data name="CommitDraftCopies" xml:space="preserve"><value>Additional .recovery.json draft copies were found from another session or profile. The main draft is shown; review the local copies for other text. Local drafts: {0}</value></data>
+  <data name="CommitDraftCloseFailed" xml:space="preserve"><value>Commit draft persistence needs attention. Reopen Local Changes to recover this session's editor text before closing its repository tab or Shovel. A previously saved message may reappear if clearing it failed.
+{0}</value></data>
+
+  <data name="CommitDraftSaving" xml:space="preserve"><value>Saving the commit draft state</value></data>
+  <data name="CommitDraftPersistenceHelp" xml:space="preserve"><value>Messages save locally for this worktree and survive reopening. A successful commit clears the submitted draft.</value></data>
 </root>
