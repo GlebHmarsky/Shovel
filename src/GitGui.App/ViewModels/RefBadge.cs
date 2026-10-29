@@ -3,10 +3,11 @@ using GitGui.Core.Git;
 
 namespace GitGui.App.ViewModels;
 
-public sealed record RefBadge(string Label, string Help, bool IsCurrent, bool HasRemote, bool IsTag, bool IsRemote)
+public sealed record RefBadge(string Label, string Help, bool IsCurrent, bool HasRemote, bool IsTag, bool IsRemote, bool IsStash = false)
 {
     // Original line drawings; no proprietary provider logos or network-loaded assets.
-    public string Icon => IsTag ? "M1,1 L9,1 19,11 11,19 1,9 Z M5,5 L5.1,5.1" :
+    public string Icon => IsStash ? "M2,6 L18,6 18,18 2,18 Z M1,2 L19,2 19,6 1,6 Z M7,10 L13,10" :
+        IsTag ? "M1,1 L9,1 19,11 11,19 1,9 Z M5,5 L5.1,5.1" :
         IsRemote ? RemoteIcon : "M5,3 L5,17 M5,11 C5,7 15,12 15,5 M3,1 L7,1 7,5 3,5 Z M13,1 L17,1 17,5 13,5 Z M3,15 L7,15 7,19 3,19 Z";
     public string RemoteIcon => "M2,2 L18,2 18,13 2,13 Z M10,13 L10,18 M5,18 L15,18 M5,6 L15,6 M5,9 L12,9";
     public static IReadOnlyList<RefBadge> Build(HistoryEntry entry, RepositorySnapshot? repository)
@@ -28,6 +29,8 @@ public sealed record RefBadge(string Label, string Help, bool IsCurrent, bool Ha
             badges.Add(new(reference.Name[13..], UiText.Format("RemoteBadgeHelp", reference.Name), false, false, false, true));
         foreach (var reference in refs.Where(item => item.Name.StartsWith("refs/tags/", StringComparison.Ordinal)))
             badges.Add(new(reference.Name[10..], UiText.Format("TagBadgeHelp", reference.Name), false, false, true, false));
+        foreach (var reference in refs.Where(item => item.Name.StartsWith("stash@{", StringComparison.Ordinal)))
+            badges.Add(new(reference.Name, UiText.Format("SidebarStashBadge", reference.Name), false, false, false, false, true));
         if (repository?.HeadKind == HeadKind.Detached && repository.Commit == entry.Commit.Hash)
             badges.Add(new(UiText.Get("HeadLabel"), UiText.Get("DetachedBadgeHelp"), true, false, false, false));
         return badges;

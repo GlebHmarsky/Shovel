@@ -26,12 +26,14 @@ public partial class MainWindow : Window
         SystemParameters.StaticPropertyChanged += OnSystemPropertyChanged;
         viewModel.HistoryViewChanging += CaptureHistoryScroll;
         viewModel.HistoryViewChanged += RestoreHistoryScroll;
+        viewModel.SidebarCommitLocated += OnSidebarCommitLocated;
         Activated += (_, _) => viewModel.RefreshIfStale();
         Closed += (_, _) =>
         {
             SystemParameters.StaticPropertyChanged -= OnSystemPropertyChanged;
             viewModel.HistoryViewChanging -= CaptureHistoryScroll;
             viewModel.HistoryViewChanged -= RestoreHistoryScroll;
+            viewModel.SidebarCommitLocated -= OnSidebarCommitLocated;
         };
         // Columns are outside the visual tree. Keep every computed graph lane visible when
         // the viewport narrows; the table can scroll horizontally instead of clipping edges.
@@ -39,6 +41,8 @@ public partial class MainWindow : Window
             new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
     }
 
+    private void OnSidebarCommitLocated(object? sender, EventArgs e)
+    { if (ViewModel.SelectedCommit is { } row) HistoryTable.ScrollIntoView(row); }
     private void OnSystemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     { if (e.PropertyName == nameof(SystemParameters.HighContrast)) Dispatcher.InvokeAsync(() => HighContrast = SystemParameters.HighContrast); }
     private void OnBranchMenu(object sender, RoutedEventArgs e)

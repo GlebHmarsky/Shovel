@@ -183,9 +183,9 @@
       </Grid.ColumnDefinitions>
       <DockPanel Margin="10,14" Background="{DynamicResource Theme.Sidebar}">
         <TextBlock DockPanel.Dock="Top" Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" Margin="8,0,0,12" />
-        <StackPanel VerticalAlignment="Top">
+        <StackPanel DockPanel.Dock="Top" VerticalAlignment="Top">
           <Button Content="{loc:Text Key=LocalChanges}" Command="{Binding ShowChangesCommand}" HorizontalContentAlignment="Left" Padding="8,9" Background="Transparent" BorderThickness="0" ToolTip="{loc:Text Key=CommitOpenHelp}" AutomationProperties.AutomationId="LocalChangesNavigation"/>
-          <Button Content="{loc:Text Key=Stashes}" Command="{Binding StashesCommand}" HorizontalContentAlignment="Left" Padding="8,9" Background="Transparent" BorderThickness="0"/>
+
           <RadioButton Style="{StaticResource NavigationItem}" Content="{loc:Text Key=AllCommits}" IsChecked="{Binding IsHistory, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.Name="{loc:Text Key=AllCommits}" AutomationProperties.AutomationId="CurrentWorkspace"/>
           <StackPanel Margin="8,16,0,0" Visibility="{Binding HasRecovery, Converter={StaticResource BoolToVisibility}}" AutomationProperties.AutomationId="RecoveryPanel">
             <TextBlock Text="{Binding RecoveryHelp}" TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite" />
@@ -194,6 +194,7 @@
             <Button Content="{loc:Text Key=ActionTitleAbort}" Command="{Binding AbortCommand}" Margin="0,2" ToolTip="{loc:Text Key=RecoveryAbortHelp}" />
           </StackPanel>
         </StackPanel>
+        <views:RepositorySidebarView/>
       </DockPanel>
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" ResizeDirection="Columns"
                     Background="{DynamicResource Theme.Border}"

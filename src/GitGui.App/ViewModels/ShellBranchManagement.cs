@@ -22,7 +22,7 @@ public sealed partial class ShellViewModel
         DeleteBranchCommand?.Refresh(); SetBranchUpstreamCommand?.Refresh(); UnsetBranchUpstreamCommand?.Refresh();
         Changed(nameof(BranchManagementHelp));
     }
-    private async Task ManageBranchAsync(BranchManagementAction action)
+    private async Task ManageBranchAsync(BranchManagementAction action, string? selectedBranch = null)
     {
         var tab = SelectedRepository!;
         // Freeze before the modal pumps the dispatcher; neither confirmation nor a later
@@ -37,7 +37,9 @@ public sealed partial class ShellViewModel
         var attempted = false;
         try
         {
-            var options = _interaction!.ChooseBranchManagement(new(action, snapshot, page.Session));
+            var choices = new BranchManagementViewModel(action, snapshot, page.Session);
+            if (selectedBranch is not null) choices.Branch = choices.Branches.FirstOrDefault(b => b.Name == selectedBranch);
+            var options = _interaction!.ChooseBranchManagement(choices);
             if (options is null || SelectedRepository != tab) return;
             var kind = action switch
             {
@@ -73,7 +75,7 @@ public sealed partial class ShellViewModel
         finally
         {
             SetActionOpen(false);
-            if (attempted) BeginCountRead(tab);
+            if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); }
         }
     }
 }

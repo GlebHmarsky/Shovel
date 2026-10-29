@@ -43,7 +43,7 @@ public sealed class CommitRow : ObservableObject
         Author = Limit(Commit.Author, 256);
         MessagePreview = Commit.Message;
         MessageNotice = "";
-        RefLabels = string.Join(UiText.Get("RefSeparator"), (entry.References ?? []).Select(reference => reference.Name == "HEAD" ? UiText.Get("HeadLabel") :
+        RefLabels = string.Join(UiText.Get("RefSeparator"), (entry.References ?? []).Select(reference => reference.Name.StartsWith("stash@{", StringComparison.Ordinal) ? reference.Name : reference.Name == "HEAD" ? UiText.Get("HeadLabel") :
             UiText.Format(reference.Name.StartsWith("refs/heads/", StringComparison.Ordinal) ? "LocalRefLabel" :
                 reference.Name.StartsWith("refs/remotes/", StringComparison.Ordinal) ? "RemoteRefLabel" : "TagRefLabel",
                 reference.Name[(reference.Name.IndexOf('/', 5) + 1)..])));

@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.22.1** retains branch deletion/upstream management, persistent commit drafts and opt-in performance fixtures, with a smaller routine verification gate. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.23.0** adds a working repository sidebar, saved stashes in history and submodule open/update/sync; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -62,6 +62,10 @@ Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build
 
 ## Using the workspace
 
+**0.23.0 sidebar:** single-click a branch/tag/fetched remote branch/stash to select its commit; double-click a local branch (or Enter) to switch. Branch right-click offers switch/delete/upstream actions; ↑/↓ are local upstream counts. Remotes offer explicit Fetch. Stashes offer Apply/Pop/confirmed Drop inline; the existing Repository → Stashes inspector retains Create and staged-state options. Submodules open as another tab and offer Initialize / Update to the recorded commit or Sync URL. No force/recursion/automatic commit. Lists load after first history and keep cached rows on failure. [Workflow and limits](docs/product.md#repository-sidebar-0230).
+
+Optional focused sidebar integration: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-sidebar` (four checks). `--render-sidebar` runs only its first list/input-binding/offscreen check. Neither is part of routine verification; no interactive window is shown. History currently supports at most 256 saved stashes, with an explicit error above that bound. Ref jumps have bounded output/time and can fail on very large histories without clearing useful rows.
+
 **0.22.0:** Branch menu adds confirmed local deletion and upstream set/unset. Commit drafts persist locally per worktree; [storage/recovery limits](docs/architecture.md#integrated-branch-management-and-drafts-0220).
 
 Focused integration checks after building: `--check-branches`, `--check-drafts`, `--check-history-performance` passed to the foundation-check runner. Full verification includes these small checks. Opt-in benchmarks: `powershell -NoProfile -File scripts/Measure-History.ps1 -Profile merge-heavy -Samples 3`; `large` and `million` profiles and `-IdleFiveMinutes` are explicit additional runs, not release prerequisites or desktop measurements. See [metric definitions](docs/handoffs/task-3.md).
@@ -70,7 +74,7 @@ Focused integration checks after building: `--check-branches`, `--check-drafts`,
 
 Focused initialization checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-init`. Included in full verification. These use isolated configuration and disposable temp repositories outside the source checkout (nested init is unsupported), with their location recorded in the artifact folder.
 
-Open a local worktree root; selected saved tab restores automatically, others load on selection, no read consent. Fixed All Commits includes local/remote/tag/current-HEAD ancestry, detached included; no reflog-only/unreachable/stash-only history or scope selector. Legacy narrow scope ignored.
+Open a local worktree root; selected saved tab restores automatically, others load on selection, no read consent. Fixed All Commits includes local/remote/tag/current-HEAD ancestry, detached included; saved stashes included; other reflog-only/unreachable history excluded, no scope selector. Legacy narrow scope ignored.
 
 Headerless graph/refs/description/author/date/hash begins below tabs. Select row for full parsed metadata/message/parents/refs. Older/Newer: 200-row pages/no total count cap. Range/status/help exposes limits. Three cached tabs/character budget, 128 back cursors/First history page; page/selection/scroll session-only. Cache eviction reloads first page.
 
@@ -100,7 +104,7 @@ Additional menu commands: confirmed Discard and selected-file Stash; configured 
 
 ## Stashes
 
-Choose sidebar **Stashes** or **Repository → Stashes**. Cached entries/message appear before background reads. Create accepts an optional message and **Include untracked files**; ignored files and submodule contents stay excluded. Select a stash to inspect saved tracked, staged, unstaged or untracked files with real text/binary diffs. **Apply** keeps the stash; **Pop** removes it only after clean application and an unchanged list. **Restore staged state** is optional for both. **Drop** confirms the exact saved entry and its consequences.
+The sidebar lists stashes directly; choose **Repository → Stashes** for Create and detailed inspection. Cached entries/message appear before background reads. Create accepts an optional message and **Include untracked files**; ignored files and submodule contents stay excluded. Select a stash to inspect saved tracked, staged, unstaged or untracked files with real text/binary diffs. **Apply** keeps the stash; **Pop** removes it only after clean application and an unchanged list. **Restore staged state** is optional for both. **Drop** confirms the exact saved entry and its consequences.
 
 Results/output remain in the modal, with command duration at top center and Cancel available. Failed/conflicted application keeps the stash; a partially successful Pop reports applied changes separately from removal. Resolve externally and stage in Local Changes; stash conflicts do not create a Continue/Abort sequence. [Workflow](docs/product.md#stashes-0180), [bounds and concurrent-client limits](docs/architecture.md#stashes-0180).
 
@@ -110,7 +114,7 @@ Focused checks after building: `dotnet run --project tests/GitGui.FoundationChec
 
 Branch: create from concrete starting commit/optional checkout; arrow switches local branches. Fetch chooses remote/all; Pull remote branch → current branch defaults to Rebase, with Merge as the alternative. Optional auto-stash saves/reapplies tracked changes (untracked stay in place; staging may change). Push chooses source/remote/destination with optional tags/upstream. Fixed-size close-only options are immediately editable from cached local refs/remote names; opening runs no Git queries. Use Fetch for new remote branches or Refresh after external configuration changes. Execution resolves the named remote using current Git configuration and validates the cached refs. Clicking the normal action closes options and starts Git. Follow phase/time at top center, Cancel there or under Repository, and read results through Details → Operation. No extra approval checkbox; force options remain deferred.
 
-Existing restrictions: Git rejects conflicting dirty/untracked paths; Shovel protects ignored collisions. Branch checkout still requires clean state and excludes sparse/submodule repositories. Pull respects existing sparse patterns and updates superproject pointers without updating/stashing submodule contents. Active sequences block new branch/network commands; recovery controls are available separately. Custom SSH/multiple remote URLs and force remain unsupported. Hooks are preserved. [Action details](docs/architecture.md#explicit-git-actions-f2a-080). Rebase/merge/stash conflicts keep recovery state and original output. Resolve files externally, Stage in Local Changes, close that modal, then Continue from the sidebar or Repository > Recovery. Skip/Abort confirm their scope; conflict editing remains deferred. One last result/output remains in memory on its repository tab, with HTTP(S) credentials redacted. Cancel is not undo; fresh history/count inspection finishes before another action/tab/window close. Main-window auth prompts survive options closure; refresh failure is distinct from Git outcome.
+Existing restrictions: Git rejects conflicting dirty/untracked paths; Shovel protects ignored collisions. Branch checkout still requires clean state and excludes sparse repositories; clean submodule superprojects switch without recursive checkout. Pull respects existing sparse patterns and updates superproject pointers without updating/stashing submodule contents. Active sequences block new branch/network commands; recovery controls are available separately. Custom SSH/multiple remote URLs and force remain unsupported. Hooks are preserved. [Action details](docs/architecture.md#explicit-git-actions-f2a-080). Rebase/merge/stash conflicts keep recovery state and original output. Resolve files externally, Stage in Local Changes, close that modal, then Continue from the sidebar or Repository > Recovery. Skip/Abort confirm their scope; conflict editing remains deferred. One last result/output remains in memory on its repository tab, with HTTP(S) credentials redacted. Cancel is not undo; fresh history/count inspection finishes before another action/tab/window close. Main-window auth prompts survive options closure; refresh failure is distinct from Git outcome.
 
 ## Headless timing reproduction
 
@@ -138,7 +142,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.22.1-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.23.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

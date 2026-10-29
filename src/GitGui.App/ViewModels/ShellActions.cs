@@ -138,11 +138,12 @@ public sealed partial class ShellViewModel
         {
             if (Status == UiText.Get("ActionPreparing")) Status = UiText.Get("NoActiveOperation");
             SetActionOpen(false);
-            if (attempted) BeginCountRead(tab);
+            if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); }
         }
     }
     private void SetActionOpen(bool value)
     {
+        if (value) _sidebarCancel?.Cancel();
         _actionOpen = value; _preparingAction = value; Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate)); Changed(nameof(OperationStatus)); RefreshCommands();
     }
     private void SetLastAction(GitActionViewModel? model)

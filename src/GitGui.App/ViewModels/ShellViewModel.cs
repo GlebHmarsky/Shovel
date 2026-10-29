@@ -82,6 +82,7 @@ public sealed partial class ShellViewModel : ObservableObject
     private void SelectRepository(RepositoryTab? value)
     {
         HistoryViewChanging?.Invoke(this, EventArgs.Empty);
+        _sidebarCancel?.Cancel(); SidebarStatus = "";
         _operationCancellation?.Cancel(); _generation++; CancelCountRead();
         _selectedRepository = value;
         if (value is not null) value.History.LastUse = ++_useCounter;
@@ -353,7 +354,8 @@ public sealed partial class ShellViewModel : ObservableObject
                     { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); }
                     _readingDivergence = false; _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
                     Changed(nameof(OperationStatus)); PublishState();
-                    if (historyPublished && !_stopping && !_commitOpen) BeginCountRead(tab);
+                    if (historyPublished && !_stopping && !_commitOpen) { tab.SidebarReadAt = default; BeginCountRead(tab); }
+                    if (!_stopping && !_commitOpen && !ActionOpen && tab.Snapshot is not null) BeginSidebarRead(tab);
                 }
             }
             void RejectChangedIdentity()
@@ -374,7 +376,7 @@ public sealed partial class ShellViewModel : ObservableObject
         var cached = Repositories.Where(tab => tab.History.Page is not null).OrderBy(tab => tab.History.LastUse).ToList();
         while (cached.Count > CachedTabLimit || (cached.Count > 1 && cached.Sum(tab => tab.History.EstimatedBytes) > 32 * 1024 * 1024))
         {
-            var oldest = cached.First(tab => tab != active); oldest.History.Clear(); cached.Remove(oldest);
+            var oldest = cached.First(tab => tab != active); oldest.History.Clear(); oldest.Sidebar = null; oldest.SidebarReadAt = default; oldest.Stashes.List = null; cached.Remove(oldest);
         }
     }
     private async Task<bool> PersistRepositoryIdentitiesAsync()
@@ -392,7 +394,7 @@ public sealed partial class ShellViewModel : ObservableObject
             _publishingState = true;
             try
             {
-                PublishChanges(); HighlightAuthors();
+                PublishChanges(); HighlightAuthors(); PublishSidebar();
                 foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(PullCount), nameof(PushCount), nameof(DivergenceHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
                 RefreshCommands(); HistoryViewChanged?.Invoke(this, EventArgs.Empty); UpdateCommitFiles();
             } finally { _publishingState = false; }
@@ -413,6 +415,7 @@ public sealed partial class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        RefreshSidebarCommands();
         NewRepositoryCommand?.Refresh();
         Changed(nameof(NewRepositoryHelp));
         StashesCommand?.Refresh();
@@ -434,7 +437,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
-    public void BeginShutdown() { StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
-    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _countTask; await _oldCommitFiles; }
+    public void BeginShutdown() { _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
+    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _countTask; await _oldCommitFiles; await _sidebarTask; }
     public void ResumeAfterSaveFailure() { _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }

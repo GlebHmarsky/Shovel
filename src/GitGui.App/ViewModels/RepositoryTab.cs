@@ -8,6 +8,8 @@ public sealed class RepositoryTab(string directory) : ObservableObject
 {
     internal CommitWorkspaceState Changes { get; } = new();
     internal StashCache Stashes { get; } = new();
+    internal RepositorySidebar? Sidebar { get; set; }
+    internal DateTimeOffset SidebarReadAt { get; set; }
     internal HistoryViewState History { get; } = new();
     public string Directory { get; } = directory;
     public string Label => Path.GetFileName(Path.TrimEndingDirectorySeparator(Directory)) is { Length: > 0 } label ? label : Directory;

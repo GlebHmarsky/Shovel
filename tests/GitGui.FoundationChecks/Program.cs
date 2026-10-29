@@ -25,6 +25,16 @@ internal static partial class Program
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
         if (args.Length == 0 || args is ["--smoke"]) return RunRoutineChecks();
+        if (args is ["--check-sidebar"] or ["--render-sidebar"])
+        {
+            _sidebarRenderOnly = args[0] == "--render-sidebar";
+            _sidebarChecks = true; _routine = true;
+            _root = Path.Combine(Path.GetFullPath("artifacts/sidebar-checks"), DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_root);
+            using var deadline = RoutineDeadline(TimeSpan.FromMinutes(3), "Sidebar checks exceeded deadline");
+            var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks();
+            Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
+        }
         string[] optionalModes = ["--full", "--check-branches", "--check-drafts", "--check-history-performance", "--check-init", "--check-file-actions", "--check-file-menus", "--check-stashes", "--check-recovery", "--check-fast-changes", "--check-commit-files", "--check-hunks", "--check-theme", "--check-local", "--check-commit", "--measure-working-copy", "--measure-working-copy-assets", "--measure-actions", "--measure-history", "--measure-large-history"];
         if (args.Length != 1 || !optionalModes.Contains(args[0])) { Console.Error.WriteLine("Use --smoke (default), --full, or a documented focused/measurement command."); return 2; }
         if (args.FirstOrDefault() == "--full") args = [];

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.0 — 2026-10-29
+
+- Add expandable sidebar branches with tracking counts, fetched remote branches, tags, stashes and submodules. Locate refs/stashes in paged history and use branch/stash context actions without opening their old list dialog.
+- Include saved stash commits and labels in All Commits. Preserve useful history during bounded asynchronous navigation and list refresh.
+- Open submodules in repository tabs, initialize/update the selected recorded commit, and sync its URL, with shared progress/authentication/cancellation and normal Git checkout protections. No force or recursive update.
+
 ## 0.22.1 — 2026-10-29
 
 - Replace default full verification with 26 smoke checks, capped at 30 checks and three minutes overall (30 seconds per check); stop on the first failure and report individual timings.

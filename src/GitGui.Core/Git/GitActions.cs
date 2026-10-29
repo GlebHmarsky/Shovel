@@ -5,7 +5,7 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init, DeleteBranch, SetUpstream, UnsetUpstream }
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init, DeleteBranch, SetUpstream, UnsetUpstream, SubmoduleUpdate, SubmoduleSync }
 public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch, Recovering }
 public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
@@ -65,8 +65,23 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
         // Named mutex covers shared refs across linked worktrees and Shovel profiles. Acquire/release
         // on this one worker thread: an await continuation must never release another thread's mutex.
         using var gate = EnterMutationGate(context.Identity);
-        try { return ExecuteLocked().GetAwaiter().GetResult(); }
-        finally { gate.ReleaseMutex(); }
+        Mutex? childGate = null;
+        try
+        {
+            if (options.Action is GitAction.SubmoduleUpdate or GitAction.SubmoduleSync)
+            {
+                var child = ValidateSubmodulePath(context.Identity.Worktree, options.Branch);
+                if (File.Exists(Path.Combine(child, ".git")) || Directory.Exists(Path.Combine(child, ".git")))
+                {
+                    var identity = identities.ReadAsync(child, token).GetAwaiter().GetResult();
+                    childGate = EnterMutationGate(identity);
+                    var state = reader.InspectAsync(context.Git, child, token, includeHistory: false).GetAwaiter().GetResult();
+                    if (state.Operation != RepositoryOperation.None) throw new GitActionException("ActionSequence");
+                }
+            }
+            return ExecuteLocked().GetAwaiter().GetResult();
+        }
+        finally { if (childGate is not null) { childGate.ReleaseMutex(); childGate.Dispose(); } gate.ReleaseMutex(); }
 
         async Task<ActionResult> ExecuteLocked()
         {
@@ -86,7 +101,7 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
             if (options.Action == GitAction.SwitchBranch || options.Action == GitAction.NewBranch && options.Checkout)
             {
                 // Branch switching has not yet been validated for these worktree modes.
-                if (File.Exists(Path.Combine(path, ".gitmodules")) || File.Exists(Path.Combine(fresh.GitDirectory, "info", "sparse-checkout")))
+                if (File.Exists(Path.Combine(fresh.GitDirectory, "info", "sparse-checkout")))
                     throw new GitActionException("ActionWorktreeUnsupported");
                 var status = await Read(git, path, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], token);
                 if (status.StandardOutput.Length != 0) throw new GitActionException("ActionDirty");
@@ -107,6 +122,11 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                     if (!history.References.Any(item => item.Name == "refs/heads/" + options.Branch)) throw new GitActionException("ActionChanged");
                     commands.Add(["switch", "--no-guess", "--no-overwrite-ignore", "--no-recurse-submodules", "--", options.Branch]);
                 }
+            }
+            else if (options.Action is GitAction.SubmoduleUpdate or GitAction.SubmoduleSync)
+            {
+                await ValidateSubmoduleAsync(context, options, token);
+                commands.Add(options.Action == GitAction.SubmoduleUpdate ? ["-c", "submodule.recurse=false", "submodule", "update", "--init", "--checkout", "--", options.Branch] : ["submodule", "sync", "--", options.Branch]);
             }
             else
             {
@@ -211,7 +231,7 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                 environment["GIT_OPTIONAL_LOCKS"] = null;
                 environment["GIT_MERGE_AUTOEDIT"] = "no";
                 // The broker exists only for this user-started operation, never history reads.
-                if (options.Action is GitAction.Fetch or GitAction.Pull or GitAction.Push)
+                if (options.Action is GitAction.Fetch or GitAction.Pull or GitAction.Push or GitAction.SubmoduleUpdate)
                 {
                     if (authentication is not null)
                         foreach (var pair in authentication.Environment) environment[pair.Key] = pair.Value;

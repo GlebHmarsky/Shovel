@@ -31,7 +31,7 @@ public sealed class GitActionViewModel : ObservableObject
     public bool IsFetch => Action == GitAction.Fetch;
     public bool IsPull => Action == GitAction.Pull;
     public bool IsPush => Action == GitAction.Push;
-    public bool IsNetwork => IsFetch || IsPull || IsPush;
+    public bool IsNetwork => IsFetch || IsPull || IsPush || Action == GitAction.SubmoduleUpdate;
     public bool ChooseBranch => IsPush || IsSwitch;
     public bool ChooseRemoteBranch => IsPush || IsPull;
     public string Title => UiText.Get((Action is GitAction.DeleteBranch or GitAction.SetUpstream or GitAction.UnsetUpstream ? "BranchManageTitle" : "ActionTitle") + Action);
@@ -69,7 +69,7 @@ public sealed class GitActionViewModel : ObservableObject
     public bool CanEdit => (_context is not null || _execute is not null) && !_dismissed && !IsRunning && !_attempted;
     public bool HasAttempt => _attempted;
     public string RunUnavailableReason => UiText.Get(_context is null && _execute is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
-        IsNetwork && Remote is null ? "ActionNoRemote" :
+        (IsFetch || IsPull || IsPush) && Remote is null ? "ActionNoRemote" :
         IsNew && string.IsNullOrWhiteSpace(NewName) ? "ActionEnterBranchName" :
         IsNew && !StartRefs.Contains(StartRef) ? "ActionNoStart" :
         ChooseBranch && !Branches.Contains(Branch) ? "ActionChooseBranch" :
@@ -97,7 +97,7 @@ public sealed class GitActionViewModel : ObservableObject
         _repository = context.Repository.Worktree; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
         _prepareExecution = prepareExecution;
         _execute = execute;
-        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!IsNetwork || Remote is not null) &&
+        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!(IsFetch || IsPull || IsPush) || Remote is not null) &&
             (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
             (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
         ApplyContext(context, initialBranch);

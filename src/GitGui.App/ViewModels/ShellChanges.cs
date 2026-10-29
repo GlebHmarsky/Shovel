@@ -31,7 +31,7 @@ public sealed partial class ShellViewModel
     private void InitializeChanges()
     {
         ShowChangesCommand = new(() => CommitDialogTask = OpenCommitAsync(), () => CanRead && _actions is not null && _interaction is not null);
-        ShowHistoryCommand = new(() => RevealDetails(DetailsIndex), () => CanRead);
+        ShowHistoryCommand = new(() => { RevealDetails(DetailsIndex); if (!IsBusy && State?.Page?.Cursor.Offset > 0) BeginInspection(SelectedRepository!, force: true, firstPage: true); }, () => CanRead);
     }
     private void BeginCurrentRead(RepositoryTab tab, bool force = false, bool reopen = false)
     { if (force) tab.Changes.ReadAt = default; BeginInspection(tab, force: force, reopen: reopen); }
@@ -42,7 +42,7 @@ public sealed partial class ShellViewModel
     private async Task OpenCommitAsync()
     {
         var tab = SelectedRepository!;
-        CancelCountRead(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
+        CancelCountRead(); _sidebarCancel?.Cancel(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
         var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
             _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities));
         _commitModel = model;

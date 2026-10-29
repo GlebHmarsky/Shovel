@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.22.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.23.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
 
@@ -20,7 +20,7 @@ Commit drafts now survive closing tabs/restarting. Restore happens after the mod
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
-- **All Commits:** ancestry of local branches, remote-tracking branches, tags and current HEAD, including detached HEAD. Excludes reflog-only, unreachable and stash-only history. Unborn HEAD does not hide other branches. No scope/filter selector; legacy narrower settings are ignored; scope help is accessible.
+- **All Commits:** ancestry of local branches, remote-tracking branches, tags, current HEAD and saved stashes, including detached HEAD. Other reflog-only and unreachable history is excluded. Unborn HEAD does not hide other branches. No scope/filter selector; legacy narrower settings are ignored; scope help is accessible.
 - Headerless virtualized history begins directly below repository tabs. Graph, ref badges, description, author, local date and short hash occupy fixed topology order; sorting/header-drag resizing are unavailable. Description adapts to width. Merge nodes have a second ring and parent help.
 - Selecting a row exposes full message, author/committer, original-offset dates, hash, parents and full refs below. Row labels are bounded previews with full tooltip/details; parsed messages within the read limit remain complete.
 - Older/Newer show 200-row pages and range; no total commit ceiling. Cache: three visited tabs, one page each, character budget; 128 back cursors plus First history page. Page/selection/scroll are session-only. Eviction reloads page one. Refresh preserves page for unchanged refs/HEAD; otherwise restarts, retaining the selected hash if present.
@@ -30,6 +30,18 @@ Commit drafts now survive closing tabs/restarting. Restore happens after the mod
 Pull shows **behind**, Push **ahead**, comparing the configured upstream from the local snapshot, even with a separate push destination. Counts load after rows. Zero is measured; dash means pending/unavailable/cancelled/failed. Help includes upstream/time/reason. Detached/unborn/no-upstream/missing-upstream/shallow cannot imply synchronization. Failed refresh retains stale counts; no server freshness claim without fetch.
 
 Same-author peers use light-yellow text, matching exact raw name/email ordinally and case-sensitively, without mailmap/committer. Nonblank email required; blank name matches only blank name. Selected row keeps selection colors; unrelated text stays white on dark history, graph/ref colors independent. High contrast uses system colors; accessible text explains the relation.
+
+## Repository sidebar (0.23.0)
+
+Expandable **Branches**, **Remotes**, **Tags**, **Stashes** and **Submodules** use local snapshots. Lists refresh after first history, on stale activation or explicit Refresh; there is no automatic fetch, polling or inactive-tab preload. Empty groups are honest empty states; pending/failure text is explicit and failed refresh retains cached entries. Menus open from available data without preparation. The sidebar resizes and scrolls.
+
+- **Branches:** current checkmark and local upstream counts (↑ ahead / ↓ behind). Single click locates its commit; double click or Enter switches. Right-click offers Switch, Show in history, Delete, Set upstream and Unset upstream. Existing clean-state/worktree/deletion protections apply. Counts reflect fetched local refs, not live server state; no upstream has no count, pending shows an ellipsis and removed upstream is identified.
+- **Remotes:** configured remotes and their fetched remote-tracking branches. Click a branch to locate it; remote context menu Fetch performs the explicit fetch. Remote creation/editing/deletion remains deferred.
+- **Tags:** click to locate the tagged commit, including older pages; no checkout or filtering. Tags pointing to non-commit objects have no history row and are omitted.
+- **Stashes:** inline saved messages/selectors; click selects the stash commit with its label in history. Its saved index/untracked parents can also appear in the graph. Right-click Apply/Pop/Drop uses real existing actions; Drop confirms the actual saved target. These quick actions restore worktree content without restoring staged state. Repository → Stashes retains detailed inspection/Create and the Restore staged state option.
+- **Submodules:** indexed gitlinks, including uninitialized ones. Click opens an initialized child as another repository tab. Right-click **Initialize / Update** checks out its recorded commit (may download); **Sync URL** copies configured URL changes. No force, recursive update, implicit stage or commit. Missing/uninitialized paths explain how to initialize; dirty collisions/active child operations fail with retained output. Add/remove/deinit/recursive/remote-latest management is deferred.
+
+Navigation retains useful history while locating an uncached commit asynchronously, selects it and scrolls into view. All Commits returns to the first page after a jump. Read/time limits report failure rather than silently omit data; [architecture](architecture.md#repository-sidebar-0230) owns limits, including the current 256-saved-stash bound. A jump starts a fresh graph lane layout for that page; normal Older paging carries it forward.
 
 ## Committed changes (0.15.0)
 
@@ -87,7 +99,7 @@ Open/Explorer require one selected row. Open uses the **current working file** a
 
 ## Stashes (0.18.0)
 
-Sidebar **Stashes** or Repository → Stashes opens a resizable owned window over retained history. Opening uses the tab's cached list/message immediately, then refreshes local stashes in the background; no remote queries, initial Git prerequisite or polling. Select an entry for its full hash/message and stored files/diffs: all tracked changes, saved staged changes, saved unstaged changes, or saved untracked files. Text/binary/LFS views are shared with historical Changes; current working files never supply saved content.
+Repository → **Stashes** opens a resizable owned window over retained history; the sidebar now lists entries directly. Opening uses the tab's cached list/message immediately, then refreshes local stashes in the background; no remote queries, initial Git prerequisite or polling. Select an entry for its full hash/message and stored files/diffs: all tracked changes, saved staged changes, saved unstaged changes, or saved untracked files. Text/binary/LFS views are shared with historical Changes; current working files never supply saved content.
 
 **Create stash** accepts an optional message and unchecked **Include untracked files**. It saves staged/unstaged changes and removes those saved changes from the worktree; ignored files and submodule contents are excluded. **Apply** restores the selected entry and keeps it. **Pop** applies first and removes that entry only after successful application with no detected conflicts and an unchanged stash list. Unchecked **Restore staged state** controls both Apply and Pop. **Drop** confirms the exact repository, stash selector/hash/message and loss of the saved entry; it does not change working files and offers no guaranteed undo.
 

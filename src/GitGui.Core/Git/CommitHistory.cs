@@ -49,7 +49,7 @@ public sealed partial class RepositoryReader
             var name = fields[0];
             if (!name.StartsWith("refs/heads/", StringComparison.Ordinal) &&
                 !name.StartsWith("refs/remotes/", StringComparison.Ordinal) &&
-                !name.StartsWith("refs/tags/", StringComparison.Ordinal)) continue;
+                !name.StartsWith("refs/tags/", StringComparison.Ordinal) && !name.StartsWith("stash@{", StringComparison.Ordinal)) continue;
             var hash = fields[2] == "commit" ? fields[1] : fields[4] == "commit" ? fields[3] : null;
             // Nested annotated tags require recursive peeling. Non-commit tags have no history row.
             if (fields[4] == "tag")
@@ -109,7 +109,7 @@ public sealed partial class RepositoryReader
             return new CommitHistory(session, cursor, null, []);
         }
         string[] roots = session.Scope == HistoryScope.AllCommits
-            ? ["--branches", "--remotes", "--tags", .. (session.Repository.Commit is { } head ? new[] { head } : [])]
+            ? ["--branches", "--remotes", "--tags", .. session.References.Where(r => r.Name.StartsWith("stash@{", StringComparison.Ordinal)).Select(r => r.Hash), .. (session.Repository.Commit is { } head ? new[] { head } : [])]
             : [session.Repository.Commit!];
         // Re-walk an unchanged ref snapshot with --skip. Retain only one page of messages/rows.
         // Deep walks can hit the process deadline; they report a retryable error, never 'end'.
@@ -162,11 +162,23 @@ public sealed partial class RepositoryReader
         }
         var result = await RunAsync(git.Executable, repository.Worktree, ReadArguments([
             "for-each-ref", "--include-root-refs", "--sort=refname", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref)%00%(upstream)",
-            "HEAD", "refs/heads/", "refs/remotes/", "refs/tags/", "refs/replace/"
+            "HEAD", "refs/heads/", "refs/remotes/", "refs/tags/", "refs/replace/", "refs/stash"
         ]), token, MaximumHistoryBytes).ConfigureAwait(false);
         RequireSuccess(result);
         string? branch = null, commit = null, headTarget = null;
         var refs = Text(result.StandardOutput);
+        if (refs.StartsWith("refs/stash\0", StringComparison.Ordinal) || refs.Contains("\nrefs/stash\0", StringComparison.Ordinal))
+        {
+            var stashTips = await RunAsync(git.Executable, repository.Worktree, ReadArguments(["reflog", "show", "--format=%H", "--max-count=257", "refs/stash", "--"]), token, MaximumHistoryBytes);
+            RequireSuccess(stashTips);
+            var hashes = Text(stashTips.StandardOutput).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            if (hashes.Length > 256) throw new GitReadException(GitFailure.OutputLimit);
+            for (var i = 0; i < hashes.Length; i++)
+            {
+                if (!IsObjectId(hashes[i])) throw new GitReadException(GitFailure.InvalidOutput);
+                refs += $"stash@{{{i}}}\0{hashes[i]}\0commit\0\0\0\0\n";
+            }
+        }
         foreach (var record in refs.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var fields = record.Split('\0');
@@ -186,7 +198,7 @@ public sealed partial class RepositoryReader
         var shallow = ReadBoundary("shallow");
         var grafts = ReadBoundary(Path.Combine("info", "grafts"));
         using var fingerprint = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
-        foreach (var part in new[] { result.StandardOutput, shallow, grafts, Encoding.UTF8.GetBytes(branch ?? ""), BitConverter.GetBytes((int)ReadOperation(repository.GitDirectory)) })
+        foreach (var part in new[] { Encoding.UTF8.GetBytes(refs), shallow, grafts, Encoding.UTF8.GetBytes(branch ?? ""), BitConverter.GetBytes((int)ReadOperation(repository.GitDirectory)) })
         { fingerprint.AppendData(BitConverter.GetBytes(part.Length)); fingerprint.AppendData(part); }
         var upstream = refs.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(record => record.Split('\0'))
             .FirstOrDefault(fields => fields[0] == headTarget)?[6];

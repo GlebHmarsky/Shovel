@@ -147,7 +147,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="TagRefLabel" xml:space="preserve"><value>Tag: {0}</value></data>
   <data name="RefSeparator" xml:space="preserve"><value> · </value></data>
   <data name="CommitReferences" xml:space="preserve"><value>Branches and tags</value></data>
-  <data name="AllCommitsHelp" xml:space="preserve"><value>All Commits: history reachable from local branches, remote-tracking branches, tags and HEAD, including detached HEAD. Reflog-only, unreachable and stash-only commits are excluded. No filters are active.</value></data>
+  <data name="AllCommitsHelp" xml:space="preserve"><value>All Commits: history reachable from local branches, remote-tracking branches, tags, HEAD and saved stashes, including detached HEAD. Other reflog-only and unreachable commits are excluded. No filters are active. Saved stash limit: 256; exceeding it reports an error rather than hiding entries.</value></data>
   <data name="CurrentHeadHelp" xml:space="preserve"><value>Ancestors of the inspected HEAD, including detached HEAD. Commits exclusive to other branches or tags are outside this scope. This does not check out a branch.</value></data>
   <data name="MainMenu" xml:space="preserve"><value>Main menu</value></data>
   <data name="RepositoryMenu" xml:space="preserve"><value>_Repository</value></data>
@@ -724,4 +724,19 @@ Requested upstream: {2}</value></data>
 
   <data name="CommitDraftSaving" xml:space="preserve"><value>Saving the commit draft state</value></data>
   <data name="CommitDraftPersistenceHelp" xml:space="preserve"><value>Messages save locally for this worktree and survive reopening. A successful commit clears the submitted draft.</value></data>
+  <data name="SidebarLocateFailed" xml:space="preserve"><value>Could not locate this commit. Existing history was retained; refresh and try again.</value></data>
+  <data name="ActionTitleSubmoduleSync" xml:space="preserve"><value>Sync submodule URL</value></data>
+  <data name="SidebarSubmodulePath" xml:space="preserve"><value>This submodule path is unsupported or contains a link outside the expected worktree.</value></data>
+  <data name="ActionExplainSubmoduleSync" xml:space="preserve"><value>Copy this submodule URL from .gitmodules into local configuration.</value></data>
+  <data name="SidebarStashBadge" xml:space="preserve"><value>Saved stash: {0}</value></data>
+  <data name="SidebarLocating" xml:space="preserve"><value>Locating commit in history…</value></data>
+  <data name="ActionExplainSubmoduleUpdate" xml:space="preserve"><value>Check out the recorded submodule commit without force or recursion.</value></data>
+  <data name="SidebarFailed" xml:space="preserve"><value>Could not refresh repository lists. Cached entries are retained. Use Repository → Refresh to retry.</value></data>
+  <data name="SidebarOpenSubmodule" xml:space="preserve"><value>Open as repository tab</value></data>
+  <data name="SidebarLoading" xml:space="preserve"><value>Updating repository lists…</value></data>
+  <data name="SidebarLocate" xml:space="preserve"><value>Show in history</value></data>
+  <data name="ActionTitleSubmoduleUpdate" xml:space="preserve"><value>Initialize / Update submodule</value></data>
+  <data name="SidebarGone" xml:space="preserve"><value>Upstream missing</value></data>
+  <data name="SidebarSubmoduleUnavailable" xml:space="preserve"><value>Submodule is not initialized or is inaccessible. Use Initialize / Update first.</value></data>
+  <data name="SidebarTitle" xml:space="preserve"><value>Repository navigation</value></data>
 </root>

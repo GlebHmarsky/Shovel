@@ -4,7 +4,10 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.22.1 delivered: routine verification is 26 checks (maximum 30), measured at 33.3 seconds; full/focused regressions remain opt-in. Investigate the recorded intermittent draft write with focused checks next. Broader theme work remains P2.
+0.23.0: working repository sidebar, saved stash history and selected submodule operations. Routine verification stays at 26 checks (maximum 30); feature checks remain opt-in. The recorded intermittent draft write remains the next correctness investigation. Broader theme work remains P2.
+
+- [x] **P1 — Make repository sidebar functional.** Branch switch/tracking/context actions; fetched remote refs; tag/stash history navigation; inline Apply/Pop/confirmed Drop; submodule open/update/sync. Async cached lists after history, retained errors, real disposable workflows and normal/minimum offscreen review.
+- [x] **P1 — Deliver 0.23.0.** 26 routine checks in 31.5 seconds; four focused sidebar checks, offscreen input/layout review, matching ignored preview/package verification and owning documentation.
 
 - [x] **P1 — Reduce routine verification.** Explicit small default, count/runtime guards, first-failure stop, per-check timings, optional full suite, updated guidance and verified 0.22.1 preview. No automatic suite growth or repeated unchanged checks. [Policy](AGENTS.md), [commands](README.md#restore-build-and-check).
 
@@ -66,7 +69,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] **P1 — Network MVP.** Clone/remote editing and broader auth/input. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor and advanced stash variants; disposable destructive fixtures.
-- [ ] **P2 — Extended compatibility.** Submodule/worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization.
+- [ ] **P2 — Extended compatibility.** Additional submodule management (add/remove/deinit/recursive/remote-latest), worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization. Selected submodule open/update/sync is delivered.
 
 ## Decisions before rollout
 
@@ -76,6 +79,8 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.23.0 / 2026-10-29:** branch/remotes/tags/stash/submodule sidebar with real navigation and actions, saved stash history, selected submodule open/update/sync. Default remains 26 checks; four optional feature checks and normal/minimum offscreen review. Matching preview hashes verified. [Evidence and limitations](docs/roadmap.md#current-status).
 
 - [x] **0.22.1 / 2026-10-29:** default/preview reduced to 26 explicit smoke checks; 30-count cap, 30 seconds/check, 180 seconds total. All 26 passed in 33.3 seconds; three guard probes and package hashes verified. Extended suite retained but not rerun for this delivery. [Evidence](docs/roadmap.md#current-status).
 
