@@ -10,6 +10,7 @@ namespace GitGui.App.Services;
 
 public interface IUserInteraction
 {
+    BranchManagementOptions? ChooseBranchManagement(BranchManagementViewModel model) => null;
     RepositoryInitOptions? ChooseRepositoryInitialization() => null;
     string? ChooseInitializationFolder() => null;
     string? ChooseRepository();
@@ -32,6 +33,11 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public BranchManagementOptions? ChooseBranchManagement(BranchManagementViewModel model)
+    {
+        var window = new BranchManagementWindow(model) { Owner = Owner };
+        return window.ShowDialog() == true ? model.SubmittedOptions : null;
+    }
     public RepositoryInitOptions? ChooseRepositoryInitialization()
     {
         var model = new RepositoryInitViewModel(this);

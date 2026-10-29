@@ -1,0 +1,30 @@
+<Window x:Class="GitGui.App.Views.BranchManagementWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{Binding Title}"
+ Width="660" Height="500" ResizeMode="NoResize" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+ FlowDirection="{x:Static loc:UiText.Direction}" FontFamily="Segoe UI" FontSize="13"
+ Background="{DynamicResource Theme.Sidebar}" Foreground="{DynamicResource Theme.Text}">
+ <Window.Resources><BooleanToVisibilityConverter x:Key="VisibleWhenTrue"/></Window.Resources>
+ <Grid Margin="22">
+  <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+   <StackPanel>
+    <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold"/>
+    <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" Margin="0,8,0,10"/>
+    <TextBlock Text="{Binding Repository}" TextWrapping="Wrap" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=BranchManageRepository}"/>
+    <Label Content="{loc:Text Key=BranchManageLocalBranch}" Target="{Binding ElementName=BranchInput}" Margin="0,10,0,0"/>
+    <ComboBox x:Name="BranchInput" ItemsSource="{Binding Branches}" DisplayMemberPath="Name" SelectedItem="{Binding Branch}" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=BranchManageLocalBranch}"/>
+    <StackPanel Visibility="{Binding IsSetUpstream, Converter={StaticResource VisibleWhenTrue}}">
+     <Label Content="{loc:Text Key=BranchManageRemoteBranch}" Target="{Binding ElementName=UpstreamInput}" Margin="0,10,0,0"/>
+     <ComboBox x:Name="UpstreamInput" ItemsSource="{Binding RemoteBranches}" DisplayMemberPath="Name" SelectedItem="{Binding Upstream}" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=BranchManageRemoteBranch}"/>
+    </StackPanel>
+    <TextBlock Text="{Binding Target}" TextWrapping="Wrap" FlowDirection="LeftToRight" Margin="0,12,0,10" AutomationProperties.LiveSetting="Polite"/>
+    <TextBlock Text="{Binding Readiness}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+   </StackPanel>
+  </ScrollViewer>
+  <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+   <Button Content="{Binding SubmitText}" Command="{Binding SubmitCommand}" IsDefault="{Binding SubmitIsDefault}" ToolTip="{Binding Readiness}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding Readiness}" MinWidth="95"/>
+   <Button Content="{loc:Text Key=ActionCancel}" IsCancel="True" IsDefault="{Binding IsDelete}" MinWidth="85" Margin="8,0,0,0"/>
+  </StackPanel>
+ </Grid>
+</Window>

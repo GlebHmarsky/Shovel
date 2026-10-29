@@ -167,6 +167,10 @@
          <MenuItem Header="{loc:Text Key=ActionTitleSwitchBranch}" ItemsSource="{Binding BranchMenuItems}" IsEnabled="{Binding CanSwitchBranch}" ToolTip="{Binding SwitchActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding SwitchActionHelp}">
           <MenuItem.ItemContainerStyle><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Header" Value="{Binding Name}"/><Setter Property="Command" Value="{Binding Command}"/><Setter Property="CommandParameter" Value="{Binding Name}"/></Style></MenuItem.ItemContainerStyle>
          </MenuItem>
+         <Separator/>
+         <MenuItem Header="{loc:Text Key=BranchManageTitleDeleteBranch}" Command="{Binding DeleteBranchCommand}" ToolTip="{Binding BranchManagementHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchManagementHelp}"/>
+         <MenuItem Header="{loc:Text Key=BranchManageTitleSetUpstream}" Command="{Binding SetBranchUpstreamCommand}" ToolTip="{Binding BranchManagementHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchManagementHelp}"/>
+         <MenuItem Header="{loc:Text Key=BranchManageTitleUnsetUpstream}" Command="{Binding UnsetBranchUpstreamCommand}" ToolTip="{Binding BranchManagementHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchManagementHelp}"/>
         </ContextMenu></Button.ContextMenu>
        </Button>
       </StackPanel></Grid>

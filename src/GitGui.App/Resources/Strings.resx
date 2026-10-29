@@ -681,4 +681,32 @@ Parents: {7}
   <data name="InitIncomplete" xml:space="preserve"><value>Initialization did not finish successfully. Any created files were kept. Inspect the command output and destination before trying again.</value></data>
   <data name="InitUnexpectedLayout" xml:space="preserve"><value>The resulting worktree is outside the requested destination. It was not opened; inspect Git’s output and configured templates.</value></data>
   <data name="InitCreatedUnverified" xml:space="preserve"><value>Git reported success, but the new repository could not be inspected. Files were kept. Inspect the output and open the folder when it is accessible.</value></data>
+  <data name="BranchManageTitleDeleteBranch" xml:space="preserve"><value>Delete local branch…</value></data>
+  <data name="BranchManageTitleSetUpstream" xml:space="preserve"><value>Set upstream…</value></data>
+  <data name="BranchManageTitleUnsetUpstream" xml:space="preserve"><value>Unset upstream…</value></data>
+  <data name="BranchManageExplainDeleteBranch" xml:space="preserve"><value>Confirm deletion of the selected local branch and its tip below. Its reflog and branch configuration are also removed. Git permits deletion only when fully merged into its upstream, or HEAD when no upstream is set. Current and linked-worktree branches cannot be deleted. Working files and remote branches are retained.</value></data>
+  <data name="BranchManageExplainSetUpstream" xml:space="preserve"><value>Choose an existing local remote-tracking branch as this branch’s upstream. This changes local tracking configuration without fetching, checking out or pushing. Choices are cached; submission checks the current refs and configuration.</value></data>
+  <data name="BranchManageExplainUnsetUpstream" xml:space="preserve"><value>Remove the selected branch’s upstream configuration. Local and remote-tracking branches and working files are retained. Nothing is fetched or checked out. Git reports an error if no upstream is configured.</value></data>
+  <data name="BranchManageSubmitDeleteBranch" xml:space="preserve"><value>Delete branch</value></data>
+  <data name="BranchManageSubmitSetUpstream" xml:space="preserve"><value>Set upstream</value></data>
+  <data name="BranchManageSubmitUnsetUpstream" xml:space="preserve"><value>Unset upstream</value></data>
+  <data name="BranchManageRepository" xml:space="preserve"><value>Repository</value></data>
+  <data name="BranchManageLocalBranch" xml:space="preserve"><value>Local branch</value></data>
+  <data name="BranchManageRemoteBranch" xml:space="preserve"><value>Existing remote-tracking branch</value></data>
+  <data name="BranchManageTarget" xml:space="preserve"><value>Branch: {0}
+Tip: {1}
+Current upstream: {2}</value></data>
+  <data name="BranchManageNoUpstream" xml:space="preserve"><value>None</value></data>
+  <data name="BranchManageChooseBranch" xml:space="preserve"><value>Choose an existing local branch.</value></data>
+  <data name="BranchManageNoRemoteRef" xml:space="preserve"><value>Choose an existing remote-tracking branch. If it is missing, close these options and use Fetch or Refresh first.</value></data>
+  <data name="BranchManageCurrent" xml:space="preserve"><value>The current branch cannot be deleted. Select a different branch.</value></data>
+  <data name="BranchManageOccupied" xml:space="preserve"><value>This branch is checked out in a linked worktree and cannot be deleted. No branch was switched automatically.</value></data>
+  <data name="BranchManageChanged" xml:space="preserve"><value>The repository, branch tip, tracking target or configuration changed. Refresh and review the targets again; this operation was not retried.</value></data>
+  <data name="BranchManageUnavailable" xml:space="preserve"><value>This branch-management operation is unavailable.</value></data>
+  <data name="BranchManageReady" xml:space="preserve"><value>Ready. Submission validates these cached targets and uses the current local Git configuration.</value></data>
+  <data name="BranchManageMenuHelp" xml:space="preserve"><value>Delete a local branch or change upstream tracking using cached local refs. Validation runs after submission.</value></data>
+  <data name="BranchManageSymbolicRef" xml:space="preserve"><value>This target is a symbolic ref. Select a concrete local branch or remote-tracking branch instead.</value></data>
+  <data name="BranchManageResultTarget" xml:space="preserve"><value>Reviewed branch: {0}
+Reviewed tip: {1}
+Requested upstream: {2}</value></data>
 </root>
