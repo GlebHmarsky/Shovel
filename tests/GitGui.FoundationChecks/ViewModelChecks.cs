@@ -17,7 +17,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false, bool stashesOnly = false, bool fileMenusOnly = false, bool fileActionsOnly = false, bool initOnly = false)
+    private static void RunViewModelChecks(bool localOnly = false, bool commitOnly = false, bool hunksOnly = false, bool commitFilesOnly = false, bool fastChangesOnly = false, bool recoveryOnly = false, bool stashesOnly = false, bool fileMenusOnly = false, bool fileActionsOnly = false, bool initOnly = false, bool branchManagementOnly = false, bool draftsOnly = false)
     {
         // Pump a real dispatcher for async view-model continuations, without opening a window.
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -37,8 +37,8 @@ internal static partial class Program
             // A bounded watchdog makes a harness/lifetime regression fail instead of hanging packaging.
             // The full aggregate includes recovery, stashes and extended file fixtures; keep individual
             // operation timeouts unchanged while allowing their sequential total to finish.
-            var focused = localOnly || commitOnly || hunksOnly || commitFilesOnly || fastChangesOnly || recoveryOnly || stashesOnly || fileMenusOnly || fileActionsOnly || initOnly;
-            var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(focused ? 8 : 15) };
+            var focused = localOnly || commitOnly || hunksOnly || commitFilesOnly || fastChangesOnly || recoveryOnly || stashesOnly || fileMenusOnly || fileActionsOnly || initOnly || branchManagementOnly || draftsOnly;
+            var watchdog = new DispatcherTimer { Interval = TimeSpan.FromMinutes(focused ? 8 : 20) };
             watchdog.Tick += (_, _) => { watchdog.Stop(); frame.Continue = false; };
             watchdog.Start();
             async Task CompleteFrameAsync() { try { await task; } finally { frame.Continue = false; } }
@@ -58,6 +58,8 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (branchManagementOnly) { await RunBranchManagementChecksAsync(); return; }
+            if (draftsOnly) { await RunCommitDraftChecksAsync(); return; }
             if (initOnly) { await RunInitializationChecksAsync(); return; }
             if (fileActionsOnly) { await RunFileActionChecksAsync(); return; }
             if (fileMenusOnly) { await RunFileMenuChecksAsync(); return; }
@@ -254,6 +256,8 @@ internal static partial class Program
             await RunFileMenuChecksAsync();
             await RunFileActionChecksAsync();
             await RunInitializationChecksAsync();
+            await RunBranchManagementChecksAsync();
+            await RunCommitDraftChecksAsync();
             await RunAuthenticationViewChecksAsync();
 
             async Task<ShellViewModel> LoadRealModel(string path)

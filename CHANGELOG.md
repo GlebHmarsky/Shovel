@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.0 — 2026-10-29
+
+- Merge local branch deletion and upstream set/unset into the Branch menu, with cached options, exact-target confirmation and normal Git merged/worktree protections.
+- Persist per-worktree commit drafts locally with atomic revisioned writes, delayed restoration, conflict recovery copies and exact-submission clearing after successful commit.
+- Integrate opt-in merge-heavy/large/million-commit performance fixtures, cancellation and process resource sampling. Keep expensive benchmarks outside normal checks.
+
 ## 0.21.0 — 2026-10-29
 
 - Add File / Repository → New repository with destination and optional initial branch. Open options without Git/filesystem preparation; Create closes options and runs real initialization with shell progress, output and cancellation.

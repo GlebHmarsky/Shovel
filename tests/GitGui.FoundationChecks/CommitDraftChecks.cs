@@ -77,7 +77,7 @@ internal static partial class Program
                 var before = await File.ReadAllBytesAsync(file);
                 await ExpectDraftFailure(failure, () => store.LoadAsync("fixture-worktree", identity, default));
                 await ExpectDraftFailure(failure, () => store.SaveAsync("fixture-worktree", identity, saved.Revision, new("replacement", ""), default));
-                Expect(before.SequenceEqual(await File.ReadAllBytesAsync(file)), "Unreadable/newer bytes are never overwritten");
+                Expect(Enumerable.SequenceEqual<byte>(before, await File.ReadAllBytesAsync(file)), "Unreadable/newer bytes are never overwritten");
             });
         }
         await Check("Cancellation after temporary-file flush preserves canonical bytes and removes only the owned temporary file", async () =>
@@ -93,7 +93,7 @@ internal static partial class Program
             await gate.BeforePublish.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Expect(Directory.EnumerateFiles(store.Location, "*.tmp").Count() == 1, "Fixture reached the flushed-before-replace boundary");
             cancel.Cancel(); await ExpectException<OperationCanceledException>(() => write);
-            Expect(before.SequenceEqual(await File.ReadAllBytesAsync(file)) && !Directory.EnumerateFiles(store.Location, "*.tmp").Any(),
+            Expect(Enumerable.SequenceEqual<byte>(before, await File.ReadAllBytesAsync(file)) && !Directory.EnumerateFiles(store.Location, "*.tmp").Any(),
                 "Interrupted publication keeps old complete record and cleans its temporary text");
         });
         await Check("Locked draft and writer gate fail/cancel without replacing saved text", async () =>
@@ -111,7 +111,7 @@ internal static partial class Program
             using (var locked = new FileStream(lockFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             using (var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
                 await ExpectException<OperationCanceledException>(() => store.SaveAsync("fixture-worktree", identity, saved.Revision, new("cancelled", ""), cancel.Token));
-            Expect(before.SequenceEqual(await File.ReadAllBytesAsync(file)), "Lock/cancellation preserves last durable bytes");
+            Expect(Enumerable.SequenceEqual<byte>(before, await File.ReadAllBytesAsync(file)), "Lock/cancellation preserves last durable bytes");
             await store.SaveAsync("fixture-worktree", identity, saved.Revision, new("retry succeeds", ""), default);
         });
         await Check("Unavailable directory and size bounds retain the previous draft", async () =>
@@ -349,6 +349,17 @@ internal static partial class Program
         CommitViewModel Editor(ICommitDraftStore? source = null, CommitWorkspaceState? state = null) =>
             new(repo, git, reader, actions, new CommitInteraction(), state, identity.Fingerprint, source ?? store);
         var hook = Path.Combine(repo, ".git", "hooks", "pre-commit");
+
+        await Check("Early-open editor binds draft persistence after its first validated repository read", async () =>
+        {
+            var earlyStore = new CommitDraftStore(Fixture("early-open-draft-store"), identities);
+            var editor = new CommitViewModel(repo, git, reader, actions, new CommitInteraction(), draftStore: earlyStore);
+            editor.Subject = "typed before identity";
+            await editor.StartLoading(); await editor.DraftLoadingTask;
+            Expect(editor.Subject == "typed before identity" && editor.CommitTarget == UiText.Get("CommitDraftPersistenceHelp"), "Fresh identity enables persistence without replacing early text");
+            await editor.CloseAsync();
+            Expect((await earlyStore.LoadAsync(repo, identity.Fingerprint, default)).Text.Subject == "typed before identity", "Early-open text survives close");
+        });
 
         await Check("Bound failed commit retains durable draft and bound success clears it before closing", async () =>
         {

@@ -249,6 +249,7 @@ internal static partial class Program
             });
             await RunHistoryChecksAsync(reader, git, Git);
             await RunActionChecksAsync(reader, git, runner, Git);
+            await RunHistoryPerformanceChecksAsync();
         }
         finally
         {

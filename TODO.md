@@ -4,7 +4,7 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.21.0 completed: local repository initialization. Broader theme work remains P2.
+0.22.0 delivered: all three worker branches merged into master and retained; 263 full checks passed and the matching preview is packaged. Investigate the recorded intermittent draft write next. Broader theme work remains P2.
 
 - [x] **P1 — Initialize local repositories.** Fast options, new/existing nonrepo folders, optional initial branch, preserved files, automatic opening and real progress/errors/cancellation. Nine focused checks pass.
 - [x] **P1 — Deliver 0.21.0.** 216 full checks and nine focused checks passed; offscreen review, owning docs, matching ignored preview and local commit. No interactive launch. [Evidence](docs/roadmap.md#current-status).
@@ -18,21 +18,21 @@ Worker rules: no dependency installation, restore, compilation, test execution, 
 
 ### Task 1 — Local branch deletion and upstream tracking
 
-- [ ] **P1; branch `codex/task-1-branch-management`.** Deliver real branch management from the existing Branch menu: delete a selected local branch, set its upstream to an existing remote-tracking branch, or unset its upstream. No remote deletion, force deletion, fetch or implicit checkout.
+- [x] **P1; branch `codex/task-1-branch-management`.** Deliver real branch management from the existing Branch menu: delete a selected local branch, set its upstream to an existing remote-tracking branch, or unset its upstream. No remote deletion, force deletion, fetch or implicit checkout.
 - Open options immediately from cached refs. Submission revalidates identity/refs/config and serializes through the existing common-repository mutation gate. Confirm deletion with exact branch/tip; use Git's normal merged-branch protection. Refuse current branches and branches checked out in any linked worktree. Handle stale targets, missing refs, active sequences, locks and cancellation accurately; refresh history/ref labels/ahead-behind after success or failure.
 - Own new `Core/Git/BranchManagement.cs`, `App/ViewModels/ShellBranchManagement.cs`, dedicated branch-management view/model files, and necessary narrow wiring in `ShellActions.cs`, `ShellViewModel.cs`, `MainWindow.xaml`, `UserInteraction.cs`. Reuse existing Core gate helpers; any necessary edit to `GitActions.cs` must be small and preserve other commands. Do not edit commit/draft/history-performance modules.
 - Add disposable-fixture checks in `tests/GitGui.FoundationChecks/BranchManagementChecks.cs`: merged/unmerged/current/linked-worktree deletion, tracking set/unset, changed target and failed/cancelled execution. Handoff: `docs/handoffs/task-1.md` with exact test registration instructions and known limits. Acceptance is source-complete workflow plus written checks; it is **not runtime-verified** until integration.
 
 ### Task 2 — Crash-safe per-repository commit drafts
 
-- [ ] **P2, advanced for independent parallel work; branch `codex/task-2-commit-drafts`.** Persist commit subject/body locally so closing a tab or restarting Shovel does not lose the draft. Restore after the commit modal is visible; never delay opening/history. Successful commit clears only the submitted draft; failed/cancelled commit retains it. Do not persist passwords, output, diffs or authentication data.
+- [x] **P2, advanced for independent parallel work; branch `codex/task-2-commit-drafts`.** Persist commit subject/body locally so closing a tab or restarting Shovel does not lose the draft. Restore after the commit modal is visible; never delay opening/history. Successful commit clears only the submitted draft; failed/cancelled commit retains it. Do not persist passwords, output, diffs or authentication data.
 - Use a small dedicated Core draft store and App coordination module. Debounce/bound writes, use atomic replacement, handle corrupt/newer data, permissions/disk failure, shutdown and late completion. Key drafts by repository/worktree identity so linked worktrees stay separate and replaced repositories cannot silently inherit drafts. Avoid lost updates across profiles; expose a localized recoverable save/load problem without blocking ordinary Git use. Preserve newer text when a delayed save/delete completes.
 - Own new draft storage/coordinator files, narrow wiring in `CommitViewModel.cs`, `ShellChanges.cs`, `LocalChangesState.cs` if present, and dedicated draft tests. Do not change shared settings schema/profile identity, branch actions, main-window menus or history algorithms. Inspect the actual state type before editing; do not invent a parallel draft state.
 - Add isolated storage/lifetime tests in `tests/GitGui.FoundationChecks/CommitDraftChecks.cs` covering reopen, successful/failed commit, corrupt/locked storage, identity replacement, linked worktrees and stale writes. Handoff: `docs/handoffs/task-2.md` with storage/retention design, test registration and unexecuted checks. Draft files contain user text: document their local location and deletion behavior; never log their content.
 
 ### Task 3 — Representative history/performance harness
 
-- [ ] **P1; branch `codex/task-3-history-benchmarks`.** Extend the existing disposable performance harness with reproducible merge-heavy and large-history fixtures, including an opt-in million-commit case. Generate locally with isolated config, no network or user's repositories. Keep expensive cases opt-in, outside the default foundation suite.
+- [x] **P1; branch `codex/task-3-history-benchmarks`.** Extend the existing disposable performance harness with reproducible merge-heavy and large-history fixtures, including an opt-in million-commit case. Generate locally with isolated config, no network or user's repositories. Keep expensive cases opt-in, outside the default foundation suite.
 - Measure first history page, warm tab switch, refresh, later pages and cancellation under load separately. Include app/owned-child memory sampling and an opt-in five-minute idle CPU sample, with clear measurement boundaries and machine/fixture metadata. Preserve the existing 200-row page size and All Commits scope; validate topology/count expectations. Never label headless measurements as visible desktop startup or input latency.
 - Own new files under `tests/GitGui.FoundationChecks/` prefixed `HistoryPerformance`, plus an optional dedicated `scripts/Measure-History.ps1`. Do not alter production code, existing benchmark methods, shared test dispatch or release scripts. Provide exact integration commands/dispatch registration in `docs/handoffs/task-3.md`. Add bounded cancellation, cleanup of only owned temporary fixtures, and useful failure output; do not generate/run the fixtures in this assignment.
 - Acceptance: runnable harness source and documented reproducible commands/metrics, statically reviewed; **no fabricated measurements**. Any optimization suggested by the harness remains a later evidence-based change.
@@ -41,15 +41,16 @@ Worker rules: no dependency installation, restore, compilation, test execution, 
 
 Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoint `BranchManage*` and `CommitDraft*` prefixes; do not reformat or reorder existing entries. This is an explicit small merge point. All other shared-file ownership follows the boundaries above. If an unforeseen overlap is required, document it in the handoff and stop that portion rather than editing another task's modules.
 
-- [ ] **P1 — Integrate the three branches after review.** Apply commits sequentially; resolve additive resource entries, register tests/opt-in benchmark commands, review concurrency and startup effects, update owning docs/TODO, choose one capability version and changelog entry, then restore/build/run required checks and make a matching ignored preview. Do not mark tasks verified or release them before this step. No automatic merging is authorized by the worker assignments.
+- [x] **P1 — Integrate the three branches after review.** User-authorized merges preserve all worker branches; additive resources reconciled, tests/opt-in dispatch registered, early-open draft persistence corrected, docs/version/changelog updated. 263 full checks and package verification passed; original worker handoffs remain historical. [Evidence and limits](docs/roadmap.md#current-status).
 
 ## Next priorities
 
-- [ ] **P1 — Local MVP remainder.** Branch deletion/tracking next; broaden signing and failure recovery. Init, whole-hunk staging, sequence recovery and stashes are delivered. Advanced stash variants remain backlog, not prerequisites for basic stash use.
+- [ ] **P1 — Diagnose intermittent draft write failure.** One integrated run reported `CommitDraftUnavailable` while another profile replaced a saved draft; focused rerun passed. Reproduce and capture a typed OS error/stage without logging user text, paths or arbitrary exceptions before choosing a fix. Preserve existing draft/recovery behavior; see roadmap evidence.
+- [ ] **P1 — Local MVP remainder.** Branch deletion/tracking integrated; next broaden signing and failure recovery. Init, whole-hunk staging, sequence recovery and stashes are delivered. Advanced stash variants remain backlog, not prerequisites for basic stash use.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
-- [ ] **P1 — Extend performance fixtures.** Merge-heavy/million-commit cases, cancellation under load, app/child peak memory, five-minute idle CPU; retain F1e baseline.
+- [ ] **P1 — Run representative performance fixtures.** Use the integrated opt-in merge-heavy/large/million harness and five-minute idle sampling; retain F1e baseline and distinguish harness/child metrics from desktop behavior. Small fixture correctness checks do not establish large-scale latency budgets.
 - [ ] **P1 — Validate accessibility/layout.** Mixed DPI, OS high contrast/screen reader, keyboard/focus, +40%/RTL, themes. Offscreen colors do not certify OS accessibility.
 - [ ] **P2 — External reconciliation/tools.** Focus/resume/external-client races and tracked tool sessions.
 - [ ] **P2 — File-menu extensions.** Optional all-parent file history/extra diff-tool chooser, repository/global ignore editing and LFS locks/migration; current implemented scopes remain visible.
@@ -58,7 +59,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 ## Backlog
 
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
-- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and crash-safe per-repository draft storage; preserve bounded reads and clear unsupported states.
+- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Network MVP.** Clone/remote editing and broader auth/input. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
@@ -73,6 +74,8 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.22.0 / 2026-10-29:** integrated branch deletion/upstream management, persistent per-worktree drafts and opt-in performance harness. 263 full checks; focused branches 13/13, drafts 28/28, harness 6/6; offscreen review and verified preview. Original branches retained. One earlier intermittent draft write remains tracked above. [Evidence and limits](docs/roadmap.md#current-status).
 
 - [x] **0.21.0 / 2026-10-29:** local repository initialization with fast options, optional initial branch, preserved files/partial results and automatic opening. 216 full checks; focused 9/9; normal/minimum offscreen review and package hashes verified. Next: branch deletion/tracking. [Evidence and limits](docs/roadmap.md#current-status).
 

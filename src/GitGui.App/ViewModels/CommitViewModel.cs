@@ -39,7 +39,7 @@ public sealed partial class CommitViewModel : ObservableObject
     private readonly RepositoryReader _reader;
     private readonly IUserInteraction _interaction;
     private readonly CommitWorkspaceState _state;
-    private readonly string? _identity;
+    private string? _identity;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly Stopwatch _elapsed = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -191,6 +191,7 @@ public sealed partial class CommitViewModel : ObservableObject
             var context = await _actions.ReadWorkingCopyAsync(_git, Directory, cancellation.Token);
             if (_closed || cancellation.IsCancellationRequested || generation != _readGeneration) return;
             if (_identity is not null && context.Identity.Fingerprint != _identity) { _state.Clear(); PublishRows(); throw new GitActionException("ActionIdentityChanged"); }
+            BindValidatedDraftIdentity(context.Identity.Fingerprint);
             var rows = await Task.Run(() => context.Changes.Entries.Select(entry => new ChangeRow(entry)).ToArray(), cancellation.Token);
             if (_closed || cancellation.IsCancellationRequested || generation != _readGeneration) return;
             _state.Context = context; _state.ReadAt = context.Changes.ReadAt; _state.Rows = rows;

@@ -206,6 +206,7 @@ internal static partial class Program
         await Check("Commit entry retains shell history, counts unique paths, and owns modal lifetime", async () =>
         {
             var shellInteraction = new CommitInteraction(); var shell = new ShellViewModel(reader, shellInteraction, identities, actions: actions);
+            shell.DraftStore = new GitGui.Core.Drafts.CommitDraftStore(Fixture("legacy-shell-drafts"), identities);
             shell.CompleteStartup(new(new() { RepositoryPaths = [repo], SelectedRepositoryPath = repo }, SettingsLoadStatus.Loaded)); await shell.WaitForIdleAsync();
             var history = shell.Commits; Expect(history.Count > 0 && shell.CommitButtonLabel != UiText.Get("CommitOpenUnknown"), "Count read follows history");
             shellInteraction.OnOpen = async editor =>

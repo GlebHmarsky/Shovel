@@ -12,7 +12,11 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.21.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.22.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+
+Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
+
+Commit drafts now survive closing tabs/restarting. Restore happens after the modal appears; newer typing wins. Successful commit clears only its submitted text, while failed commit retains it. Storage errors remain visible without blocking Git; conflicting copies can require manual recovery. See the persistence limits in architecture.
 
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
@@ -57,7 +61,7 @@ Opening binds cached rows/draft immediately, then reads after layout; it never f
 
 **0.16.0 file-action feedback:** file Stage/Unstage updates affected rows from real Git status before a wider background scan. Keep selection on the same path when its side changes. A short trailing delay coalesces successive actions; cached rows remain usable, newer generations supersede old reads and a failed full refresh visibly marks retained rows stale. Bottom activity bars and the ticking commit footer are removed. Static results/errors, Refresh/Cancel, in-memory phase timings and command-only top-center duration remain. Ordinary background work adds no throbber or polling.
 
-Draft, file selection and last output are session-only per tab; successful commit clears the draft, failed commit retains it. Closing the tab/app discards that draft; no crash-safe draft persistence yet. [Architecture](architecture.md#local-changes-and-commit-0130) owns bounds and execution details.
+File selection and last output remain session-only. Draft persistence in 0.22.0 supersedes the old session-only draft policy; successful commit clears the submitted draft, failed commit retains it.
 
 ## Local Changes file menus (0.19.0)
 

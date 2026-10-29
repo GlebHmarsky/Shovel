@@ -72,7 +72,8 @@ internal static partial class Program
             var result = await actions.ExecuteBranchManagementAsync(context, Options(context, BranchManagementAction.Delete), default);
             Expect(result.Success && !await Exists(repo, "refs/heads/merged/日本語") && await Exists(repo, "refs/remotes/origin/main"), "Only the chosen local ref is removed");
             Expect(await Git(repo, "rev-parse", "HEAD") == context.Repository.Commit && await Git(repo, "branch", "--show-current") == "main", "HEAD unchanged");
-            Expect(index.SequenceEqual(await File.ReadAllBytesAsync(Path.Combine(context.Repository.GitDirectory, "index"))) &&
+            var observedIndex = await File.ReadAllBytesAsync(Path.Combine(context.Repository.GitDirectory, "index"));
+            Expect(index.SequenceEqual(observedIndex) &&
                 await File.ReadAllTextAsync(Path.Combine(repo, "tracked.txt")) == "dirty retained\n" &&
                 await File.ReadAllTextAsync(Path.Combine(repo, "untracked.txt")) == "retained", "Index and dirty/untracked files unchanged");
         });
@@ -223,6 +224,7 @@ internal static partial class Program
             try
             {
                 var content = (FrameworkElement)window.Content; Arrange(content, 660, 500);
+                SaveRender(content, "branch-management-delete.png", 660, 500);
                 Expect(runner.Calls == calls && model.Target.Contains(model.Branch!.Hash) && model.Target.Contains(model.Branch.Name) &&
                     !model.SubmitIsDefault && window.ResizeMode == ResizeMode.NoResize, "Opening/editing/layout starts no Git and shows reviewed target");
                 Expect(VisualDescendants<Button>(content).Single(button => button.IsCancel).IsDefault, "Delete defaults to Cancel");

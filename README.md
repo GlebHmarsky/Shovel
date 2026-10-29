@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.21.0** adds local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.22.0** adds branch deletion/upstream management and persistent commit drafts, plus opt-in performance fixtures. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -52,6 +52,10 @@ Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build
 
 ## Using the workspace
 
+**0.22.0:** Branch menu adds confirmed local deletion and upstream set/unset. Commit drafts persist locally per worktree; [storage/recovery limits](docs/architecture.md#integrated-branch-management-and-drafts-0220).
+
+Focused integration checks after building: `--check-branches`, `--check-drafts`, `--check-history-performance` passed to the foundation-check runner. Full verification includes these small checks. Opt-in benchmarks: `powershell -NoProfile -File scripts/Measure-History.ps1 -Profile merge-heavy -Samples 3`; `large` and `million` profiles and `-IdleFiveMinutes` are explicit additional runs, not release prerequisites or desktop measurements. See [metric definitions](docs/handoffs/task-3.md).
+
 **File / Repository → New repository…** creates a local repository in a new or existing folder. Enter an absolute path and optional initial branch (blank uses Git's default), then Create. Options open without preparation; execution/progress/output stays in the shell and the resulting repository opens automatically. Existing files remain unstaged; no commit or remote is added. An existing root opens without reinitializing. Partial failure/cancellation preserves files; inspect the result before retrying. [Destination restrictions and workflow](docs/product.md#new-local-repository-0210).
 
 Focused initialization checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-init`. Included in full verification. These use isolated configuration and disposable temp repositories outside the source checkout (nested init is unsupported), with their location recorded in the artifact folder.
@@ -70,7 +74,7 @@ Menus, working toolbar actions and center timer remain; unfinished Explorer/Term
 
 ## Local Changes
 
-Choose toolbar **Commit (count)** or sidebar Local changes. The resizable modal binds cached rows/draft before its background scan, while history stays behind it. Select unstaged or staged files for the appropriate diff. Ctrl/Shift selects multiple files; hold Shift while clicking the existing Stage/Unstage buttons for all listed files. Enter subject/body to Commit; Amend can preload the last message and confirms the actual tip. Hold Shift on Commit for Commit and Push to the configured upstream. Push failure retains the successful commit. Drafts survive closing/reopening this modal during the session, but not closing the tab/app.
+Choose toolbar **Commit (count)** or sidebar Local changes. The resizable modal binds cached rows/draft before its background scan, while history stays behind it. Select unstaged or staged files for the appropriate diff. Ctrl/Shift selects multiple files; hold Shift while clicking the existing Stage/Unstage buttons for all listed files. Enter subject/body to Commit; Amend can preload the last message and confirms the actual tip. Hold Shift on Commit for Commit and Push to the configured upstream. Push failure retains the successful commit. Drafts persist locally across modal/tab closure and restart, keyed by worktree identity. Unsaved edits inside the debounce window can still be lost on a crash; storage failures expose recovery information.
 
 The right side shows colored, numbered unified text, whitespace/whole-file options and hunk navigation. Binary files show Old/New cards, extension and size with exact bytes; recognized LFS pointers show asset size without downloading content. Refresh/Cancel and retained Git output are inside the modal. Failed status reads keep rows but disable stale writes. Commit count runs once after selected-tab history, never delays those rows or polls/preloads other tabs. [Product](docs/product.md#local-changes--commit-0130) owns the full workflow; [architecture](docs/architecture.md#local-changes-and-commit-0130) owns limits/filter and submodule restrictions. Image previews, arbitrary-line staging and conflict editing are deferred; resolve files externally, then stage/commit a resolved merge here.
 
@@ -124,7 +128,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.21.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.22.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

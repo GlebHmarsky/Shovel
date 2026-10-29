@@ -66,6 +66,8 @@ Deferred implementation; these define the requested install-once experience, not
 
 ## Verification and acceptance
 
+0.22 integration: disposable checks cover branch merged/current/linked-worktree protections, tracking, stale target/config and cancelled/partial outcomes; isolated draft tests cover atomic saves, revisions, recovery copies, replaced identity, linked worktrees, failed/successful commits and delayed restoration. Small performance-harness checks verify deterministic topology, cancellation, owned cleanup and sampler behavior. Full million-scale/idle measurements and physical crash/ACL/disk-full certification are separate from these checks.
+
 Build/headless evidence is distinct from desktop/live-auth/installed verification. Use meaningful parser/process tests and disposable real-Git integration fixtures with isolated config/test hooks; never destructive tests on working repositories. Live accounts/desktop launches require task authorization. Record date, OS/build/architecture/Git/runtime/fixture/results/limits. **A feature is complete only when its real action works within stated scope.** Mock/layout checks cannot replace Git semantics.
 
 Historical phase gates below preserve regression coverage; old prototype/trust behavior is evidence only. Update assertions when implementing G1/G13/S2. Unrelated runtime matrices do not block independent requested functionality.

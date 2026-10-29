@@ -21,6 +21,7 @@ internal static partial class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.FirstOrDefault() == "--measure-history-performance") return HistoryPerformanceHarness.Run(args);
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
         _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() == "--measure-actions" ? "artifacts/action-benchmarks" : args.FirstOrDefault() is "--measure-history" or "--measure-large-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() == "--check-hunks" ? "artifacts/hunk-checks" : args.FirstOrDefault() == "--check-commit" ? "artifacts/commit-checks" : args.FirstOrDefault() == "--check-theme" ? "artifacts/theme-checks" : args.FirstOrDefault() == "--check-local" ? "artifacts/local-changes-checks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
@@ -33,7 +34,20 @@ internal static partial class Program
         if (args.FirstOrDefault() == "--check-file-menus") _root = Path.Combine(Path.GetFullPath("artifacts/file-menu-checks"), Path.GetFileName(_root));
         if (args.FirstOrDefault() == "--check-file-actions") _root = Path.Combine(Path.GetFullPath("artifacts/file-action-checks"), Path.GetFileName(_root));
         if (args.FirstOrDefault() == "--check-init") _root = Path.Combine(Path.GetFullPath("artifacts/init-checks"), Path.GetFileName(_root));
+        if (args.FirstOrDefault() is "--check-branches" or "--check-drafts" or "--check-history-performance")
+            _root = Path.Combine(Path.GetFullPath("artifacts/integration-checks"), Path.GetFileName(_root));
         Directory.CreateDirectory(_root);
+        if (args.FirstOrDefault() is "--check-branches" or "--check-drafts")
+        {
+            var app = new HeadlessApplication(); app.InitializeComponent();
+            RunViewModelChecks(branchManagementOnly: args[0] == "--check-branches", draftsOnly: args[0] == "--check-drafts");
+            Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
+        }
+        if (args.FirstOrDefault() == "--check-history-performance")
+        {
+            RunHistoryPerformanceChecksAsync().GetAwaiter().GetResult();
+            Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
+        }
         if (args.FirstOrDefault() == "--check-init") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(initOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--check-file-actions") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(fileActionsOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }
         if (args.FirstOrDefault() == "--check-file-menus") { var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks(fileMenusOnly: true); Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1; }

@@ -7,6 +7,7 @@ namespace GitGui.App.ViewModels;
 public sealed partial class CommitViewModel
 {
     private CommitDraftCoordinator? _draft;
+    private ICommitDraftStore? _draftStore;
     private bool _draftCloseReported;
     private Task _mergeDraftTask = Task.CompletedTask;
     public Task DraftLoadingTask => _draft?.LoadingTask ?? Task.CompletedTask;
@@ -19,10 +20,19 @@ public sealed partial class CommitViewModel
 
     private void InitializeDrafts(ICommitDraftStore? store)
     {
+        _draftStore = store;
         if (store is null || _identity is null) return;
         _draft = new(_state, store, Directory, _identity);
         _draft.TextRestored += OnDraftRestored;
         _draft.ProblemChanged += OnDraftProblem;
+    }
+    private void BindValidatedDraftIdentity(string identity)
+    {
+        if (_identity is not null) return;
+        _identity = identity;
+        InitializeDrafts(_draftStore);
+        _ = _draft?.StartOrRetryAsync();
+        Changed(nameof(CommitTarget));
     }
     private void OnDraftRestored(object? sender, EventArgs args)
     { Changed(nameof(Subject)); Changed(nameof(Description)); Changed(nameof(CommitTarget)); RefreshCommands(); }
