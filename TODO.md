@@ -4,7 +4,9 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.27.1: diagnose commit-draft write failures and recover from reproduced transient file contention. Routine verification stays at 26 checks (maximum 30); focused checks remain opt-in.
+0.27.2: planning update for replacing Fork in the owner's daily workflow; runtime functionality remains 0.27.1. [Product](docs/product.md#requested-next-workflows-not-implemented) owns confirmed requests and open interaction choices. Routine verification stays at 26 checks (maximum 30).
+
+- [x] **P1 — Record daily-use priorities.** Prioritize fewer-click Pull, history context actions and in-app conflict resolution; keep LFS locking and coworker distribution later. Do not mark these as implemented.
 
 - [x] **P1 — Diagnose draft storage and preserve both writers.** Twelve repeats of the original reopen flow passed; a controlled publication lock reproduced `CommitDraftUnavailable` with OS error 32. Add bounded cancellable retries for sharing/lock errors, rechecking identity/revision, and allowlisted diagnostic metadata. Four focused checks pass; the old uninstrumented failure's exact cause remains unknown.
 - [x] **P1 — Deliver 0.27.1.** Four focused checks; 26 routine checks in 54.0 seconds; zero build warnings/errors, matching ignored preview/package hashes, updated owning docs and descriptive commit. No interactive launch; original failure attribution and physical crash/ACL/disk-full validation remain limits.
@@ -65,24 +67,28 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P1 — Local MVP remainder.** Branch deletion/tracking integrated; next broaden signing and failure recovery. Init, whole-hunk staging, sequence recovery and stashes are delivered. Advanced stash variants remain backlog, not prerequisites for basic stash use.
+- [ ] **P1 — Direct default Pull.** Execute the normal operation without two dialog clicks, retaining access to options, accurate progress/errors and existing Git protections. Proposed first increment; settle fixed versus remembered defaults/auto-stash before implementation.
+- [ ] **P1 — History context actions.** Checkout, Reset branch to here (Soft/Mixed/Hard), Copy SHA and Revert. Bind the selected commit, preserve dirty-worktree protections, show destructive scope and verify disposable outcomes. Clarify checkout interaction; merge-commit revert must identify the mainline rather than guess.
+- [ ] **P1 — Named-side conflict editor.** Implement the [requested workflow](docs/product.md#requested-next-workflows-not-implemented): real source names, one-side resolution, in-app C++/text merge and selectable external tool; binary side selection. Preserve conflict/sequence state, cancellation and stale-file checks; settle apply/stage interaction first.
+- [ ] **P2 — Remaining signing/input recovery.** Broaden only for a concrete daily-use failure; not a prerequisite that displaces requested functionality. Existing hooks/signing stay enabled.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
 - [ ] **P1 — Run representative performance fixtures.** Use the integrated opt-in merge-heavy/large/million harness and five-minute idle sampling; retain F1e baseline and distinguish harness/child metrics from desktop behavior. Small fixture correctness checks do not establish large-scale latency budgets.
 - [ ] **P1 — Validate accessibility/layout.** Mixed DPI, OS high contrast/screen reader, keyboard/focus, +40%/RTL, themes. Offscreen colors do not certify OS accessibility.
 - [ ] **P2 — External reconciliation/tools.** Focus/resume/external-client races and tracked tool sessions.
-- [ ] **P2 — File-menu extensions.** Optional all-parent file history/extra diff-tool chooser, repository/global ignore editing and LFS locks/migration; current implemented scopes remain visible.
+- [ ] **P2 — File-menu extensions.** Optional all-parent file history/extra diff-tool chooser, repository/global ignore editing and LFS migration; current implemented scopes remain visible.
 - [ ] **P2 — Filtering when requested.** Ref/search ancestry, default All Commits, retained selection/scroll.
 
 ## Backlog
 
+- [ ] **P2 — LFS locks (low priority).** Discuss a separately authorized server-capability/authentication test, then consider owner display and Lock/Unlock. Server support is unknown; no live test or fetch yet.
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Network MVP.** Clone, remote editing/removal and broader auth/input; adding remotes and setting upstream are delivered. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
-- [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
-- [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor and advanced stash variants; disposable destructive fixtures.
+- [ ] **P2 — Pilot distribution, after personal replacement.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
+- [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/tag management/reflog/force-with-lease and advanced stash variants; disposable destructive fixtures. Reset/Revert and conflict editing are advanced into Next priorities above.
 - [ ] **P2 — Extended compatibility.** Additional submodule management (add/remove/deinit/recursive/remote-latest), worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization. Selected submodule open/update/sync is delivered.
 
 ## Decisions before rollout

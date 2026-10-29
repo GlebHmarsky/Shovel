@@ -4,6 +4,8 @@ Updated 2026-10-29. Confirmed unless marked proposed. IDs remain stable. [Produc
 
 ## Git functionality and compatibility
 
+**Confirmed direction, not shipped (2026-10-29):** personal Fork replacement precedes team rollout. Advance direct default Pull, selected-commit Checkout/Soft-Mixed-Hard Reset/Copy SHA/Revert, and named-side conflict resolution with in-app text editing plus binary side selection. Acceptance must cover real selected targets, dirty/index preservation for each chosen mode, destructive-scope confirmation, stale state, failed/cancelled commands, merge/rebase/stash provenance, external-tool failure and actual resolved/unresolved index state. [Product](product.md#requested-next-workflows-not-implemented) owns interaction decisions still open. LFS locking remains low priority and server support is unknown.
+
 | ID | Requirement |
 | --- | --- |
 | G1 | Deliver real clone/init/open, status, file/hunk stage/unstage, commit/amend, branches/tracking, fetch/pull/push, tags, stashes, merge/rebase/cherry-pick/revert/reset/reflog/conflicts in usable increments. Every requested feature includes working controls and behavior; no placeholder/no-op UI or mock completion. Implement or omit unfinished entry points; state-dependent disabling needs a localized reason. |

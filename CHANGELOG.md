@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.2 — 2026-10-29
+
+- Record personal Fork-replacement priorities: fewer-click Pull, history Checkout/Reset/Copy SHA/Revert, and named-side conflict resolution with an in-app text merge editor. These are planned features; runtime behavior is unchanged.
+- Defer coworker distribution and LFS locking experiments; retain open interaction choices rather than invent defaults.
+
 ## 0.27.1 — 2026-10-29
 
 - Recover from temporary commit-draft sharing/lock failures with short, cancellable background retries. Recheck worktree identity and draft revision on each attempt; preserve another profile's newer save and this window's recovery copy.
