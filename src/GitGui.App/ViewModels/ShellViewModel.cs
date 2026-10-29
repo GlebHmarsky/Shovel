@@ -433,8 +433,8 @@ public sealed partial class ShellViewModel : ObservableObject
         Changed(nameof(HasRecovery)); Changed(nameof(CanSkipRecovery)); Changed(nameof(RecoveryHelp));
         ShowChangesCommand?.Refresh(); ShowHistoryCommand?.Refresh();
         NotifyActionContext();
-        foreach (var property in new[] { nameof(CanOpenBranchMenu), nameof(CanSwitchBranch), nameof(BranchActionHelp), nameof(FetchActionHelp), nameof(PullActionHelp), nameof(PushActionHelp), nameof(SwitchActionHelp) }) Changed(property);
-        NewBranchCommand?.Refresh(); FetchCommand?.Refresh(); PullCommand?.Refresh(); PushCommand?.Refresh(); SwitchBranchCommand?.Refresh(); Changed(nameof(LocalBranches)); Changed(nameof(BranchMenuItems));
+        foreach (var property in new[] { nameof(CanOpenBranchMenu), nameof(CanSwitchBranch), nameof(BranchActionHelp), nameof(FetchActionHelp), nameof(PullActionHelp), nameof(DefaultPullHelp), nameof(PushActionHelp), nameof(SwitchActionHelp) }) Changed(property);
+        NewBranchCommand?.Refresh(); FetchCommand?.Refresh(); PullCommand?.Refresh(); DefaultPullCommand?.Refresh(); PushCommand?.Refresh(); SwitchBranchCommand?.Refresh(); Changed(nameof(LocalBranches)); Changed(nameof(BranchMenuItems));
         CloseTabCommand?.Refresh(); CloseOtherTabsCommand?.Refresh(); MoveTabLeftCommand?.Refresh(); MoveTabRightCommand?.Refresh(); RefreshTabCommand?.Refresh();
         OpenRepositoryCommand?.Refresh(); RefreshRepositoryCommand?.Refresh(); CancelCommand?.Refresh(); ChooseGitCommand?.Refresh();
         DiagnosticsCommand?.Refresh();

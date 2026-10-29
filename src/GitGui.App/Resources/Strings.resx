@@ -779,4 +779,8 @@ Requested upstream: {2}</value></data>
   <data name="RemoteAddReady" xml:space="preserve"><value>Saves configuration only. Fetch next, then set the branch upstream from Repository.</value></data>
   <data name="ActionTitleAddRemote" xml:space="preserve"><value>Add remote</value></data>
   <data name="ActionExplainAddRemote" xml:space="preserve"><value>Save a remote in this repository. Fetch separately to download branches.</value></data>
+  <data name="PullOptions" xml:space="preserve"><value>Pull options…</value></data>
+  <data name="PullDefaultHelp" xml:space="preserve"><value>Pull upstream with Rebase; auto-stash off.</value></data>
+  <data name="PullDefaultNeedsUpstream" xml:space="preserve"><value>Set an upstream or choose a target in Pull options.</value></data>
+  <data name="PullDefaultTargetChanged" xml:space="preserve"><value>The upstream changed or uses a custom mapping. Refresh or choose the remote and branch in Pull options.</value></data>
 </root>

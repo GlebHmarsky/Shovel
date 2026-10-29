@@ -145,10 +145,15 @@
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M10,1 L10,14 M5,9 L10,14 15,9 M2,16 L2,20 18,20 18,16"/><TextBlock Text="{loc:Text Key=Fetch}"/></StackPanel>
         </Button>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
-          <Button Style="{StaticResource ToolbarButton}" Command="{Binding PullCommand}" AutomationProperties.Name="{loc:Text Key=Pull}" ToolTip="{Binding PullActionHelp}" AutomationProperties.HelpText="{Binding PullActionHelp}">
+          <Button Style="{StaticResource ToolbarButton}" Command="{Binding DefaultPullCommand}" AutomationProperties.AutomationId="DefaultPull" AutomationProperties.Name="{loc:Text Key=Pull}" ToolTip="{Binding DefaultPullHelp}" AutomationProperties.HelpText="{Binding DefaultPullHelp}">
             <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M17,2 C5,2 5,5 5,16 M1,11 L5,16 10,11"/><TextBlock Text="{loc:Text Key=Pull}"/></StackPanel>
           </Button>
           <TextBlock Text="{Binding PullCount}" VerticalAlignment="Top" Margin="0,5,5,0" FontWeight="SemiBold" AutomationProperties.Name="{loc:Text Key=BehindCount}" AutomationProperties.HelpText="{Binding DivergenceHelp}" />
+          <Button Command="{Binding PullCommand}" Width="22" Padding="4,6" Margin="0,0,3,0" VerticalAlignment="Stretch"
+                  AutomationProperties.AutomationId="PullOptions" AutomationProperties.Name="{loc:Text Key=PullOptions}"
+                  ToolTip="{loc:Text Key=PullOptions}" AutomationProperties.HelpText="{Binding PullActionHelp}">
+            <Path Data="M0,0 L6,0 3,4 Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="6" Height="4" Stretch="Fill"/>
+          </Button>
         </StackPanel>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
           <Button Style="{StaticResource ToolbarButton}" Command="{Binding PushCommand}" AutomationProperties.Name="{loc:Text Key=Push}" ToolTip="{Binding PushActionHelp}" AutomationProperties.HelpText="{Binding PushActionHelp}">

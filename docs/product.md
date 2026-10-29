@@ -10,9 +10,8 @@ Updated 2026-10-29. [Requirements](requirements.md) owns acceptance; [architectu
 
 ## Requested next workflows (not implemented)
 
-- **Fewer-click Pull:** the ordinary default operation should not require opening and submitting an options modal. A split-button with direct Pull and a separate options menu is proposed. Whether defaults are fixed or remembered per repository, including auto-stash, remains open; current runtime still opens the modal and defaults to Rebase with auto-stash off.
-- **History context menu:** prioritize Checkout, Reset branch to here with Soft/Mixed/Hard choices, Copy SHA and Revert. Existing confirmation and Git protections still apply. Checkout's detached-HEAD versus new-branch interaction remains open; the selected commit must be the actual target.
-- **Conflict resolution:** use the supplied Screenshot_19.png as a layout reference, with named source cards (for example stash/patch versus master), selectable sides and a selected external merge tool. One selected side takes that version; both sides lead to merging. C++/text conflicts need an in-app merge editor; binary files use explicit side selection, not a pretend text merge. Display actual available provenance; do not infer branches merely from generic ours/theirs labels, especially during rebase. The exact apply/stage interaction remains open. Existing Continue/Skip/Abort stays separate from editing an individual conflict.
+- **History context menu:** prioritize Checkout, Reset branch to here with Soft/Mixed/Hard choices, Copy SHA and Revert. Existing confirmation and Git protections still apply. Confirmed: Checkout checks out the selected commit directly and is explicitly labelled Detached HEAD; no branch-name prompt.
+- **Conflict resolution:** use the supplied Screenshot_19.png as a layout reference, with named source cards (for example stash/patch versus master), selectable sides and a selected external merge tool. One selected side takes that version; both sides lead to merging. C++/text conflicts need an in-app merge editor; binary files use explicit side selection, not a pretend text merge. Display actual available provenance; do not infer branches merely from generic ours/theirs labels, especially during rebase. Confirmed: checkboxes only choose a side; Resolve applies the chosen version and stages the file as resolved. Existing Continue/Skip/Abort stays separate from editing an individual conflict.
 - **LFS locking:** low priority, desired for a later experiment. Server capability/authentication and actual lock workflows are unverified. No live server test or automatic fetch is authorized by this planning discussion.
 
 The general diff-view preference question was left unanswered; no side-by-side default, image-preview priority or individual-line staging decision is inferred. [TODO](../TODO.md#next-priorities) owns sequencing.
@@ -21,9 +20,15 @@ The general diff-view preference question was left unanswered; no side-by-side d
 
 The work environment is already trusted. No repository-trust modal on open, restore, first operation or ordinary dialog opening; no repeated consent checkbox for configured Git programs. Selecting the normal action authorizes it. **Do not introduce extra safety measures or approval layers without a concrete requirement.** Retain normal Git data-loss protections, destructive-action confirmation and required authentication/SSH host verification. This replaces older prototype-retention and routine trust-gate requirements; runtime gaps are tracked in TODO.
 
+## Direct Pull (0.28.0)
+
+Confirmed split-button behavior: **Pull** executes the current branch's configured upstream immediately; the adjacent arrow opens the existing Pull modal for alternate targets/settings and its normal submit flow. Keep the established default: **Rebase, auto-stash off**. Modal choices apply to that submission only; no new remembered settings. No options window or extra confirmation for the default action. Both routes share actual command progress, cancellation, retained errors/output and history reconciliation.
+
+The arrow remains preparation-free. Direct Pull requires an attached branch and an unambiguous cached remote-tracking upstream; otherwise its localized help points to upstream setup or Pull options. Submission validates the actual configured remote/server branch before fetching, so changed/custom tracking mappings are not guessed from a ref suffix. Unsupported mappings can use explicit targets in the modal. Normal Git dirty-worktree protections, hooks and authentication remain. Opening tabs never initiates Pull.
+
 ## Current workspace
 
-Implemented through **0.27.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.28.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
 
@@ -162,7 +167,7 @@ Ordinary UI interactions must respond promptly, without a loading prerequisite. 
 
 Pull preserves existing sparse-checkout patterns and only updates superproject references to submodules. Submodule contents are neither updated nor included in auto-stash; use existing tools for those workflows. Branch switching in these repository modes remains deferred.
 
-Normal action buttons execute without an additional trust checkbox. **Submitting Pull closes the options modal immediately**; the same shared flow applies to Fetch/Push/branch actions. The main window shows the actual phase (checking targets, fetching, checking fetched commit, updating local branch), elapsed time and indeterminate progress at top center. Existing history stays visible/selectable. Cancel is available there and in Repository; cancellation is unavailable during fresh inspection. Missing targets/dependencies disable actions with localized help.
+Normal action buttons execute without an additional trust checkbox. **Submitting Pull options closes the options modal immediately**; the same shared flow applies to Fetch/Push/branch actions. The main window shows the actual phase (checking targets, fetching, checking fetched commit, updating local branch), elapsed time and indeterminate progress at top center. Existing history stays visible/selectable. Cancel is available there and in Repository; cancellation is unavailable during fresh inspection. Missing targets/dependencies disable actions with localized help.
 
 Operation details opens below with the repository, full result explanation and bounded original/redacted Git output. Success/failure/cancellation persists at top center and in details after reinspection. A failed refresh is distinct from Git success. One last result is kept in memory, only shown on its repository tab; cancelling a later options dialog preserves it. No percentage is invented. Authentication prompts are owned by the main window after options close. Options/execution/reconciliation still blocks tab navigation/new Git actions/window close; attempting close shows operation details. Cancellation stops owned work and reinspects; it does not undo changes. Related caches become stale after every attempt; retry uses fresh targets. No automatic retries/abort/lock removal; auto-stash occurs only when selected for Pull.
 

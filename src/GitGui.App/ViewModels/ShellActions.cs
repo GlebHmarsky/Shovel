@@ -20,6 +20,7 @@ public sealed partial class ShellViewModel
     public RelayCommand NewBranchCommand { get; private set; } = null!;
     public RelayCommand FetchCommand { get; private set; } = null!;
     public RelayCommand PullCommand { get; private set; } = null!;
+    public RelayCommand DefaultPullCommand { get; private set; } = null!;
     public RelayCommand PushCommand { get; private set; } = null!;
     public RelayCommand ContinueCommand { get; private set; } = null!;
     public RelayCommand SkipCommand { get; private set; } = null!;
@@ -43,6 +44,21 @@ public sealed partial class ShellViewModel
     public string FetchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleFetch");
     public string PullActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? UiText.Get("ActionPullNeedsBranch") : DivergenceHelp;
+    private (string Remote, string Branch)? DefaultPullTarget
+    {
+        get
+        {
+            var snapshot = SelectedRepository?.Snapshot;
+            if (snapshot?.HeadKind != HeadKind.Branch || snapshot.UpstreamRef is not { } upstream) return null;
+            var remotes = snapshot.RemoteNames.Where(name => upstream.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)).ToArray();
+            if (remotes.Length != 1) return null;
+            var branch = upstream[(14 + remotes[0].Length)..];
+            return branch.Length > 0 ? (remotes[0], branch) : null;
+        }
+    }
+    public string DefaultPullHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
+        SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? UiText.Get("ActionPullNeedsBranch") :
+        UiText.Get(DefaultPullTarget is null ? "PullDefaultNeedsUpstream" : "PullDefaultHelp");
     public string PushActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         LocalBranches.Count == 0 ? UiText.Get("ActionNeedsBranch") : DivergenceHelp;
     public string SwitchActionHelp => UiText.Get(ActionUnavailableKey ?? (LocalBranches.Count == 0 ? "ActionNeedsBranch" : "ActionTitleSwitchBranch"));
@@ -61,13 +77,16 @@ public sealed partial class ShellViewModel
         NewBranchCommand = new(() => OpenAction(GitAction.NewBranch), () => CanAct);
         FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanAct);
         PullCommand = new(() => OpenAction(GitAction.Pull), () => CanAct && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
+        DefaultPullCommand = new(() => ActionTask = OpenActionAsync(GitAction.Pull, null, defaultPull: true), () => CanAct && DefaultPullTarget is not null);
         PushCommand = new(() => OpenAction(GitAction.Push), () => CanAct && LocalBranches.Count != 0);
         SwitchBranchCommand = new(branch => OpenAction(GitAction.SwitchBranch, branch), branch => CanAct && LocalBranches.Contains(branch));
     }
     private void OpenAction(GitAction action, string? branch = null) => ActionTask = OpenActionAsync(action, branch);
-    private async Task OpenActionAsync(GitAction action, string? branch)
+    private async Task OpenActionAsync(GitAction action, string? branch, bool defaultPull = false)
     {
         var tab = SelectedRepository!;
+        var pullTarget = defaultPull ? DefaultPullTarget : null;
+        if (defaultPull && pullTarget is null) return;
         // A modal confirmation pumps the dispatcher. Freeze its target before it opens;
         // activation/refresh must not silently replace the operation the user reviewed.
         var reviewedSnapshot = tab.Snapshot!;
@@ -107,12 +126,19 @@ public sealed partial class ShellViewModel
                 if (context.Repository.Commit != cached.Repository.Commit || context.Repository.Branch != cached.Repository.Branch ||
                     context.History.Fingerprint != cached.History.Fingerprint)
                     throw new GitActionException("ActionChanged");
+                if (pullTarget is { } target)
+                    await _actions.ValidateDefaultPullTargetAsync(context, target.Remote, target.Branch, token);
                 return context;
             });
+            if (pullTarget is { } selectedTarget)
+            {
+                model.Remote = cached.Remotes.Single(remote => remote.Name == selectedTarget.Remote);
+                model.RemoteBranch = selectedTarget.Branch;
+            }
             var previous = _lastAction;
             _preparingAction = false;
             SetLastAction(model);
-            if (recoveryAction) model.RunCommand.Execute(null);
+            if (recoveryAction || defaultPull) model.RunCommand.Execute(null);
             else _interaction!.ShowGitAction(model);
             model.DismissOptions(); attempted = model.HasAttempt;
             if (!model.HasAttempt) SetLastAction(previous);

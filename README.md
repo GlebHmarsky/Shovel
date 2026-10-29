@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.27.2** updates the implementation priorities only; runtime functionality remains unchanged from 0.27.1, which recovers temporary draft-storage locks with bounded retries and private error metadata; includes local remote setup, read/refresh timers and a cleaner resizable workspace; includes integrated title-bar menus and stash graph improvements; includes operation duration capsules; includes background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.28.0** adds direct default Pull with an adjacent arrow for existing options; includes recovery from temporary draft-storage locks with bounded retries and private error metadata; includes local remote setup, read/refresh timers and a cleaner resizable workspace; includes integrated title-bar menus and stash graph improvements; includes operation duration capsules; includes background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -70,6 +70,10 @@ Data-directory must be absolute; default %LOCALAPPDATA%\GitGui\Foundation preser
 Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build/publish copies them). Askpass handles explicit network credentials/passphrases/host confirmation; browser/GCM/signing/interactive hooks/custom SSH still use existing tools. Shovel saves no prompt/credential data; configured helpers may store credentials. Live sign-in/focus/input unverified.
 
 ## Using the workspace
+
+**Pull:** the main button runs Rebase against the current branch's configured upstream, with auto-stash off. Its arrow opens the existing modal for other targets, Merge and optional auto-stash; submit there to execute those choices. Modal settings do not change the main button's defaults. Missing upstream disables direct Pull with a reason; use upstream setup or the options arrow. Both routes use the existing top-center progress/Cancel and retained result/output. This does not make Git execution instantaneous.
+
+Optional focused checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-default-pull` (four local-Git/headless checks and Dark/Light normal/minimum renders; no live server or visible app).
 
 **0.27.0:** resize the sidebar freely within the window; labels trim and it scrolls vertically only. Commit remains beside Push; duplicate sidebar title/Local Changes, the page-control band and main footer are removed. Help retains the version. Read failures retain rows with a Diagnostics link. **Repository → Add remote…** saves a name and URL/local path without network access; use Fetch next, then **Set upstream…** (or Unset upstream) there. The Remotes group also offers Add remote. Existing remote edit/delete is deferred.
 
@@ -160,7 +164,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.27.2-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.28.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

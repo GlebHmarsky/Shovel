@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.28.0 — 2026-10-29
+
+- Make the main Pull button execute Rebase against the configured upstream with auto-stash off. Add an adjacent arrow opening the existing Pull settings dialog; alternate targets, Merge and auto-stash still execute through that modal.
+- Reuse progress, cancellation, authentication, retained output and history reconciliation. Explain missing upstreams and validate the server-side tracking target before direct Pull; no guessed remote or silently remembered modal choices.
+- Record confirmed future history checkout in detached HEAD and conflict Resolve applying/staging the chosen side. Those features remain pending.
+
 ## 0.27.2 — 2026-10-29
 
 - Record personal Fork-replacement priorities: fewer-click Pull, history Checkout/Reset/Copy SHA/Revert, and named-side conflict resolution with an in-app text merge editor. These are planned features; runtime behavior is unchanged.

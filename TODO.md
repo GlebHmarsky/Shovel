@@ -4,7 +4,10 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.27.2: planning update for replacing Fork in the owner's daily workflow; runtime functionality remains 0.27.1. [Product](docs/product.md#requested-next-workflows-not-implemented) owns confirmed requests and open interaction choices. Routine verification stays at 26 checks (maximum 30).
+0.28.0: direct default Pull plus the existing options dialog on its adjacent arrow. Checkout and conflict-resolution choices are confirmed for subsequent increments. Routine verification remains 26 checks (maximum 30).
+
+- [x] **P1 — Direct default Pull.** Main button uses Rebase/auto-stash off and configured upstream; arrow keeps the existing editable modal. Shared real execution/results/reconciliation; no options-time preparation or remembered-choice change.
+- [x] **P1 — Deliver 0.28.0.** Four focused checks/offscreen Dark/Light normal/minimum review; 26 routine checks in 51.6 seconds; matching ignored preview/package hashes, updated docs and descriptive commit. No interactive launch or live server test.
 
 - [x] **P1 — Record daily-use priorities.** Prioritize fewer-click Pull, history context actions and in-app conflict resolution; keep LFS locking and coworker distribution later. Do not mark these as implemented.
 
@@ -67,9 +70,8 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P1 — Direct default Pull.** Execute the normal operation without two dialog clicks, retaining access to options, accurate progress/errors and existing Git protections. Proposed first increment; settle fixed versus remembered defaults/auto-stash before implementation.
-- [ ] **P1 — History context actions.** Checkout, Reset branch to here (Soft/Mixed/Hard), Copy SHA and Revert. Bind the selected commit, preserve dirty-worktree protections, show destructive scope and verify disposable outcomes. Clarify checkout interaction; merge-commit revert must identify the mainline rather than guess.
-- [ ] **P1 — Named-side conflict editor.** Implement the [requested workflow](docs/product.md#requested-next-workflows-not-implemented): real source names, one-side resolution, in-app C++/text merge and selectable external tool; binary side selection. Preserve conflict/sequence state, cancellation and stale-file checks; settle apply/stage interaction first.
+- [ ] **P1 — History context actions.** Checkout, Reset branch to here (Soft/Mixed/Hard), Copy SHA and Revert. Bind the selected commit, preserve dirty-worktree protections, show destructive scope and verify disposable outcomes. Checkout directly into explicitly labelled Detached HEAD; merge-commit revert must identify the mainline rather than guess.
+- [ ] **P1 — Named-side conflict editor.** Implement the [requested workflow](docs/product.md#requested-next-workflows-not-implemented): real source names, one-side resolution, in-app C++/text merge and selectable external tool; binary side selection. Preserve conflict/sequence state, cancellation and stale-file checks; checkboxes only select; Resolve applies the chosen version and stages it.
 - [ ] **P2 — Remaining signing/input recovery.** Broaden only for a concrete daily-use failure; not a prerequisite that displaces requested functionality. Existing hooks/signing stay enabled.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
