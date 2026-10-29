@@ -46,6 +46,9 @@ public partial class MainWindow : Window
             new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
     }
 
+    private void OnUpdates(object sender, RoutedEventArgs e)
+    { if (ViewModel.Updates is { } updates) new UpdateWindow(updates) { Owner = this }.ShowDialog(); }
+
     private void OnHistoryWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
         if (_restoringScroll || ViewModel.IsBusy || FindScroll(HistoryTable) is not { } scroll) return;

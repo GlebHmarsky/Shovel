@@ -1,12 +1,12 @@
 # Product
 
-Updated 2026-10-29. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
+Updated 2026-10-30. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
 
 ## Purpose and delivery
 
 **Shovel** is a lightweight Windows 10/11 Git client for about 30 initial coworkers using development repositories, including C++/TypeScript. Aim for Fork's restrained layout and Git Extensions' practical capabilities, with original assets. AI maintains the code; the shipped app needs no AI service. English first, localization-ready; install once with in-place updates when distribution is implemented.
 
-**Confirmed priorities, 2026-10-29:** first replace Fork for the owner's daily work and personal testing; broader coworker distribution comes later. Motivations are inspectable source, control over workflow/visual details, fewer routine clicks and evaluating AI-maintained software. These motivations are not a security finding about Fork or a security guarantee for Shovel; no public source-release/license decision is implied.
+**Confirmed priorities, 2026-10-29:** first replace Fork for the owner's daily work and personal testing; broader coworker distribution comes later. Motivations are inspectable source, control over workflow/visual details, fewer routine clicks and evaluating AI-maintained software. These motivations are not a security finding about Fork or a security guarantee for Shovel; public source publication under MIT and a separate public shovel-releases repository were confirmed on 2026-10-30.
 
 ## Requested next workflows (not implemented)
 
@@ -212,6 +212,6 @@ Reference: original attachment unavailable; 2026-10-25 screenshot confirmed head
 
 ## Update experience (confirmed)
 
-Deferred implementation: asynchronous startup check, optional configurable periodic checks and manual check; visible installed/available version, channel, notes and status. Download/verify with progress/failures; allow postponement or explicit **Restart and update**. Download never authorizes installation. Apply only after final idle check; preserve settings/tabs/drafts/recovery data. Unavailable server must not block startup/Git.
+0.30.0 implements Windows packaging and asynchronous signed update checks/downloads; actual installed rollout validation remains open. Public source Shovel uses MIT; downloads use public shovel-releases under the owner’s personal account (username pending). See [distribution](distribution.md) for setup. Optional periodic checks and manual checks expose installed/available version, channel, notes and status. Download/verify with progress/failures; allow postponement or explicit **Restart and update**. Download never authorizes installation. Apply only after final idle check; preserve settings/tabs/drafts/recovery data. Unavailable server must not block startup/Git.
 
 States: checking, current, available, downloading, verifying, ready, postponed, blocked by work, installing, failed, recovered. [Update requirements](requirements.md#updates-and-distribution) owns install/authenticity/failure acceptance.

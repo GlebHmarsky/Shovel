@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.30.0 — 2026-10-30
+
+- Add per-user self-contained Windows installer packaging with pinned Velopack, signed GitHub release feeds, automatic check/download, manual retry/cancel and an explicit idle-gated Restart and update action. Preserve existing settings/tabs/drafts.
+- Add local release signing/publishing scripts, stable/test channels and GitHub setup instructions. Hosting remains unconfigured until the owner supplies their account; native installed update/repair/uninstall still need disposable Windows validation.
+- Publish source under the MIT license with third-party notices.
+
 ## 0.29.0 — 2026-10-29
 
 - Add history-row context actions for detached Checkout, confirmed Soft/Mixed/Hard branch Reset, full SHA copying and Revert. Merge reverts explicitly choose a mainline parent; conflicts use the existing recovery controls.

@@ -24,6 +24,7 @@ public sealed record AppSettings
     public RepositoryIdentityStamp[] RepositoryIdentities { get; init; } = [];
     public RepositoryPreference[] RepositoryPreferences { get; init; } = [];
     public string? SelectedRepositoryPath { get; init; }
+    public bool CheckUpdatesPeriodically { get; init; } = true;
     public AppAppearance Appearance { get; init; } = AppAppearance.Dark;
     public string? RiderExecutable { get; init; }
     public string? CodeExecutable { get; init; }

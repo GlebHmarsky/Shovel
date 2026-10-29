@@ -170,7 +170,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.29.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.30.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -191,3 +191,7 @@ Current identity supports root on local fixed drive/no reparse components; UNC/r
 History uses one read chain/max two children; the modal has bounded cancelling status/diff chains. Mutations cancel old reads without waiting for their drain; close drains them. Bare repos rejected, linked actions coordinated within Shovel, external clients independent. Shallow ends distinct, missing partial objects fail without fetch. Detected merge/rebase/cherry-pick/revert sequences support recovery; mailbox/ambiguous state remains unsupported.
 
 History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared Dark/Light themes](docs/theme.md) apply to the client area; Shovel title bars use native palette-aware styling (exact colors on Windows 11, best effort on Windows 10); pickers/message boxes remain system-owned. Dark/Light selection is available under Appearance; further theme polish remains deferred. Pending: arbitrary-line staging, image/text side-by-side diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.
+
+## Windows installer and updates
+
+Public source **Shovel** uses the [MIT license](LICENSE). Windows installer/update packaging uses pinned Velopack and a separate public **shovel-releases** repository; account configuration is intentionally unset. [GitHub setup, signing, build/publish commands and installed validation limits](docs/distribution.md). Build the matching preview once, then run `pwsh -File scripts/Build-Installer.ps1 -LocalOnly` for an unconfigured local installer. Configured release builds require repository/public/private-key parameters described there; no upload occurs during packaging. Optional focused checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-updates`.

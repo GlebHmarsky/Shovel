@@ -32,6 +32,10 @@ try {
     foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $staging $file))) { throw ('Missing preview file: ' + $file) }
     }
+    . (Join-Path $PSScriptRoot 'Get-SourceFingerprint.ps1')
+    @{ Version=$version; SourceFingerprint=(Get-SourceFingerprint $projectRoot); Suite='smoke' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $staging 'VERIFICATION.json') -Encoding utf8
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE'),(Join-Path $projectRoot 'THIRD-PARTY-NOTICES.md') -Destination $staging
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'third-party/VELOPACK-LICENSE.txt') -Destination $staging
     $instructions = @"
 Shovel $version - local Windows x64 preview
 
@@ -67,7 +71,7 @@ Branch opens create/switch dialogs. Pull defaults to Rebase with a Merge alterna
 Submitting closes the options window. Follow progress/elapsed time at top center, Cancel there or under Repository, and use Details (ellipsis) to see the retained Operation result/output. History reads and refreshes also report elapsed duration; capsules fade in briefly. The fixed command duration capsule includes validation/execution/final refresh; completion holds three seconds then fades over two, retaining outcome text and errors. Colors and symbols distinguish success, conflict, failure and cancellation; Windows animation/high-contrast preferences are honored. Pull updates local files/history/counts; divergent branches integrate using the selected strategy. Conflicts retain Git recovery state with Continue/Skip/Abort controls; auto-stash can conflict and staged changes can return unstaged. Repository navigation/exit waits for completion or cancellation and reinspection.
 Pull respects existing sparse patterns and updates superproject submodule pointers only; submodule files are not updated or auto-stashed.
 Git/OpenSSH askpass prompts are available during explicit network actions. Keep Shovel.AskPass.exe and its companion files here. Verify SSH host fingerprints independently before accepting; Shovel does not save credentials, but configured Git helpers may do so.
-Credential Manager browser sign-in, interactive signing/hooks, custom SSH commands, conflict editing, force-push, search/filter, installer and updates remain deferred. Configured hooks/signing remain enabled; no bypass. Use existing terminal tools for unsupported interaction; cancellation is not undo. Local history needs no approval.
+Credential Manager browser sign-in, interactive signing/hooks, custom SSH commands, conflict editing, force-push, search/filter, this portable preview has no configured updater; installers are packaged separately with Build-Installer.ps1. Configured hooks/signing remain enabled; no bypass. Use existing terminal tools for unsupported interaction; cancellation is not undo. Local history needs no approval.
 
 This is an unsigned, framework-dependent local preview, not the signed team distribution.
 Settings are outside this folder: %LOCALAPPDATA%\GitGui\Foundation.

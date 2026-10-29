@@ -74,6 +74,9 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
+- [ ] **P1 — Finish public installer rollout (0.30.0 branch).** Packaging, signed checks/downloads and explicit restart admission are implemented. Configure the personal GitHub owner and public Shovel/shovel-releases repositories, generate/back up the signing key, choose Windows publisher signing, and verify two installed versions on a disposable Windows user/VM. Prove native install/update/repair/uninstall, cross-session admission, retained settings/drafts and framework maintenance-log contents before coworker rollout. [Setup and limits](docs/distribution.md). No publication or system install has been performed.
+
+
 - [ ] **P1 — Named-side conflict editor.** Implement the [requested workflow](docs/product.md#requested-next-workflows-not-implemented): real source names, one-side resolution, in-app C++/text merge and selectable external tool; binary side selection. Preserve conflict/sequence state, cancellation and stale-file checks; checkboxes only select; Resolve applies the chosen version and stages it.
 - [ ] **P2 — Remaining signing/input recovery.** Broaden only for a concrete daily-use failure; not a prerequisite that displaces requested functionality. Existing hooks/signing stay enabled.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
@@ -92,18 +95,20 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Network MVP.** Clone, remote editing/removal and broader auth/input; adding remotes and setting upstream are delivered. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
-- [ ] **P2 — Pilot distribution, after personal replacement.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
+- [ ] **P2 — Installed distribution acceptance.** 0.30.0 selects Velopack/public GitHub Releases; finish the explicit rollout task above and pass U1–U7/D1 on installed Windows, including key-rotation and uninstall-data-choice requirements.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/tag management/reflog/force-with-lease and advanced stash variants; disposable destructive fixtures. Reset/Revert and conflict editing are advanced into Next priorities above.
 - [ ] **P2 — Extended compatibility.** Additional submodule management (add/remove/deinit/recursive/remote-latest), worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization. Selected submodule open/update/sync is delivered.
 
 ## Decisions before rollout
 
 - [ ] **Q2:** coworker Windows editions/builds, architectures, IT/proxy/no-admin constraints. Local SDK prerequisites are present.
-- [ ] **Q3/Q4:** private/offsite/VPN access, host, release/signing owner, certificate/key custody, updater/installer; architecture compares candidates.
+- [ ] **Q3/Q4:** personal GitHub username/URLs, release/signing owner and certificate/key custody. Public GitHub Releases, Velopack and MIT are confirmed; no private-host/VPN requirement.
 - [ ] Refresh pinned .NET 10 servicing patch before distribution; reverify.
-- [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
+- [ ] Finalize Windows publisher signing before distribution. Per-user Shovel install identity retains existing Foundation settings and CommitDrafts locations. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.30.0 / 2026-10-30 (installer branch):** Windows self-contained packaging, signed public-GitHub update checks/downloads, restart admission and publishing scripts; MIT source license. 12 focused checks, 26 final smoke checks, local installer and disposable signing-fixture packaging verified. GitHub owner and installed rollout remain in the explicit task above. [Evidence](docs/roadmap.md#current-status).
 
 - [x] **0.24.0 / 2026-10-29:** background-only author peers, rounded graph lines, equal tabs, Explorer/Rider/VS Code/Bash toolbar and persisted Dark/Light appearance. Four optional focused checks, normal/minimum offscreen review; 26 routine checks in 32.2 seconds and verified preview. Actual desktop handoffs remain unverified. [Evidence](docs/roadmap.md#current-status).
 

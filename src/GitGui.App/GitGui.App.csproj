@@ -6,11 +6,17 @@
     <RootNamespace>GitGui.App</RootNamespace>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <StartupObject>GitGui.App.Program</StartupObject>
+    <UpdateConfigurationFile Condition="'$(UpdateConfigurationFile)' == ''">$(MSBuildProjectDirectory)/updates.json</UpdateConfigurationFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/Shovel.ico</ApplicationIcon>
     <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+    <EmbeddedResource Include="$(UpdateConfigurationFile)" LogicalName="GitGui.App.updates.json" />
     <Resource Include="Assets/Shovel.ico" />
     <ProjectReference Include="../GitGui.Core/GitGui.Core.csproj" />
     <ProjectReference Include="../GitGui.ProcessHost/GitGui.ProcessHost.csproj" />
