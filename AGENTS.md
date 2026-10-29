@@ -12,6 +12,8 @@ Read [product](docs/product.md), [requirements](docs/requirements.md), [architec
 
 ## Project and implementation
 
+- **Parallel assignment exception (2026-10-29):** the three numbered assignments in TODO use separate branches AND separate worktrees, with no compilation, test execution, version bump, changelog release, preview packaging or merge on worker branches. Commit only the assigned implementation and handoff. Static review and writing tests are required; execution/release verification belongs to later integration. This planning-only update also skips versioning and packaging. All other rules remain in effect.
+
 - **Confirmed** = user-approved; **Proposed** = unapproved; **Open** = unresolved; **Deferred** = future scope. Later user requests can advance deferred work; old phase order must not block an explicitly requested feature.
 - Product: **Shovel** (2026-10-24), executable `Shovel.exe`; retain internal GitGui names/profile for compatibility. Icon: selected silver shovel on blue circle, `src/GitGui.App/Assets/Shovel.png/.ico` (2026-10-25).
 - Stack: C# / WPF / .NET 10 LTS; no TypeScript. Keep Core independent of WPF, compose services in App, presentation in view models, view/lifetime behavior in code-behind. Prefer understandable modules, mature dependencies and reproducible builds.

@@ -10,6 +10,39 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [x] **P1 — Deliver 0.21.0.** 216 full checks and nine focused checks passed; offscreen review, owning docs, matching ignored preview and local commit. No interactive launch. [Evidence](docs/roadmap.md#current-status).
 
 
+## Parallel assignments — Task 1, Task 2, Task 3
+
+Confirmed 2026-10-29: these are independent implementation branches, not three releases. Start each from the same planning commit containing this section. **Use a separate worktree for each chat**; switching branches in one shared directory is not isolation. Never reset another checkout or copy uncommitted work automatically. Do not start other tasks or spawn agents from an assigned chat.
+
+Worker rules: no dependency installation, restore, compilation, test execution, app launch, packaging, version/changelog edits, push or merge. Write meaningful tests and perform static review only; clearly report them as unexecuted. Preserve all existing protections and preparation-free options. Commit assigned changes locally. Do not edit this checklist or shared product/architecture/roadmap docs on worker branches; write a concise implementation/verification handoff in the assigned `docs/handoffs/task-N.md` instead (not another checklist). The integrator will update owning docs and TODO once.
+
+### Task 1 — Local branch deletion and upstream tracking
+
+- [ ] **P1; branch `codex/task-1-branch-management`.** Deliver real branch management from the existing Branch menu: delete a selected local branch, set its upstream to an existing remote-tracking branch, or unset its upstream. No remote deletion, force deletion, fetch or implicit checkout.
+- Open options immediately from cached refs. Submission revalidates identity/refs/config and serializes through the existing common-repository mutation gate. Confirm deletion with exact branch/tip; use Git's normal merged-branch protection. Refuse current branches and branches checked out in any linked worktree. Handle stale targets, missing refs, active sequences, locks and cancellation accurately; refresh history/ref labels/ahead-behind after success or failure.
+- Own new `Core/Git/BranchManagement.cs`, `App/ViewModels/ShellBranchManagement.cs`, dedicated branch-management view/model files, and necessary narrow wiring in `ShellActions.cs`, `ShellViewModel.cs`, `MainWindow.xaml`, `UserInteraction.cs`. Reuse existing Core gate helpers; any necessary edit to `GitActions.cs` must be small and preserve other commands. Do not edit commit/draft/history-performance modules.
+- Add disposable-fixture checks in `tests/GitGui.FoundationChecks/BranchManagementChecks.cs`: merged/unmerged/current/linked-worktree deletion, tracking set/unset, changed target and failed/cancelled execution. Handoff: `docs/handoffs/task-1.md` with exact test registration instructions and known limits. Acceptance is source-complete workflow plus written checks; it is **not runtime-verified** until integration.
+
+### Task 2 — Crash-safe per-repository commit drafts
+
+- [ ] **P2, advanced for independent parallel work; branch `codex/task-2-commit-drafts`.** Persist commit subject/body locally so closing a tab or restarting Shovel does not lose the draft. Restore after the commit modal is visible; never delay opening/history. Successful commit clears only the submitted draft; failed/cancelled commit retains it. Do not persist passwords, output, diffs or authentication data.
+- Use a small dedicated Core draft store and App coordination module. Debounce/bound writes, use atomic replacement, handle corrupt/newer data, permissions/disk failure, shutdown and late completion. Key drafts by repository/worktree identity so linked worktrees stay separate and replaced repositories cannot silently inherit drafts. Avoid lost updates across profiles; expose a localized recoverable save/load problem without blocking ordinary Git use. Preserve newer text when a delayed save/delete completes.
+- Own new draft storage/coordinator files, narrow wiring in `CommitViewModel.cs`, `ShellChanges.cs`, `LocalChangesState.cs` if present, and dedicated draft tests. Do not change shared settings schema/profile identity, branch actions, main-window menus or history algorithms. Inspect the actual state type before editing; do not invent a parallel draft state.
+- Add isolated storage/lifetime tests in `tests/GitGui.FoundationChecks/CommitDraftChecks.cs` covering reopen, successful/failed commit, corrupt/locked storage, identity replacement, linked worktrees and stale writes. Handoff: `docs/handoffs/task-2.md` with storage/retention design, test registration and unexecuted checks. Draft files contain user text: document their local location and deletion behavior; never log their content.
+
+### Task 3 — Representative history/performance harness
+
+- [ ] **P1; branch `codex/task-3-history-benchmarks`.** Extend the existing disposable performance harness with reproducible merge-heavy and large-history fixtures, including an opt-in million-commit case. Generate locally with isolated config, no network or user's repositories. Keep expensive cases opt-in, outside the default foundation suite.
+- Measure first history page, warm tab switch, refresh, later pages and cancellation under load separately. Include app/owned-child memory sampling and an opt-in five-minute idle CPU sample, with clear measurement boundaries and machine/fixture metadata. Preserve the existing 200-row page size and All Commits scope; validate topology/count expectations. Never label headless measurements as visible desktop startup or input latency.
+- Own new files under `tests/GitGui.FoundationChecks/` prefixed `HistoryPerformance`, plus an optional dedicated `scripts/Measure-History.ps1`. Do not alter production code, existing benchmark methods, shared test dispatch or release scripts. Provide exact integration commands/dispatch registration in `docs/handoffs/task-3.md`. Add bounded cancellation, cleanup of only owned temporary fixtures, and useful failure output; do not generate/run the fixtures in this assignment.
+- Acceptance: runnable harness source and documented reproducible commands/metrics, statically reviewed; **no fabricated measurements**. Any optimization suggested by the harness remains a later evidence-based change.
+
+### Shared files and integration
+
+Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoint `BranchManage*` and `CommitDraft*` prefixes; do not reformat or reorder existing entries. This is an explicit small merge point. All other shared-file ownership follows the boundaries above. If an unforeseen overlap is required, document it in the handoff and stop that portion rather than editing another task's modules.
+
+- [ ] **P1 — Integrate the three branches after review.** Apply commits sequentially; resolve additive resource entries, register tests/opt-in benchmark commands, review concurrency and startup effects, update owning docs/TODO, choose one capability version and changelog entry, then restore/build/run required checks and make a matching ignored preview. Do not mark tasks verified or release them before this step. No automatic merging is authorized by the worker assignments.
+
 ## Next priorities
 
 - [ ] **P1 — Local MVP remainder.** Branch deletion/tracking next; broaden signing and failure recovery. Init, whole-hunk staging, sequence recovery and stashes are delivered. Advanced stash variants remain backlog, not prerequisites for basic stash use.
