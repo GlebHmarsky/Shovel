@@ -58,6 +58,9 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_lfsChecks) { await RunLfsChecksAsync(); return; }
+            if (_conflictChecks) { await RunConflictChecksAsync(); return; }
+            if (_usabilityChecks) { await RunUsabilityChecksAsync(); return; }
             if (_historyActionChecks) { await RunHistoryActionChecksAsync(); return; }
             if (_defaultPullChecks) { await RunDefaultPullChecksAsync(); return; }
             if (_draftIoChecks) { await RunDraftIoChecksAsync(); return; }

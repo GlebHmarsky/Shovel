@@ -70,6 +70,8 @@ public partial class MainWindow : Window
     }
     private void OnRepositoryTabMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == System.Windows.Input.MouseButton.Left && sender is ListBoxItem { DataContext: RepositoryTab candidate })
+        { _dragTab = candidate; _dragStart = e.GetPosition(RepositoryTabs); }
         if (e.ChangedButton == System.Windows.Input.MouseButton.Middle && sender is ListBoxItem { DataContext: RepositoryTab tab })
         { e.Handled = true; ViewModel.CloseTab(tab); }
     }
@@ -115,7 +117,10 @@ public partial class MainWindow : Window
         if (settings.IsMaximized) WindowState = WindowState.Maximized;
     }
 
-    public AppSettings CaptureLayout() => new()
+    public AppSettings CaptureLayout()
+    {
+        CaptureHistoryScroll(null, EventArgs.Empty);
+        return new()
     {
         WindowWidth = RestoreBounds.Width,
         WindowHeight = RestoreBounds.Height,
@@ -123,7 +128,8 @@ public partial class MainWindow : Window
         SidebarWidth = SidebarColumn.ActualWidth,
         DetailsHeight = DetailsRow.ActualHeight,
         SelectedSection = NavigationSection.History
-    };
+        };
+    }
 
     private void OnDetailsSelection(object sender, SelectionChangedEventArgs e)
     {

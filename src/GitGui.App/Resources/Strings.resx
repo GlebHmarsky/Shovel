@@ -352,7 +352,7 @@ Git submodule state: {4}</value></data>
   <data name="ChangesPath" xml:space="preserve"><value>Path</value></data>
   <data name="ChangesFileDetails" xml:space="preserve"><value>File details</value></data>
   <data name="ChangesReadOutput" xml:space="preserve"><value>Read output</value></data>
-  <data name="ChangesLimits" xml:space="preserve"><value>Read-only snapshot; Refresh and Cancel are under Repository. Up to 4 MiB / 20,000 entries; exceeding a limit shows an error, not a partial result. Configured clean filters are suppressed. Submodule pointers are shown; nested worktree changes are not scanned. Ignored directories may be collapsed.</value></data>
+  <data name="ChangesLimits" xml:space="preserve"><value>Read-only snapshot; Refresh and Cancel are under Repository. Up to 4 MiB / 20,000 entries; exceeding a limit shows an error, not a partial result. Configured clean filters are suppressed; standard LFS assets are checked against local pointer hashes. Custom filters can differ from ordinary Git status. Submodule pointers are shown; nested worktree changes are not scanned. Ignored directories may be collapsed.</value></data>
   <data name="CommitWorkspace" xml:space="preserve"><value>Commit workspace</value></data>
   <data name="CommitWindowTitle" xml:space="preserve"><value>Commit — {0}</value></data>
   <data name="CommitOpen" xml:space="preserve"><value>Commit ({0})</value></data>
@@ -423,7 +423,7 @@ This rewrites its hash and may require coordinating published history. Reflog ca
   <data name="DiffSummaryUnsupportedPath" xml:space="preserve"><value>A linked/reparse path cannot be previewed here.</value></data>
   <data name="DiffSummaryUnsupportedEncoding" xml:space="preserve"><value>Text is not valid UTF-8; no decoded preview is shown. {0} B → {1} B.</value></data>
   <data name="DiffSummaryTooLarge" xml:space="preserve"><value>Diff exceeds the preview limit. {0} B → {1} B. No partial text is presented.</value></data>
-  <data name="DiffConflict" xml:space="preserve"><value>Unmerged file: combined Git diff. Resolve with your editor, then Stage the resolved file.</value></data>
+  <data name="DiffConflict" xml:space="preserve"><value>Unmerged file. Open Resolve conflict to choose a named side or edit and stage a text merge.</value></data>
   <data name="DiffNoWhitespaceChanges" xml:space="preserve"><value>No changes remain with whitespace ignored.</value></data>
   <data name="DiffNoTextChanges" xml:space="preserve"><value>No text changes; metadata, mode or line-ending normalization may differ.</value></data>
   <data name="DiffLimits" xml:space="preserve"><value>Unified Git diff; Ctrl+C copies selected rows. At most 2 MiB, 20,000 lines and 16,384 characters per line. External diff, text conversion and clean/process filters are suppressed for reads. Whole-file staging uses configured filters; filtered files do not support hunk staging. Binary sizes compare stored blobs with on-disk worktree bytes; submodules show pointers only.</value></data>
@@ -482,7 +482,7 @@ This rewrites its hash and may require coordinating published history. Reflog ca
   <data name="ActionTitleSkip" xml:space="preserve"><value>Skip…</value></data>
   <data name="ActionTitleAbort" xml:space="preserve"><value>Abort…</value></data>
   <data name="ActionStageRecovering" xml:space="preserve"><value>Recovering operation</value></data>
-  <data name="RecoveryHelp" xml:space="preserve"><value>{0} in progress. Open Local Changes to review conflicts, resolve files externally and stage them, then Continue.</value></data>
+  <data name="RecoveryHelp" xml:space="preserve"><value>{0} in progress. Open Local Changes, resolve each conflicted file, then Continue.</value></data>
   <data name="RecoveryContinueHelp" xml:space="preserve"><value>Continue the detected operation using staged resolutions and Git's existing commit message. Hooks and signing remain enabled.</value></data>
   <data name="RecoverySkipHelp" xml:space="preserve"><value>Skip the current commit and discard its conflict resolution before continuing the sequence.</value></data>
   <data name="RecoveryAbortHelp" xml:space="preserve"><value>Abandon the detected operation. Review the affected repository and original tip before confirming.</value></data>
@@ -531,7 +531,7 @@ Git will discard the current commit's resolution changes and continue with the r
   <data name="StashNeedsCommit" xml:space="preserve"><value>Create an initial commit before creating a stash.</value></data>
   <data name="StashChanged" xml:space="preserve"><value>The stash list changed. Refresh and review the selected entry before trying again.</value></data>
   <data name="StashInspectFailed" xml:space="preserve"><value>Git finished, but the resulting conflict state could not be checked. The stash was retained. Review the output and refresh Local Changes before proceeding.</value></data>
-  <data name="StashApplyFailed" xml:space="preserve"><value>Application did not complete cleanly. The stash was retained; some files may have been restored. Review Git output and Local Changes. Resolve files externally and stage resolutions in Local Changes; there is no stash Continue/Abort sequence. Do not blindly apply again.</value></data>
+  <data name="StashApplyFailed" xml:space="preserve"><value>Application did not complete cleanly. The stash was retained; some files may have been restored. Review Git output and Local Changes. Resolve and stage each file in Local Changes; there is no stash Continue/Abort sequence. Do not blindly apply again.</value></data>
   <data name="StashAppliedRetained" xml:space="preserve"><value>The stash was applied, but its entry was not confirmed removed. Refresh the list and review the output. Do not apply again; Drop the saved entry only after verifying your files.</value></data>
   <data name="StashPopped" xml:space="preserve"><value>The stash was applied and its saved entry removed.</value></data>
   <data name="StashConfirmDrop" xml:space="preserve"><value>Drop {1} in {0}?
@@ -827,4 +827,40 @@ Previous HEAD: {1}</value></data>
   <data name="ActionExplainResetMixed" xml:space="preserve"><value>Move the current branch and replace the index; retain working files.</value></data>
   <data name="ActionExplainResetHard" xml:space="preserve"><value>Move the current branch and replace index and tracked files.</value></data>
   <data name="ActionExplainRevertCommit" xml:space="preserve"><value>Create a commit that reverses the selected change.</value></data>
+  <data name="ConflictTitle" xml:space="preserve"><value>Resolve conflict</value></data>
+  <data name="ConflictCloseEdits" xml:space="preserve"><value>Close the editor and discard its unsaved text for {0}? Any file already written by a resolution attempt stays on disk.</value></data>
+  <data name="ConflictOpen" xml:space="preserve"><value>Resolve conflict…</value></data>
+  <data name="ConflictResolve" xml:space="preserve"><value>Resolve</value></data>
+  <data name="ConflictResolveStage" xml:space="preserve"><value>Resolve and stage</value></data>
+  <data name="ConflictOperationBanner" xml:space="preserve"><value>{0} in progress — resolve files in Local Changes, then continue, or abort the operation.</value></data>
+  <data name="ConflictLoading" xml:space="preserve"><value>Reading conflict sides…</value></data>
+  <data name="ConflictResolving" xml:space="preserve"><value>Applying resolution and staging this file…</value></data>
+  <data name="ConflictResolved" xml:space="preserve"><value>The file is resolved and staged. Continue the operation after resolving the remaining files.</value></data>
+  <data name="ConflictChoose" xml:space="preserve"><value>Select one side to keep it, or select both and edit the result. Resolve applies and stages this file.</value></data>
+  <data name="ConflictCurrentSide" xml:space="preserve"><value>Current checkout — {0}</value></data>
+  <data name="ConflictIncomingSide" xml:space="preserve"><value>Incoming operation — {0}</value></data>
+  <data name="ConflictRebasedSide" xml:space="preserve"><value>Rebased result so far — {0}</value></data>
+  <data name="ConflictReplayedSide" xml:space="preserve"><value>Commit being replayed — {0}</value></data>
+  <data name="ConflictIncomingUnknown" xml:space="preserve"><value>Incoming stash / patch / other side (stage 3; origin not recorded by Git)</value></data>
+  <data name="ConflictDeletedSide" xml:space="preserve"><value>File absent on this side. Selecting it resolves this path as deleted.</value></data>
+  <data name="ConflictBinarySide" xml:space="preserve"><value>Binary, LFS, unsupported encoding or large content. Select this side to restore it through Git.</value></data>
+  <data name="ConflictBinaryHelp" xml:space="preserve"><value>This file cannot be edited as text here. Select exactly one side, or use your configured external merge tool.</value></data>
+  <data name="ConflictEditorHelp" xml:space="preserve"><value>The result starts with the working file, including conflict markers. Edit it below; both selected sides use that edited result. Selecting a checkbox does not modify a file.</value></data>
+  <data name="ConflictResolveHelp" xml:space="preserve"><value>Apply the selected side or edited result, then stage this file as resolved.</value></data>
+  <data name="ConflictReloadRequired" xml:space="preserve"><value>Reload the conflict before another attempt. The displayed edit and output are retained.</value></data>
+  <data name="ConflictDuration" xml:space="preserve"><value>{0:F1} s</value></data>
+  <data name="ConflictResult" xml:space="preserve"><value>Editable result</value></data>
+  <data name="ConflictBase" xml:space="preserve"><value>Common base</value></data>
+  <data name="ConflictUseCurrent" xml:space="preserve"><value>Start with current side</value></data>
+  <data name="ConflictUseIncoming" xml:space="preserve"><value>Start with incoming side</value></data>
+  <data name="ConflictReload" xml:space="preserve"><value>Reload file</value></data>
+  <data name="ConflictExternal" xml:space="preserve"><value>External merge tool</value></data>
+  <data name="ConflictUnsupported" xml:space="preserve"><value>This conflict involves a symbolic link or submodule. Resolve it with Git or its owning tool, then refresh.</value></data>
+  <data name="ConflictEditedOutside" xml:space="preserve"><value>The working file changed after this preview. Your editor text is retained; copy it if needed, then reload before resolving.</value></data>
+  <data name="ConflictTextLimit" xml:space="preserve"><value>The editor supports UTF-8 text up to 512 KiB, 20,000 lines and 16,384 characters per line. Use side selection or an external merge tool for this content.</value></data>
+  <data name="ConflictMarkersRemain" xml:space="preserve"><value>Conflict markers remain in the edited result. Remove them before resolving.</value></data>
+  <data name="ConflictToolMissing" xml:space="preserve"><value>No external merge tool is configured. Set merge.guitool or merge.tool in Git, or use Shovel's side selection/text editor.</value></data>
+  <data name="ConflictStillUnmerged" xml:space="preserve"><value>The tool returned, but this file is still unmerged. Its content and output are retained.</value></data>
+  <data name="ConflictNoLongerUnmerged" xml:space="preserve"><value>This file is no longer unmerged. Close this editor and refresh Local Changes.</value></data>
+  <data name="HistoryStartupCached" xml:space="preserve"><value>Last-known view from {0:g}. Loading current repository data…</value></data>
 </root>

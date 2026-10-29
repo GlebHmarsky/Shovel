@@ -1,10 +1,10 @@
 # Requirements and acceptance
 
-Updated 2026-10-29. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
+Updated 2026-10-30. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
 
 ## Git functionality and compatibility
 
-**Confirmed direction (2026-10-29; history actions delivered; conflict editor pending):** personal Fork replacement precedes team rollout. Direct default Pull is delivered in 0.28.0; selected-commit Checkout/Soft-Mixed-Hard Reset/Copy SHA/Revert and direct Fetch/Push in 0.29.0. Next is named-side conflict resolution with in-app text editing plus binary side selection. Acceptance must cover real selected targets, dirty/index preservation for each chosen mode, destructive-scope confirmation, stale state, failed/cancelled commands, merge/rebase/stash provenance, external-tool failure and actual resolved/unresolved index state. [Product](product.md#requested-next-workflows-not-implemented) owns interaction decisions still open. LFS locking remains low priority and server support is unknown.
+**Confirmed direction (2026-10-30):** personal Fork replacement precedes team rollout. Direct Pull/history actions and Fetch/Push are delivered; 0.30.0 adds named-side conflict resolution and text editing. Acceptance covers actual staged results, merge/rebase/stash provenance, deletion/binary/LFS choices, stale files/index/attributes, retained edits on failed/cancelled execution and external-tool failure. Merge/rebase banners must open Local Changes or abort the detected operation. Startup previews must be bounded, visibly stale and unable to authorize mutations. Stash menus perform real Apply/Pop/Drop without opening-time work; tab order persists and disabled chrome remains themed. Discard evidence must separate validation, native command and reconciliation, single/batch assets, UI responsiveness and exact-byte correctness; do not infer a fix for an unreproduced 30-second event. [Product](product.md#conflict-resolution-and-faster-reopening-0300) owns UX and limits; LFS locking remains low priority.
 
 | ID | Requirement |
 | --- | --- |

@@ -5,6 +5,8 @@ public sealed record ProcessRequest(string Executable, string WorkingDirectory, 
     public Dictionary<string, string?> Environment { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(15);
     public int MaximumOutputBytes { get; init; } = 256 * 1024;
+    // Optional bounded, caller-owned input file. EOF remains the default for interactive programs.
+    public string? StandardInputFile { get; init; }
 }
 
 public enum ProcessOutcome { Exited, Cancelled, TimedOut, OutputLimit, StartFailed }

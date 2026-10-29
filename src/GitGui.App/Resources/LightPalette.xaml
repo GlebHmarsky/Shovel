@@ -31,6 +31,8 @@
   <SolidColorBrush x:Key="Theme.OperationSuccessBackground" Color="#E1F2E6"/>
   <SolidColorBrush x:Key="Theme.OperationSuccessText" Color="#215633"/>
   <SolidColorBrush x:Key="Theme.OperationWarningBackground" Color="#FFF0CB"/>
+  <SolidColorBrush x:Key="Theme.SequenceBackground" Color="#FFE2C6"/>
+  <SolidColorBrush x:Key="Theme.SequenceBorder" Color="#A24D0E"/>
   <SolidColorBrush x:Key="Theme.OperationWarningText" Color="#705014"/>
   <SolidColorBrush x:Key="Theme.OperationFailedBackground" Color="#FBE6E8"/>
   <SolidColorBrush x:Key="Theme.OperationFailedText" Color="#8C2834"/>

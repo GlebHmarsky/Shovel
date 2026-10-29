@@ -56,14 +56,19 @@ internal sealed class NativeChildProcess : IDisposable
         using var error = new Pipe();
         // Anonymous pipe parent ends are never inherited, even by concurrent launches.
         input.Write.Dispose(); // Immediate EOF on stdin, no invisible prompts.
+        using var inputFile = request.StandardInputFile is { } inputPath
+            ? new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete) : null;
+        if (inputFile?.Length > 1024 * 1024) throw new ArgumentException("RequestTooLarge");
+        var inputHandle = inputFile?.SafeFileHandle ?? input.Read;
+        if (inputFile is not null && !SetHandleInformation(inputHandle, 1, 1)) throw Error();
         output.MakeReadPrivate(); error.MakeReadPrivate();
-        using var attributes = new Attributes(job.Handle, [input.Read.DangerousGetHandle(), output.Write.DangerousGetHandle(), error.Write.DangerousGetHandle()]);
+        using var attributes = new Attributes(job.Handle, [inputHandle.DangerousGetHandle(), output.Write.DangerousGetHandle(), error.Write.DangerousGetHandle()]);
         var startup = new StartupInfoEx
         {
             Info = new StartupInfo
             {
                 Size = (uint)Marshal.SizeOf<StartupInfoEx>(), Flags = 0x100, // STARTF_USESTDHANDLES
-                Input = input.Read.DangerousGetHandle(), Output = output.Write.DangerousGetHandle(), Error = error.Write.DangerousGetHandle()
+                Input = inputHandle.DangerousGetHandle(), Output = output.Write.DangerousGetHandle(), Error = error.Write.DangerousGetHandle()
             },
             Attributes = attributes.List
         };

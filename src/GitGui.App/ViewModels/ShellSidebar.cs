@@ -165,7 +165,8 @@ public sealed partial class ShellViewModel
         ActionTask = ExecuteSidebarAsync(tab, action == StashAction.Apply ? GitAction.StashApply : action == StashAction.Pop ? GitAction.StashPop : GitAction.StashDrop,
             stash: new(action, list, entry));
     }
-    private async Task ExecuteSidebarAsync(RepositoryTab tab, GitAction action, string branch = "", string remote = "", string start = "HEAD", StashOptions? stash = null)
+    private async Task ExecuteSidebarAsync(RepositoryTab tab, GitAction action, string branch = "", string remote = "", string start = "HEAD", StashOptions? stash = null,
+        StashAction? historyStashAction = null, string historyStashHash = "", string historyStashSelector = "")
     {
         if (SelectedRepository != tab || !CanAct) return;
         var cached = SidebarContext(tab); ActionContext? prepared = null;
@@ -181,8 +182,14 @@ public sealed partial class ShellViewModel
             {
                 var fresh = await _actions!.PrepareAsync(cached.Git, tab.Directory, token);
                 if (fresh.Identity.Fingerprint != cached.Identity.Fingerprint || fresh.History.Fingerprint != cached.History.Fingerprint) throw new GitActionException("ActionChanged");
+                if (historyStashAction is { } selectedAction)
+                {
+                    var list = await _actions.ReadStashesAsync(cached.Git, fresh.Identity, token);
+                    var entry = list.Entries.FirstOrDefault(e => e.Hash == historyStashHash && e.Selector == historyStashSelector) ?? throw new GitActionException("StashChanged");
+                    stash = new(selectedAction, list, entry); tab.Stashes.List = list;
+                }
                 prepared = fresh; return fresh;
-            }, stash is null ? null : (token, output) => _actions!.ExecuteStashAsync(prepared!, stash, token, output));
+            }, stash is null && historyStashAction is null ? null : (token, output) => _actions!.ExecuteStashAsync(prepared!, stash!, token, output));
             operation.Branch = branch; operation.StartRef = start;
             if (remote.Length > 0) operation.Remote = operation.Remotes.FirstOrDefault(r => r.Name == remote);
             SetLastAction(operation); DetailsIndex = 3; operation.RunCommand.Execute(null); await operation.RunningTask; Status = operation.Summary;

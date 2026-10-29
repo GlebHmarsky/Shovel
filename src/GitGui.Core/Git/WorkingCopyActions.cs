@@ -8,11 +8,11 @@ namespace GitGui.Core.Git;
 public sealed record WorkingCopyContext(GitInstallation Git, RepositoryIdentity Identity, RepositorySnapshot Repository,
     LocalChanges Changes, string IndexStamp, string ConfigStamp, string HeadMessage, string MergeMessage)
 {
-    internal string[]? FilterOverrides { get; init; }
+    internal StatusFilterOptions? FilterOverrides { get; init; }
 }
-public enum WorkingCopyAction { Stage, Unstage, Commit, StageHunks, UnstageHunks, Discard, StashFiles, IgnoreFiles, IgnoreExtension, LfsTrack, LfsUntrack, ExternalDiff }
+public enum WorkingCopyAction { Stage, Unstage, Commit, StageHunks, UnstageHunks, Discard, StashFiles, IgnoreFiles, IgnoreExtension, LfsTrack, LfsUntrack, ExternalDiff, ResolveConflict }
 public sealed record WorkingCopyOptions(WorkingCopyAction Action, IReadOnlyList<LocalChange> Entries, string Message = "", bool Amend = false,
-    HunkSelection? Hunks = null);
+    HunkSelection? Hunks = null, ConflictResolution? Resolution = null);
 public sealed record WorkingCopyResult(ActionResult Result, string? CommitHash = null)
 {
     public double ValidationMilliseconds { get; init; }
@@ -29,7 +29,7 @@ public sealed partial class GitActions
         var repository = await reader.InspectAsync(git, path, token, includeHistory: false);
         if (!SamePaths(identity, repository)) throw new GitActionException("ActionIdentityChanged");
         var stamp = await IndexStampAsync(repository, token);
-        var filterOverrides = await reader.FilterOverridesAsync(git, path, token);
+        var filterOverrides = await reader.StatusFiltersAsync(git, path, token);
         var changesTask = reader.ReadLocalChangesAsync(git, path, false, token, filterOverrides: filterOverrides);
         var configTask = ConfigStamp(git, path, token);
         var messageTask = repository.Commit is null ? Task.FromResult<ProcessResult?>(null) : ReadMessage();
@@ -86,14 +86,24 @@ public sealed partial class GitActions
             var inspection = options.Action == WorkingCopyAction.Commit ? reader.InspectAsync(git, path, token, includeHistory: false)
                 : reader.ReadWorkingCopyHeadAsync(git, context.Repository, token);
             var configuration = ConfigStamp(git, path, token);
-            await Task.WhenAll(inspection, configuration);
+            Task<LocalChanges>? reviewedPaths = null;
+            if (options.Action == WorkingCopyAction.Discard && options.Entries.Count > 0 && options.Entries.All(context.Changes.Entries.Contains))
+            {
+                var targets = FileActionPaths(options.Entries);
+                foreach (var target in targets) ValidateRegularTarget(path, target);
+                reviewedPaths = reader.ReadLocalChangesAsync(git, path, false, token,
+                    targets.Length <= 128 && targets.Sum(item => item.Length + 3) < 16000 ? targets : null, context.FilterOverrides, normalizeLfs: false);
+            }
+            await Task.WhenAll(inspection, configuration, reviewedPaths ?? Task.CompletedTask);
             var fresh = await inspection;
             if (!SamePaths(context.Identity, fresh) || fresh.Branch != context.Repository.Branch || fresh.Commit != context.Repository.Commit ||
                 fresh.Operation != context.Repository.Operation || await IndexStampAsync(fresh, token) != context.IndexStamp ||
                 await configuration != context.ConfigStamp) throw new GitActionException("CommitStale");
             if (!Enum.IsDefined(options.Action)) throw new GitActionException("ActionReadFailed");
+            if (options.Action == WorkingCopyAction.ResolveConflict)
+                return await ResolveConflictLockedAsync(context, fresh, options.Resolution ?? throw new GitActionException("ConflictChoose"), timing, token, progress);
             if (options.Action >= WorkingCopyAction.Discard)
-                return await ExecuteFileMenuLockedAsync(context, fresh, options, timing.Elapsed.TotalMilliseconds, token, progress);
+                return await ExecuteFileMenuLockedAsync(context, fresh, options, timing.Elapsed.TotalMilliseconds, token, progress, reviewedPaths is null ? null : await reviewedPaths);
             var temporary = Directory.CreateTempSubdirectory("shovel-git-");
             try
             {

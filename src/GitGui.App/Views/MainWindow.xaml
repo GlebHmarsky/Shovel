@@ -108,9 +108,11 @@
       </MenuItem>
     </Menu>
     </Grid>
-    <ListBox Grid.Row="2" ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}" IsEnabled="{Binding CanNavigate}"
+    <ListBox x:Name="RepositoryTabs" Grid.Row="2" ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}" IsEnabled="{Binding CanNavigate}"
+             AllowDrop="True" PreviewMouseMove="OnTabMouseMove" PreviewMouseLeftButtonUp="OnTabMouseUp" DragOver="OnTabDragOver" Drop="OnTabDrop"
              BorderThickness="0,0,0,1" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
              AutomationProperties.Name="{loc:Text Key=RepositoryTabs}" AutomationProperties.AutomationId="RepositoryTabs">
+      <ListBox.Template><ControlTemplate TargetType="ListBox"><Border Background="{DynamicResource Theme.Sidebar}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer Focusable="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"><ItemsPresenter/></ScrollViewer></Border></ControlTemplate></ListBox.Template>
       <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate></ListBox.ItemsPanel>
       <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" TextAlignment="Center" TextTrimming="CharacterEllipsis" Padding="6,8" ToolTip="{Binding Directory}" FlowDirection="LeftToRight" /></DataTemplate></ListBox.ItemTemplate>
       <ListBox.ItemContainerStyle>
@@ -260,8 +262,19 @@
           <RowDefinition x:Name="DetailsRow" Height="180" MinHeight="80" />
         </Grid.RowDefinitions>
         <Grid>
-          <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-          <DataGrid Grid.Row="0" x:Name="HistoryTable" PreviewMouseWheel="OnHistoryWheel" ItemsSource="{Binding Commits}" SelectedItem="{Binding SelectedCommit}"
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <TextBlock Grid.Row="2" Text="{Binding HistoryNotice}" Margin="8,4" Foreground="{DynamicResource Theme.Muted}" Visibility="{Binding ShowingStartupPreview, Converter={StaticResource BoolToVisibility}}" AutomationProperties.LiveSetting="Polite"/>
+          <Border Background="{DynamicResource Theme.SequenceBackground}" BorderBrush="{DynamicResource Theme.SequenceBorder}" BorderThickness="0,0,0,1" Padding="10,6" Visibility="{Binding HasOperationBanner, Converter={StaticResource BoolToVisibility}}" AutomationProperties.AutomationId="OperationBanner">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="{loc:Text Key=ConflictResolve}" Command="{Binding ShowChangesCommand}" Margin="8,0,0,0"/>
+                <Button Content="{loc:Text Key=ActionTitleContinue}" Command="{Binding ContinueCommand}" Margin="8,0,0,0"/>
+                <Button Content="{loc:Text Key=ActionTitleAbort}" Command="{Binding AbortCommand}" Margin="8,0,0,0"/>
+              </StackPanel>
+              <TextBlock Text="{Binding OperationBanner}" Foreground="{DynamicResource Theme.Text}" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+            </DockPanel>
+          </Border>
+          <DataGrid Grid.Row="1" x:Name="HistoryTable" PreviewMouseWheel="OnHistoryWheel" ItemsSource="{Binding Commits}" SelectedItem="{Binding SelectedCommit}"
                     Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}"
                     AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
                     CanUserReorderColumns="False" CanUserResizeRows="False" SelectionMode="Single" SelectionUnit="FullRow"
@@ -328,10 +341,10 @@
               <DataGridTextColumn Header="{loc:Text Key=HistoryHash}" Binding="{Binding ShortHash}" Width="115" MinWidth="115" ElementStyle="{StaticResource HistoryText}" />
             </DataGrid.Columns>
           </DataGrid>
-          <Button Content="{Binding HistoryProblem}" Command="{Binding DiagnosticsCommand}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" MaxWidth="420" AutomationProperties.LiveSetting="Polite">
+          <Button Grid.Row="1" Content="{Binding HistoryProblem}" Command="{Binding DiagnosticsCommand}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" MaxWidth="420" AutomationProperties.LiveSetting="Polite">
             <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding HistoryProblem}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style>
           </Button>
-          <TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="450" Margin="16" IsHitTestVisible="False">
+          <TextBlock Grid.Row="1" Text="{Binding HistoryNotice}" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="450" Margin="16" IsHitTestVisible="False">
             <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Foreground" Value="{DynamicResource Theme.HistoryText}"/><Style.Triggers><DataTrigger Binding="{Binding Commits.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding HighContrast, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"><Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
           </TextBlock>
 
@@ -381,7 +394,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12">
               <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
               <TextBlock Text="{Binding SettingsNotice}" TextWrapping="Wrap"/>
-              <TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap"/>
+              <TextBlock Grid.Row="1" Text="{Binding HistoryNotice}" TextWrapping="Wrap"/>
               <TextBlock Text="{loc:Text Key=HistoryLimits}" TextWrapping="Wrap"/>
               <TextBlock Text="{Binding GitStatus}" />
               <TextBlock Text="{loc:Text Key=RawOutput}" FontWeight="SemiBold" />

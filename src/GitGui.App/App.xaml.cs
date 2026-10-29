@@ -63,6 +63,7 @@ public partial class App : Application
             _shell = new ShellViewModel(reader, new UserInteraction(), identities,
                 persist: SaveIdentitySettingsAsync, trace: _trace, actions: new GitActions(runner, reader, identities));
             _shell.DraftStore = new GitGui.Core.Drafts.CommitDraftStore(null, identities, _log.RecordDraftStorage);
+            _shell.StartupCache = new HistoryCacheStore(directory);
             _shell.AppearanceChanged += (_, _) => _theme.Select(_shell.Appearance);
             MainWindow window;
             using (_trace.Measure(TimingStage.Shell)) window = new MainWindow(_shell);
@@ -128,6 +129,10 @@ public partial class App : Application
                     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     await Task.Run(() => _settings!.SaveAsync(snapshot, timeout.Token), timeout.Token);
                     _log!.Record(DiagnosticEvent.SettingsSaved);
+                    // A rebuildable cache must not consume the settings save deadline or cause its error dialog.
+                    using var cacheTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    try { await _shell.SaveStartupCacheAsync(cacheTimeout.Token); }
+                    catch (OperationCanceledException) { }
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException)
                 {

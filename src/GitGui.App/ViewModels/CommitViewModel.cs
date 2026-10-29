@@ -175,6 +175,7 @@ public sealed partial class CommitViewModel : ObservableObject
         }, () => CanApplyHunks);
         _timer.Tick += (_, _) => { Changed(nameof(Summary)); if (_mutating && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
         PublishRows(); RawOutput = _state.LastOutput;
+        InitializeConflicts();
         if (_state.LastResult.Length != 0) Status = _state.LastResult;
     }
     public Task StartLoading() { if (!_closed && !_mutating) { _ = _draft?.StartOrRetryAsync(); LoadingTask = LoadAsync(); } return LoadingTask; }
@@ -432,6 +433,7 @@ public sealed partial class CommitViewModel : ObservableObject
     }
     private void RefreshCommands()
     {
+        ResolveConflictCommand?.Refresh(); Changed(nameof(IsConflictSelected));
         StageCommand?.Refresh(); UnstageCommand?.Refresh(); CommitCommand?.Refresh(); RefreshCommand?.Refresh(); NextHunkCommand?.Refresh(); PreviousHunkCommand?.Refresh();
         ApplyHunksCommand?.Refresh();
         Changed(nameof(CanApplyHunks)); Changed(nameof(HunkActionLabel)); Changed(nameof(HunkHelp));

@@ -37,7 +37,7 @@ public sealed class AppTheme : IDisposable
                 "Theme.Disabled" => SystemColors.GrayTextBrush,
                 "Theme.ActiveSelection" or "Theme.Selected" or "Theme.Pressed" or "Theme.Hover" => SystemColors.HighlightBrush,
                 "Theme.SelectionText" => SystemColors.HighlightTextBrush,
-                "Theme.Border" or "Theme.Focus" or "Theme.Accent" => SystemColors.WindowTextBrush,
+                "Theme.Border" or "Theme.Focus" or "Theme.Accent" or "Theme.SequenceBorder" => SystemColors.WindowTextBrush,
                 _ => SystemColors.WindowBrush
             };
         }

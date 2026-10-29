@@ -1,14 +1,19 @@
 # Implementation checklist
 
-Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-10-30. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
+
+- [x] **P1 — Conflict resolution.** Actual source labels, per-file side checkout/staging and UTF-8 result editing; merge/rebase banner with Resolve/Continue/Abort. Binary/LFS/deletion/rebase/stash and stale/failure paths covered by focused checks. Configured external tool works; tool chooser and additional encodings remain limits.
+- [x] **P1 — Startup and daily-use fixes.** Bounded saved last-selected history preview; real stash history Apply/Pop/Drop; themed disabled tab strip and persisted drag reorder. Headless cache publication and offscreen theme checks passed; native desktop input remains unverified.
+- [x] **P1 — Profile discard and correct LFS status.** Read-only authorized asset-repository inspection; disposable text/LFS single/batch measurements; overlapping validation and consolidated HEAD reads; restore filters/hooks preserved. Fixed false modified rows after hydrated LFS restores. See [results](docs/roadmap.md#conflicts-and-usability-0300).
+- [x] **P1 — Deliver 0.30.0.** Focused conflict/usability/LFS/status/responsiveness checks and offscreen review; 26 routine checks in 55.6 seconds, zero build warnings/errors, matching ignored preview/checksums, owning docs and descriptive source commit. No interactive launch; LFS latency remains open below.
 
 - [x] **P1 — History context actions.** Clicked full SHA; detached Checkout; confirmed Soft/Mixed/Hard Reset; Copy SHA and Revert with explicit merge mainline. Preparation-free menu, shared execution/results/recovery and stale-target rejection.
 - [x] **P1 — Direct Fetch/Push with options arrows.** Use supported configured single-branch targets; preserve split Pull and modal Commit. No menu-time preparation.
 - [x] **P1 — Deliver 0.29.0.** Nine focused scenarios passed across history checks and the corrected network rerun; Dark/Light normal/minimum offscreen review; 26 routine checks in 62.4 seconds, matching ignored preview/package hashes, owning docs and descriptive commit. No interactive launch or live server test.
 
-0.29.0: history context actions and split Fetch/Pull/Push; Commit stays modal. Named-side conflict editing is next. Routine verification remains 26 checks (maximum 30).
+0.30.0 adds conflict resolution and startup/tab/stash usability. Routine verification remains 26 checks (maximum 30). Discard's reported 30-second spike and one-second target remain open below.
 
 - [x] **P1 — Direct default Pull.** Main button uses Rebase/auto-stash off and configured upstream; arrow keeps the existing editable modal. Shared real execution/results/reconciliation; no options-time preparation or remembered-choice change.
 - [x] **P1 — Deliver 0.28.0.** Four focused checks/offscreen Dark/Light normal/minimum review; 26 routine checks in 51.6 seconds; matching ignored preview/package hashes, updated docs and descriptive commit. No interactive launch or live server test.
@@ -74,7 +79,8 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P1 — Named-side conflict editor.** Implement the [requested workflow](docs/product.md#requested-next-workflows-not-implemented): real source names, one-side resolution, in-app C++/text merge and selectable external tool; binary side selection. Preserve conflict/sequence state, cancellation and stale-file checks; checkboxes only select; Resolve applies the chosen version and stages it.
+- [ ] **P1 — Finish representative LFS discard latency.** The 30-second unstaged Blueprint event was not reproduced; controlled timings still exceed the one-second target. Correlate validation/Git/reconciliation timings from the actual delayed attempt with asset size, LFS cache/filter/hook state and disk load. Keep exact bytes/rows correct and UI cancellable. Do not claim the event fixed from the current unpaired benchmark runs.
+- [ ] **P2 — Conflict editor extensions.** In-app external-tool chooser, more encodings and block-level merge controls; current configured-tool/UTF-8/side-selection workflow is delivered.
 - [ ] **P2 — Remaining signing/input recovery.** Broaden only for a concrete daily-use failure; not a prerequisite that displaces requested functionality. Existing hooks/signing stay enabled.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
@@ -93,7 +99,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 - [ ] **P1 — Network MVP.** Clone, remote editing/removal and broader auth/input; adding remotes and setting upstream are delivered. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
 - [ ] **P2 — Pilot distribution, after personal replacement.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
-- [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/tag management/reflog/force-with-lease and advanced stash variants; disposable destructive fixtures. Reset/Revert and conflict editing are advanced into Next priorities above.
+- [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/tag management/reflog/force-with-lease and advanced stash variants; disposable destructive fixtures. Reset/Revert and per-file conflict editing are delivered; extensions remain above.
 - [ ] **P2 — Extended compatibility.** Additional submodule management (add/remove/deinit/recursive/remote-latest), worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization. Selected submodule open/update/sync is delivered.
 
 ## Decisions before rollout

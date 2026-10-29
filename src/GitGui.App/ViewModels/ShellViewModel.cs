@@ -198,7 +198,7 @@ public sealed partial class ShellViewModel : ObservableObject
             SettingsLoadStatus.Invalid => "SettingsInvalid", _ => "SettingsUnavailable"
         });
         IsReady = true; Status = result.CanSave ? UiText.Get("FoundationReady") : SettingsNotice;
-        if (SelectedRepository is not null) BeginInspection(SelectedRepository);
+        if (SelectedRepository is not null) { _startupPreviewTask = RestoreStartupPreviewAsync(SelectedRepository); BeginInspection(SelectedRepository); }
     }
 
     public void RefreshIfStale()
@@ -256,7 +256,7 @@ public sealed partial class ShellViewModel : ObservableObject
                 Changed(nameof(DivergenceHelp));
                 Status = UiText.Get("InspectingRepository");
                 _git ??= await _reader.DiscoverAsync(_explicitGit, cancellation.Token); Changed(nameof(GitStatus));
-                var previous = state.Page;
+                var previous = state.StartupPreview ? null : state.Page;
                 var snapshot = direction == 0 ? await _reader.InspectAsync(_git, tab.Directory, cancellation.Token) : tab.Snapshot!;
                 if (Obsolete()) return;
                 if (!string.Equals(snapshot.Worktree, identity.Worktree, StringComparison.OrdinalIgnoreCase) ||
@@ -309,7 +309,7 @@ public sealed partial class ShellViewModel : ObservableObject
                     selectedHash = savedView?.SelectedHash ?? selectedHash;
                     state.VerticalOffset = savedView?.Vertical ?? 0; state.HorizontalOffset = savedView?.Horizontal ?? 0;
                 }
-                state.Page = history; state.Rows = rows; state.EstimatedBytes = prepared.Bytes;
+                state.StartupPreview = false; state.Page = history; state.Rows = rows; state.EstimatedBytes = prepared.Bytes;
                 state.Selected = rows.FirstOrDefault(row => row.Commit.Hash == selectedHash) ?? rows.FirstOrDefault();
                 state.ValidatedAt = DateTimeOffset.UtcNow; state.NeedsRefresh = false;
                 state.Notice = LoadedNotice(history); state.Error = state.RawOutput = "";
@@ -403,6 +403,7 @@ public sealed partial class ShellViewModel : ObservableObject
             try
             {
                 PublishChanges(); HighlightAuthors(); PublishSidebar();
+                Changed(nameof(ShowingStartupPreview));
                 foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(PullCount), nameof(PushCount), nameof(DivergenceHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(HistoryProblem), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
                 RefreshCommands(); HistoryViewChanged?.Invoke(this, EventArgs.Empty); UpdateCommitFiles();
             } finally { _publishingState = false; }
@@ -421,6 +422,14 @@ public sealed partial class ShellViewModel : ObservableObject
         Repositories.IndexOf(tab) + offset >= 0 && Repositories.IndexOf(tab) + offset < Repositories.Count;
     private void MoveTab(RepositoryTab tab, int offset)
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
+    public void ReorderTab(RepositoryTab tab, int destination)
+    {
+        if (!CanNavigate || !Repositories.Contains(tab) || destination < 0 || destination >= Repositories.Count) return;
+        var selected = SelectedRepository;
+        Repositories.Move(Repositories.IndexOf(tab), destination);
+        if (SelectedRepository != selected) SelectedRepository = selected;
+        RefreshCommands();
+    }
     private void RefreshCommands()
     {
         RefreshWorkspaceTools();
@@ -431,6 +440,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RefreshBranchManagement();
         ContinueCommand?.Refresh(); SkipCommand?.Refresh(); AbortCommand?.Refresh();
         Changed(nameof(HasRecovery)); Changed(nameof(CanSkipRecovery)); Changed(nameof(RecoveryHelp));
+        Changed(nameof(HasOperationBanner)); Changed(nameof(OperationBanner));
         ShowChangesCommand?.Refresh(); ShowHistoryCommand?.Refresh();
         NotifyActionContext(); RefreshHistoryActions();
         foreach (var property in new[] { nameof(CanOpenBranchMenu), nameof(CanSwitchBranch), nameof(BranchActionHelp), nameof(FetchActionHelp), nameof(PullActionHelp), nameof(DefaultPullHelp), nameof(DefaultFetchHelp), nameof(DefaultPushHelp), nameof(PushActionHelp), nameof(SwitchActionHelp) }) Changed(property);
@@ -448,6 +458,6 @@ public sealed partial class ShellViewModel : ObservableObject
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
     public void BeginShutdown() { _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
-    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _countTask; await _oldCommitFiles; await _sidebarTask; }
+    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _startupPreviewTask; await _countTask; await _oldCommitFiles; await _sidebarTask; }
     public void ResumeAfterSaveFailure() { _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }

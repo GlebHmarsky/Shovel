@@ -9,7 +9,7 @@ public sealed partial class GitActions
 {
     // Runs inside ExecuteWorkingCopyAsync's common-directory gate, after identity/HEAD/index/config validation.
     private async Task<WorkingCopyResult> ExecuteFileMenuLockedAsync(WorkingCopyContext context, RepositorySnapshot fresh,
-        WorkingCopyOptions options, double initialValidation, CancellationToken token, Action<ProcessOutput>? progress)
+        WorkingCopyOptions options, double initialValidation, CancellationToken token, Action<ProcessOutput>? progress, LocalChanges? reviewedPaths = null)
     {
         var watch = Stopwatch.StartNew(); var path = context.Identity.Worktree; var git = context.Git;
         var entries = options.Entries;
@@ -19,7 +19,7 @@ public sealed partial class GitActions
         var paths = FileActionPaths(entries);
         foreach (var relative in paths) ValidateRegularTarget(path, relative);
         var scoped = paths.Length <= 128 && paths.Sum(item => item.Length + 3) < 16000;
-        var current = await reader.ReadLocalChangesAsync(git, path, false, token, scoped ? paths : null, context.FilterOverrides);
+        var current = reviewedPaths ?? await reader.ReadLocalChangesAsync(git, path, false, token, scoped ? paths : null, context.FilterOverrides);
         if (entries.Any(entry => !current.Entries.Contains(entry)) || await IndexStampAsync(fresh, token) != context.IndexStamp)
             throw new GitActionException("CommitStale");
         if (options.Action is WorkingCopyAction.StashFiles && (fresh.Commit is null || fresh.Operation != RepositoryOperation.None))

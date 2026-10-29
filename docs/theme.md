@@ -1,6 +1,6 @@
 # Shared visual theme
 
-Updated 2026-10-29. **Confirmed direction:** restrained Fork-inspired dark surfaces, with live Dark/Light selection added in 0.24.0. Further polish stays P2 in [TODO](../TODO.md). This document owns palette/state conventions; [product](product.md) owns workflow and [roadmap](roadmap.md) records verification. No Fork artwork, branding or proprietary style resources are used.
+Updated 2026-10-30. **Confirmed direction:** restrained Fork-inspired dark surfaces, with live Dark/Light selection added in 0.24.0. Further polish stays P2 in [TODO](../TODO.md). This document owns palette/state conventions; [product](product.md) owns workflow and [roadmap](roadmap.md) records verification. No Fork artwork, branding or proprietary style resources are used.
 
 ## Palette and hierarchy (0.12.1)
 
@@ -58,3 +58,7 @@ Shared styles live in `Resources/AppStyles.xaml`; `Services/AppTheme.cs` applies
 Since 0.16.1, Shovel-owned window title bars use native DWM styling; 0.24.0 updates that styling on palette changes. Windows 11 caption/background/text/border colors follow Chrome, Text/Muted and Border; high contrast removes these overrides. Dialog caption buttons remain native. Since 0.26.0 the main window uses an integrated WindowChrome caption with SystemCommands buttons; move/resize/system-menu hit testing remains delegated to WPF/Windows. Windows 10 receives a best-effort light/dark-mode request; unsupported attributes retain native defaults. Windows file/folder pickers and MessageBox dialogs remain OS-owned. Wider visual/accessibility polish stays deferred. Do not claim pixel parity or desktop certification from an offscreen render.
 
 Implementation uses stable [WPF styles/templates](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/control-styles-and-templates). The .NET 10 [Window.ThemeMode API](https://learn.microsoft.com/en-us/dotnet/api/system.windows.window.thememode?view=windowsdesktop-10.0) is still marked experimental in official documentation checked 2026-10-28; this pass avoids adopting it or changing control metrics through Fluent theme migration.
+
+## Conflict and modal surfaces (0.30.0)
+
+Merge/rebase banners sit above history using Theme.SequenceBackground/SequenceBorder (orange in Dark/Light, system window/text in high contrast). Conflict panes use shared text/input styles and native selection/scrolling. The repository ListBox has an explicit semantic border/scroll template, so owner disabling for Commit cannot paint the strip white. Drag feedback uses WPF's native loop; desktop drag/DPI and native modal paint still need interactive validation.

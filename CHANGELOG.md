@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.30.0 — 2026-10-30
+
+- Resolve individual conflicts with named current/incoming sources, native side checkout and staging, or a bounded in-app UTF-8 merge editor. Preserve rebase side semantics, binary/LFS assets, deletion choices, stale edits and failed-tool results. Show an orange merge/rebase banner with Resolve, Continue and Abort.
+- Restore the last selected repository's saved history view while fresh data loads; mark it as last-known and keep mutations dependent on current data. Add Apply/Pop/Drop to stash history menus, keep the tab strip themed under the Commit modal, and drag tabs to reorder their saved positions.
+- Overlap discard validation and collapse HEAD metadata queries. Correct false modified rows for hydrated standard LFS assets using local pointer/hash comparison, without running filters during background reads. Add isolated single/batch discard profiling; the reported 30-second spike and Fork-equivalent latency remain unverified.
+- Add optional conflict, usability and LFS checks; retain the 26-check routine budget. Document cache storage, editor limits, measured performance and remaining desktop validation.
+
 ## 0.29.0 — 2026-10-29
 
 - Add history-row context actions for detached Checkout, confirmed Soft/Mixed/Hard branch Reset, full SHA copying and Revert. Merge reverts explicitly choose a mainline parent; conflicts use the existing recovery controls.

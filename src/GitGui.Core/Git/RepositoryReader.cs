@@ -98,7 +98,7 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         }
     }, token);
 
-    private Task<ProcessResult> RunAsync(string executable, string directory, string[] arguments, CancellationToken token, int maximumOutputBytes = 256 * 1024)
+    private Task<ProcessResult> RunAsync(string executable, string directory, string[] arguments, CancellationToken token, int maximumOutputBytes = 256 * 1024, string? inputFile = null)
     {
         var environment = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         // Inherited Git overrides/trace destinations must not redirect inspection or leak output.
@@ -112,7 +112,7 @@ public sealed partial class RepositoryReader(IProcessRunner runner, PerformanceT
         environment["GCM_INTERACTIVE"] = "never";
         environment["GIT_OPTIONAL_LOCKS"] = "0";
         environment["GIT_NO_LAZY_FETCH"] = "1";
-        return runner.RunAsync(new(executable, directory, arguments) { Environment = environment, MaximumOutputBytes = maximumOutputBytes }, token);
+        return runner.RunAsync(new(executable, directory, arguments) { Environment = environment, MaximumOutputBytes = maximumOutputBytes, StandardInputFile = inputFile }, token);
     }
 
     private static string[] ReadArguments(string[] args) => ["--no-pager", "--no-optional-locks", "--no-lazy-fetch",

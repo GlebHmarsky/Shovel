@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
@@ -8,9 +9,9 @@ using GitGui.ProcessHost;
 namespace GitGui.FoundationChecks;
 internal static partial class Program
 {
-    private static async Task MeasureWorkingCopyAsync(bool assets = false)
+    private static async Task MeasureWorkingCopyAsync(bool assets = false, bool discard = false, bool lfs = false, bool profile = false)
     {
-        var runner = new WorkingTimingRunner(); var reader = new RepositoryReader(runner);
+        var runner = new WorkingTimingRunner(profile); var reader = new RepositoryReader(runner);
         var actions = new GitActions(runner, reader, new WindowsRepositoryIdentity());
         var git = await reader.DiscoverAsync(null, default); var repo = Fixture("working-copy timing");
         var config = Path.Combine(_root, "isolated.config"); await File.WriteAllTextAsync(config, "");
@@ -18,10 +19,18 @@ internal static partial class Program
         async Task<string> Git(params string[] args)
         {
             var result = await runner.RunAsync(new(git.Executable, repo, args), default);
-            Expect(result.ExitCode == 0, "Benchmark fixture command"); return Encoding.UTF8.GetString(result.StandardOutput).Trim();
+            Expect(result.ExitCode == 0, "Benchmark fixture command: " + Encoding.UTF8.GetString(result.StandardError)); return Encoding.UTF8.GetString(result.StandardOutput).Trim();
         }
         await Git("init", "-b", "main"); await Git("config", "user.name", "Timing"); await Git("config", "user.email", "timing@example.invalid");
         await Git("config", "core.autocrlf", "false");
+        if (lfs)
+        {
+            await Git("config", "filter.lfs.process", "git-lfs filter-process");
+            await Git("config", "filter.lfs.clean", "git-lfs clean -- %f");
+            await Git("config", "filter.lfs.smudge", "git-lfs smudge -- %f");
+            await Git("config", "filter.lfs.required", "true");
+            await File.WriteAllTextAsync(Path.Combine(repo, ".gitattributes"), "*.uasset filter=lfs diff=lfs merge=lfs -text\n");
+        }
         for (var i = 0; i < 2000; i++) await File.WriteAllTextAsync(Path.Combine(repo, $"file-{i}.txt"), "baseline\n");
         if (assets)
         {
@@ -30,31 +39,72 @@ internal static partial class Program
         }
         await Git("add", "."); await Git("commit", "-m", "Fixture"); var hash = await Git("rev-parse", "HEAD");
         for (var i = 0; i < 1000; i++) await File.WriteAllTextAsync(Path.Combine(repo, ".git", "refs", "heads", $"fixture-{i}"), hash + "\n");
-        for (var sample = 0; sample < 3; sample++)
+        for (var sample = 0; sample < (discard ? 6 : 3); sample++)
         {
             if (assets) for (var i = 0; i < 64; i++) File.SetLastWriteTimeUtc(Path.Combine(repo, $"asset-{i}.uasset"), DateTime.UtcNow.AddSeconds(sample + 2));
-            await File.WriteAllTextAsync(Path.Combine(repo, "file-0.txt"), $"changed {sample}\n");
+            var count = discard && sample > 2 ? 64 : 1;
+            for (var i = 0; i < count; i++)
+                if (lfs) { using var changed = File.OpenWrite(Path.Combine(repo, $"asset-{i}.uasset")); changed.Position = 1024; changed.WriteByte((byte)(sample + 100)); }
+                else await File.WriteAllTextAsync(Path.Combine(repo, $"file-{i}.txt"), $"changed {sample}\n");
             var context = await actions.ReadWorkingCopyAsync(git, repo, default);
-            foreach (var action in new[] { WorkingCopyAction.Stage, WorkingCopyAction.Unstage })
+            foreach (var action in discard ? new[] { WorkingCopyAction.Discard } : new[] { WorkingCopyAction.Stage, WorkingCopyAction.Unstage })
             {
-                runner.Samples.Clear(); var watch = Stopwatch.StartNew();
-                var result = await actions.ExecuteWorkingCopyAsync(context, new(action, context.Changes.Entries.Where(e => e.Path == "file-0.txt").ToArray()), default);
+                runner.Samples.Clear(); runner.Children.Clear(); var watch = Stopwatch.StartNew();
+                var targets = Enumerable.Range(0, count).Select(i => lfs ? $"asset-{i}.uasset" : $"file-{i}.txt").ToHashSet();
+                var result = await actions.ExecuteWorkingCopyAsync(context, new(action, context.Changes.Entries.Where(e => targets.Contains(e.Path)).ToArray()), default);
                 Expect(result.Result.Success, "Measured operation succeeded"); var execution = watch.Elapsed.TotalMilliseconds;
                 context = result.UpdatedContext ?? await actions.ReadWorkingCopyAsync(git, repo, default); var rows = watch.Elapsed.TotalMilliseconds;
-                await reader.ReadFileDiffAsync(context, context.Changes.Entries.Single(e => e.Path == "file-0.txt"), new(), default);
-                Console.WriteLine($"Sample {sample + 1} {action}: execute {execution:F1} ms; fresh rows {rows:F1} ms; diff {watch.Elapsed.TotalMilliseconds:F1} ms; processes {runner.Samples.Count}");
-                Console.WriteLine(string.Join("; ", runner.Samples.Select(s => $"{s.Name} {s.Milliseconds:F1} ms")));
+                Console.WriteLine($"Remaining selected unstaged rows: {context.Changes.Entries.Count(e => targets.Contains(e.Path) && e.Group == ChangeGroup.Unstaged)}");
+                if (discard) Expect(!context.Changes.Entries.Any(e => targets.Contains(e.Path) && e.Group == ChangeGroup.Unstaged), "Discarded rows must leave Local Changes");
+                var samples = runner.Samples.ToArray();
+                if (!discard) await reader.ReadFileDiffAsync(context, context.Changes.Entries.Single(e => e.Path == "file-0.txt"), new(), default);
+                else if (!lfs) foreach (var target in targets) Expect(await File.ReadAllTextAsync(Path.Combine(repo, target)) == "baseline\n", "Discard restored exact bytes");
+                else { var diff = await Git(["diff", "--name-only", "--", .. targets]); Expect(diff.Length == 0, "LFS discard restored actual assets"); }
+                Console.WriteLine($"Sample {sample + 1} {action} ({count} files): execute {execution:F1} ms; fresh rows {rows:F1} ms; validation {result.ValidationMilliseconds:F1} ms; command {result.CommandMilliseconds:F1} ms; reconciliation {result.RefreshMilliseconds:F1} ms; processes {samples.Length}");
+                Console.WriteLine(string.Join("; ", samples.Select(s => $"{s.Name} {s.Milliseconds:F1} ms")));
+                foreach (var child in runner.Children) Console.WriteLine($"Restore child {child.Name}: {child.Milliseconds:F1} ms");
             }
         }
-        Console.WriteLine("Disposable 2,000-text-file / 1,001-branch fixture; " + (assets ? "plus 64 x 4 MiB unchanged binary assets with invalidated stat cache; " : "") + "headless, first plus two warm samples, not desktop p95. " + _root);
+        Console.WriteLine("Disposable 2,000-text-file / 1,001-branch fixture; " + (assets ? "plus 64 x 4 MiB binary assets with invalidated stat cache; " : "") +
+            (lfs ? "mutated LFS assets, normal smudge/clean and installed fixture hooks; " : "mutated text files; ") +
+            "headless, three samples per selection size; byte verification excluded from timings/process counts; " + (profile ? "Trace2 profiling enabled (child lifetimes overlap, profiling adds overhead); " : "") + "not desktop p95. " + _root);
     }
-    private sealed class WorkingTimingRunner : IProcessRunner
+    private sealed class WorkingTimingRunner(bool profile = false) : IProcessRunner
     {
         private readonly WindowsProcessRunner _inner = new();
         public List<(string Name, double Milliseconds)> Samples { get; } = [];
+        public List<(string Name, double Milliseconds)> Children { get; } = [];
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
+            var trace = profile && request.Arguments.Contains("restore");
+            if (trace) request = request with { Environment = new(request.Environment, StringComparer.OrdinalIgnoreCase) { ["GIT_TRACE2_EVENT"] = "1" } };
             var watch = Stopwatch.StartNew(); var result = await _inner.RunAsync(request, token, output);
+            if (trace)
+            {
+                // Read trace only in memory; persist only allowlisted child category + numeric duration.
+                var children = new Dictionary<string, string>(); var ordinary = new StringBuilder();
+                foreach (var line in Encoding.UTF8.GetString(result.StandardError).Split('\n'))
+                {
+                    try
+                    {
+                        using var json = JsonDocument.Parse(line); var data = json.RootElement;
+                        if (!data.TryGetProperty("event", out var ev)) continue;
+                        var kind = ev.GetString();
+                        if (kind is not ("child_start" or "child_exit")) continue;
+                        var key = data.GetProperty("sid").GetString() + "/" + data.GetProperty("child_id").GetInt32();
+                        if (kind == "child_start")
+                        {
+                            var category = data.TryGetProperty("hook_name", out var hook) && hook.GetString() == "post-checkout" ? "post-checkout hook" :
+                                data.TryGetProperty("argv", out var argv) && argv.EnumerateArray().Any(arg => arg.GetString() == "git-lfs filter-process") ? "LFS filter-process" : "other configured child";
+                            children[key] = category;
+                        }
+                        else if (children.TryGetValue(key, out var category) && data.TryGetProperty("t_rel", out var seconds))
+                            Children.Add((category, seconds.GetDouble() * 1000));
+                    }
+                    catch (JsonException) { ordinary.AppendLine(line); }
+                }
+                result = result with { StandardError = Encoding.UTF8.GetBytes(ordinary.ToString()) };
+            }
             var commands = new[] { "rev-parse", "symbolic-ref", "for-each-ref", "remote", "config", "log", "status", "diff", "add", "restore", "reset", "cat-file", "check-attr" };
             lock (Samples) Samples.Add((request.Arguments.FirstOrDefault(commands.Contains) ?? "other", watch.Elapsed.TotalMilliseconds));
             return result;

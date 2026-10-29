@@ -152,13 +152,24 @@ public sealed partial class RepositoryReader
         using var timing = trace?.Measure(TimingStage.References);
         if (headOnly)
         {
-            var hashTask = RunAsync(git.Executable, repository.Worktree, ReadArguments(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]), token);
-            var branchTask = RunAsync(git.Executable, repository.Worktree, ReadArguments(["symbolic-ref", "--quiet", "--short", "HEAD"]), token);
-            await Task.WhenAll(hashTask, branchTask);
-            var hashResult = await hashTask; var branchResult = await branchTask;
-            RequireSuccess(hashResult, allowOne: true); RequireSuccess(branchResult, allowOne: true);
-            var tip = hashResult.ExitCode == 0 ? Line(hashResult.StandardOutput) : null;
-            var branchName = branchResult.ExitCode == 0 ? Line(branchResult.StandardOutput) : null;
+            // Query only HEAD, including its symbolic target, in one process. No all-ref enumeration.
+            var headResult = await RunAsync(git.Executable, repository.Worktree, ReadArguments([
+                "for-each-ref", "--include-root-refs", "--format=%(objectname)%00%(symref)%00%(objecttype)", "HEAD"]), token);
+            RequireSuccess(headResult);
+            string? tip = null, branchName = null;
+            var headFields = Text(headResult.StandardOutput).TrimEnd('\r', '\n').Split('\0');
+            if (headFields.Length == 3 && headFields[2] == "commit")
+            {
+                tip = headFields[0];
+                if (headFields[1].StartsWith("refs/heads/", StringComparison.Ordinal)) branchName = headFields[1][11..];
+                else if (headFields[1].Length > 0) throw new GitReadException(GitFailure.InvalidOutput);
+            }
+            else if (headResult.StandardOutput.Length == 0)
+            {
+                var unborn = await RunAsync(git.Executable, repository.Worktree, ReadArguments(["symbolic-ref", "--quiet", "--short", "HEAD"]), token);
+                RequireSuccess(unborn); branchName = Line(unborn.StandardOutput);
+            }
+            else throw new GitReadException(GitFailure.InvalidOutput);
             if (tip is not null && !IsObjectId(tip) || tip is null && branchName is null) throw new GitReadException(GitFailure.InvalidOutput);
             string? trackingName = null;
             if (includeUpstream && tip is not null && branchName is not null)

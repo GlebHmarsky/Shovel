@@ -28,18 +28,20 @@ public sealed partial class ShellViewModel
     public RelayCommand SkipCommand { get; private set; } = null!;
     public RelayCommand AbortCommand { get; private set; } = null!;
     public bool HasRecovery => SelectedRepository?.Snapshot?.Recovery is not null;
+    public bool HasOperationBanner => SelectedRepository?.Snapshot?.Recovery?.Kind is RecoveryKind.Merge or RecoveryKind.Rebase;
+    public string OperationBanner => UiText.Format("ConflictOperationBanner", UiText.Get("Operation" + SelectedRepository?.Snapshot?.Recovery?.Kind));
     public bool CanSkipRecovery => SelectedRepository?.Snapshot?.Recovery?.CanSkip == true;
     public string RecoveryHelp => SelectedRepository?.Snapshot?.Recovery is { } recovery
         ? UiText.Format("RecoveryHelp", UiText.Get("Operation" + recovery.Kind)) : UiText.Get("RecoveryUnavailable");
-    private bool CanRecover => CanNavigate && !IsBusy && _interaction is not null && _actions is not null && _git is not null && HasRecovery && State?.Page is not null;
+    private bool CanRecover => CanNavigate && !IsBusy && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && HasRecovery && State?.Page is not null;
     public RelayCommand<string> SwitchBranchCommand { get; private set; } = null!;
     public IReadOnlyList<string> LocalBranches => State?.Page?.Session.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray() ?? [];
     public IReadOnlyList<BranchMenuItem> BranchMenuItems => LocalBranches.Select(name => new BranchMenuItem(name, SwitchBranchCommand)).ToArray();
-    private bool CanAct => CanNavigate && !IsBusy && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
+    private bool CanAct => CanNavigate && !IsBusy && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
     public bool CanOpenBranchMenu => CanAct;
     private string? ActionUnavailableKey => !IsReady || _stopping ? "ActionWorkspaceStarting" :
         ActionOpen ? "ActionWorkspaceBusy" : SelectedRepository is null ? "ActionOpenRepository" :
-        IsBusy ? "ActionWaitForRead" : _git is null ? "ActionSelectGit" :
+        IsBusy || ShowingStartupPreview ? "ActionWaitForRead" : _git is null ? "ActionSelectGit" :
         _interaction is null || _actions is null || SelectedRepository.Snapshot is null || State?.Page is null ? "ActionInspectionNeeded" :
         SelectedRepository.Snapshot.Operation != RepositoryOperation.None ? "ActionSequence" : null;
     public string BranchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleNewBranch");

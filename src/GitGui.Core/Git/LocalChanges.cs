@@ -10,8 +10,10 @@ public sealed record LocalChange(ChangeGroup Group, string Path, char Code, stri
     public string IndexObject { get; init; } = "";
     public string HeadMode { get; init; } = "";
     public string IndexMode { get; init; } = "";
+    public string WorktreeMode { get; init; } = "";
 }
 public sealed record LocalChanges(IReadOnlyList<LocalChange> Entries, DateTimeOffset ReadAt, bool IncludesIgnored);
+public sealed record StatusFilterOptions(string[] Overrides, bool StandardLfs);
 
 public sealed partial class RepositoryReader
 {
@@ -19,30 +21,39 @@ public sealed partial class RepositoryReader
     public const int MaximumStatusEntries = 20000;
 
     public Task<LocalChanges> ReadLocalChangesAsync(GitInstallation git, string path, bool ignored, CancellationToken token,
-        IReadOnlyList<string>? paths = null, string[]? filterOverrides = null) => Task.Run(async () =>
+        IReadOnlyList<string>? paths = null, StatusFilterOptions? filterOverrides = null, bool normalizeLfs = true) => Task.Run(async () =>
     {
-        var overrides = filterOverrides ?? await FilterOverridesAsync(git, path, token);
+        var filters = filterOverrides ?? await StatusFiltersAsync(git, path, token);
         foreach (var item in paths ?? []) WorkingCopyPath(path, item);
-        var result = await RunAsync(git.Executable, path, ReadArguments([.. overrides,
+        var result = await RunAsync(git.Executable, path, ReadArguments([.. filters.Overrides,
             "--literal-pathspecs", "-c", "status.submoduleSummary=false", "status", "--porcelain=v2", "-z", "--untracked-files=all",
             "--ignore-submodules=dirty", "--renames", ignored ? "--ignored=matching" : "--ignored=no", "--", .. paths ?? []]), token, MaximumStatusBytes);
         RequireSuccess(result);
-        return new LocalChanges(ParseLocalChanges(result.StandardOutput, token), DateTimeOffset.Now, ignored);
+        var entries = ParseLocalChanges(result.StandardOutput, token);
+        if (filters.StandardLfs && normalizeLfs) entries = await NormalizeLfsStatusAsync(git, path, entries, token);
+        return new LocalChanges(entries, DateTimeOffset.Now, ignored);
     }, token);
 
     // Shared by automatic status/diff reads. Explicit staging still honors configured filters.
-    internal async Task<string[]> FilterOverridesAsync(GitInstallation git, string path, CancellationToken token)
+    internal async Task<string[]> FilterOverridesAsync(GitInstallation git, string path, CancellationToken token) =>
+        (await StatusFiltersAsync(git, path, token)).Overrides;
+
+    internal async Task<StatusFilterOptions> StatusFiltersAsync(GitInstallation git, string path, CancellationToken token)
     {
-        var config = await RunAsync(git.Executable, path, ReadArguments(["config", "--null", "--name-only", "--get-regexp", @"^filter\..*\.(clean|process|required)$"]), token);
+        var config = await RunAsync(git.Executable, path, ReadArguments(["config", "--null", "--get-regexp", @"^filter\..*\.(clean|process|required)$"]), token);
         RequireSuccess(config, allowOne: true);
         var overrides = new List<string>();
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var record in Text(config.StandardOutput).Split('\0', StringSplitOptions.RemoveEmptyEntries))
         {
-            var key = record;
+            var split = record.IndexOf('\n'); if (split < 0) continue;
+            var key = record[..split]; values[key] = record[(split + 1)..];
             if (Regex.IsMatch(key, @"^filter\..+\.(clean|process|required)$", RegexOptions.CultureInvariant | RegexOptions.Singleline))
             { overrides.Add("-c"); overrides.Add(key + (key.EndsWith(".required", StringComparison.Ordinal) ? "=false" : "=")); }
         }
-        return overrides.ToArray();
+        var standard = values.GetValueOrDefault("filter.lfs.process") == "git-lfs filter-process" &&
+            values.GetValueOrDefault("filter.lfs.clean") == "git-lfs clean -- %f";
+        return new(overrides.ToArray(), standard);
     }
 
     public static IReadOnlyList<LocalChange> ParseLocalChanges(byte[] bytes, CancellationToken token = default)
@@ -71,7 +82,7 @@ public sealed partial class RepositoryReader
                 original = records[i];
             }
             LocalChange Entry(ChangeGroup group, char code) => new(group, fields[^1], code, original, fields[2])
-            { HeadObject = fields[6], IndexObject = fields[7], HeadMode = fields[3], IndexMode = fields[4] };
+            { HeadObject = fields[6], IndexObject = fields[7], HeadMode = fields[3], IndexMode = fields[4], WorktreeMode = fields[5] };
             if (record[0] == 'u') Add(new(ChangeGroup.Conflicted, fields[^1], 'U', Submodule: fields[2]));
             else
             {
