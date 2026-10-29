@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.22.1 — 2026-10-29
+
+- Replace default full verification with 26 smoke checks, capped at 30 checks and three minutes overall (30 seconds per check); stop on the first failure and report individual timings.
+- Keep the complete regression suite available through `--full` and existing focused commands. Preview packaging runs only the smoke suite; expensive benchmarks remain opt-in.
+
 ## 0.22.0 — 2026-10-29
 
 - Merge local branch deletion and upstream set/unset into the Branch menu, with cached options, exact-target confirmation and normal Git merged/worktree protections.

@@ -17,6 +17,20 @@ internal static partial class Program
     {
         switch (args[0])
         {
+            case "routine-failure":
+                _routine = true;
+                try { await Check("intentional guard failure", () => throw new InvalidOperationException("probe")); }
+                catch (InvalidOperationException) { return 1; }
+                Console.WriteLine("UNEXPECTED_CONTINUATION"); return 0;
+            case "routine-timeout":
+                using (RoutineDeadline(TimeSpan.FromMilliseconds(50), "intentional guard timeout"))
+                    await Task.Delay(Timeout.InfiniteTimeSpan);
+                return 0;
+            case "routine-cap":
+                _routine = true; _passed = 30;
+                try { await Check("must not execute", () => { Console.WriteLine("UNEXPECTED_CONTINUATION"); return Task.CompletedTask; }); }
+                catch (InvalidOperationException) { return 1; }
+                return 0;
             case "arguments":
                 Console.Write(JsonSerializer.Serialize(args.Skip(1).ToArray())); return 0;
             case "flood":

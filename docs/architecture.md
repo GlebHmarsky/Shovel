@@ -2,6 +2,12 @@
 
 Updated 2026-10-29. C# / WPF / .NET 10 LTS confirmed. Runtime through 0.22.0: branch management and persistent drafts; local repository initialization; Local Changes file menus including discard/selected stash, external diff, history/blame, ignore/LFS rules and patch export; Stashes and sequence recovery; scoped reconciliation, quiet scans and binary/LFS cards; modal diffs/file and hunk staging/commit/amend/Commit and Push, history/committed changes, branch/network options and Pull-Rebase/Merge/auto-stash. [Requirements](requirements.md) owns obligations, [TODO](../TODO.md) tasks, [roadmap](roadmap.md) decisions/evidence. Future designs below are proposals.
 
+## Verification runner (0.22.1)
+
+`RoutineChecks.cs` owns the explicit smoke workflow; `Program` routes no arguments/`--smoke` there and reserves `--full` for the existing regression suites. A plain headless WPF Application loads resources; one isolated, small Git workflow reuses a temporary repository and local bare remote outside the source checkout. Test configuration is isolated. Model-only checks cover tab scheduling; they are not desktop or real-repository timing evidence. Each scenario is counted explicitly, with no nested full-suite dispatch. Retained temporary fixtures are recorded under ignored `artifacts/smoke-checks` for diagnosis.
+
+`Check` enforces the 30-check cap, first-failure stop and timed output for routine mode. Thread-pool timers independent of the WPF dispatcher exit 124 at 30 seconds/check or 180 seconds/suite (including setup); runner exit closes the existing kill-on-close process jobs. The <120-second target excludes build/publish. Optional suites retain their existing extended deadlines/coverage. `Build-Preview.ps1` calls only `--smoke`, refuses publication on failure and never overwrites a version. Production app behavior is unchanged. [Commands](../README.md#restore-build-and-check), [policy](requirements.md#verification-and-acceptance).
+
 ## Local repository initialization (0.21.0)
 
 `RepositoryInitWindow` / `RepositoryInitViewModel` contain options only; `ShellInitialization` owns the submitted task and automatic tab selection. `GitActionViewModel` also supports an operation without a pre-existing repository context, reusing bounded output, progress, cancellation and reinspection. Menus/dialog construction do no preparation. Core `RepositoryInitialization.cs` handles validation and execution on a worker; no new dependency or settings schema.

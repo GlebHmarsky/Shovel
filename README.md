@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.22.0** adds branch deletion/upstream management and persistent commit drafts, plus opt-in performance fixtures. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.22.1** retains branch deletion/upstream management, persistent commit drafts and opt-in performance fixtures, with a smaller routine verification gate. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -30,9 +30,19 @@ dotnet build GitGui.slnx --no-restore -c Release -m:1 -p:UseSharedCompilation=fa
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
 ```
 
+Default (or `--smoke`): **26 checks**, enforced maximum **30**, target under **120 seconds**, hard stop **180 seconds overall / 30 seconds per check**. Prints the active check and elapsed time, stops at the first failure. Exit 124 means timeout; exit 1 means failure; invalid mode exits 2. The small workflow reuses a disposable repository; later steps depend on earlier success. It covers representative operations, not the full regression matrix.
+
+Optional extended verification, only when relevant:
+
+```powershell
+dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --full
+dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-drafts
+```
+
+All existing focused commands and opt-in benchmarks remain available. Full verification retains its detailed checks and longer deadlines; it never runs implicitly. During development run only relevant checks, then run the default once through Build-Preview on final code; avoid separately repeating an unchanged smoke run. The target excludes restore/build/publish time; timers include smoke fixture setup.
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
 
-Fixtures under ignored artifacts/foundation-checks (initialization destinations and empty nonrepo fixtures in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28) distinguishes integration/headless from desktop.
+Routine fixtures under ignored artifacts/smoke-checks; optional full fixtures under artifacts/foundation-checks (initialization destinations and empty nonrepo fixtures in temp), isolated config/disposable Git repos/local bare remotes/test hooks. Headless WPF uses a plain test Application/shared resources, suppresses production startup and saves PNGs without Show/desktop control. Restricted MSYS named-object creation may need sandbox permission; that does not authorize live remotes/launches. [Evidence](docs/roadmap.md#fast-file-actions-and-binary-cards-2026-10-28) distinguishes integration/headless from desktop.
 
 Focused theme resource/control/offscreen checks (no window shown): `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-theme`. The full suite also runs these checks.
 
@@ -82,7 +92,7 @@ Select a line inside a change block, or Ctrl/Shift-select multiple blocks, then 
 
 File Stage/Unstage publishes freshly checked target rows before a coalesced full scan; other rows can remain stale until that background scan. The next action does not wait for an obsolete diff/scan. Selection follows the same file across lists. Bottom activity bars and the ticking footer are removed; static results/errors and cancellation remain. Expand **Git output** for validation, command and refresh timings. The selected diff loads separately; timings remain in memory without diagnostic logging of paths/arguments/content.
 
-Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for hunks, `--check-commit-files` for historical files/diffs and `--check-fast-changes` for scoped/background action results, delayed reads, LFS sizes and binary cards. The full preview checks include all of them.
+Focused headless checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-local` for the parser/status, or `--check-commit` for modal/diff/mutation workflows. Use `--check-hunks` for hunks, `--check-commit-files` for historical files/diffs and `--check-fast-changes` for scoped/background action results, delayed reads, LFS sizes and binary cards. Optional `--full` includes all of them; routine previews use only smoke checks.
 
 Local Changes file menus: right-click a row, or use Shift+F10/Menu key. Stage/Unstage and explicit All entries keep their captured scope regardless of Shift. Open/Explorer accepts one file; Copy path/full path supports multiselection. Enter in the file grid stages/unstages selected files; Delete opens Discard confirmation; Ctrl+C / Ctrl+Shift+C copies relative/full paths; Ctrl+Shift+Alt+S acts on all files on that side; Ctrl+Shift+Alt+O opens one working file. Menu Enter activates its highlighted item. Deleted files use Explorer's containing-folder fallback. Refresh after editing externally. [Workflow/limits](docs/product.md#local-changes-file-menus-0190).
 
@@ -94,7 +104,7 @@ Choose sidebar **Stashes** or **Repository → Stashes**. Cached entries/message
 
 Results/output remain in the modal, with command duration at top center and Cancel available. Failed/conflicted application keeps the stash; a partially successful Pop reports applied changes separately from removal. Resolve externally and stage in Local Changes; stash conflicts do not create a Continue/Abort sequence. [Workflow](docs/product.md#stashes-0180), [bounds and concurrent-client limits](docs/architecture.md#stashes-0180).
 
-Focused checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-stashes`. Disposable repositories and offscreen renders only; included in full preview verification.
+Focused checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-stashes`. Disposable repositories and offscreen renders only; available in optional full verification.
 
 ## Branch and remote actions
 
@@ -128,7 +138,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.22.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.22.1-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

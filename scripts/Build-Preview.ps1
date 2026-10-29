@@ -22,7 +22,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
     dotnet build GitGui.slnx --no-restore -c Release -m:1 -p:UseSharedCompilation=false -nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
-    dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build
+    dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --smoke
     if ($LASTEXITCODE -ne 0) { throw 'Verification failed; preview was not produced.' }
     dotnet publish src/GitGui.App --no-restore -c Release --self-contained false -o $staging -m:1 -p:UseSharedCompilation=false -nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed. The partial output is not a usable preview.' }

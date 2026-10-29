@@ -24,6 +24,10 @@ internal static partial class Program
         if (args.FirstOrDefault() == "--measure-history-performance") return HistoryPerformanceHarness.Run(args);
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
+        if (args.Length == 0 || args is ["--smoke"]) return RunRoutineChecks();
+        string[] optionalModes = ["--full", "--check-branches", "--check-drafts", "--check-history-performance", "--check-init", "--check-file-actions", "--check-file-menus", "--check-stashes", "--check-recovery", "--check-fast-changes", "--check-commit-files", "--check-hunks", "--check-theme", "--check-local", "--check-commit", "--measure-working-copy", "--measure-working-copy-assets", "--measure-actions", "--measure-history", "--measure-large-history"];
+        if (args.Length != 1 || !optionalModes.Contains(args[0])) { Console.Error.WriteLine("Use --smoke (default), --full, or a documented focused/measurement command."); return 2; }
+        if (args.FirstOrDefault() == "--full") args = [];
         _root = Path.Combine(Path.GetFullPath(args.FirstOrDefault() == "--measure-actions" ? "artifacts/action-benchmarks" : args.FirstOrDefault() is "--measure-history" or "--measure-large-history" ? "artifacts/history-benchmarks" : args.FirstOrDefault() == "--check-hunks" ? "artifacts/hunk-checks" : args.FirstOrDefault() == "--check-commit" ? "artifacts/commit-checks" : args.FirstOrDefault() == "--check-theme" ? "artifacts/theme-checks" : args.FirstOrDefault() == "--check-local" ? "artifacts/local-changes-checks" : args.FirstOrDefault() ?? "artifacts/foundation-checks"),
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
         if (args.FirstOrDefault() is "--measure-working-copy" or "--measure-working-copy-assets") _root = Path.Combine(Path.GetFullPath("artifacts/working-copy-benchmarks"), Path.GetFileName(_root));
@@ -285,8 +289,16 @@ internal static partial class Program
 
     private static async Task Check(string name, Func<Task> action)
     {
-        try { await action(); _passed++; Console.WriteLine($"PASS {name}"); }
-        catch (Exception exception) { _failed++; Console.Error.WriteLine($"FAIL {name}: {exception}"); }
+        if (_routine && _passed + _failed >= 30) throw new InvalidOperationException("Routine check cap is 30; replace a check or use an optional suite.");
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        using var deadline = _routine ? RoutineDeadline(TimeSpan.FromSeconds(30), "Check timeout: " + name) : null;
+        Console.WriteLine($"RUN {name}");
+        try { await action(); _passed++; Console.WriteLine($"PASS {name} ({watch.Elapsed.TotalMilliseconds:F0} ms)"); }
+        catch (Exception exception)
+        {
+            _failed++; Console.Error.WriteLine($"FAIL {name} ({watch.Elapsed.TotalMilliseconds:F0} ms): {exception}");
+            if (_routine) throw;
+        }
     }
 
     private static void Expect(bool condition, string message)

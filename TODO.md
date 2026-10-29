@@ -4,7 +4,9 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.22.0 delivered: all three worker branches merged into master and retained; 263 full checks passed and the matching preview is packaged. Investigate the recorded intermittent draft write next. Broader theme work remains P2.
+0.22.1 delivered: routine verification is 26 checks (maximum 30), measured at 33.3 seconds; full/focused regressions remain opt-in. Investigate the recorded intermittent draft write with focused checks next. Broader theme work remains P2.
+
+- [x] **P1 — Reduce routine verification.** Explicit small default, count/runtime guards, first-failure stop, per-check timings, optional full suite, updated guidance and verified 0.22.1 preview. No automatic suite growth or repeated unchanged checks. [Policy](AGENTS.md), [commands](README.md#restore-build-and-check).
 
 - [x] **P1 — Initialize local repositories.** Fast options, new/existing nonrepo folders, optional initial branch, preserved files, automatic opening and real progress/errors/cancellation. Nine focused checks pass.
 - [x] **P1 — Deliver 0.21.0.** 216 full checks and nine focused checks passed; offscreen review, owning docs, matching ignored preview and local commit. No interactive launch. [Evidence](docs/roadmap.md#current-status).
@@ -74,6 +76,8 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.22.1 / 2026-10-29:** default/preview reduced to 26 explicit smoke checks; 30-count cap, 30 seconds/check, 180 seconds total. All 26 passed in 33.3 seconds; three guard probes and package hashes verified. Extended suite retained but not rerun for this delivery. [Evidence](docs/roadmap.md#current-status).
 
 - [x] **0.22.0 / 2026-10-29:** integrated branch deletion/upstream management, persistent per-worktree drafts and opt-in performance harness. 263 full checks; focused branches 13/13, drafts 28/28, harness 6/6; offscreen review and verified preview. Original branches retained. One earlier intermittent draft write remains tracked above. [Evidence and limits](docs/roadmap.md#current-status).
 
