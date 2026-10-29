@@ -34,8 +34,8 @@ public sealed class GitActionViewModel : ObservableObject
     public bool IsNetwork => IsFetch || IsPull || IsPush;
     public bool ChooseBranch => IsPush || IsSwitch;
     public bool ChooseRemoteBranch => IsPush || IsPull;
-    public string Title => UiText.Get("ActionTitle" + Action);
-    public string Explanation => UiText.Get("ActionExplain" + Action);
+    public string Title => UiText.Get((Action is GitAction.DeleteBranch or GitAction.SetUpstream or GitAction.UnsetUpstream ? "BranchManageTitle" : "ActionTitle") + Action);
+    public string Explanation => UiText.Get((Action is GitAction.DeleteBranch or GitAction.SetUpstream or GitAction.UnsetUpstream ? "BranchManageExplain" : "ActionExplain") + Action);
     public string Into => _context?.Repository.Branch ?? UiText.Get("NoBranch");
     public string CurrentRepository => _repository;
     public IReadOnlyList<GitRemote> Remotes => _context?.Remotes ?? [];

@@ -416,6 +416,7 @@ public sealed partial class ShellViewModel : ObservableObject
         NewRepositoryCommand?.Refresh();
         Changed(nameof(NewRepositoryHelp));
         StashesCommand?.Refresh();
+        RefreshBranchManagement();
         ContinueCommand?.Refresh(); SkipCommand?.Refresh(); AbortCommand?.Refresh();
         Changed(nameof(HasRecovery)); Changed(nameof(CanSkipRecovery)); Changed(nameof(RecoveryHelp));
         ShowChangesCommand?.Refresh(); ShowHistoryCommand?.Refresh();

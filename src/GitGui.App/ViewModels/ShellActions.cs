@@ -53,6 +53,7 @@ public sealed partial class ShellViewModel
         NewRepositoryCommand = new(() => ActionTask = InitializeRepositoryAsync(), () => CanNavigate && !IsBusy &&
             _reader is not null && _interaction is not null && _actions is not null && Repositories.Count < 20);
         InitializeStashes();
+        InitializeBranchManagement();
         ContinueCommand = new(() => OpenAction(GitAction.Continue), () => CanRecover);
         SkipCommand = new(() => OpenAction(GitAction.Skip), () => CanRecover && CanSkipRecovery);
         AbortCommand = new(() => OpenAction(GitAction.Abort), () => CanRecover);

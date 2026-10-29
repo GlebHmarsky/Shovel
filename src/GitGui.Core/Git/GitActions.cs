@@ -5,7 +5,7 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init }
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init, DeleteBranch, SetUpstream, UnsetUpstream }
 public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch, Recovering }
 public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
@@ -64,11 +64,7 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
         token = authenticationStop.Token;
         // Named mutex covers shared refs across linked worktrees and Shovel profiles. Acquire/release
         // on this one worker thread: an await continuation must never release another thread's mutex.
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context.Identity.CommonDirectory.ToUpperInvariant())));
-        using var gate = new Mutex(false, @"Local\Shovel.GitAction." + key);
-        bool owned;
-        try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
-        if (!owned) throw new GitActionException("ActionOtherInstance");
+        using var gate = EnterMutationGate(context.Identity);
         try { return ExecuteLocked().GetAwaiter().GetResult(); }
         finally { gate.ReleaseMutex(); }
 
