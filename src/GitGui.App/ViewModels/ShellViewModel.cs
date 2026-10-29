@@ -85,6 +85,7 @@ public sealed partial class ShellViewModel : ObservableObject
         _sidebarCancel?.Cancel(); SidebarStatus = "";
         _operationCancellation?.Cancel(); _generation++; CancelCountRead();
         _selectedRepository = value;
+        PublishActivity(null);
         if (value is not null) value.History.LastUse = ++_useCounter;
         Status = value?.History.Error is { Length: > 0 } error ? error : UiText.Get(value?.History.Page is null ? "HistoryNotLoaded" : "HistoryCheckingCached");
         Changed(nameof(SelectedRepository)); Changed(nameof(RepositoryTitle)); PublishState();
@@ -169,6 +170,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RefreshTabCommand = new(tab => { SelectedRepository = tab; BeginCurrentRead(tab, force: true); },
             tab => CanNavigate && _reader is not null && Repositories.Contains(tab));
         _timer.Tick += (_, _) => Changed(nameof(OperationStatus));
+        PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OperationStatus)) Changed(nameof(OperationCaption)); };
         InitializeActions(actions); InitializeChanges(); InitializeWorkspaceTools(tools);
     }
     private bool CanRead => CanNavigate && SelectedRepository is not null && _reader is not null;

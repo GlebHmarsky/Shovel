@@ -155,6 +155,8 @@ public sealed partial class ShellViewModel
     }
     private void OnActionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (ReferenceEquals(sender, CurrentAction) && e.PropertyName is nameof(GitActionViewModel.Summary) or nameof(GitActionViewModel.IsRunning))
+            PublishActivity(CurrentAction?.Activity);
         if (e.PropertyName == nameof(GitActionViewModel.Summary)) Changed(nameof(OperationStatus));
         if (e.PropertyName is nameof(GitActionViewModel.IsRunning) or nameof(GitActionViewModel.HasAttempt) or nameof(GitActionViewModel.CanCancel))
             NotifyActionContext();

@@ -1,10 +1,14 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.24.0** adds background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.25.0** adds stable operation duration capsules and a rounded visual pass; includes background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
 **Delivery policy:** requested controls must perform real actions; no new placeholders or UI-only completion. Established work environment: no repo-trust/first-use/program-consent layer for ordinary Git actions, and no extra safety measures without concrete need. Normal action buttons authorize the operation and configured hooks/helpers; required auth/destructive confirmations remain. Unfinished entry points are omitted; disabled working actions explain the missing target/dependency or active operation.
+
+Top-center command durations now use a fixed capsule: running blue, success green, conflict/refresh problem amber, failure red, cancelled neutral. Completion holds three seconds then fades over two; the result and details stay available. Stage/Unstage/Commit use the same existing command timer, including reconciliation. Background reads stay quiet. No new setup or dependency is required. [Behavior](docs/product.md#operation-feedback-0250).
+
+Optional focused verification after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-operation-style` (four checks; disposable Git, controlled WPF animation clock and offscreen normal/minimum Dark/Light renders). It does not show a window or certify desktop animation smoothness.
 
 ## Prerequisites
 
@@ -146,7 +150,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.24.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.25.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

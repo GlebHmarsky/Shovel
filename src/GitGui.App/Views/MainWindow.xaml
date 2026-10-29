@@ -134,20 +134,18 @@
         </StackPanel>
       </StackPanel>
       <Grid Grid.Column="1" MaxWidth="530"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <Border Margin="12,0" Padding="10,4" MaxWidth="430" Background="{DynamicResource Theme.Raised}" CornerRadius="3">
-        <StackPanel HorizontalAlignment="Stretch">
-          <TextBlock Text="{Binding RepositoryTitle}" TextAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedRepository.Directory}" />
-          <TextBlock Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12" ToolTip="{Binding SelectedRepository.Head}" />
-          <DockPanel>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}">
-              <Button Content="{loc:Text Key=ActionDetails}" Command="{Binding ShowActionDetailsCommand}" Padding="3,0" Margin="3,0" FontSize="11" BorderThickness="0" Background="Transparent" AutomationProperties.Name="{loc:Text Key=ActionDetails}" />
-              <Button Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Padding="3,0" FontSize="11" BorderThickness="0" Background="Transparent" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionCancelHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{loc:Text Key=ActionCancelHelp}" />
-            </StackPanel>
-            <TextBlock Text="{Binding OperationStatus}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="11" ToolTip="{Binding OperationStatus}" AutomationProperties.AutomationId="OperationStatus" AutomationProperties.LiveSetting="Polite" />
-          </DockPanel>
-          <ProgressBar Height="3" Margin="0,2,0,0" IsIndeterminate="{Binding IsActionRunning}" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="{Binding OperationStatus}" AutomationProperties.AutomationId="ActionProgress" />
-          <TextBlock Text="{Binding SelectedRepository.State}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="11" ToolTip="{Binding SelectedRepository.State}" Visibility="{Binding SelectedRepository.HasOperation, Converter={StaticResource BoolToVisibility}}" />
-        </StackPanel>
+      <Border Margin="12,0" Padding="9,5" MaxWidth="430" Background="{DynamicResource Theme.Raised}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="6">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="17"/><RowDefinition Height="17"/><RowDefinition Height="Auto"/><RowDefinition Height="2"/></Grid.RowDefinitions>
+          <TextBlock Margin="38,0" Text="{Binding RepositoryTitle}" TextAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedRepository.Directory}" />
+          <TextBlock Grid.Row="1" Margin="38,0" Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource Theme.Muted}" ToolTip="{Binding SelectedRepository.State}" />
+          <StackPanel Grid.RowSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+            <Button Content="⋯" Command="{Binding ShowActionDetailsCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionDetails}" AutomationProperties.Name="{loc:Text Key=ActionDetails}" />
+            <Button Content="×" Command="{Binding CancelCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionCancelHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{loc:Text Key=ActionCancel}" AutomationProperties.HelpText="{loc:Text Key=ActionCancelHelp}" />
+          </StackPanel>
+          <views:OperationIndicator Grid.Row="2" Activity="{Binding Activity}" Caption="{Binding OperationCaption}"/>
+          <ProgressBar Grid.Row="3" Height="2" IsIndeterminate="{Binding IsActionRunning}" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="{Binding OperationCaption}" AutomationProperties.AutomationId="ActionProgress" />
+        </Grid>
       </Border>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
        <Button Style="{StaticResource ToolbarButton}" Command="{Binding NewBranchCommand}" ToolTip="{Binding BranchActionHelp}" AutomationProperties.HelpText="{Binding BranchActionHelp}" AutomationProperties.Name="{loc:Text Key=ActionTitleNewBranch}">

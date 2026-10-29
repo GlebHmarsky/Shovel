@@ -1,0 +1,32 @@
+<UserControl x:Class="GitGui.App.Views.OperationIndicator" x:Name="Root"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:vm="clr-namespace:GitGui.App.ViewModels"
+ SnapsToDevicePixels="True" UseLayoutRounding="True" Focusable="False" Foreground="{DynamicResource Theme.Text}">
+ <Grid Height="28">
+  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="88"/></Grid.ColumnDefinitions>
+  <TextBlock x:Name="CaptionText" Text="{Binding Caption, ElementName=Root}" VerticalAlignment="Center" FontSize="11"
+   Margin="0,0,6,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Caption, ElementName=Root}"
+   AutomationProperties.AutomationId="OperationStatus" AutomationProperties.LiveSetting="Polite" AutomationProperties.HelpText="{Binding Activity.Help, ElementName=Root}"/>
+  <!-- Reserve the capsule's cell even after it fades. Timers never remeasure the caption. -->
+  <Border x:Name="DurationBadge" Grid.Column="1" CornerRadius="11" BorderThickness="1" Padding="6,2" Height="23"
+   DataContext="{Binding Activity, ElementName=Root}" ToolTip="{Binding Help}" AutomationProperties.Name="{Binding Help}">
+   <Border.Style><Style TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource Theme.OperationRunningBackground}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Theme.OperationRunningText}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.OperationRunningText}"/>
+    <Style.Triggers>
+     <DataTrigger Binding="{Binding Outcome}" Value="{x:Static vm:OperationOutcome.Success}"><Setter Property="Background" Value="{DynamicResource Theme.OperationSuccessBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.OperationSuccessText}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.OperationSuccessText}"/></DataTrigger>
+     <DataTrigger Binding="{Binding Outcome}" Value="{x:Static vm:OperationOutcome.Failed}"><Setter Property="Background" Value="{DynamicResource Theme.OperationFailedBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.OperationFailedText}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.OperationFailedText}"/></DataTrigger>
+     <DataTrigger Binding="{Binding Outcome}" Value="{x:Static vm:OperationOutcome.Conflict}"><Setter Property="Background" Value="{DynamicResource Theme.OperationWarningBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.OperationWarningText}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.OperationWarningText}"/></DataTrigger>
+     <DataTrigger Binding="{Binding Outcome}" Value="{x:Static vm:OperationOutcome.RefreshFailed}"><Setter Property="Background" Value="{DynamicResource Theme.OperationWarningBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.OperationWarningText}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.OperationWarningText}"/></DataTrigger>
+     <DataTrigger Binding="{Binding Outcome}" Value="{x:Static vm:OperationOutcome.Cancelled}"><Setter Property="Background" Value="{DynamicResource Theme.Raised}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.Muted}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Muted}"/></DataTrigger>
+    </Style.Triggers>
+   </Style></Border.Style>
+   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <TextBlock Text="{Binding Mark}" FontSize="11" VerticalAlignment="Center"/>
+    <TextBlock Grid.Column="1" Text="{Binding Duration}" FontSize="11" TextAlignment="Right" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular" TextTrimming="CharacterEllipsis"/>
+   </Grid>
+  </Border>
+ </Grid>
+</UserControl>

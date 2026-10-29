@@ -75,7 +75,10 @@ public sealed class GitActionViewModel : ObservableObject
         ChooseBranch && !Branches.Contains(Branch) ? "ActionChooseBranch" :
         ChooseRemoteBranch && string.IsNullOrWhiteSpace(RemoteBranch) ? "ActionChooseRemoteBranch" : "ActionReady");
     public event EventHandler? ExecutionStarting;
-    private bool _reconciling, _gitFinished, _cancelled, _needsResolution;
+    private bool _reconciling, _gitFinished, _cancelled, _needsResolution, _refreshFailed;
+    public OperationActivity? Activity => !HasAttempt ? null : new(this, Title, Phase, _elapsed.Elapsed.TotalSeconds,
+        IsRunning ? OperationOutcome.Running : _refreshFailed ? OperationOutcome.RefreshFailed : _needsResolution ? OperationOutcome.Conflict :
+        Succeeded ? OperationOutcome.Success : _cancelled ? OperationOutcome.Cancelled : OperationOutcome.Failed);
     public bool IsReconciling { get => _reconciling; private set { if (Set(ref _reconciling, value)) Changed(nameof(CanCancel)); } }
     public bool CanCancel => IsRunning && !IsReconciling && !_cancel.IsCancellationRequested;
     public bool Succeeded { get; private set; }
@@ -225,7 +228,7 @@ public sealed class GitActionViewModel : ObservableObject
             catch (Exception) { Status = UiText.Format("ActionReinspectionFailed", Status); }
             finally
             {
-                _timer.Stop(); _elapsed.Stop();
+                _timer.Stop(); _elapsed.Stop(); _refreshFailed = !refreshed;
                 Phase = UiText.Get(!refreshed ? "ActionRefreshFailedShort" : _needsResolution ? "ActionConflictShort" : Succeeded ? "ActionCompletedShort" : _cancelled ? "ActionStoppedShort" : "ActionFailedShort");
                 IsReconciling = false; IsRunning = false; Changed(nameof(Duration)); Changed(nameof(Summary)); _cancel.Dispose();
             }

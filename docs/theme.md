@@ -30,6 +30,12 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 
 History graph strokes use compact 16-DIP lanes, straight runs and rounded joins; merges are hollow circles with a center marker. Gold/red/green/blue/purple strokes have darker light-theme counterparts. Selected rows retain graph colors; OS high contrast uses system text. Core topology/lane calculation is unchanged.
 
+## Borders and operation feedback (0.25.0)
+
+Use one-DIP shared Border separators; retain open, headerless history rows rather than boxing every cell. Buttons/navigation use 4-DIP radii; repository/lower tabs round only the top corners (5/4 DIP); popup surfaces use 5 DIP with 3-DIP menu-item corners. The center context panel uses a 6-DIP radius and quiet outline. Focus, hover, selected and disabled states continue to use existing semantic roles and native input behavior.
+
+The duration capsule uses an 11-DIP radius, fixed width and tabular digits. New `Operation{Running,Success,Warning,Failed}{Background,Text}` roles pair blue, green, amber and red surfaces with high-contrast text in both palettes. Cancellation uses Raised/Muted. Status text and symbols distinguish states without color. High contrast maps these roles to system window/text brushes. Only the completion capsule animates; its fade does not change layout. See [behavior](product.md#operation-feedback-0250); no added Git work or perpetual idle animation.
+
 ## State rules
 
 - Distinguish surfaces by role, not arbitrary shades per window. Main history begins at the repository tabs; theme changes add no toolbar, padding band or data preparation.

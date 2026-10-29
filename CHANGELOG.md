@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.25.0 — 2026-10-29
+
+- Give timed operations a fixed elapsed-time capsule at top center, with distinct success, conflict, failure and cancellation states. Hold completion briefly then fade; retain results and errors, avoid text movement and honor Windows animation/high-contrast preferences.
+- Refine shared button, tab, menu and repository-context borders with consistent small corner radii in Dark and Light themes.
+- Require descriptive change-focused commit titles; retain the small routine verification suite and optional focused visual checks.
+
 ## 0.24.0 — 2026-10-29
 
 - Highlight same-author history rows with a muted yellow background and unchanged text; retain normal selection and high-contrast behavior. Draw compact straight graph lanes with rounded joins and distinct merge nodes.

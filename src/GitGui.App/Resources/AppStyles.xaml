@@ -6,7 +6,7 @@
     <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="Background" Value="{DynamicResource Theme.Raised}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.Border}"/><Setter Property="BorderThickness" Value="1"/>
     <Setter Property="FocusVisualStyle" Value="{StaticResource Theme.FocusVisual}"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-      <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2" Padding="{TemplateBinding Padding}">
+      <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
       </Border>
       <ControlTemplate.Triggers>
@@ -28,7 +28,7 @@
   <Style TargetType="ListBox"><Setter Property="Background" Value="{DynamicResource Theme.TabStrip}"/><Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.Border}"/></Style>
   <Style TargetType="ListBoxItem">
     <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="Background" Value="Transparent"/><Setter Property="FocusVisualStyle" Value="{StaticResource Theme.FocusVisual}"/>
-    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="0,0,1,0"><ContentPresenter/></Border>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="0,0,1,0" CornerRadius="5,5,0,0"><ContentPresenter/></Border>
       <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Theme.Hover}"/><Setter Property="Foreground" Value="{DynamicResource Theme.SelectionText}"/></Trigger>
       <Trigger Property="IsSelected" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Theme.Sidebar}"/><Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/></Trigger>
       <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource Theme.Disabled}"/></Trigger></ControlTemplate.Triggers>
@@ -37,7 +37,7 @@
   <Style TargetType="TabControl"><Setter Property="Background" Value="{DynamicResource Theme.Panel}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.Border}"/><Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/></Style>
   <Style TargetType="TabItem">
     <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="FocusVisualStyle" Value="{StaticResource Theme.FocusVisual}"/>
-    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Border x:Name="Surface" Background="{DynamicResource Theme.Sidebar}" BorderBrush="Transparent" BorderThickness="0,0,0,2" Padding="14,7"><ContentPresenter x:Name="Header" ContentSource="Header" RecognizesAccessKey="True"/></Border>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Border x:Name="Surface" Background="{DynamicResource Theme.Sidebar}" BorderBrush="Transparent" BorderThickness="0,0,0,2" CornerRadius="4,4,0,0" Padding="14,7"><ContentPresenter x:Name="Header" ContentSource="Header" RecognizesAccessKey="True"/></Border>
       <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Theme.Hover}"/><Setter TargetName="Header" Property="TextElement.Foreground" Value="{DynamicResource Theme.SelectionText}"/></Trigger>
       <Trigger Property="IsSelected" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Theme.Sidebar}"/><Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Theme.Accent}"/><Setter TargetName="Header" Property="TextElement.Foreground" Value="{DynamicResource Theme.Accent}"/></Trigger>
       <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource Theme.Disabled}"/><Setter TargetName="Header" Property="TextElement.Foreground" Value="{DynamicResource Theme.Disabled}"/></Trigger></ControlTemplate.Triggers>
@@ -45,7 +45,7 @@
   </Style>
   <Style x:Key="NavigationItem" TargetType="RadioButton">
     <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="FocusVisualStyle" Value="{StaticResource Theme.FocusVisual}"/>
-    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton"><Border x:Name="Surface" Background="Transparent" CornerRadius="2" Padding="{TemplateBinding Padding}"><ContentPresenter RecognizesAccessKey="True"/></Border>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton"><Border x:Name="Surface" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}"><ContentPresenter RecognizesAccessKey="True"/></Border>
       <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Theme.Hover}"/><Setter Property="Foreground" Value="{DynamicResource Theme.SelectionText}"/></Trigger>
       <Trigger Property="IsChecked" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Theme.Selected}"/><Setter Property="Foreground" Value="{DynamicResource Theme.SelectionText}"/></Trigger>
       <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource Theme.Disabled}"/></Trigger></ControlTemplate.Triggers>
@@ -70,7 +70,7 @@
   <Style TargetType="ContextMenu">
     <Setter Property="Background" Value="{DynamicResource Theme.Raised}"/><Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.Border}"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu">
-      <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="2">
+      <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="3">
         <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer>
       </Border>
     </ControlTemplate></Setter.Value></Setter>
@@ -78,13 +78,13 @@
   <Style TargetType="MenuItem">
     <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/><Setter Property="Padding" Value="8,5"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
-      <Border x:Name="Surface" Background="Transparent" Padding="{TemplateBinding Padding}"><Grid>
+      <Border x:Name="Surface" Background="Transparent" CornerRadius="3" Padding="{TemplateBinding Padding}"><Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
         <TextBlock x:Name="Shortcut" Grid.Column="1" Text="{TemplateBinding InputGestureText}" Margin="24,0,0,0"/>
         <TextBlock x:Name="Arrow" Grid.Column="2" Text="›" Margin="14,0,0,0" Visibility="Collapsed"/>
         <Popup x:Name="PART_Popup" IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}" Placement="Right" AllowsTransparency="True" Focusable="False" PlacementTarget="{Binding ElementName=Surface}">
-          <Border Background="{DynamicResource Theme.Raised}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" Padding="2"><ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer></Border>
+          <Border Background="{DynamicResource Theme.Raised}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="5" Padding="3"><ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer></Border>
         </Popup>
       </Grid></Border>
       <ControlTemplate.Triggers>

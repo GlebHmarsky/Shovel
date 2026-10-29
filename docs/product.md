@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.24.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.25.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
 
@@ -30,6 +30,12 @@ Commit drafts now survive closing tabs/restarting. Restore happens after the mod
 Pull shows **behind**, Push **ahead**, comparing the configured upstream from the local snapshot, even with a separate push destination. Counts load after rows. Zero is measured; dash means pending/unavailable/cancelled/failed. Help includes upstream/time/reason. Detached/unborn/no-upstream/missing-upstream/shallow cannot imply synchronization. Failed refresh retains stale counts; no server freshness claim without fetch.
 
 Same-author peers use a muted yellow **row background**, retaining ordinary text color. Matching remains exact raw name/email ordinally and case-sensitively, without mailmap/committer; nonblank email required. Selected rows keep normal selection styling. High contrast suppresses the peer fill; accessible text explains the relation. Graph lanes use compact straight runs/rounded joins and hollow merge markers; selection preserves lane colors. Topology and pagination are unchanged.
+
+## Operation feedback (0.25.0)
+
+The top-center repository/branch panel keeps fixed title, status and duration positions. Timed Git actions and Stage/Unstage/Commit display elapsed seconds in a small capsule; phase text stays separate so changing digits cannot move it. The timer includes validation/execution and final reconciliation, not only the Git subprocess. A running command remains running through that reconciliation. Background history/count/diff reads do not produce completion capsules.
+
+At completion the capsule turns green for success, amber for conflict or failed refresh, red for failure, or neutral for cancellation, with a corresponding symbol and explicit outcome text. It holds for three seconds then fades over two; Windows animation preference/high contrast removes the fade. The caption, errors and retained Operation/commit results remain available after the capsule disappears. A new attempt replaces the old animation; switching repositories clears transient feedback instead of replaying it. Long captions/durations truncate within their slots with full tooltips/accessibility help. Details (ellipsis) and Cancel (cross) remain in reserved top-right space inside the panel.
 
 ## Workspace toolbar and appearance (0.24.0)
 

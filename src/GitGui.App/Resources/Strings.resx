@@ -759,4 +759,9 @@ Requested upstream: {2}</value></data>
   <data name="WorkspaceExecutableFilter" xml:space="preserve"><value>Application (*.exe)|*.exe</value></data>
   <data name="WorkspacePreferenceSaveFailed" xml:space="preserve"><value>The preference works for this session but could not be saved. Settings remain available for recovery.</value></data>
 <data name="WorkspaceBashShortcut" xml:space="preserve"><value>Ctrl+Alt+T</value></data><data name="WorkspaceExplorerShortcut" xml:space="preserve"><value>Ctrl+Alt+O</value></data>
+  <data name="OperationCaption" xml:space="preserve"><value>{0} · {1}</value><comment>{0} operation title; {1} current phase or outcome. Duration occupies a separate fixed slot.</comment></data>
+  <data name="OperationSeconds" xml:space="preserve"><value>{0:N1} s</value><comment>{0} elapsed seconds; keep the unit short for the duration capsule.</comment></data>
+  <data name="OperationTimingHelp" xml:space="preserve"><value>{0} · {1}. Elapsed: {2:N1} seconds, including validation and final refresh.</value></data>
+  <data name="OperationReadingCounts" xml:space="preserve"><value>Reading ahead/behind…</value></data>
+  <data name="OperationReadingHistory" xml:space="preserve"><value>Reading history…</value></data>
 </root>

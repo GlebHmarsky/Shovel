@@ -46,7 +46,12 @@ public sealed partial class ShellViewModel
         var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
             _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities));
         _commitModel = model;
-        void OnChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args) { if (args.PropertyName == nameof(CommitViewModel.Summary)) Changed(nameof(OperationStatus)); }
+        void OnChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName != nameof(CommitViewModel.Summary)) return;
+            if (model.Activity is { } activity) PublishActivity(activity);
+            Changed(nameof(OperationStatus));
+        }
         void OnSnapshot(object? sender, EventArgs args) { TrimChangesCache(tab); PublishChanges(); if (tab.Changes.Context is { } context) tab.Apply(context.Repository); }
         model.PropertyChanged += OnChanged; model.SnapshotChanged += OnSnapshot;
         try

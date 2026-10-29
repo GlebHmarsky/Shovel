@@ -49,6 +49,7 @@ The established work environment is trusted. **Do not add extra safety measures,
 | L1 | Resource-backed complete menus/dialogs/errors/help/accessibility/install/update messages; plural rules, cultural dates/numbers, text expansion/RTL, direction-isolated code/paths/hashes, no sentence concatenation. Git output remains original. |
 | A1 | Keyboard/context-menu/dialog access, restored visible focus, screen-reader semantics for custom graph/diff, noncolor status, light/dark/high contrast, DPI scaling. |
 | A2 | Shared Dark/Light surface/state conventions; semantic brushes, readable normal/selected text, disabled reasons and visible focus. Live appearance selection persists; Windows high contrast overrides it. No theme-driven Git work. [Theme](theme.md) owns palette rules; wider desktop polish remains deferred. |
+| A3 | Fixed-slot duration feedback for timed commands, with accurate success/conflict/failure/cancel/refresh-failure outcomes only after reconciliation. Three-second completion hold, two-second fade; honor Windows animation preference/high contrast. No timer-width movement, background-read toasts, repeated final-snapshot animation or cross-tab replay. Retain result/errors and localized noncolor/accessibility meaning after fade. |
 | B1 | Persist tab order/selection/settings; optional explicit tray/close/exit, no surprise autostart, minimal hidden/idle work. Local Git needs no hosted service. |
 
 ## Updates and distribution

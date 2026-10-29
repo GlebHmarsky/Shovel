@@ -26,4 +26,12 @@
   <SolidColorBrush x:Key="Theme.FileModified" Color="#866000"/>
   <SolidColorBrush x:Key="Theme.FileAdded" Color="#247435"/>
   <SolidColorBrush x:Key="Theme.FileDeleted" Color="#B12A3C"/>
+  <SolidColorBrush x:Key="Theme.OperationRunningBackground" Color="#E3EEFC"/>
+  <SolidColorBrush x:Key="Theme.OperationRunningText" Color="#214F80"/>
+  <SolidColorBrush x:Key="Theme.OperationSuccessBackground" Color="#E1F2E6"/>
+  <SolidColorBrush x:Key="Theme.OperationSuccessText" Color="#215633"/>
+  <SolidColorBrush x:Key="Theme.OperationWarningBackground" Color="#FFF0CB"/>
+  <SolidColorBrush x:Key="Theme.OperationWarningText" Color="#705014"/>
+  <SolidColorBrush x:Key="Theme.OperationFailedBackground" Color="#FBE6E8"/>
+  <SolidColorBrush x:Key="Theme.OperationFailedText" Color="#8C2834"/>
 </ResourceDictionary>

@@ -73,6 +73,12 @@ public sealed partial class CommitViewModel : ObservableObject
     public string Status { get => WithDraftProblem(_status); private set => Set(ref _status, value); }
     public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
     public string Summary => _mutating ? UiText.Format("ActionSummary", UiText.Get("CommitWorkspace"), _phase, _elapsed.Elapsed.TotalSeconds) : Status;
+    private object? _activityAttempt;
+    private string _activityTitle = "";
+    private OperationOutcome _activityOutcome;
+    public OperationActivity? Activity => _activityAttempt is null ? null : new(_activityAttempt, _activityTitle,
+        _mutating ? _phase : OperationActivity.CompletedPhase(_activityOutcome), _elapsed.Elapsed.TotalSeconds,
+        _mutating ? OperationOutcome.Running : _activityOutcome);
     public bool IsBusy => _loading || _mutating || _diffLoading || _fileBusy;
     public bool IsMutating => _mutating;
     public bool CanEditMessage => !_closed && !_mutating;
@@ -319,6 +325,7 @@ public sealed partial class CommitViewModel : ObservableObject
         _readGeneration++; _diffGeneration++; _readCancel = _diffCancel = null;
         _loading = _backgroundLoading = _diffLoading = false; _fileDiff = null; _selectedHunks = [];
         _elapsed.Restart(); _phase = UiText.Get("CommitPhase" + action); Status = _phase; RawOutput = "";
+        _activityAttempt = new object(); _activityTitle = push ? UiText.Get("CommitAndPush") : _phase; _activityOutcome = OperationOutcome.Failed;
         lock (_output) { _output.Clear(); _publishedBytes = 0; }
         _actionCancel = new CancellationTokenSource(); UpdateBusy(); OperationTask = RunAsync();
         async Task RunAsync()
@@ -332,18 +339,20 @@ public sealed partial class CommitViewModel : ObservableObject
                 waitMilliseconds = timing.Elapsed.TotalMilliseconds;
                 var result = await _actions.ExecuteWorkingCopyAsync(context, options, _actionCancel.Token, CollectOutput);
                 measured = result;
+                _activityOutcome = ActivityOutcome(result.Result);
                 await _outputTask; RawOutput = result.Result.Output; committed = result.CommitHash;
                 Status = UiText.Get(result.Result.MessageCode ?? (result.Result.Success ? "CommitSucceeded" + action : "ActionResult" + result.Result.Outcome));
                 if (result.Result.Success && action == WorkingCopyAction.Commit)
                 {
                     await CompleteSubmittedDraftAsync(submittedDraft); _amend = false; _automaticAmendMessage = null; Changed(nameof(Amend));
-                    if (push && committed is not null) await PushAsync(context, committed, _actionCancel.Token);
+                    if (push && committed is not null) _activityOutcome = await PushAsync(context, committed, _actionCancel.Token);
                     else if (committed is not null) Status = UiText.Format("CommitCreated", committed);
                     else Status = UiText.Get("CommitSucceededUnknownTip");
                 }
             }
             catch (Exception error)
             {
+                _activityOutcome = error is OperationCanceledException or GitReadException { Failure: GitFailure.Cancelled } ? OperationOutcome.Cancelled : OperationOutcome.Failed;
                 await _outputTask; await PublishOutputAsync(); CaptureError(error);
                 Status = committed is null ? Explain(error) : UiText.Format("CommitCreatedPushFailed", committed, Explain(error));
             }
@@ -360,6 +369,7 @@ public sealed partial class CommitViewModel : ObservableObject
                 else await LoadAsync(reconcile: true);
                 if (measured is not null) TimingSummary = UiText.Format("CommitTimings", waitMilliseconds, measured.ValidationMilliseconds, measured.CommandMilliseconds, measured.RefreshMilliseconds + timing.Elapsed.TotalMilliseconds);
                 Status = _state.ReadAt == default ? UiText.Format("ActionReinspectionFailed", outcome) : outcome;
+                if (_state.ReadAt == default) _activityOutcome = OperationOutcome.RefreshFailed;
                 RawOutput = output; _state.LastResult = _status; _state.LastOutput = output;
                 _actionCancel.Dispose(); _actionCancel = null; _mutating = false; UpdateBusy();
                 if (!_closed) QueueDiff(_state.Selected);
@@ -367,7 +377,9 @@ public sealed partial class CommitViewModel : ObservableObject
             }
         }
     }
-    private async Task PushAsync(WorkingCopyContext previous, string commit, CancellationToken token)
+    private static OperationOutcome ActivityOutcome(ActionResult result) => result.HasConflicts || result.Operation != RepositoryOperation.None ? OperationOutcome.Conflict :
+        result.Success ? OperationOutcome.Success : result.Outcome == ProcessOutcome.Cancelled ? OperationOutcome.Cancelled : OperationOutcome.Failed;
+    private async Task<OperationOutcome> PushAsync(WorkingCopyContext previous, string commit, CancellationToken token)
     {
         var target = ResolvePushTarget(previous) ?? throw new GitActionException("CommitNoUpstream");
         _phase = UiText.Get("ActionStagePushing"); Changed(nameof(Summary));
@@ -385,6 +397,7 @@ public sealed partial class CommitViewModel : ObservableObject
         await _outputTask; RawOutput += result.Output;
         Status = result.Success && authentication?.Failure is null ? UiText.Format("CommitCreatedPushed", commit)
             : UiText.Format("CommitCreatedPushFailed", commit, UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure : "ActionResult" + result.Outcome));
+        return authentication?.Failure is not null ? OperationOutcome.Failed : ActivityOutcome(result);
     }
     private static (string Remote, string Branch)? ResolvePushTarget(WorkingCopyContext? context)
     {
