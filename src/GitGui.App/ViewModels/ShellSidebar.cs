@@ -73,7 +73,7 @@ public sealed partial class ShellViewModel
             [Menu("SidebarOpenSubmodule", () => ActionTask = OpenSubmoduleAsync(tab, module)),
              Menu("ActionTitleSubmoduleUpdate", () => RunSidebarAction(tab, GitAction.SubmoduleUpdate, module.Path, start: module.Hash)),
              Menu("ActionTitleSubmoduleSync", () => RunSidebarAction(tab, GitAction.SubmoduleSync, module.Path, start: module.Hash))]));
-        SidebarNodes = [Group("Branches", branches), Group("Remotes", remotes), Group("Tags", tags), Group("Stashes", stashes), Group("Submodules", modules)];
+        SidebarNodes = [Group("Branches", branches), Group("Remotes", remotes) with { Menu = [new(UiText.Get("RemoteAddTitle"), AddRemoteCommand)] }, Group("Tags", tags), Group("Stashes", stashes), Group("Submodules", modules)];
         Changed(nameof(SidebarNodes));
     }
 
@@ -116,7 +116,8 @@ public sealed partial class ShellViewModel
         _operationCancellation?.Cancel(); CancelCountRead();
         var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30)); _operationCancellation = cancel;
         var generation = ++_generation; var session = tab.History.Page.Session;
-        _elapsed.Restart(); _timer.Start(); IsBusy = true; Status = UiText.Get("SidebarLocating");
+        _elapsed.Restart(); _timer.Start(); IsBusy = true; Status = UiText.Get("SidebarLocating"); StartReadActivity();
+        var located = false;
         _activeOperation = Locate();
         async Task Locate()
         {
@@ -129,7 +130,7 @@ public sealed partial class ShellViewModel
                 state.Page = history; state.Rows = rows; state.Cursors.Clear(); state.Cursors.Add(history.Cursor); state.PageIndex = 0;
                 state.PageViews.Clear(); state.EstimatedBytes = rows.Sum(r => (long)r.Commit.Message.Length * 2 + 1024);
                 state.VerticalOffset = 0; state.Selected = rows.FirstOrDefault(r => r.Commit.Hash == hash); state.Notice = LoadedNotice(history);
-                PublishState(); SidebarCommitLocated?.Invoke(this, EventArgs.Empty); Status = UiText.Get("HistoryLoaded");
+                located = true; PublishState(); SidebarCommitLocated?.Invoke(this, EventArgs.Empty); Status = UiText.Get("HistoryLoaded");
             }
             catch (GitReadException error)
             {
@@ -138,7 +139,7 @@ public sealed partial class ShellViewModel
             }
             catch (OperationCanceledException) { if (generation == _generation) Status = UiText.Get("GitErrorCancelled"); }
             catch (Exception) { if (generation == _generation) Status = UiText.Get("SidebarLocateFailed"); }
-            finally { if (generation == _generation) { _operationCancellation = null; _timer.Stop(); _elapsed.Stop(); IsBusy = false; } cancel.Dispose(); }
+            finally { if (generation == _generation) { _operationCancellation = null; _timer.Stop(); _elapsed.Stop(); IsBusy = false; FinishReadActivity(cancel.IsCancellationRequested ? OperationOutcome.Cancelled : located ? OperationOutcome.Success : OperationOutcome.Failed); } cancel.Dispose(); }
         }
     }
     public event EventHandler? SidebarCommitLocated;

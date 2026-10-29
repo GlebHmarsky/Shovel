@@ -4,12 +4,15 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.26.0: requested caption/toolbar and stash/merge graph corrections. Routine verification stays at 26 checks (maximum 30); focused checks remain opt-in. Draft-write diagnosis remains the next correctness investigation after this increment.
+0.27.0: requested workspace cleanup, stash graph clarity, history timers and remote/upstream setup. Routine verification stays at 26 checks (maximum 30); focused checks remain opt-in. Draft-write diagnosis remains the next correctness investigation after this increment.
+
+- [x] **P1 — Clean workspace and expose remote setup.** Sidebar has no horizontal scroll or fixed width cap; duplicate title/Local Changes and main footer removed. Page range/navigation move into View with keyboard/edge scrolling. Larger caption icons and shorter tooltips; read/refresh fade feedback; one stash base connection preserves real commits. Add remote locally, then explicit Fetch and Set upstream.
+- [x] **P1 — Deliver 0.27.0.** Four focused checks and Dark/Light normal/minimum offscreen review; 26 routine checks in 47.4 seconds; matching ignored preview/package hashes, owning docs and descriptive commit. No interactive launch or live network; see roadmap limits.
 
 - [x] **P1 — Compact caption and stable history.** Menus in draggable title strip; Fetch/Pull/Push/Commit order; one row per stash, fixed lanes and broad graph turns. Original metadata and independent history retained; visible pagination/ref jumps agree.
 - [x] **P1 — Deliver 0.26.0.** Four focused topology/stash/page/caption checks, offscreen normal/minimum Dark/Light review; 26 routine checks in 41.8 seconds, matching ignored preview, docs and descriptive commit. Native caption behavior and large-repository stash projection timings remain validation limits.
 
-- [x] **P1 — Stable operation feedback.** Fixed duration capsule for existing timed commands; accurate completion outcome, brief hold/fade, no horizontal text jump or background-read notification. Retain results/errors; respect animation preference/high contrast.
+- [x] **P1 — Stable operation feedback.** Fixed duration capsule for existing timed commands; accurate completion outcome, brief hold/fade, no horizontal text jump. Read feedback added in 0.27.0. Retain results/errors; respect animation preference/high contrast.
 - [x] **P1 — Deliver visual pass (0.25.0).** Consistent small radii/dividers in both themes, four focused checks and normal/minimum offscreen review; 26 routine checks in 32.7 seconds, matching ignored preview, owning docs and descriptive local commit. Live animation/desktop accessibility remains unverified; see roadmap.
 
 - [x] **P1 — Workspace presentation and toolbar.** Background-only author peers, straight/rounded graph, evenly filled tabs, Open in Explorer/Rider/VS Code, Bash and persisted Dark/Light appearance. Four focused checks and normal/minimum offscreen review; no live tool launches.
@@ -75,7 +78,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
-- [ ] **P1 — Network MVP.** Clone/remote editing and broader auth/input. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
+- [ ] **P1 — Network MVP.** Clone, remote editing/removal and broader auth/input; adding remotes and setting upstream are delivered. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
 - [ ] **P1 — Pilot distribution.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/revert/reset/tags/reflog/force-with-lease/conflict editor and advanced stash variants; disposable destructive fixtures.
 - [ ] **P2 — Extended compatibility.** Additional submodule management (add/remove/deinit/recursive/remote-latest), worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization. Selected submodule open/update/sync is delivered.

@@ -50,7 +50,7 @@ internal static partial class Program
                 await File.WriteAllTextAsync(Path.Combine(repo, ".git", "refs", "heads", "main"), second + "\n");
                 await File.WriteAllTextAsync(Path.Combine(repo, "local.txt"), "local edit\n");
                 shell.CompleteStartup(new(new() { RepositoryPaths = [repo] }, SettingsLoadStatus.Loaded)); await shell.WaitForIdleAsync();
-                Expect(shell.Activity is null, "Startup/background reads create no completion toast");
+                Expect(shell.Activity is { Outcome: OperationOutcome.Success }, "Startup history reports timing");
                 interaction.Commit = async editor =>
                 {
                     await editor.StartLoading(); await editor.DiffTask; editor.ShiftHeld = true;
@@ -69,8 +69,8 @@ internal static partial class Program
                 Expect(shell.SelectedRepository?.Snapshot?.Branch == "feedback" && shell.Activity is { Outcome: OperationOutcome.Success },
                     $"Actual branch action reaches shell feedback: {shell.SelectedRepository?.Snapshot?.Branch}; {shell.Activity?.Outcome}; {shell.CurrentAction?.Status}; {shell.CurrentAction?.RawOutput}; {interaction.Error}");
                 var original = shell.SelectedRepository; var other = new RepositoryTab(Fixture("empty-tab")); shell.Repositories.Add(other);
-                shell.SelectedRepository = other; Expect(shell.Activity is null, "Other tab cannot inherit completion"); await shell.WaitForIdleAsync();
-                shell.SelectedRepository = original; await shell.WaitForIdleAsync(); Expect(shell.Activity is null, "Old completion does not replay on return");
+                shell.SelectedRepository = other; Expect(shell.Activity is { IsComplete: false }, "Other tab starts its own read feedback"); await shell.WaitForIdleAsync();
+                shell.SelectedRepository = original; await shell.WaitForIdleAsync(); Expect(shell.Activity is { Outcome: OperationOutcome.Success }, "Returning tab reports its own read feedback");
             });
             await Check("Capsule holds then fades without moving text or allowing old completion to hide a new attempt", async () =>
             {
@@ -92,7 +92,9 @@ internal static partial class Program
                 Expect(badge.Opacity < .01, "Repeated final snapshot cannot restart fade");
                 view.Activity = new(new object(), "Fetch", "Running", 9.9, OperationOutcome.Running);
                 Expect(Clock() is null, "New attempt detaches old animation");
-                view.Activity = view.Activity with { Seconds = 1000.0 }; Arrange(view, 240, 28); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                view.Activity = view.Activity with { Seconds = 1000.0 };
+                ((AnimationClock?)typeof(OperationIndicator).GetField("_entranceClock", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(view))?.Controller?.SeekAlignedToLastTick(TimeSpan.FromSeconds(1), TimeSeekOrigin.BeginTime);
+                Arrange(view, 240, 28); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 Expect(badge.Opacity > .99 && caption.ActualWidth == width && caption.TransformToAncestor(view).Transform(new Point()) == left, "New attempt replaces old clock; timing never shifts caption");
                 view.Activity = null; Expect(badge.Opacity == 0 && caption.ActualWidth == width, "Clearing feedback preserves layout");
             });

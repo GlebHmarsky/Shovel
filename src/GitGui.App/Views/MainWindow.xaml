@@ -12,13 +12,15 @@
         AutomationProperties.AutomationId="MainWindow">
   <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="32" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False" CornerRadius="0"/></shell:WindowChrome.WindowChrome>
   <Window.InputBindings>
+    <KeyBinding Key="PageDown" Modifiers="Control" Command="{Binding LoadMoreHistoryCommand}" />
+    <KeyBinding Key="PageUp" Modifiers="Control" Command="{Binding NewerHistoryCommand}" />
     <KeyBinding Key="T" Modifiers="Control+Alt" Command="{Binding OpenToolCommand}" CommandParameter="Bash"/>
     <KeyBinding Key="O" Modifiers="Control+Alt" Command="{Binding OpenToolCommand}" CommandParameter="Explorer"/>
   </Window.InputBindings>
   <Window.Resources>
     <Style x:Key="CaptionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Width" Value="44"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/>
-      <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FontSize" Value="15"/>
+      <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FontSize" Value="23"/>
     </Style>
     <Style x:Key="AuthorHighlightText" TargetType="TextBlock" />
     <Style x:Key="ToolbarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -63,10 +65,18 @@
         <MenuItem Header="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
       </MenuItem>
       <MenuItem Header="{loc:Text Key=ViewMenu}">
+        <MenuItem Header="{loc:Text Key=NewerCommits}" Command="{Binding NewerHistoryCommand}" InputGestureText="{loc:Text Key=HistoryNewerShortcut}" />
+        <MenuItem Header="{loc:Text Key=LoadOlderCommits}" Command="{Binding LoadMoreHistoryCommand}" InputGestureText="{loc:Text Key=HistoryOlderShortcut}" />
+        <MenuItem Header="{Binding HistoryRange}" IsEnabled="False" />
+        <MenuItem Header="{Binding HistoryNotice}" IsEnabled="False" />
         <MenuItem Header="{loc:Text Key=FirstHistoryPage}" Command="{Binding FirstHistoryCommand}" />
         <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
       </MenuItem>
       <MenuItem Header="{loc:Text Key=RepositoryMenu}">
+        <MenuItem Header="{loc:Text Key=RemoteAddTitle}" Command="{Binding AddRemoteCommand}" />
+        <MenuItem Header="{loc:Text Key=BranchManageTitleSetUpstream}" Command="{Binding SetBranchUpstreamCommand}" />
+        <MenuItem Header="{loc:Text Key=BranchManageTitleUnsetUpstream}" Command="{Binding UnsetBranchUpstreamCommand}" />
+        <Separator />
         <MenuItem Header="{loc:Text Key=NewRepository}" Command="{Binding NewRepositoryCommand}" ToolTip="{Binding NewRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=RefreshRepository}" Command="{Binding RefreshRepositoryCommand}" />
@@ -207,14 +217,12 @@
     </Grid>
     <Grid Grid.Row="3" Background="{DynamicResource Theme.Sidebar}">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="SidebarColumn" Width="210" MinWidth="160" MaxWidth="320" />
+        <ColumnDefinition x:Name="SidebarColumn" Width="210" MinWidth="160" />
         <ColumnDefinition Width="5" />
-        <ColumnDefinition Width="*" MinWidth="500" />
+        <ColumnDefinition Width="*" MinWidth="180" />
       </Grid.ColumnDefinitions>
       <DockPanel Margin="10,14" Background="{DynamicResource Theme.Sidebar}">
-        <TextBlock DockPanel.Dock="Top" Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" Margin="8,0,0,12" />
         <StackPanel DockPanel.Dock="Top" VerticalAlignment="Top">
-          <Button Content="{loc:Text Key=LocalChanges}" Command="{Binding ShowChangesCommand}" HorizontalContentAlignment="Left" Padding="8,9" Background="Transparent" BorderThickness="0" ToolTip="{loc:Text Key=CommitOpenHelp}" AutomationProperties.AutomationId="LocalChangesNavigation"/>
 
           <RadioButton Style="{StaticResource NavigationItem}" Content="{loc:Text Key=AllCommits}" IsChecked="{Binding IsHistory, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" Padding="8,9" GroupName="Workspace" AutomationProperties.Name="{loc:Text Key=AllCommits}" AutomationProperties.AutomationId="CurrentWorkspace"/>
           <StackPanel Margin="8,16,0,0" Visibility="{Binding HasRecovery, Converter={StaticResource BoolToVisibility}}" AutomationProperties.AutomationId="RecoveryPanel">
@@ -237,7 +245,7 @@
         </Grid.RowDefinitions>
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-          <DataGrid Grid.Row="0" x:Name="HistoryTable" ItemsSource="{Binding Commits}" SelectedItem="{Binding SelectedCommit}"
+          <DataGrid Grid.Row="0" x:Name="HistoryTable" PreviewMouseWheel="OnHistoryWheel" ItemsSource="{Binding Commits}" SelectedItem="{Binding SelectedCommit}"
                     Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}"
                     AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
                     CanUserReorderColumns="False" CanUserResizeRows="False" SelectionMode="Single" SelectionUnit="FullRow"
@@ -301,19 +309,13 @@
               <DataGridTextColumn Header="{loc:Text Key=HistoryHash}" Binding="{Binding ShortHash}" Width="115" MinWidth="115" ElementStyle="{StaticResource HistoryText}" />
             </DataGrid.Columns>
           </DataGrid>
+          <Button Content="{Binding HistoryProblem}" Command="{Binding DiagnosticsCommand}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" MaxWidth="420" AutomationProperties.LiveSetting="Polite">
+            <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding HistoryProblem}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style>
+          </Button>
           <TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="450" Margin="16" IsHitTestVisible="False">
             <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Foreground" Value="{DynamicResource Theme.HistoryText}"/><Style.Triggers><DataTrigger Binding="{Binding Commits.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding HighContrast, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"><Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
           </TextBlock>
-          <DockPanel Grid.Row="1" Margin="8,4">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-              <Button Content="{loc:Text Key=NewerShort}" Command="{Binding NewerHistoryCommand}" ToolTip="{loc:Text Key=NewerCommits}" Margin="8,0,0,0" />
-              <Button Content="{loc:Text Key=OlderShort}" Command="{Binding LoadMoreHistoryCommand}" ToolTip="{loc:Text Key=LoadOlderCommits}" Margin="8,0,0,0" />
-            </StackPanel>
-            <TextBlock DockPanel.Dock="Left" Text="{Binding HistoryRange}" VerticalAlignment="Center" Margin="0,0,12,0" FontSize="11" ToolTip="{loc:Text Key=HistoryLimits}" />
-            <TextBlock Text="{Binding HistoryNotice}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="11" AutomationProperties.LiveSetting="Polite">
-              <TextBlock.ToolTip><StackPanel MaxWidth="460"><TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap"/><TextBlock Text="{loc:Text Key=HistoryLimits}" TextWrapping="Wrap" Margin="0,6,0,0"/></StackPanel></TextBlock.ToolTip>
-            </TextBlock>
-          </DockPanel>
+
         </Grid>
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows"
                       Background="{DynamicResource Theme.Border}"
@@ -358,6 +360,10 @@
           </TabItem>
           <TabItem Header="{loc:Text Key=Diagnostics}">
             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12">
+              <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+              <TextBlock Text="{Binding SettingsNotice}" TextWrapping="Wrap"/>
+              <TextBlock Text="{Binding HistoryNotice}" TextWrapping="Wrap"/>
+              <TextBlock Text="{loc:Text Key=HistoryLimits}" TextWrapping="Wrap"/>
               <TextBlock Text="{Binding GitStatus}" />
               <TextBlock Text="{loc:Text Key=RawOutput}" FontWeight="SemiBold" />
               <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="160" VerticalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RawOutput}" />
@@ -377,14 +383,6 @@
 </TabControl>
       </Grid>
     </Grid>
-    <Border Grid.Row="4" Padding="14,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Theme.Border}">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Right" Text="{Binding Version}" Margin="16,0,0,0" FlowDirection="LeftToRight" />
-        <StackPanel>
-          <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="Status" />
-          <TextBlock Text="{Binding SettingsNotice}" TextWrapping="Wrap" />
-        </StackPanel>
-      </DockPanel>
-    </Border>
+
   </Grid>
 </Window>

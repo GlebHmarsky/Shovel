@@ -1,12 +1,12 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.26.0** adds integrated title-bar menus, Fetch/Pull/Push/Commit order, stable graph lanes and one entry per stash; includes operation duration capsules; includes background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.27.0** adds local remote setup, read/refresh timers and a cleaner resizable workspace; includes integrated title-bar menus and stash graph improvements; includes operation duration capsules; includes background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
 **Delivery policy:** requested controls must perform real actions; no new placeholders or UI-only completion. Established work environment: no repo-trust/first-use/program-consent layer for ordinary Git actions, and no extra safety measures without concrete need. Normal action buttons authorize the operation and configured hooks/helpers; required auth/destructive confirmations remain. Unfinished entry points are omitted; disabled working actions explain the missing target/dependency or active operation.
 
-Top-center command durations now use a fixed capsule: running blue, success green, conflict/refresh problem amber, failure red, cancelled neutral. Completion holds three seconds then fades over two; the result and details stay available. Stage/Unstage/Commit use the same existing command timer, including reconciliation. Background reads stay quiet. No new setup or dependency is required. [Behavior](docs/product.md#operation-feedback-0250).
+Top-center command durations now use a fixed capsule: running blue, success green, conflict/refresh problem amber, failure red, cancelled neutral. Completion holds three seconds then fades over two; the result and details stay available. Stage/Unstage/Commit use the same existing command timer, including reconciliation. History reads/refreshes also show timing with a brief entrance fade; secondary status/diff scans stay quiet. No new setup or dependency is required. [Behavior](docs/product.md#operation-feedback-0250).
 
 Optional focused verification after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-operation-style` (four checks; disposable Git, controlled WPF animation clock and offscreen normal/minimum Dark/Light renders). It does not show a window or certify desktop animation smoothness.
 
@@ -68,6 +68,11 @@ Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build
 
 ## Using the workspace
 
+**0.27.0:** resize the sidebar freely within the window; labels trim and it scrolls vertically only. Commit remains beside Push; duplicate sidebar title/Local Changes, the page-control band and main footer are removed. Help retains the version. Read failures retain rows with a Diagnostics link. **Repository → Add remote…** saves a name and URL/local path without network access; use Fetch next, then **Set upstream…** (or Unset upstream) there. The Remotes group also offers Add remote. Existing remote edit/delete is deferred.
+
+Optional focused verification: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-workspace-cleanup` (four bounded checks; disposable Git, controlled read failures/cancellation, topology and offscreen Dark/Light renders). Default remains 26 checks.
+
+
 **0.24.0 workspace:** repository tabs divide the full strip equally. Same-author rows have a yellow background with unchanged text; selected rows keep normal styling. Top-right **Open in** launches Explorer, Rider or VS Code; **Console** opens Git Bash at this repository (Ctrl+Alt+T, Explorer Ctrl+Alt+O). Rider prefers a single root-level `.uproject`, then `.slnx`/`.sln`/`.csproj`; multiple/no candidates open the folder. Missing apps prompt for their executable, remembered locally. **Appearance → Dark / Light** updates immediately and persists. Windows high contrast overrides both. No Work button or startup/menu-time discovery. [Workflow](docs/product.md#workspace-toolbar-and-appearance-0240), [handoff and schema limits](docs/architecture.md#workspace-presentation-and-tool-handoff-0240).
 
 Optional focused checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-workspace` (four checks; isolated settings/Git, fake launch boundary and offscreen renders, no interactive tool launch).
@@ -86,7 +91,7 @@ Focused initialization checks after building: `dotnet run --project tests/GitGui
 
 Open a local worktree root; selected saved tab restores automatically, others load on selection, no read consent. Fixed All Commits includes local/remote/tag/current-HEAD ancestry, detached included; saved stashes included; other reflog-only/unreachable history excluded, no scope selector. Legacy narrow scope ignored.
 
-Headerless graph/refs/description/author/date/hash begins below tabs. Select row for full parsed metadata/message/parents/refs. Older/Newer: 200-row pages/no total count cap. Range/status/help exposes limits. Three cached tabs/character budget, 128 back cursors/First history page; page/selection/scroll session-only. Cache eviction reloads first page.
+Headerless graph/refs/description/author/date/hash begins below tabs. Select row for full parsed metadata/message/parents/refs. View → Older/Newer, Ctrl+Page Up/Down or scrolling past a page edge: 200-row pages/no total count cap. View shows range/status; Diagnostics exposes limits. Three cached tabs/character budget, 128 back cursors/First history page; page/selection/scroll session-only. Cache eviction reloads first page.
 
 Select a commit, then **Changes** in the bottom panel for its committed files and numbered text diffs or binary byte sizes. Merge commits default to the first parent; choose another parent to compare that side. Initial commits compare with the empty tree; missing history objects report an error without fetching. Shared file markers are yellow **M**, green **+** and red **−**, with textual/accessibility descriptions. The panel reads committed objects, not your working files.
 
@@ -152,7 +157,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.26.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.27.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

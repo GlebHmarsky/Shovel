@@ -5,18 +5,20 @@
   <TextBlock DockPanel.Dock="Bottom" Text="{Binding SidebarStatus}" TextWrapping="Wrap" Margin="4" AutomationProperties.LiveSetting="Polite"/>
   <TreeView ItemsSource="{Binding SidebarNodes}" Background="{DynamicResource Theme.Sidebar}" Foreground="{DynamicResource Theme.Text}"
    BorderThickness="0" SelectedItemChanged="OnSelected" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
-   ScrollViewer.HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=SidebarTitle}">
+   ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="{loc:Text Key=SidebarTitle}">
    <TreeView.Resources>
     <HierarchicalDataTemplate DataType="{x:Type vm:SidebarNode}" ItemsSource="{Binding Children}">
-     <StackPanel Orientation="Horizontal" ToolTip="{Binding Accessible}">
+     <Grid ToolTip="{Binding Label}">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <TextBlock Text="{Binding Icon}" Margin="0,0,5,0"/>
-      <TextBlock Text="{Binding Label}"/>
-      <TextBlock Text="{Binding Detail}" Margin="8,0,0,0"/>
-     </StackPanel>
+      <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+      <TextBlock Grid.Column="2" Text="{Binding Detail}" Margin="8,0,0,0"/>
+     </Grid>
     </HierarchicalDataTemplate>
    </TreeView.Resources>
    <TreeView.ItemContainerStyle>
     <Style TargetType="TreeViewItem">
+     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
      <Setter Property="IsExpanded" Value="True"/>
      <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/>
      <Setter Property="Padding" Value="2,4"/>

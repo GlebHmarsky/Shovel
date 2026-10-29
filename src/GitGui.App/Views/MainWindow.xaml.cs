@@ -45,6 +45,14 @@ public partial class MainWindow : Window
             new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
     }
 
+    private void OnHistoryWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        if (_restoringScroll || ViewModel.IsBusy || FindScroll(HistoryTable) is not { } scroll) return;
+        var command = e.Delta < 0 && scroll.VerticalOffset >= scroll.ScrollableHeight - .5 ? ViewModel.LoadMoreHistoryCommand :
+            e.Delta > 0 && scroll.VerticalOffset <= .5 ? ViewModel.NewerHistoryCommand : null;
+        if (command?.CanExecute(null) != true) return;
+        e.Handled = true; command.Execute(null);
+    }
     private void OnToolbarMenu(object sender, RoutedEventArgs e)
     {
         if (sender is Button { ContextMenu: { } menu } button)
@@ -101,7 +109,7 @@ public partial class MainWindow : Window
         var area = SystemParameters.WorkArea;
         Width = Math.Min(settings.WindowWidth, area.Width);
         Height = Math.Min(settings.WindowHeight, area.Height);
-        SidebarColumn.Width = new(settings.SidebarWidth);
+        SidebarColumn.Width = new(Math.Min(settings.SidebarWidth, Math.Max(160, Width - 185)));
         DetailsRow.Height = new(settings.DetailsHeight);
         if (settings.IsMaximized) WindowState = WindowState.Maximized;
     }
@@ -129,6 +137,8 @@ public partial class MainWindow : Window
     }
     private void OnWorkspaceSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (ShellLayout is not null && SidebarColumn is not null && ShellLayout.ActualWidth > 0 && SidebarColumn.Width.Value > ShellLayout.ActualWidth - 185)
+            SidebarColumn.Width = new(Math.Max(160, ShellLayout.ActualWidth - 185));
         FitDetails();
     }
     private void FitDetails()

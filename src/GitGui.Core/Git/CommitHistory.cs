@@ -136,14 +136,14 @@ public sealed partial class RepositoryReader
         GraphPage graph;
         var stashTips = session.References.Where(r => r.Name.StartsWith("stash@{", StringComparison.Ordinal)).Select(r => r.Hash).ToHashSet(StringComparer.Ordinal);
         // Retain true parent metadata in the details; only the graph projects folded stashes.
-        var graphCommits = shown.Select(c => stashTips.Contains(c.Hash) && c.Parents.Skip(1).Any(session.HiddenStashCommits.Contains)
+        var graphCommits = shown.Select(c => stashTips.Contains(c.Hash) && c.Parents.Count is 2 or 3
             ? c with { Parents = c.Parents.Take(1).ToArray() } : c).ToArray();
         using (trace?.Measure(TimingStage.Graph)) graph = CommitGraph.BuildPage(graphCommits, cursor.Graph, token);
         var labels = session.References.ToLookup(reference => reference.Hash, StringComparer.Ordinal);
         return new CommitHistory(session, cursor, commits.Length > pageSize
             ? new HistoryCursor(checked(cursor.Offset + shown.Length), graph.Next, commits[pageSize].Hash,
                 checked((cursor.RawOffset ?? cursor.Offset) + raw.TakeWhile(c => c.Hash != commits[pageSize].Hash).Count())) : null,
-            shown.Select((commit, index) => new HistoryEntry(commit, graph.Rows[index], labels[commit.Hash].ToArray())).ToArray());
+            shown.Select((commit, index) => new HistoryEntry(commit, graph.Rows[index] with { IsStash = stashTips.Contains(commit.Hash) }, labels[commit.Hash].ToArray())).ToArray());
     }, token);
 
     private async Task<HistoryState> ReadHistoryStateAsync(

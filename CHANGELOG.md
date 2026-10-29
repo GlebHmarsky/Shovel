@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.0 — 2026-10-29
+
+- Remove the main footer, history page-control band and duplicate sidebar repository/Local Changes entries. Let the sidebar widen without a fixed cap, trim labels without horizontal scrolling, and enlarge caption icons. Keep page navigation/range in View, add keyboard and scroll-edge paging, and shorten tooltips.
+- Show timed history reads/refreshes with a brief fade-in and outcome-colored completion fade. Preserve command feedback through reconciliation, failed-read rows and visible diagnostics.
+- Add preparation-free local remote setup and expose upstream set/unset under Repository. Save configuration without fetching; use explicit Fetch for remote branches.
+- Distinguish stash nodes and consistently connect them to their true base, preserving real stash-only ancestors and independently reachable internal objects.
+
 ## 0.26.0 — 2026-10-29
 
 - Move Commit after Push and combine the main menus with a draggable title strip and working window controls.

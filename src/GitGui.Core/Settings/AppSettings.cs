@@ -33,7 +33,7 @@ public sealed record AppSettings
     {
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),
         WindowHeight = Clamp(WindowHeight, 800, 620, 2160),
-        SidebarWidth = Clamp(SidebarWidth, 210, 160, 320),
+        SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Max(160, SidebarWidth) : 210,
         DetailsHeight = Clamp(DetailsHeight, 180, 80, 360),
         SelectedSection = Enum.IsDefined(SelectedSection) ? SelectedSection : NavigationSection.History,
         Appearance = Enum.IsDefined(Appearance) ? Appearance : AppAppearance.Dark,

@@ -109,8 +109,7 @@ internal static partial class Program
             SaveRender(content, "history-changes-minimum.png", 900, 580);
             var details = VisualDescendants<TabControl>(content).Single(); var filesView = VisualDescendants<CommitFilesView>(content).Single();
             var output = VisualDescendants<Expander>(filesView).Single();
-            var footer = VisualDescendants<TextBlock>(content).Single(text => AutomationProperties.GetAutomationId(text) == "Status");
-            Expect(output.TransformToAncestor(content).Transform(new Point(0, output.ActualHeight)).Y < footer.TransformToAncestor(content).Transform(new Point()).Y, "Minimum-size Git output remains above the footer");
+            Expect(output.TransformToAncestor(content).Transform(new Point(0, output.ActualHeight)).Y <= content.ActualHeight, "Minimum-size Git output remains inside the workspace");
             shell.DetailsIndex = 0; Expect(shell.CommitFiles is null, "Leave Changes releases active model");
             shell.BeginShutdown(); await shell.WaitForIdleAsync(); window.Close();
         });

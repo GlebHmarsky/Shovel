@@ -66,6 +66,14 @@ public sealed class CommitGraphCell : FrameworkElement
         }
         var center = PointAt(row.NodeLane, .5);
         var brush = Color(row.NodeColor);
+        if (row.IsStash)
+        {
+            // Stashes are saved snapshots, not merges. Their single base connection keeps
+            // true base ancestry, including commits no longer on a normal branch.
+            drawing.DrawRoundedRectangle((Brush)FindResource("Theme.Canvas"), new Pen(brush, 1.7),
+                new Rect(center.X - 4, center.Y - 4, 8, 8), 1.5, 1.5);
+            return;
+        }
         drawing.DrawEllipse(row.IsMerge ? null : brush, row.IsMerge ? new Pen(brush, 1.7) : null, center, row.IsMerge ? 5 : 3, row.IsMerge ? 5 : 3);
         // Merge nodes have a second ring; meaning does not rely on lane color.
         if (row.IsMerge) drawing.DrawEllipse(brush, null, center, 1.5, 1.5);

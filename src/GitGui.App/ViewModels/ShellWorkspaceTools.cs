@@ -50,7 +50,7 @@ public sealed partial class ShellViewModel
     private async Task OpenToolAsync(RepositoryTool tool)
     {
         var tab = SelectedRepository!;
-        _launchingTool = true; RefreshCommands();
+        _launchingTool = true; _showWorkspaceStatus = true; RefreshCommands();
         Status = UiText.Get("WorkspaceToolStarting");
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try

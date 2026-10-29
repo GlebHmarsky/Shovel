@@ -41,10 +41,10 @@ public sealed partial class ShellViewModel : ObservableObject
         IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) :
         HasRecovery ? UiText.Get("RecoveryWaiting") : HasAction ? CurrentAction!.Summary : UiText.Get("NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
-    public string Status { get => _status; private set => Set(ref _status, value); }
+    public string Status { get => _status; private set { if (Set(ref _status, value)) Changed(nameof(OperationCaption)); } }
     public string RawOutput => State?.RawOutput ?? "";
     private string _settingsNotice = "";
-    public string SettingsNotice { get => _settingsNotice; private set => Set(ref _settingsNotice, value); }
+    public string SettingsNotice { get => _settingsNotice; private set { if (Set(ref _settingsNotice, value)) Changed(nameof(OperationCaption)); } }
     public string GitStatus => _git is null ? UiText.Get("GitNotChecked") : UiText.Format("GitVersionFormat", _git.Version);
     public string TimingDetails => string.Join(Environment.NewLine, _trace.Snapshot().Select(sample => UiText.Format("TimingSample", UiText.Get("Timing" + sample.Stage), sample.Milliseconds)));
     public string PullCount => Count(ahead: false);
@@ -67,6 +67,8 @@ public sealed partial class ShellViewModel : ObservableObject
             state.Selected = value; HighlightAuthors(); Changed(); UpdateCommitFiles();
         }
     }
+    public string HistoryProblem => State is { Rows.Count: > 0 } state &&
+        (state.Error.Length != 0 || state.ValidatedAt == default || state.NeedsRefresh) && !IsBusy ? state.Notice : "";
     public string HistoryNotice => State?.Notice ?? UiText.Get("HistoryNotLoaded");
     public bool IsHistory => true;
     private RepositoryTab? _selectedRepository;
@@ -169,7 +171,7 @@ public sealed partial class ShellViewModel : ObservableObject
         MoveTabRightCommand = new(tab => MoveTab(tab, 1), tab => CanMove(tab, 1));
         RefreshTabCommand = new(tab => { SelectedRepository = tab; BeginCurrentRead(tab, force: true); },
             tab => CanNavigate && _reader is not null && Repositories.Contains(tab));
-        _timer.Tick += (_, _) => Changed(nameof(OperationStatus));
+        _timer.Tick += (_, _) => { Changed(nameof(OperationStatus)); UpdateReadActivity(); };
         PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OperationStatus)) Changed(nameof(OperationCaption)); };
         InitializeActions(actions); InitializeChanges(); InitializeWorkspaceTools(tools);
     }
@@ -214,12 +216,13 @@ public sealed partial class ShellViewModel : ObservableObject
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         _operationCancellation = cancellation;
         _readingDivergence = false; _elapsed.Restart(); IsBusy = true; _timer.Start();
+        StartReadActivity(actionReconcile);
         _activeOperation = InspectAsync();
 
         async Task InspectAsync()
         {
             var state = tab.History;
-            var historyPublished = false;
+            var historyPublished = false; var readSucceeded = false;
             try
             {
                 await prior; // Drain owned cancelled work before admitting the next read.
@@ -247,7 +250,7 @@ public sealed partial class ShellViewModel : ObservableObject
                 // Local history is the default product behavior, not a trust permission.
                 // Remember identity only after a successful read; future execution features need separate gates.
                 if (!force && direction == 0 && state.Page is not null && !state.NeedsRefresh && DateTimeOffset.UtcNow - state.ValidatedAt < RefreshAge)
-                { state.Notice = LoadedNotice(state.Page); Status = UiText.Get("HistoryCached"); return; }
+                { readSucceeded = true; state.Notice = LoadedNotice(state.Page); Status = UiText.Get("HistoryCached"); return; }
                 state.Notice = UiText.Get(state.Page is null ? "HistoryLoading" : "HistoryRefreshing"); Changed(nameof(HistoryNotice));
                 state.ValidatedAt = default; // A failed/cancelled refresh cannot later masquerade as fresh cached data.
                 Changed(nameof(DivergenceHelp));
@@ -311,7 +314,7 @@ public sealed partial class ShellViewModel : ObservableObject
                 state.ValidatedAt = DateTimeOffset.UtcNow; state.NeedsRefresh = false;
                 state.Notice = LoadedNotice(history); state.Error = state.RawOutput = "";
                 tab.Apply(history.Session.Repository); EvictCaches(tab); Status = UiText.Get("HistoryLoaded");
-                historyPublished = true;
+                historyPublished = readSucceeded = true;
                 if (direction == 0) state.Divergence = new(DivergenceState.Pending);
                 PublishState(); // Rows are usable before optional ahead/behind traversal or a profile write.
                 if (identityChanged)
@@ -356,6 +359,8 @@ public sealed partial class ShellViewModel : ObservableObject
                     if (cancellation.IsCancellationRequested && !_stopping && !historyPublished)
                     { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); }
                     _readingDivergence = false; _timer.Stop(); _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
+                    FinishReadActivity(cancellation.IsCancellationRequested ? OperationOutcome.Cancelled :
+                        !readSucceeded ? OperationOutcome.Failed : state.Divergence?.State == DivergenceState.Failed ? OperationOutcome.RefreshFailed : OperationOutcome.Success);
                     Changed(nameof(OperationStatus)); PublishState();
                     if (historyPublished && !_stopping && !_commitOpen) { tab.SidebarReadAt = default; BeginCountRead(tab); }
                     if (!_stopping && !_commitOpen && !ActionOpen && tab.Snapshot is not null) BeginSidebarRead(tab);
@@ -398,7 +403,7 @@ public sealed partial class ShellViewModel : ObservableObject
             try
             {
                 PublishChanges(); HighlightAuthors(); PublishSidebar();
-                foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(PullCount), nameof(PushCount), nameof(DivergenceHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
+                foreach (var property in new[] { nameof(Commits), nameof(SelectedCommit), nameof(PullCount), nameof(PushCount), nameof(DivergenceHelp), nameof(HistoryRange), nameof(HistoryNotice), nameof(HistoryProblem), nameof(GraphWidth), nameof(RawOutput), nameof(TimingDetails) }) Changed(property);
                 RefreshCommands(); HistoryViewChanged?.Invoke(this, EventArgs.Empty); UpdateCommitFiles();
             } finally { _publishingState = false; }
         }

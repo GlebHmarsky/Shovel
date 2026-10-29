@@ -10,6 +10,7 @@ namespace GitGui.App.Services;
 
 public interface IUserInteraction
 {
+    RemoteSetupOptions? ChooseRemoteSetup(RemoteSetupViewModel model) => null;
     string? ChooseWorkspaceExecutable(RepositoryTool tool) => null;
     BranchManagementOptions? ChooseBranchManagement(BranchManagementViewModel model) => null;
     RepositoryInitOptions? ChooseRepositoryInitialization() => null;
@@ -34,6 +35,11 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public RemoteSetupOptions? ChooseRemoteSetup(RemoteSetupViewModel model)
+    {
+        var window = new RemoteSetupWindow(model) { Owner = Owner };
+        return window.ShowDialog() == true ? model.Options : null;
+    }
     public string? ChooseWorkspaceExecutable(RepositoryTool tool)
     {
         var dialog = new OpenFileDialog { Title = UiText.Format("WorkspaceChooseExecutable", UiText.Get("Workspace" + tool)), Filter = UiText.Get("WorkspaceExecutableFilter"), CheckFileExists = true };

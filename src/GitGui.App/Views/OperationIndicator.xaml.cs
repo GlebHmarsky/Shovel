@@ -8,6 +8,7 @@ namespace GitGui.App.Views;
 public partial class OperationIndicator : UserControl
 {
     private AnimationClock? _completionClock;
+    private AnimationClock? _entranceClock;
     public static readonly DependencyProperty ActivityProperty = DependencyProperty.Register(nameof(Activity), typeof(OperationActivity), typeof(OperationIndicator), new PropertyMetadata(null, OnActivityChanged));
     public static readonly DependencyProperty CaptionProperty = DependencyProperty.Register(nameof(Caption), typeof(string), typeof(OperationIndicator), new PropertyMetadata(""));
     public OperationActivity? Activity { get => (OperationActivity?)GetValue(ActivityProperty); set => SetValue(ActivityProperty, value); }
@@ -19,6 +20,7 @@ public partial class OperationIndicator : UserControl
     }
     private void StopCompletion()
     {
+        _entranceClock?.Controller?.Remove(); _entranceClock = null;
         _completionClock?.Controller?.Remove(); _completionClock = null;
         DurationBadge.ApplyAnimationClock(OpacityProperty, null);
     }
@@ -27,10 +29,19 @@ public partial class OperationIndicator : UserControl
         var view = (OperationIndicator)sender;
         var previous = (OperationActivity?)e.OldValue; var current = (OperationActivity?)e.NewValue;
         // A timer/refresh notification must not replay an already completed attempt.
-        if (current is { IsComplete: true } && previous is { IsComplete: true } && ReferenceEquals(current.Attempt, previous.Attempt)) return;
+        if (current is not null && previous is not null && current.IsComplete == previous.IsComplete && ReferenceEquals(current.Attempt, previous.Attempt)) return;
         view.StopCompletion();
         view.DurationBadge.Opacity = current is null ? 0 : 1;
-        if (current is not { IsComplete: true }) return;
+        if (current is null) return;
+        if (!current.IsComplete)
+        {
+            if (SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast)
+            {
+                view._entranceClock = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)).CreateClock();
+                view.DurationBadge.ApplyAnimationClock(OpacityProperty, view._entranceClock);
+            }
+            return;
+        }
         // Honor Windows animation preference and high contrast without changing either.
         var duration = SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast ? TimeSpan.FromSeconds(2) : TimeSpan.Zero;
         view._completionClock = new DoubleAnimation(1, 0, duration)

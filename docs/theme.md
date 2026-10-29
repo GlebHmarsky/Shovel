@@ -8,7 +8,7 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 
 | Role (`Theme.` prefix) | Color | Use |
 | --- | --- | --- |
-| Chrome / TabStrip | #1B1B1B / #171717 | Menu/toolbar/footer; inactive repository tabs |
+| Chrome / TabStrip | #1B1B1B / #171717 | Menu/toolbar; inactive repository tabs |
 | Canvas | #222222 | History and file-list surface |
 | Sidebar / Panel | #2B2B2B / #323232 | Navigation/selected repo tab/lower tab headers; details content |
 | Raised / Input | #303030 / #272727 | Repository context, buttons/popups; editable fields |
@@ -28,17 +28,17 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 
 `LightPalette.xaml` uses the same semantic keys: Chrome #F3F3F3, tabs #E8E8E8, sidebar #ECECEC, white Canvas/Input, Panel #F7F7F7, Raised #E4E4E4, Border #B0B0B0, Text/HistoryText #202020 and Muted #555555. Selection/hover use blue fills with white text; Accent #A0391D, Focus #245F9C. AuthorPeer is pale yellow #FFF3BF with ordinary dark text. Diff/marker colors use darker foregrounds over pale fills. All shared views consume these resources; switching adds no scans/reloads. Dark remains the initial/default appearance.
 
-History graph strokes use compact 16-DIP lanes, straight runs and rounded joins; merges are hollow circles with a center marker. Gold/red/green/blue/purple strokes have darker light-theme counterparts. Selected rows retain graph colors; OS high contrast uses system text. Since 0.26.0, Core keeps fixed branch tracks and projects ordinary stash entries to their base; see the caption/history architecture.
+History graph strokes use compact 16-DIP lanes, straight runs and rounded joins; merges are hollow circles with a center marker; stashes are hollow rounded squares with one base connection. Gold/red/green/blue/purple strokes have darker light-theme counterparts. Selected rows retain graph colors; OS high contrast uses system text. Since 0.26.0, Core keeps fixed branch tracks and projects ordinary stash entries to their base; see the caption/history architecture.
 
 ## Borders and operation feedback (0.25.0)
 
 Use one-DIP shared Border separators; retain open, headerless history rows rather than boxing every cell. Buttons/navigation use 4-DIP radii; repository/lower tabs round only the top corners (5/4 DIP); popup surfaces use 5 DIP with 3-DIP menu-item corners. The center context panel uses a 6-DIP radius and quiet outline. Focus, hover, selected and disabled states continue to use existing semantic roles and native input behavior.
 
-The duration capsule uses an 11-DIP radius, fixed width and tabular digits. New `Operation{Running,Success,Warning,Failed}{Background,Text}` roles pair blue, green, amber and red surfaces with high-contrast text in both palettes. Cancellation uses Raised/Muted. Status text and symbols distinguish states without color. High contrast maps these roles to system window/text brushes. Only the completion capsule animates; its fade does not change layout. See [behavior](product.md#operation-feedback-0250); no added Git work or perpetual idle animation.
+The duration capsule uses an 11-DIP radius, fixed width and tabular digits. New `Operation{Running,Success,Warning,Failed}{Background,Text}` roles pair blue, green, amber and red surfaces with high-contrast text in both palettes. Cancellation uses Raised/Muted. Status text and symbols distinguish states without color. High contrast maps these roles to system window/text brushes. The capsule fades in for a new attempt and out after completion; its fade does not change layout. See [behavior](product.md#operation-feedback-0250); no added Git work or perpetual idle animation.
 
 ## State rules
 
-- Main caption/menu strip is 32 DIP, sharing Chrome/Text with localized caption controls and existing focus/hover behavior. WindowChrome supplies native move/resize hit testing; menus/buttons remain interactive. Dialog captions are unchanged.
+- Main caption/menu strip is 32 DIP with 23-DIP caption glyphs in 44×32 targets, sharing Chrome/Text with localized caption controls and existing focus/hover behavior. WindowChrome supplies native move/resize hit testing; menus/buttons remain interactive. Dialog captions are unchanged.
 - History only: fixed branch tracks and up to 10-DIP curved joins replace the prior small double bends (0.26.0). Preserve graph colors/merge markers/high contrast and compact 16-DIP lane spacing. Folding a stash changes its graph to one base connection, while details retain its true parents.
 
 - Distinguish surfaces by role, not arbitrary shades per window. Main history begins at the repository tabs; theme changes add no toolbar, padding band or data preparation.

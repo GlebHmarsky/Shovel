@@ -2,7 +2,10 @@ namespace GitGui.Core.Git;
 
 // Y coordinates are fractions of a row: top=0, node=.5, bottom=1.
 public sealed record GraphLine(int FromLane, double FromY, int ToLane, double ToY, int Color);
-public sealed record GraphRow(int NodeLane, int NodeColor, int LaneCount, bool IsMerge, IReadOnlyList<GraphLine> Lines);
+public sealed record GraphRow(int NodeLane, int NodeColor, int LaneCount, bool IsMerge, IReadOnlyList<GraphLine> Lines)
+{
+    public bool IsStash { get; init; }
+}
 
 // Empty hashes reserve vacant columns. Duplicate targets retain separate branch tracks
 // until that target's row, rather than joining unrelated branches early.

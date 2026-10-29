@@ -123,7 +123,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="HistoryNotLoaded" xml:space="preserve"><value>Open a repository from the Repository menu to view its history.</value></data>
   <data name="HistoryLoading" xml:space="preserve"><value>Loading history…</value></data>
   <data name="HistoryUnborn" xml:space="preserve"><value>This branch has no commits yet.</value></data>
-  <data name="HistoryMore" xml:space="preserve"><value>More history is available. Load older commits to see the next page.</value></data>
+  <data name="HistoryMore" xml:space="preserve"><value>Scroll past the bottom for older commits, or use View → Older commits.</value></data>
   <data name="HistoryEnd" xml:space="preserve"><value>End of available history for this scope. Tab activation checks for refresh when the snapshot is older than 30 seconds.</value></data>
   <data name="HistoryShallowEnd" xml:space="preserve"><value>End of locally available history in this shallow clone. No additional objects were fetched.</value></data>
   <data name="HistoryFailed" xml:space="preserve"><value>History is unavailable. See the status and Git output, then refresh to retry.</value></data>
@@ -135,7 +135,7 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="HistoryScope" xml:space="preserve"><value>History scope</value></data>
   <data name="AllCommitsScope" xml:space="preserve"><value>Scope: local branches, remotes and tags · Filters: none</value></data>
   <data name="CurrentHeadScope" xml:space="preserve"><value>Scope: current HEAD ancestry (including detached) · Filters: none</value></data>
-  <data name="HistoryLimits" xml:space="preserve"><value>Page: 200 rows · Read: 4 MiB / 15 s · Graph: 64 lanes · Back navigation: 128 pages; First page in Repository · No total count limit</value></data>
+  <data name="HistoryLimits" xml:space="preserve"><value>200 rows per page; scroll past an edge or use View / Ctrl+Page Up or Down. Read: 4 MiB / 15 s; graph: 64 lanes; 128 back cursors. No total history limit.</value></data>
   <data name="HistoryRange" xml:space="preserve"><value>Showing {0:N0}–{1:N0}</value></data>
   <data name="NewerCommits" xml:space="preserve"><value>Newer commits</value></data>
   <data name="HistoryEmptyAll" xml:space="preserve"><value>No commits are reachable from local branches, remote-tracking branches, tags or HEAD.</value></data>
@@ -186,8 +186,8 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="CountUnavailable" xml:space="preserve"><value>—</value><comment>Unavailable ahead/behind count, never a guessed zero.</comment></data>
   <data name="AheadCount" xml:space="preserve"><value>Commits ahead of upstream</value></data>
   <data name="BehindCount" xml:space="preserve"><value>Commits behind upstream</value></data>
-  <data name="DivergenceAvailable" xml:space="preserve"><value>Ahead: {0}; behind: {1}. Upstream: {2}. Local snapshot: {3:g}. No remote contact; the server may have newer commits. Both counts compare this upstream, which can differ from a configured push destination. Pull and Push are not implemented.</value><comment>{0}/{1} counts, {2} full upstream ref, {3} local snapshot date/time. Label form avoids plural sentences.</comment></data>
-  <data name="DivergenceStale" xml:space="preserve"><value>Previous comparison, possibly stale. Ahead: {0}; behind: {1}. Upstream: {2}. Local snapshot: {3:g}. No remote contact. Pull and Push are not implemented.</value><comment>{0}/{1} counts, {2} full upstream ref, {3} local snapshot date/time.</comment></data>
+  <data name="DivergenceAvailable" xml:space="preserve"><value>Ahead {0} · Behind {1} · {2} (local snapshot {3:g})</value><comment>{0}/{1} counts, {2} full upstream ref, {3} local snapshot date/time. Label form avoids plural sentences.</comment></data>
+  <data name="DivergenceStale" xml:space="preserve"><value>Stale: ahead {0} · behind {1} · {2} ({3:g})</value><comment>{0}/{1} counts, {2} full upstream ref, {3} local snapshot date/time.</comment></data>
   <data name="DivergencePending" xml:space="preserve"><value>Comparison not available yet. Counts use locally recorded upstream history; Pull and Push are not implemented.</value></data>
   <data name="DivergenceNoUpstream" xml:space="preserve"><value>No upstream is configured for this branch. Pull and Push are not implemented.</value></data>
   <data name="DivergenceMissingUpstream" xml:space="preserve"><value>The configured upstream ref is missing locally. No remote request was made. Pull and Push are not implemented.</value></data>
@@ -357,7 +357,7 @@ Git submodule state: {4}</value></data>
   <data name="CommitWindowTitle" xml:space="preserve"><value>Commit — {0}</value></data>
   <data name="CommitOpen" xml:space="preserve"><value>Commit ({0})</value></data>
   <data name="CommitOpenUnknown" xml:space="preserve"><value>Commit (…)</value></data>
-  <data name="CommitOpenHelp" xml:space="preserve"><value>Open local changes, diffs and the commit editor. Count is the last local snapshot; a partly staged file counts once.</value></data>
+  <data name="CommitOpenHelp" xml:space="preserve"><value>Open local changes and commit.</value></data>
   <data name="CommitWaitForRead" xml:space="preserve"><value>Wait for the local snapshot or current operation. Refresh to retry a failed read.</value></data>
   <data name="CommitStale" xml:space="preserve"><value>The repository or index changed. Refresh before retrying. Whole-file staging uses current on-disk contents.</value></data>
   <data name="CommitInvalidPath" xml:space="preserve"><value>This path cannot be used as a file within the current worktree.</value></data>
@@ -704,7 +704,7 @@ Current upstream: {2}</value></data>
   <data name="BranchManageChanged" xml:space="preserve"><value>The repository, branch tip, tracking target or configuration changed. Refresh and review the targets again; this operation was not retried.</value></data>
   <data name="BranchManageUnavailable" xml:space="preserve"><value>This branch-management operation is unavailable.</value></data>
   <data name="BranchManageReady" xml:space="preserve"><value>Ready. Submission validates these cached targets and uses the current local Git configuration.</value></data>
-  <data name="BranchManageMenuHelp" xml:space="preserve"><value>Delete a local branch or change upstream tracking using cached local refs. Validation runs after submission.</value></data>
+  <data name="BranchManageMenuHelp" xml:space="preserve"><value>Manage local branches and tracking.</value></data>
   <data name="BranchManageSymbolicRef" xml:space="preserve"><value>This target is a symbolic ref. Select a concrete local branch or remote-tracking branch instead.</value></data>
   <data name="BranchManageResultTarget" xml:space="preserve"><value>Reviewed branch: {0}
 Reviewed tip: {1}
@@ -761,10 +761,22 @@ Requested upstream: {2}</value></data>
 <data name="WorkspaceBashShortcut" xml:space="preserve"><value>Ctrl+Alt+T</value></data><data name="WorkspaceExplorerShortcut" xml:space="preserve"><value>Ctrl+Alt+O</value></data>
   <data name="OperationCaption" xml:space="preserve"><value>{0} · {1}</value><comment>{0} operation title; {1} current phase or outcome. Duration occupies a separate fixed slot.</comment></data>
   <data name="OperationSeconds" xml:space="preserve"><value>{0:N1} s</value><comment>{0} elapsed seconds; keep the unit short for the duration capsule.</comment></data>
-  <data name="OperationTimingHelp" xml:space="preserve"><value>{0} · {1}. Elapsed: {2:N1} seconds, including validation and final refresh.</value></data>
+  <data name="OperationTimingHelp" xml:space="preserve"><value>{0} · {1} · {2:N1} s</value></data>
   <data name="OperationReadingCounts" xml:space="preserve"><value>Reading ahead/behind…</value></data>
   <data name="OperationReadingHistory" xml:space="preserve"><value>Reading history…</value></data>
   <data name="WindowMinimize" xml:space="preserve"><value>Minimize</value></data>
   <data name="WindowMaximizeRestore" xml:space="preserve"><value>Maximize or restore</value></data>
   <data name="WindowClose" xml:space="preserve"><value>Close window</value></data>
+  <data name="HistoryNewerShortcut" xml:space="preserve"><value>Ctrl+Page Up</value></data>
+  <data name="HistoryOlderShortcut" xml:space="preserve"><value>Ctrl+Page Down</value></data>
+  <data name="OperationHistoryTitle" xml:space="preserve"><value>History</value></data>
+  <data name="RemoteAddTitle" xml:space="preserve"><value>Add remote…</value></data>
+  <data name="RemoteAddName" xml:space="preserve"><value>Remote name</value></data>
+  <data name="RemoteAddLocation" xml:space="preserve"><value>URL or local repository path</value></data>
+  <data name="RemoteAddSubmit" xml:space="preserve"><value>Add remote</value></data>
+  <data name="RemoteAddExists" xml:space="preserve"><value>That remote already exists. Choose another name.</value></data>
+  <data name="RemoteAddInvalid" xml:space="preserve"><value>Enter a remote name and location without embedded passwords or URL query tokens.</value></data>
+  <data name="RemoteAddReady" xml:space="preserve"><value>Saves configuration only. Fetch next, then set the branch upstream from Repository.</value></data>
+  <data name="ActionTitleAddRemote" xml:space="preserve"><value>Add remote</value></data>
+  <data name="ActionExplainAddRemote" xml:space="preserve"><value>Save a remote in this repository. Fetch separately to download branches.</value></data>
 </root>
