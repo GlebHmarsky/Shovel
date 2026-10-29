@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_historyLayoutChecks) { await RunHistoryLayoutChecksAsync(); return; }
             if (_operationStyleChecks) { await RunOperationStyleChecksAsync(); return; }
             if (_workspaceChecks) { await RunWorkspaceChecksAsync(); return; }
             if (_sidebarChecks) { await RunSidebarChecksAsync(); return; }

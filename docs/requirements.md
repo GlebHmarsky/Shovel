@@ -28,6 +28,8 @@ Updated 2026-10-29. Confirmed unless marked proposed. IDs remain stable. [Produc
 
 ## Execution and data handling
 
+**History/caption layout (0.26.0):** one visible row for ordinary saved stashes, with original details/inspector data retained and independently reachable objects protected. Folding must preserve 200-row visible pagination, ref navigation and stale-result checks. Branch columns/colors remain stable until convergence; rounded edges must connect across rows/pages without missing parents. Main menus share the draggable caption; caption commands preserve existing shutdown and normal window management. Native desktop behavior needs explicit verification, separate from offscreen layout checks.
+
 The established work environment is trusted. **Do not add extra safety measures, repository-trust modals, first-use approval layers or repeated consent for routine Git actions.** Use normal operation controls; confirm actual destructive scope and honor required authentication/host verification. This replaces older routine trust-gate requirements.
 
 | ID | Requirement |

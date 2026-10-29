@@ -22,6 +22,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         DataContext = ViewModel = viewModel;
+        CommandBindings.Add(new(SystemCommands.MinimizeWindowCommand, (_, _) => SystemCommands.MinimizeWindow(this)));
+        CommandBindings.Add(new(SystemCommands.MaximizeWindowCommand, (_, _) =>
+        { if (WindowState == WindowState.Maximized) SystemCommands.RestoreWindow(this); else SystemCommands.MaximizeWindow(this); }));
+        CommandBindings.Add(new(SystemCommands.CloseWindowCommand, (_, _) => SystemCommands.CloseWindow(this)));
         HighContrast = SystemParameters.HighContrast;
         SystemParameters.StaticPropertyChanged += OnSystemPropertyChanged;
         viewModel.HistoryViewChanging += CaptureHistoryScroll;

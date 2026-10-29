@@ -764,4 +764,7 @@ Requested upstream: {2}</value></data>
   <data name="OperationTimingHelp" xml:space="preserve"><value>{0} · {1}. Elapsed: {2:N1} seconds, including validation and final refresh.</value></data>
   <data name="OperationReadingCounts" xml:space="preserve"><value>Reading ahead/behind…</value></data>
   <data name="OperationReadingHistory" xml:space="preserve"><value>Reading history…</value></data>
+  <data name="WindowMinimize" xml:space="preserve"><value>Minimize</value></data>
+  <data name="WindowMaximizeRestore" xml:space="preserve"><value>Maximize or restore</value></data>
+  <data name="WindowClose" xml:space="preserve"><value>Close window</value></data>
 </root>

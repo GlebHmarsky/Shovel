@@ -126,7 +126,7 @@ internal static partial class Program
             var commits = new[] { Node("aa", "bb", "cc", "dd"), Node("bb", "ee"), Node("cc", "ee"), Node("dd", "ee"), Node("ee") };
             var graph = CommitGraph.Build(commits);
             AssertGraphConnections(commits.Select((commit, index) => new HistoryEntry(commit, graph[index])).ToArray());
-            Expect(graph[0].Lines.Count == 3 && graph[^1].LaneCount == 1, "Octopus converges to common ancestor");
+            Expect(graph[0].Lines.Count == 3 && graph[^1].NodeLane == 0 && !graph[^1].Lines.Any(line => line.ToY == 1), "Octopus lanes join at the actual common ancestor");
             await ExpectGitFailure(GitFailure.InvalidOutput, () => Task.FromResult(CommitGraph.Build([Node("aa", "aa")])));
             await ExpectGitFailure(GitFailure.HistoryTooWide, () => Task.FromResult(CommitGraph.Build([Node("tip", Enumerable.Range(0, 65).Select(value => "p" + value).ToArray())])));
         });

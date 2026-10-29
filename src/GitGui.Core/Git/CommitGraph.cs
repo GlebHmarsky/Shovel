@@ -4,6 +4,8 @@ namespace GitGui.Core.Git;
 public sealed record GraphLine(int FromLane, double FromY, int ToLane, double ToY, int Color);
 public sealed record GraphRow(int NodeLane, int NodeColor, int LaneCount, bool IsMerge, IReadOnlyList<GraphLine> Lines);
 
+// Empty hashes reserve vacant columns. Duplicate targets retain separate branch tracks
+// until that target's row, rather than joining unrelated branches early.
 public sealed record GraphLane(string Hash, int Color);
 public sealed record GraphCursor(IReadOnlyList<GraphLane> Lanes, int NextColor)
 {
@@ -11,11 +13,9 @@ public sealed record GraphCursor(IReadOnlyList<GraphLane> Lanes, int NextColor)
 }
 public sealed record GraphPage(IReadOnlyList<GraphRow> Rows, GraphCursor Next);
 
-/// <summary>Deterministic lane layout for child-before-parent history, independent of WPF.</summary>
 public static class CommitGraph
 {
     public const int MaximumLanes = 64;
-
     public static IReadOnlyList<GraphRow> Build(IReadOnlyList<CommitRecord> commits, CancellationToken token = default)
         => BuildPage(commits, GraphCursor.Start, token).Rows;
 
@@ -28,37 +28,46 @@ public static class CommitGraph
         foreach (var commit in commits)
         {
             token.ThrowIfCancellationRequested();
-            // Reject pathological octopus commits before building/searching their lane list.
             if (commit.Parents.Count > MaximumLanes) throw new GitReadException(GitFailure.HistoryTooWide);
             if (!seen.Add(commit.Hash) || commit.Parents.Any(seen.Contains)) throw new GitReadException(GitFailure.InvalidOutput);
             var node = lanes.FindIndex(lane => lane.Hash == commit.Hash);
             var incoming = node >= 0;
-            if (!incoming) { node = lanes.Count; lanes.Add(new(commit.Hash, nextColor++)); }
-            var before = lanes.ToArray();
-            var color = before[node].Color;
-            lanes.RemoveAt(node);
-            var parentLanes = new List<GraphLane>();
-            foreach (var parent in commit.Parents.Distinct(StringComparer.Ordinal))
+            if (!incoming) node = Allocate(new(commit.Hash, nextColor++));
+            var before = lanes.ToArray(); var color = before[node].Color;
+            for (var i = 0; i < lanes.Count; i++)
+                if (lanes[i].Hash == commit.Hash) lanes[i] = new("", lanes[i].Color);
+            var parents = commit.Parents.Distinct(StringComparer.Ordinal).ToArray();
+            var outgoing = new List<int>();
+            for (var p = 0; p < parents.Length; p++)
             {
-                var lane = lanes.Find(item => item.Hash == parent);
-                if (lane is null)
+                if (p == 0) { lanes[node] = new(parents[p], color); outgoing.Add(node); }
+                else
                 {
-                    lane = new(parent, parentLanes.Count == 0 ? color : nextColor++);
-                    lanes.Insert(Math.Min(node + parentLanes.Count, lanes.Count), lane);
+                    var target = lanes.FindIndex(lane => lane.Hash == parents[p]);
+                    outgoing.Add(target >= 0 ? target : Allocate(new(parents[p], nextColor++)));
                 }
-                parentLanes.Add(lane);
             }
             var width = Math.Max(before.Length, lanes.Count);
-            if (width > MaximumLanes) throw new GitReadException(GitFailure.HistoryTooWide);
             var lines = new List<GraphLine>();
             for (var i = 0; i < before.Length; i++)
             {
-                if (i == node) { if (incoming) lines.Add(new(node, 0, node, .5, color)); }
-                else lines.Add(new(i, 0, lanes.FindIndex(lane => lane.Hash == before[i].Hash), 1, before[i].Color));
+                if (before[i].Hash.Length == 0) continue;
+                if (before[i].Hash == commit.Hash)
+                { if (incoming || i != node) lines.Add(new(i, 0, node, .5, before[i].Color)); }
+                else lines.Add(new(i, 0, i, 1, before[i].Color));
             }
-            foreach (var parent in parentLanes) lines.Add(new(node, .5, lanes.IndexOf(parent), 1, parent.Color));
-            rows.Add(new(node, color, width, commit.Parents.Count > 1, lines.ToArray()));
+            foreach (var lane in outgoing) lines.Add(new(node, .5, lane, 1, lanes[lane].Color));
+            rows.Add(new(node, color, width, parents.Length > 1, lines.ToArray()));
+            while (lanes.Count > 0 && lanes[^1].Hash.Length == 0) lanes.RemoveAt(lanes.Count - 1);
         }
         return new(rows, new(lanes.ToArray(), nextColor));
+
+        int Allocate(GraphLane lane)
+        {
+            var slot = lanes.FindIndex(item => item.Hash.Length == 0);
+            if (slot >= 0) { lanes[slot] = lane; return slot; }
+            if (lanes.Count >= MaximumLanes) throw new GitReadException(GitFailure.HistoryTooWide);
+            lanes.Add(lane); return lanes.Count - 1;
+        }
     }
 }

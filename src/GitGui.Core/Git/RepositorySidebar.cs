@@ -34,10 +34,11 @@ public sealed partial class RepositoryReader
         var result = await RunAsync(git.Executable, session.Repository.Worktree, ReadArguments(["rev-list", "--topo-order", "--branches", "--remotes", "--tags",
             .. session.References.Where(r => r.Name == "HEAD" || r.Name.StartsWith("stash@{", StringComparison.Ordinal)).Select(r => r.Hash), "--"]), token, 16 * 1024 * 1024);
         RequireSuccess(result);
-        var hashes = Text(result.StandardOutput).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var raw = Text(result.StandardOutput).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var hashes = raw.Where(id => !session.HiddenStashCommits.Contains(id)).ToArray();
         var index = Array.IndexOf(hashes, hash); if (index < 0) throw new GitReadException(GitFailure.ChangedDuringRead);
         var offset = index / HistoryPageSize * HistoryPageSize;
-        return await ReadHistoryPageAsync(git, session, new(offset, GraphCursor.Start, hashes[offset]), token);
+        return await ReadHistoryPageAsync(git, session, new(offset, GraphCursor.Start, hashes[offset], Array.IndexOf(raw, hashes[offset])), token);
     }, token);
 }
 

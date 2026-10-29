@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.25.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.26.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
 
@@ -29,7 +29,15 @@ Commit drafts now survive closing tabs/restarting. Restore happens after the mod
 
 Pull shows **behind**, Push **ahead**, comparing the configured upstream from the local snapshot, even with a separate push destination. Counts load after rows. Zero is measured; dash means pending/unavailable/cancelled/failed. Help includes upstream/time/reason. Detached/unborn/no-upstream/missing-upstream/shallow cannot imply synchronization. Failed refresh retains stale counts; no server freshness claim without fetch.
 
-Same-author peers use a muted yellow **row background**, retaining ordinary text color. Matching remains exact raw name/email ordinally and case-sensitively, without mailmap/committer; nonblank email required. Selected rows keep normal selection styling. High contrast suppresses the peer fill; accessible text explains the relation. Graph lanes use compact straight runs/rounded joins and hollow merge markers; selection preserves lane colors. Topology and pagination are unchanged.
+Same-author peers use a muted yellow **row background**, retaining ordinary text color. Matching remains exact raw name/email ordinally and case-sensitively, without mailmap/committer; nonblank email required. Selected rows keep normal selection styling. High contrast suppresses the peer fill; accessible text explains the relation. Graph lanes use compact straight runs/rounded joins and hollow merge markers; selection preserves lane colors. Since 0.26.0, branch lanes stay fixed until their shared target; stash folding preserves visible-page size and original parent metadata.
+
+## Compact caption and history (0.26.0)
+
+File/View/Repository/Window/Help share the main window's draggable caption strip with its title and Minimize, Maximize/Restore and Close controls. Empty caption space retains standard move/double-click/system-menu behavior through WPF WindowChrome; Close follows existing shutdown handling. Other dialogs retain their native captions. The left toolbar is Open, **Fetch, Pull, Push, Commit**.
+
+Each saved stash is one history entry connected to its base, rather than a merge plus separate index/untracked commits. Its real parents/message remain in details; the existing Stashes inspector still exposes staged/untracked content and Apply/Pop/Drop. Objects independently reachable through normal branches/tags/HEAD or a stash base remain visible. Unusual stored commits keep their ordinary history shape. All Commits retains normal history scope and 200 visible rows per page; sidebar jumps use the same folded ordering.
+
+Branch tracks keep their lane and color until the actual shared ancestor, including consecutive merges with the same base. Wider rounded turns replace short zigzags. Independent roots, octopus and criss-cross merges and page boundaries use the same bounded graph rules. Layout remains capped at 64 occupied/reserved columns; unusually wide history reports the existing limit instead of drawing false connections.
 
 ## Operation feedback (0.25.0)
 

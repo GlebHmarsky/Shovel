@@ -43,14 +43,22 @@ public sealed class CommitGraphCell : FrameworkElement
                 if (start.X == end.X) context.LineTo(end, true, false);
                 else
                 {
-                    var middle = (start.Y + end.Y) / 2;
-                    var radius = Math.Min(4, Math.Min(Math.Abs(end.X - start.X), end.Y - start.Y) / 2);
+                    // One broad quarter-turn at the fork/join, with the branch straight
+                    // through the row boundary. Never bend a live lane around another merge.
+                    var radius = Math.Min(10, Math.Min(Math.Abs(end.X - start.X), end.Y - start.Y));
                     var direction = Math.Sign(end.X - start.X);
-                    context.LineTo(new(start.X, middle - radius), true, false);
-                    context.QuadraticBezierTo(new(start.X, middle), new(start.X + direction * radius, middle), true, false);
-                    context.LineTo(new(end.X - direction * radius, middle), true, false);
-                    context.QuadraticBezierTo(new(end.X, middle), new(end.X, middle + radius), true, false);
-                    context.LineTo(end, true, false);
+                    if (line.FromY == .5)
+                    {
+                        context.LineTo(new(end.X - direction * radius, start.Y), true, false);
+                        context.QuadraticBezierTo(new(end.X, start.Y), new(end.X, start.Y + radius), true, false);
+                        context.LineTo(end, true, false);
+                    }
+                    else
+                    {
+                        context.LineTo(new(start.X, end.Y - radius), true, false);
+                        context.QuadraticBezierTo(new(start.X, end.Y), new(start.X + direction * radius, end.Y), true, false);
+                        context.LineTo(end, true, false);
+                    }
                 }
             }
             geometry.Freeze();

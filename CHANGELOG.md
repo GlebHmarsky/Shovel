@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.26.0 — 2026-10-29
+
+- Move Commit after Push and combine the main menus with a draggable title strip and working window controls.
+- Show one entry per saved stash, folding private index/untracked commits while preserving original details and independently reachable history. Keep full visible pages and correct ref navigation.
+- Keep merged branches in distinct straight lanes until their shared ancestor, with broader rounded turns and consistent continuation across pages.
+
 ## 0.25.0 — 2026-10-29
 
 - Give timed operations a fixed elapsed-time capsule at top center, with distinct success, conflict, failure and cancellation states. Hold completion briefly then fade; retain results and errors, avoid text movement and honor Windows animation/high-contrast preferences.

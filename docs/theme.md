@@ -28,7 +28,7 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 
 `LightPalette.xaml` uses the same semantic keys: Chrome #F3F3F3, tabs #E8E8E8, sidebar #ECECEC, white Canvas/Input, Panel #F7F7F7, Raised #E4E4E4, Border #B0B0B0, Text/HistoryText #202020 and Muted #555555. Selection/hover use blue fills with white text; Accent #A0391D, Focus #245F9C. AuthorPeer is pale yellow #FFF3BF with ordinary dark text. Diff/marker colors use darker foregrounds over pale fills. All shared views consume these resources; switching adds no scans/reloads. Dark remains the initial/default appearance.
 
-History graph strokes use compact 16-DIP lanes, straight runs and rounded joins; merges are hollow circles with a center marker. Gold/red/green/blue/purple strokes have darker light-theme counterparts. Selected rows retain graph colors; OS high contrast uses system text. Core topology/lane calculation is unchanged.
+History graph strokes use compact 16-DIP lanes, straight runs and rounded joins; merges are hollow circles with a center marker. Gold/red/green/blue/purple strokes have darker light-theme counterparts. Selected rows retain graph colors; OS high contrast uses system text. Since 0.26.0, Core keeps fixed branch tracks and projects ordinary stash entries to their base; see the caption/history architecture.
 
 ## Borders and operation feedback (0.25.0)
 
@@ -37,6 +37,9 @@ Use one-DIP shared Border separators; retain open, headerless history rows rathe
 The duration capsule uses an 11-DIP radius, fixed width and tabular digits. New `Operation{Running,Success,Warning,Failed}{Background,Text}` roles pair blue, green, amber and red surfaces with high-contrast text in both palettes. Cancellation uses Raised/Muted. Status text and symbols distinguish states without color. High contrast maps these roles to system window/text brushes. Only the completion capsule animates; its fade does not change layout. See [behavior](product.md#operation-feedback-0250); no added Git work or perpetual idle animation.
 
 ## State rules
+
+- Main caption/menu strip is 32 DIP, sharing Chrome/Text with localized caption controls and existing focus/hover behavior. WindowChrome supplies native move/resize hit testing; menus/buttons remain interactive. Dialog captions are unchanged.
+- History only: fixed branch tracks and up to 10-DIP curved joins replace the prior small double bends (0.26.0). Preserve graph colors/merge markers/high contrast and compact 16-DIP lane spacing. Folding a stash changes its graph to one base connection, while details retain its true parents.
 
 - Distinguish surfaces by role, not arbitrary shades per window. Main history begins at the repository tabs; theme changes add no toolbar, padding band or data preparation.
 - Repository tabs: quiet inactive surface, lighter selected tab, hover feedback and a keyboard focus outline. Lower tabs: orange text plus underline; selection remains identifiable without color alone.
@@ -52,6 +55,6 @@ The duration capsule uses an 11-DIP radius, fixed width and tabular digits. New 
 
 Shared styles live in `Resources/AppStyles.xaml`; `Services/AppTheme.cs` applies the selected palette at startup, on Appearance selection and system high-contrast changes, and unsubscribes at exit. Schema 5 stores the selection; older profiles default to Dark. No new dependency, network request or Git-path change. Headless tests use the same resources with a plain test Application.
 
-Since 0.16.1, Shovel-owned window title bars use native DWM styling; 0.24.0 updates that styling on palette changes. Windows 11 caption/background/text/border colors follow Chrome, Text/Muted and Border; high contrast removes these overrides. Native caption buttons, resizing, dragging and system menus remain intact. Windows 10 receives a best-effort light/dark-mode request; unsupported attributes retain native defaults. Windows file/folder pickers and MessageBox dialogs remain OS-owned. Wider visual/accessibility polish stays deferred. Do not claim pixel parity or desktop certification from an offscreen render.
+Since 0.16.1, Shovel-owned window title bars use native DWM styling; 0.24.0 updates that styling on palette changes. Windows 11 caption/background/text/border colors follow Chrome, Text/Muted and Border; high contrast removes these overrides. Dialog caption buttons remain native. Since 0.26.0 the main window uses an integrated WindowChrome caption with SystemCommands buttons; move/resize/system-menu hit testing remains delegated to WPF/Windows. Windows 10 receives a best-effort light/dark-mode request; unsupported attributes retain native defaults. Windows file/folder pickers and MessageBox dialogs remain OS-owned. Wider visual/accessibility polish stays deferred. Do not claim pixel parity or desktop certification from an offscreen render.
 
 Implementation uses stable [WPF styles/templates](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/control-styles-and-templates). The .NET 10 [Window.ThemeMode API](https://learn.microsoft.com/en-us/dotnet/api/system.windows.window.thememode?view=windowsdesktop-10.0) is still marked experimental in official documentation checked 2026-10-28; this pass avoids adopting it or changing control metrics through Fluent theme migration.

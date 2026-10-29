@@ -4,7 +4,10 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.25.0: focused operation feedback and visual polish requested after 0.24.0. Routine verification stays at 26 checks (maximum 30); feature checks remain opt-in. The recorded intermittent draft write remains the next correctness investigation after this increment.
+0.26.0: requested caption/toolbar and stash/merge graph corrections. Routine verification stays at 26 checks (maximum 30); focused checks remain opt-in. Draft-write diagnosis remains the next correctness investigation after this increment.
+
+- [x] **P1 — Compact caption and stable history.** Menus in draggable title strip; Fetch/Pull/Push/Commit order; one row per stash, fixed lanes and broad graph turns. Original metadata and independent history retained; visible pagination/ref jumps agree.
+- [x] **P1 — Deliver 0.26.0.** Four focused topology/stash/page/caption checks, offscreen normal/minimum Dark/Light review; 26 routine checks in 41.8 seconds, matching ignored preview, docs and descriptive commit. Native caption behavior and large-repository stash projection timings remain validation limits.
 
 - [x] **P1 — Stable operation feedback.** Fixed duration capsule for existing timed commands; accurate completion outcome, brief hold/fade, no horizontal text jump or background-read notification. Retain results/errors; respect animation preference/high contrast.
 - [x] **P1 — Deliver visual pass (0.25.0).** Consistent small radii/dividers in both themes, four focused checks and normal/minimum offscreen review; 26 routine checks in 32.7 seconds, matching ignored preview, owning docs and descriptive local commit. Live animation/desktop accessibility remains unverified; see roadmap.

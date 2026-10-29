@@ -13,8 +13,11 @@ public enum HistoryScope { AllCommits, CurrentHead }
 public sealed record CommitRef(string Name, string Hash, string? Upstream = null);
 public sealed record HistoryEntry(CommitRecord Commit, GraphRow Graph, IReadOnlyList<CommitRef>? References = null);
 public sealed record HistorySession(RepositorySnapshot Repository, HistoryScope Scope, string Fingerprint,
-    IReadOnlyList<CommitRef> References, bool IsShallow);
-public sealed record HistoryCursor(long Offset, GraphCursor Graph, string? ExpectedFirst = null)
+    IReadOnlyList<CommitRef> References, bool IsShallow)
+{
+    public IReadOnlySet<string> HiddenStashCommits { get; init; } = new HashSet<string>();
+}
+public sealed record HistoryCursor(long Offset, GraphCursor Graph, string? ExpectedFirst = null, long? RawOffset = null)
 {
     public static HistoryCursor Start { get; } = new(0, GraphCursor.Start);
 }
@@ -64,7 +67,8 @@ public sealed partial class RepositoryReader
             refs.Add(new(name, hash, fields[6].Length == 0 ? null : fields[6]));
         }
         if (repository.Commit is not null) refs.Add(new("HEAD", repository.Commit));
-        return new HistorySession(repository with { InitialHistoryState = null }, scope, state.Fingerprint, refs.ToArray(), state.IsShallow);
+        var session = new HistorySession(repository with { InitialHistoryState = null }, scope, state.Fingerprint, refs.ToArray(), state.IsShallow);
+        return session with { HiddenStashCommits = await ReadStashInternalsAsync(git, session, token) };
     }
 
     public async Task<CommitHistory> ReadInitialHistoryAsync(GitInstallation git, RepositorySnapshot repository,
@@ -117,22 +121,28 @@ public sealed partial class RepositoryReader
             "log", "--topo-order", "--no-color", "--no-decorate", "--no-show-signature", "--no-notes",
             "--no-use-mailmap", "--no-patch", "--no-ext-diff", "--no-textconv", "--encoding=UTF-8", "-z",
             "--format=tformat:%H%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B",
-            "--skip=" + cursor.Offset.ToString(CultureInfo.InvariantCulture),
-            "--max-count=" + (pageSize + 1).ToString(CultureInfo.InvariantCulture), .. roots, "--"
+            "--skip=" + (cursor.RawOffset ?? cursor.Offset).ToString(CultureInfo.InvariantCulture),
+            "--max-count=" + (pageSize + 1 + session.HiddenStashCommits.Count).ToString(CultureInfo.InvariantCulture), .. roots, "--"
         ]), token, MaximumHistoryBytes).ConfigureAwait(false);
         RequireSuccess(result);
         var after = await ReadHistoryStateAsync(git, session.Repository, token).ConfigureAwait(false);
         if (after.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
-        IReadOnlyList<CommitRecord> commits;
-        using (trace?.Measure(TimingStage.Parsing)) commits = ParseHistory(result.StandardOutput);
-        if (commits.Count > pageSize + 1 || (cursor.ExpectedFirst is not null &&
-            (commits.Count == 0 || commits[0].Hash != cursor.ExpectedFirst))) throw new GitReadException(GitFailure.ChangedDuringRead);
+        IReadOnlyList<CommitRecord> raw;
+        using (trace?.Measure(TimingStage.Parsing)) raw = ParseHistory(result.StandardOutput, pageSize + 1 + session.HiddenStashCommits.Count);
+        var commits = raw.Where(c => !session.HiddenStashCommits.Contains(c.Hash)).ToArray();
+        if (raw.Count > pageSize + 1 + session.HiddenStashCommits.Count || (cursor.ExpectedFirst is not null &&
+            (commits.Length == 0 || commits[0].Hash != cursor.ExpectedFirst))) throw new GitReadException(GitFailure.ChangedDuringRead);
         var shown = commits.Take(pageSize).ToArray();
         GraphPage graph;
-        using (trace?.Measure(TimingStage.Graph)) graph = CommitGraph.BuildPage(shown, cursor.Graph, token);
+        var stashTips = session.References.Where(r => r.Name.StartsWith("stash@{", StringComparison.Ordinal)).Select(r => r.Hash).ToHashSet(StringComparer.Ordinal);
+        // Retain true parent metadata in the details; only the graph projects folded stashes.
+        var graphCommits = shown.Select(c => stashTips.Contains(c.Hash) && c.Parents.Skip(1).Any(session.HiddenStashCommits.Contains)
+            ? c with { Parents = c.Parents.Take(1).ToArray() } : c).ToArray();
+        using (trace?.Measure(TimingStage.Graph)) graph = CommitGraph.BuildPage(graphCommits, cursor.Graph, token);
         var labels = session.References.ToLookup(reference => reference.Hash, StringComparer.Ordinal);
-        return new CommitHistory(session, cursor, commits.Count > pageSize
-            ? new HistoryCursor(checked(cursor.Offset + shown.Length), graph.Next, commits[pageSize].Hash) : null,
+        return new CommitHistory(session, cursor, commits.Length > pageSize
+            ? new HistoryCursor(checked(cursor.Offset + shown.Length), graph.Next, commits[pageSize].Hash,
+                checked((cursor.RawOffset ?? cursor.Offset) + raw.TakeWhile(c => c.Hash != commits[pageSize].Hash).Count())) : null,
             shown.Select((commit, index) => new HistoryEntry(commit, graph.Rows[index], labels[commit.Hash].ToArray())).ToArray());
     }, token);
 
@@ -227,13 +237,14 @@ public sealed partial class RepositoryReader
         }
     }
 
-    public static IReadOnlyList<CommitRecord> ParseHistory(byte[] bytes)
+    public static IReadOnlyList<CommitRecord> ParseHistory(byte[] bytes) => ParseHistory(bytes, HistoryPageSize + 1);
+    private static IReadOnlyList<CommitRecord> ParseHistory(byte[] bytes, int maximumRecords)
     {
         if (bytes.Length > MaximumHistoryBytes) throw new GitReadException(GitFailure.OutputLimit);
         if (bytes.Length == 0) return [];
         // NUL fields + NUL record terminator preserve multiline bodies and separator-like text.
         var fields = Encoding.UTF8.GetString(bytes).Split('\0');
-        if (fields[^1].Length != 0 || (fields.Length - 1) % 9 != 0 || (fields.Length - 1) / 9 > HistoryPageSize + 1)
+        if (fields[^1].Length != 0 || (fields.Length - 1) % 9 != 0 || (fields.Length - 1) / 9 > maximumRecords)
             throw new GitReadException(GitFailure.InvalidOutput);
         var commits = new List<CommitRecord>();
         for (var i = 0; i < fields.Length - 1; i += 9)
