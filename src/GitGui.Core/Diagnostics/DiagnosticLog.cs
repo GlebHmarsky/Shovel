@@ -1,9 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Channels;
+using GitGui.Core.Drafts;
 
 namespace GitGui.Core.Diagnostics;
 
-public enum DiagnosticEvent { Started, SettingsLoaded, SettingsReadOnly, SettingsSaved, SettingsSaveFailed, FatalError, Stopped }
+public enum DiagnosticEvent { Started, SettingsLoaded, SettingsReadOnly, SettingsSaved, SettingsSaveFailed, FatalError, Stopped, DraftStorageRetry, DraftStorageFailed }
 public enum FailureKind { None, AccessDenied, Io, InvalidData, Cancelled, Unexpected }
 
 /// <summary>Only allowlisted codes, never messages, paths, arguments or repository data.</summary>
@@ -39,6 +41,15 @@ public sealed class DiagnosticLog : IAsyncDisposable
         await _writer.ConfigureAwait(false);
     }
 
+    public void RecordDraftStorage(CommitDraftDiagnostic detail)
+    {
+        if (!Enum.IsDefined(detail.Operation) || !Enum.IsDefined(detail.Stage) || detail.NativeError is < 0 or > 65535)
+            throw new ArgumentOutOfRangeException(nameof(detail));
+        _entries.Writer.TryWrite(new(DateTimeOffset.UtcNow,
+            (detail.Retrying ? DiagnosticEvent.DraftStorageRetry : DiagnosticEvent.DraftStorageFailed).ToString(), FailureKind.Io.ToString(),
+            new(detail.Operation.ToString(), detail.Stage.ToString(), detail.NativeError)));
+    }
+
     private async Task WriteAsync(string directory)
     {
         try
@@ -57,5 +68,7 @@ public sealed class DiagnosticLog : IAsyncDisposable
         catch (UnauthorizedAccessException) { Interlocked.Exchange(ref _failed, 1); }
     }
 
-    private sealed record Entry(DateTimeOffset TimeUtc, string Event, string Failure);
+    private sealed record DraftIo(string Operation, string Stage, int? NativeError);
+    private sealed record Entry(DateTimeOffset TimeUtc, string Event, string Failure,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DraftIo? Draft = null);
 }

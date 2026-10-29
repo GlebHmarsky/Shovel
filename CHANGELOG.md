@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.27.1 — 2026-10-29
+
+- Recover from temporary commit-draft sharing/lock failures with short, cancellable background retries. Recheck worktree identity and draft revision on each attempt; preserve another profile's newer save and this window's recovery copy.
+- Record only draft operation, storage stage and numeric OS error in bounded diagnostics. Persistent locks and other storage failures retain the existing recoverable error; no draft text, repository paths or arbitrary exception messages are logged.
+- Add four optional focused checks for replacement, lock recovery, cancellation, competing saves and diagnostic privacy; keep the routine suite at 26 checks. The earlier uninstrumented failure's exact cause remains unknown.
+
 ## 0.27.0 — 2026-10-29
 
 - Remove the main footer, history page-control band and duplicate sidebar repository/Local Changes entries. Let the sidebar widen without a fixed cap, trim labels without horizontal scrolling, and enlarge caption icons. Keep page navigation/range in View, add keyboard and scroll-edge paging, and shorten tooltips.

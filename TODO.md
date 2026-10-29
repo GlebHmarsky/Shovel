@@ -4,7 +4,10 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.27.0: requested workspace cleanup, stash graph clarity, history timers and remote/upstream setup. Routine verification stays at 26 checks (maximum 30); focused checks remain opt-in. Draft-write diagnosis remains the next correctness investigation after this increment.
+0.27.1: diagnose commit-draft write failures and recover from reproduced transient file contention. Routine verification stays at 26 checks (maximum 30); focused checks remain opt-in.
+
+- [x] **P1 — Diagnose draft storage and preserve both writers.** Twelve repeats of the original reopen flow passed; a controlled publication lock reproduced `CommitDraftUnavailable` with OS error 32. Add bounded cancellable retries for sharing/lock errors, rechecking identity/revision, and allowlisted diagnostic metadata. Four focused checks pass; the old uninstrumented failure's exact cause remains unknown.
+- [x] **P1 — Deliver 0.27.1.** Four focused checks; 26 routine checks in 54.0 seconds; zero build warnings/errors, matching ignored preview/package hashes, updated owning docs and descriptive commit. No interactive launch; original failure attribution and physical crash/ACL/disk-full validation remain limits.
 
 - [x] **P1 — Clean workspace and expose remote setup.** Sidebar has no horizontal scroll or fixed width cap; duplicate title/Local Changes and main footer removed. Page range/navigation move into View with keyboard/edge scrolling. Larger caption icons and shorter tooltips; read/refresh fade feedback; one stash base connection preserves real commits. Add remote locally, then explicit Fetch and Set upstream.
 - [x] **P1 — Deliver 0.27.0.** Four focused checks and Dark/Light normal/minimum offscreen review; 26 routine checks in 47.4 seconds; matching ignored preview/package hashes, owning docs and descriptive commit. No interactive launch or live network; see roadmap limits.
@@ -62,7 +65,6 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P1 — Diagnose intermittent draft write failure.** One integrated run reported `CommitDraftUnavailable` while another profile replaced a saved draft; focused rerun passed. Reproduce and capture a typed OS error/stage without logging user text, paths or arbitrary exceptions before choosing a fix. Preserve existing draft/recovery behavior; see roadmap evidence.
 - [ ] **P1 — Local MVP remainder.** Branch deletion/tracking integrated; next broaden signing and failure recovery. Init, whole-hunk staging, sequence recovery and stashes are delivered. Advanced stash variants remain backlog, not prerequisites for basic stash use.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.

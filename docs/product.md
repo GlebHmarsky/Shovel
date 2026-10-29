@@ -97,7 +97,7 @@ Opening binds cached rows/draft immediately, then reads after layout; it never f
 
 **0.16.0 file-action feedback:** file Stage/Unstage updates affected rows from real Git status before a wider background scan. Keep selection on the same path when its side changes. A short trailing delay coalesces successive actions; cached rows remain usable, newer generations supersede old reads and a failed full refresh visibly marks retained rows stale. Bottom activity bars and the ticking commit footer are removed. Static results/errors, Refresh/Cancel, in-memory phase timings and command-only top-center duration remain. Ordinary background work adds no throbber or polling.
 
-File selection and last output remain session-only. Draft persistence in 0.22.0 supersedes the old session-only draft policy; successful commit clears the submitted draft, failed commit retains it.
+File selection and last output remain session-only. Draft persistence in 0.22.0 supersedes the old session-only draft policy; successful commit clears the submitted draft, failed commit retains it. Since 0.27.1, temporary file-sharing/lock failures get short background retries without delaying modal opening. Persistent failures retain the save/load problem and editor text; a competing profile's newer draft is preserved, with this window's text in its own recovery copy when storage permits. [Storage and recovery limits](architecture.md#integrated-branch-management-and-drafts-0220).
 
 ## Local Changes file menus (0.19.0)
 

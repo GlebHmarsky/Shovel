@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.27.0** adds local remote setup, read/refresh timers and a cleaner resizable workspace; includes integrated title-bar menus and stash graph improvements; includes operation duration capsules; includes background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.27.1** recovers temporary draft-storage locks with bounded retries and private error metadata; includes local remote setup, read/refresh timers and a cleaner resizable workspace; includes integrated title-bar menus and stash graph improvements; includes operation duration capsules; includes background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -43,7 +43,10 @@ Optional extended verification, only when relevant:
 ```powershell
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --full
 dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-drafts
+dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-draft-io
 ```
+
+`--check-draft-io` runs four isolated-file checks for reopen, temporary/persistent locks, cancellation, competing saves and diagnostic privacy, without Git or visible windows. It is opt-in and does not increase the default count.
 
 All existing focused commands and opt-in benchmarks remain available. Full verification retains its detailed checks and longer deadlines; it never runs implicitly. During development run only relevant checks, then run the default once through Build-Preview on final code; avoid separately repeating an unchanged smoke run. The target excludes restore/build/publish time; timers include smoke fixture setup.
 Check every exit code. Env applies to current shell; single-process MSBuild/no shared compiler avoids observed execution restrictions. Checks are a console runner, not dotnet test; nonzero means failure.
@@ -157,7 +160,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.27.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.27.1-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -167,7 +170,7 @@ Build ignored/untracked; never overwrite an existing version. Partial publish st
 | --- | --- |
 | settings.json | Schema 4: layout/up to 20 tabs/order/selection/legacy scope/identity; All Commits written since 0.7.0. No credentials/history. Schemas 1/2/3 migrate without consent; stamps saved after successful reads. Invalid/inaccessible/newer/unsupported or externally changed file is not overwritten. |
 | settings.json.bak | Previous valid bytes, including pre-migration data; no automatic restore. |
-| diagnostics.jsonl / .1 | UTC + typed codes; ~256 KiB each, bounded queue/best effort including fatal exit; no raw output/exceptions/paths/content. |
+| diagnostics.jsonl / .1 | UTC + typed codes; draft retry/failure adds only operation, storage stage and numeric native error; ~256 KiB each, bounded queue/best effort including fatal exit; no raw output/exceptions/paths/content. |
 
 Close app, copy settings/backup first; inspect schema before restoring or move invalid file aside for defaults. Older previews read schema 4 without writing; downgrade via separate profile/compatible backup. External-edit check is not a transaction with arbitrary editors; never edit during save.
 

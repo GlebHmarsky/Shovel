@@ -13,9 +13,13 @@ public sealed record CommitDraftText(string Subject, string Description)
 }
 public sealed record CommitDraftSnapshot(string? Revision, CommitDraftText Text, bool HasRecoveryCopies = false);
 public enum CommitDraftFailure { Unavailable, Invalid, NewerSchema, Changed, IdentityChanged, TooLarge }
-public sealed class CommitDraftException(CommitDraftFailure failure) : IOException("CommitDraft" + failure)
+public enum CommitDraftOperation { Load, Save, Recovery }
+public enum CommitDraftStage { ValidateIdentity, OpenDirectory, AcquireWriter, ReadRecord, WriteTemporary, PublishRecord, EnumerateRecovery, DeleteRecovery }
+public sealed record CommitDraftDiagnostic(CommitDraftOperation Operation, CommitDraftStage Stage, int? NativeError, bool Retrying);
+public sealed class CommitDraftException(CommitDraftFailure failure, CommitDraftDiagnostic? diagnostic = null) : IOException("CommitDraft" + failure)
 {
     public CommitDraftFailure Failure { get; } = failure;
+    public CommitDraftDiagnostic? Diagnostic { get; } = diagnostic;
 }
 public interface ICommitDraftStore
 {
@@ -26,7 +30,7 @@ public interface ICommitDraftStore
 }
 
 /// <summary>Local user text only. Independent of settings, Git and profiles; never logs content or exceptions.</summary>
-public sealed class CommitDraftStore(string? directory, IRepositoryIdentityProvider identities) : ICommitDraftStore
+public sealed class CommitDraftStore(string? directory, IRepositoryIdentityProvider identities, Action<CommitDraftDiagnostic>? diagnostic = null) : ICommitDraftStore
 {
     // UI limits include messages not yet valid for Git's smaller UTF-8 limit.
     public const int MaximumSubjectCharacters = 16384, MaximumDescriptionCharacters = 65536;
@@ -36,46 +40,50 @@ public sealed class CommitDraftStore(string? directory, IRepositoryIdentityProvi
     public string Location => _location.Value;
     private sealed record Document(int SchemaVersion, string Key, string Revision, string Subject, string Description);
 
-    public Task<CommitDraftSnapshot> LoadAsync(string worktree, string identity, CancellationToken token) => Guard(async () =>
+    public Task<CommitDraftSnapshot> LoadAsync(string worktree, string identity, CancellationToken token) => Guard(CommitDraftOperation.Load, async attempt =>
     {
-        await ValidateIdentityAsync(worktree, identity, token).ConfigureAwait(false);
+        await ValidateIdentityAsync(worktree, identity, attempt, token).ConfigureAwait(false);
         var key = Key(identity);
-        var snapshot = await ReadAsync(MainPath(key), key, token).ConfigureAwait(false);
+        var snapshot = await ReadAsync(MainPath(key), key, attempt, token).ConfigureAwait(false);
+        attempt.Stage = CommitDraftStage.EnumerateRecovery;
         var hasCopies = Directory.Exists(Location) && Directory.EnumerateFiles(Location, key + ".*.recovery.json").Any();
-        await ValidateIdentityAsync(worktree, identity, token).ConfigureAwait(false);
+        await ValidateIdentityAsync(worktree, identity, attempt, token).ConfigureAwait(false);
         return snapshot with { HasRecoveryCopies = hasCopies };
     }, token);
 
-    public Task<CommitDraftSnapshot> SaveAsync(string worktree, string identity, string? expectedRevision, CommitDraftText text, CancellationToken token) => Guard(async () =>
+    public Task<CommitDraftSnapshot> SaveAsync(string worktree, string identity, string? expectedRevision, CommitDraftText text, CancellationToken token) => Guard(CommitDraftOperation.Save, async attempt =>
     {
         ValidateText(text);
-        await ValidateIdentityAsync(worktree, identity, token).ConfigureAwait(false);
+        await ValidateIdentityAsync(worktree, identity, attempt, token).ConfigureAwait(false);
         var key = Key(identity);
+        attempt.Stage = CommitDraftStage.OpenDirectory;
         Directory.CreateDirectory(Location);
-        await using var gate = await AcquireAsync(key, token).ConfigureAwait(false);
-        var current = await ReadAsync(MainPath(key), key, token).ConfigureAwait(false);
+        await using var gate = await AcquireAsync(key, attempt, token).ConfigureAwait(false);
+        var current = await ReadAsync(MainPath(key), key, attempt, token).ConfigureAwait(false);
         if (current.Revision != expectedRevision) throw new CommitDraftException(CommitDraftFailure.Changed);
         var revision = Guid.NewGuid().ToString("N");
-        await ReplaceAsync(MainPath(key), key, revision, text, worktree, identity, token).ConfigureAwait(false);
+        await ReplaceAsync(MainPath(key), key, revision, text, worktree, identity, attempt, token).ConfigureAwait(false);
         // A revisioned empty record removes submitted text without missing-file ABA for older profiles.
         return new CommitDraftSnapshot(revision, text);
     }, token);
 
-    public Task<bool> SaveRecoveryAsync(string worktree, string identity, string copyId, CommitDraftText text, CancellationToken token) => Guard(async () =>
+    public Task<bool> SaveRecoveryAsync(string worktree, string identity, string copyId, CommitDraftText text, CancellationToken token) => Guard(CommitDraftOperation.Recovery, async attempt =>
     {
         if (!Guid.TryParseExact(copyId, "N", out _)) throw new CommitDraftException(CommitDraftFailure.Invalid);
         ValidateText(text);
-        await ValidateIdentityAsync(worktree, identity, token).ConfigureAwait(false);
+        await ValidateIdentityAsync(worktree, identity, attempt, token).ConfigureAwait(false);
         var key = Key(identity);
+        attempt.Stage = CommitDraftStage.OpenDirectory;
         Directory.CreateDirectory(Location);
-        await using var gate = await AcquireAsync(key, token).ConfigureAwait(false);
+        await using var gate = await AcquireAsync(key, attempt, token).ConfigureAwait(false);
         var path = Path.Combine(Location, key + "." + copyId + ".recovery.json");
         // Do not replace corrupt/newer data, even in this writer's independent recovery slot.
-        await ReadAsync(path, key, token).ConfigureAwait(false);
-        await ValidateIdentityAsync(worktree, identity, token).ConfigureAwait(false);
+        await ReadAsync(path, key, attempt, token).ConfigureAwait(false);
+        await ValidateIdentityAsync(worktree, identity, attempt, token).ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
-        if (text.IsEmpty) File.Delete(path);
-        else await ReplaceAsync(path, key, Guid.NewGuid().ToString("N"), text, worktree, identity, token).ConfigureAwait(false);
+        if (text.IsEmpty) { attempt.Stage = CommitDraftStage.DeleteRecovery; File.Delete(path); }
+        else await ReplaceAsync(path, key, Guid.NewGuid().ToString("N"), text, worktree, identity, attempt, token).ConfigureAwait(false);
+        attempt.Stage = CommitDraftStage.EnumerateRecovery;
         return Directory.EnumerateFiles(Location, key + ".*.recovery.json").Any();
     }, token);
 
@@ -85,23 +93,27 @@ public sealed class CommitDraftStore(string? directory, IRepositoryIdentityProvi
         if (identity.Length != 64 || !identity.All(char.IsAsciiHexDigit)) throw new CommitDraftException(CommitDraftFailure.IdentityChanged);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity.ToUpperInvariant())));
     }
-    private async Task ValidateIdentityAsync(string worktree, string expected, CancellationToken token)
+    private async Task ValidateIdentityAsync(string worktree, string expected, DraftAttempt attempt, CancellationToken token)
     {
+        attempt.Stage = CommitDraftStage.ValidateIdentity;
         if ((await identities.ReadAsync(worktree, token).ConfigureAwait(false)).Fingerprint != expected)
             throw new CommitDraftException(CommitDraftFailure.IdentityChanged);
     }
-    private async Task<FileStream> AcquireAsync(string key, CancellationToken token)
+    private async Task<FileStream> AcquireAsync(string key, DraftAttempt attempt, CancellationToken token)
     {
+        attempt.Stage = CommitDraftStage.AcquireWriter;
         var time = Stopwatch.StartNew();
         while (true)
         {
             token.ThrowIfCancellationRequested();
             try { return new FileStream(Path.Combine(Location, key + ".lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
-            catch (IOException) when (time.Elapsed < TimeSpan.FromSeconds(2)) { await Task.Delay(50, token).ConfigureAwait(false); }
+            catch (IOException error) when (NativeError(error) is 32 or 33 && time.Elapsed < TimeSpan.FromSeconds(2))
+            { await Task.Delay(50, token).ConfigureAwait(false); }
         }
     }
-    private static async Task<CommitDraftSnapshot> ReadAsync(string path, string key, CancellationToken token)
+    private static async Task<CommitDraftSnapshot> ReadAsync(string path, string key, DraftAttempt attempt, CancellationToken token)
     {
+        attempt.Stage = CommitDraftStage.ReadRecord;
         try
         {
             // Delete sharing lets replacement coexist with an immutable old read snapshot.
@@ -133,8 +145,9 @@ public sealed class CommitDraftStore(string? directory, IRepositoryIdentityProvi
         try { _ = new UTF8Encoding(false, true).GetByteCount(text.Subject); _ = new UTF8Encoding(false, true).GetByteCount(text.Description); }
         catch (EncoderFallbackException) { throw new CommitDraftException(CommitDraftFailure.Invalid); }
     }
-    private async Task ReplaceAsync(string destination, string key, string revision, CommitDraftText text, string worktree, string identity, CancellationToken token)
+    private async Task ReplaceAsync(string destination, string key, string revision, CommitDraftText text, string worktree, string identity, DraftAttempt attempt, CancellationToken token)
     {
+        attempt.Stage = CommitDraftStage.WriteTemporary;
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new Document(1, key, revision, text.Subject, text.Description));
         if (bytes.Length > MaximumFileBytes) throw new CommitDraftException(CommitDraftFailure.TooLarge);
         var temporary = Path.Combine(Location, key + "." + Guid.NewGuid().ToString("N") + ".tmp");
@@ -146,8 +159,9 @@ public sealed class CommitDraftStore(string? directory, IRepositoryIdentityProvi
                 await stream.FlushAsync(token).ConfigureAwait(false);
                 stream.Flush(flushToDisk: true);
             }
-            await ValidateIdentityAsync(worktree, identity, token).ConfigureAwait(false);
+            await ValidateIdentityAsync(worktree, identity, attempt, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
+            attempt.Stage = CommitDraftStage.PublishRecord;
             if (File.Exists(destination)) File.Replace(temporary, destination, null);
             else File.Move(temporary, destination, overwrite: false);
         }
@@ -158,12 +172,32 @@ public sealed class CommitDraftStore(string? directory, IRepositoryIdentityProvi
             catch (UnauthorizedAccessException) { }
         }
     }
+    private sealed class DraftAttempt { public CommitDraftStage Stage { get; set; } = CommitDraftStage.OpenDirectory; }
+    private static int? NativeError(Exception error) => error is System.ComponentModel.Win32Exception native ? native.NativeErrorCode :
+        ((uint)error.HResult & 0xFFFF0000u) == 0x80070000u ? error.HResult & 0xFFFF : null;
+
     // Includes synchronous filesystem calls, parsing, serialization and identity validation.
-    private Task<T> Guard<T>(Func<Task<T>> action, CancellationToken token) => Task.Run(async () =>
+    private Task<T> Guard<T>(CommitDraftOperation operation, Func<DraftAttempt, Task<T>> action, CancellationToken token) => Task.Run(async () =>
     {
-        try { _ = Location; return await action().ConfigureAwait(false); }
-        catch (CommitDraftException) { throw; }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or ArgumentException or NotSupportedException)
-        { throw new CommitDraftException(CommitDraftFailure.Unavailable); }
+        for (var retry = 0; ; retry++)
+        {
+            token.ThrowIfCancellationRequested();
+            var attempt = new DraftAttempt();
+            try { _ = Location; return await action(attempt).ConfigureAwait(false); }
+            catch (CommitDraftException) { throw; }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or ArgumentException or NotSupportedException)
+            {
+                var code = NativeError(error);
+                // A transient external reader can deny atomic publication. Retry the entire
+                // operation after releasing handles/temp files, never just File.Replace:
+                // another writer may have won the revision while this attempt backed off.
+                // The writer gate already has its own bounded wait; do not extend it here.
+                var retrying = retry < 3 && code is 32 or 33 && attempt.Stage != CommitDraftStage.AcquireWriter;
+                var detail = new CommitDraftDiagnostic(operation, attempt.Stage, code, retrying);
+                diagnostic?.Invoke(detail);
+                if (!retrying) throw new CommitDraftException(CommitDraftFailure.Unavailable, detail);
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * (retry + 1)), token).ConfigureAwait(false);
+            }
+        }
     }, token);
 }

@@ -62,6 +62,7 @@ public partial class App : Application
             var identities = new WindowsRepositoryIdentity();
             _shell = new ShellViewModel(reader, new UserInteraction(), identities,
                 persist: SaveIdentitySettingsAsync, trace: _trace, actions: new GitActions(runner, reader, identities));
+            _shell.DraftStore = new GitGui.Core.Drafts.CommitDraftStore(null, identities, _log.RecordDraftStorage);
             _shell.AppearanceChanged += (_, _) => _theme.Select(_shell.Appearance);
             MainWindow window;
             using (_trace.Measure(TimingStage.Shell)) window = new MainWindow(_shell);
