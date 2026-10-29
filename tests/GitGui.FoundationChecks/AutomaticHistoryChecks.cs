@@ -152,7 +152,7 @@ internal static partial class Program
             var result = await store.LoadAsync(default);
             Expect(result.Status == SettingsLoadStatus.Migrated && result.Settings.RepositoryIdentities.Length == 0 && result.Settings.RepositoryPaths.Length == 2, "Migration preserves tabs but grants no approval");
             await store.SaveAsync(result.Settings, default);
-            Expect((await new SettingsStore(Path.GetDirectoryName(store.FilePath)!).LoadAsync(default)).Settings.SchemaVersion == 4 && File.Exists(store.FilePath + ".bak"), "Schema 4 save retains pre-migration backup");
+            Expect((await new SettingsStore(Path.GetDirectoryName(store.FilePath)!).LoadAsync(default)).Settings.SchemaVersion == AppSettings.CurrentSchemaVersion && File.Exists(store.FilePath + ".bak"), "Current schema save retains pre-migration backup");
             var legacy = JsonSerializer.Serialize(settings with { SchemaVersion = 3 }).Replace("RepositoryIdentities", "Approvals");
             await File.WriteAllTextAsync(store.FilePath, legacy);
             var migrated = await new SettingsStore(Path.GetDirectoryName(store.FilePath)!).LoadAsync(default);
@@ -193,8 +193,8 @@ internal static partial class Program
                 Expect(VisualDescendants<Menu>(content).Any() && !VisualDescendants<Button>(content).Any(button => button.Command == rendered.RefreshRepositoryCommand), "No inspection toolbar; a real menu exists");
                 var normalPeer = VisualDescendants<TextBlock>(table).First(text => text.Text == rendered.Commits[0].Description);
                 var unrelatedText = VisualDescendants<TextBlock>(table).First(text => text.Text == rendered.Commits[1].Description);
-                Expect(normalPeer.Foreground is SolidColorBrush yellow && yellow.Color == Color.FromRgb(255, 242, 168) &&
-                    unrelatedText.Foreground is SolidColorBrush white && white.Color == Colors.White, "Yellow peers and white unrelated text render through real bindings");
+                Expect(normalPeer.Foreground is SolidColorBrush ordinary && ordinary.Color == Colors.White &&
+                    unrelatedText.Foreground is SolidColorBrush white && white.Color == Colors.White, "Peer and unrelated text keep their ordinary color");
                 SaveRender(content, "automatic-history.png", 1200, 760);
                 Arrange(content, 900, 580); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 SaveRender(content, "automatic-history-minimum.png", 900, 580);

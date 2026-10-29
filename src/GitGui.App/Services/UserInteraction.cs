@@ -10,6 +10,7 @@ namespace GitGui.App.Services;
 
 public interface IUserInteraction
 {
+    string? ChooseWorkspaceExecutable(RepositoryTool tool) => null;
     BranchManagementOptions? ChooseBranchManagement(BranchManagementViewModel model) => null;
     RepositoryInitOptions? ChooseRepositoryInitialization() => null;
     string? ChooseInitializationFolder() => null;
@@ -33,6 +34,11 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public string? ChooseWorkspaceExecutable(RepositoryTool tool)
+    {
+        var dialog = new OpenFileDialog { Title = UiText.Format("WorkspaceChooseExecutable", UiText.Get("Workspace" + tool)), Filter = UiText.Get("WorkspaceExecutableFilter"), CheckFileExists = true };
+        return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;
+    }
     public BranchManagementOptions? ChooseBranchManagement(BranchManagementViewModel model)
     {
         var window = new BranchManagementWindow(model) { Owner = Owner };

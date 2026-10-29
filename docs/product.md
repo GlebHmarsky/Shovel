@@ -12,7 +12,7 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Current workspace
 
-Implemented through **0.23.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.24.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
 
@@ -21,7 +21,7 @@ Commit drafts now survive closing tabs/restarting. Restore happens after the mod
 - Open/restored tabs read local history automatically, without consent settings. Read does not mean fetch. Selected saved tab loads first; others load on selection.
 - Tabs immediately show cached rows, then validate identity off-thread. Snapshots older than 30 seconds refresh on tab/window activation; Repository → Refresh is manual. No polling/preload. Loading/failure keeps rows with stale/error status; missing/replaced/inaccessible identity clears rows. Explicit reopen binds a changed location.
 - **All Commits:** ancestry of local branches, remote-tracking branches, tags, current HEAD and saved stashes, including detached HEAD. Other reflog-only and unreachable history is excluded. Unborn HEAD does not hide other branches. No scope/filter selector; legacy narrower settings are ignored; scope help is accessible.
-- Headerless virtualized history begins directly below repository tabs. Graph, ref badges, description, author, local date and short hash occupy fixed topology order; sorting/header-drag resizing are unavailable. Description adapts to width. Merge nodes have a second ring and parent help.
+- Headerless virtualized history begins directly below repository tabs. Graph, ref badges, description, author, local date and short hash occupy fixed topology order; sorting/header-drag resizing are unavailable. Description adapts to width. Merge nodes have a hollow marker and parent help.
 - Selecting a row exposes full message, author/committer, original-offset dates, hash, parents and full refs below. Row labels are bounded previews with full tooltip/details; parsed messages within the read limit remain complete.
 - Older/Newer show 200-row pages and range; no total commit ceiling. Cache: three visited tabs, one page each, character budget; 128 back cursors plus First history page. Page/selection/scroll are session-only. Eviction reloads page one. Refresh preserves page for unchanged refs/HEAD; otherwise restarts, retaining the selected hash if present.
 - Loading, end/shallow boundary, empty and errors are distinct; footer help exposes limits. Failed/cancelled paging retains rows; ref/boundary changes require refresh. Missing objects are never fetched implicitly. Original Git stderr remains in session Diagnostics.
@@ -29,7 +29,15 @@ Commit drafts now survive closing tabs/restarting. Restore happens after the mod
 
 Pull shows **behind**, Push **ahead**, comparing the configured upstream from the local snapshot, even with a separate push destination. Counts load after rows. Zero is measured; dash means pending/unavailable/cancelled/failed. Help includes upstream/time/reason. Detached/unborn/no-upstream/missing-upstream/shallow cannot imply synchronization. Failed refresh retains stale counts; no server freshness claim without fetch.
 
-Same-author peers use light-yellow text, matching exact raw name/email ordinally and case-sensitively, without mailmap/committer. Nonblank email required; blank name matches only blank name. Selected row keeps selection colors; unrelated text stays white on dark history, graph/ref colors independent. High contrast uses system colors; accessible text explains the relation.
+Same-author peers use a muted yellow **row background**, retaining ordinary text color. Matching remains exact raw name/email ordinally and case-sensitively, without mailmap/committer; nonblank email required. Selected rows keep normal selection styling. High contrast suppresses the peer fill; accessible text explains the relation. Graph lanes use compact straight runs/rounded joins and hollow merge markers; selection preserves lane colors. Topology and pagination are unchanged.
+
+## Workspace toolbar and appearance (0.24.0)
+
+Repository tabs share the entire strip equally (one fills it, two split it, etc.); long names truncate with full-path tooltips. Existing keyboard selection, reorder/close menus and middle-click close remain.
+
+Top-right **Open in** offers File Explorer, Rider and VS Code; **Console** opens Git Bash in the selected repository (also Ctrl+Alt+T; Explorer Ctrl+Alt+O). **Appearance** switches Dark/Light immediately and remembers it. Native title bars follow the palette where supported; Windows high contrast takes precedence. No Work/environment button is added.
+
+Opening these menus performs no Git, tool discovery or filesystem preparation. Selecting a tool captures that repository, discovers a supported executable off-thread, then hands it the folder/project using literal arguments. Rider prefers a single root-level `.uproject`, then `.slnx`, `.sln`, `.csproj`; ambiguous/no matches open the folder. Nested projects are not searched. A missing tool prompts for its `.exe`, remembered in the profile; no dependency is installed. Loading/failure appears in the status line without clearing history. External tools control their own lifetime; Shovel reports launch dispatch, not successful project loading, and never kills them on exit. Refresh/activation observes subsequent repository changes through the existing workflow.
 
 ## Repository sidebar (0.23.0)
 
@@ -141,7 +149,7 @@ Closing/cancelling stops and reconciles the operation; timeout is two minutes, w
 
 ## Interface and remaining workflows
 
-**Confirmed 2026-10-28:** default dark client area inspired by the supplied screenshot: distinct chrome, repository tabs, sidebar, history and details surfaces. Shared hover/pressed/disabled/selection/focus states extend to existing dialogs; lower tabs use an orange underline. [Theme](theme.md) owns colors and conventions. Shovel title bars now match the dark chrome through native Windows styling, with system high-contrast fallback; pickers/message boxes remain OS-owned. Further polish and light-mode selection remain deferred.
+**Confirmed 2026-10-28:** default dark client area inspired by the supplied screenshot: distinct chrome, repository tabs, sidebar, history and details surfaces. Shared hover/pressed/disabled/selection/focus states extend to existing dialogs; lower tabs use an orange underline. [Theme](theme.md) owns colors and conventions. Shovel title bars now match the dark chrome through native Windows styling, with system high-contrast fallback; pickers/message boxes remain OS-owned. 0.24.0 adds live Dark/Light selection and matching native chrome; further polish remains deferred.
 
 Current frame: File/View/Repository/Window/Help; Open/Commit/Fetch/Pull/Push; repository/branch/operation timer and Branch menu; repository tabs; Local changes modal entry/All Commits sidebar; history; resizable details. Repository owns secondary actions, Git selection and Diagnostics. Icon: selected front-facing silver shovel, cropped shaft, blue circle.
 

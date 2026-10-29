@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.24.0 — 2026-10-29
+
+- Highlight same-author history rows with a muted yellow background and unchanged text; retain normal selection and high-contrast behavior. Draw compact straight graph lanes with rounded joins and distinct merge nodes.
+- Spread repository tabs evenly across the full strip. Restore working Open in (Explorer/Rider/VS Code), Git Bash Console and Appearance toolbar actions; omit Work.
+- Add live Dark/Light palettes and remembered appearance/tool executable preferences. Rider prefers root-level Unreal projects; executable/project discovery happens only after explicit selection, never while opening menus.
+
 ## 0.23.0 — 2026-10-29
 
 - Add expandable sidebar branches with tracking counts, fetched remote branches, tags, stashes and submodules. Locate refs/stashes in paged history and use branch/stash context actions without opening their old list dialog.

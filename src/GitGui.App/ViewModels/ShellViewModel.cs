@@ -120,7 +120,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public RelayCommand FirstHistoryCommand { get; }
 
     public ShellViewModel(RepositoryReader? reader = null, IUserInteraction? interaction = null,
-        IRepositoryIdentityProvider? identities = null, Func<AppSettings, Task>? persist = null, PerformanceTrace? trace = null, GitActions? actions = null)
+        IRepositoryIdentityProvider? identities = null, Func<AppSettings, Task>? persist = null, PerformanceTrace? trace = null, GitActions? actions = null, IRepositoryTools? tools = null)
     {
         _reader = reader; _interaction = interaction; _identities = identities ?? new WindowsRepositoryIdentity();
         _persist = persist; _trace = trace ?? new();
@@ -169,13 +169,14 @@ public sealed partial class ShellViewModel : ObservableObject
         RefreshTabCommand = new(tab => { SelectedRepository = tab; BeginCurrentRead(tab, force: true); },
             tab => CanNavigate && _reader is not null && Repositories.Contains(tab));
         _timer.Tick += (_, _) => Changed(nameof(OperationStatus));
-        InitializeActions(actions); InitializeChanges();
+        InitializeActions(actions); InitializeChanges(); InitializeWorkspaceTools(tools);
     }
     private bool CanRead => CanNavigate && SelectedRepository is not null && _reader is not null;
 
     public void CompleteStartup(SettingsLoadResult result)
     {
         LoadedSettings = result;
+        RestoreWorkspacePreferences(result.Settings);
         Repositories.Clear(); _knownIdentities.Clear();
         foreach (var path in result.Settings.RepositoryPaths)
         {
@@ -415,6 +416,7 @@ public sealed partial class ShellViewModel : ObservableObject
     { if (CanMove(tab, offset)) { var index = Repositories.IndexOf(tab); Repositories.Move(index, index + offset); RefreshCommands(); } }
     private void RefreshCommands()
     {
+        RefreshWorkspaceTools();
         RefreshSidebarCommands();
         NewRepositoryCommand?.Refresh();
         Changed(nameof(NewRepositoryHelp));
@@ -434,6 +436,7 @@ public sealed partial class ShellViewModel : ObservableObject
     }
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
+        Appearance = Appearance, RiderExecutable = _riderExecutable, CodeExecutable = _codeExecutable, BashExecutable = _bashExecutable,
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };

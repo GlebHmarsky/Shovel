@@ -4,7 +4,10 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.23.0: working repository sidebar, saved stash history and selected submodule operations. Routine verification stays at 26 checks (maximum 30); feature checks remain opt-in. The recorded intermittent draft write remains the next correctness investigation. Broader theme work remains P2.
+0.24.0: background author highlighting, compact graph rendering, equal repository tabs, working desktop tool actions and Dark/Light appearance. Routine verification stays at 26 checks (maximum 30); feature checks remain opt-in. The recorded intermittent draft write remains the next correctness investigation.
+
+- [x] **P1 — Workspace presentation and toolbar.** Background-only author peers, straight/rounded graph, evenly filled tabs, Open in Explorer/Rider/VS Code, Bash and persisted Dark/Light appearance. Four focused checks and normal/minimum offscreen review; no live tool launches.
+- [x] **P1 — Deliver 0.24.0.** 26 routine checks in 32.2 seconds, matching ignored preview/package hashes, owning docs and local commit.
 
 - [x] **P1 — Make repository sidebar functional.** Branch switch/tracking/context actions; fetched remote refs; tag/stash history navigation; inline Apply/Pop/confirmed Drop; submodule open/update/sync. Async cached lists after history, retained errors, real disposable workflows and normal/minimum offscreen review.
 - [x] **P1 — Deliver 0.23.0.** 26 routine checks in 31.5 seconds; four focused sidebar checks, offscreen input/layout review, matching ignored preview/package verification and owning documentation.
@@ -63,7 +66,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Backlog
 
-- [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): light/theme selection, popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
+- [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Network MVP.** Clone/remote editing and broader auth/input. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
@@ -79,6 +82,8 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.24.0 / 2026-10-29:** background-only author peers, rounded graph lines, equal tabs, Explorer/Rider/VS Code/Bash toolbar and persisted Dark/Light appearance. Four optional focused checks, normal/minimum offscreen review; 26 routine checks in 32.2 seconds and verified preview. Actual desktop handoffs remain unverified. [Evidence](docs/roadmap.md#current-status).
 
 - [x] **0.23.0 / 2026-10-29:** branch/remotes/tags/stash/submodule sidebar with real navigation and actions, saved stash history, selected submodule open/update/sync. Default remains 26 checks; four optional feature checks and normal/minimum offscreen review. Matching preview hashes verified. [Evidence and limitations](docs/roadmap.md#current-status).
 

@@ -43,7 +43,7 @@ internal static partial class Program
                 foreach (var surface in new[] { "Hover", "Pressed", "Selected", "ActiveSelection" })
                     Expect(Contrast(ColorOf("SelectionText"), ColorOf(surface)) >= 4.5, "State text contrast: " + surface);
                 Expect(Contrast(ColorOf("Accent"), ColorOf("Sidebar")) >= 4.5 &&
-                    Contrast(ColorOf("AuthorPeer"), ColorOf("Canvas")) >= 4.5, "Accent and author text remain readable");
+                    Contrast(ColorOf("HistoryText"), ColorOf("AuthorPeer")) >= 4.5, "Accent and author-peer background retain readable text");
                 Expect(Contrast(ColorOf("DiffAddedText"), ColorOf("DiffAddedBackground")) >= 4.5 &&
                     Contrast(ColorOf("DiffRemovedText"), ColorOf("DiffRemovedBackground")) >= 4.5, "Added/removed text contrast");
                 foreach (var marker in new[] { "FileModified", "FileAdded", "FileDeleted" })

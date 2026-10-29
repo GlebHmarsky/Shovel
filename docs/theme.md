@@ -1,6 +1,6 @@
 # Shared visual theme
 
-Updated 2026-10-28. **Confirmed direction:** a restrained dark appearance inspired by the supplied Fork screenshot, with a first pass now and further polish at P2 in [TODO](../TODO.md). This document owns palette/state conventions; [product](product.md) owns workflow and [roadmap](roadmap.md) records verification. No Fork artwork, branding or proprietary style resources are used.
+Updated 2026-10-29. **Confirmed direction:** restrained Fork-inspired dark surfaces, with live Dark/Light selection added in 0.24.0. Further polish stays P2 in [TODO](../TODO.md). This document owns palette/state conventions; [product](product.md) owns workflow and [roadmap](roadmap.md) records verification. No Fork artwork, branding or proprietary style resources are used.
 
 ## Palette and hierarchy (0.12.1)
 
@@ -19,17 +19,23 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 | Selected / ActiveSelection | #4A4A4A / #2465AA | Inactive row/navigation selection; focused row selection |
 | SelectionText | #FFFFFF | Text on selection/interaction fills |
 | Accent / Focus | #F08060 / #7BB7F5 | Selected lower tab/default-action outline; keyboard focus |
-| AuthorPeer | #FFF2A8 | Existing same-author relationship, never the selected row |
+| AuthorPeer | #383622 | Muted yellow background for same-author peers; ordinary text, never the selected row |
 | DiffAddedBackground / DiffAddedText | #213A2B / #B8E6C4 | Added lines, accompanied by + and new line number |
 | DiffRemovedBackground / DiffRemovedText | #46252A / #FFB8BD | Removed lines, accompanied by − and old line number |
 | FileModified / FileAdded / FileDeleted | #E5C07B / #80C58B / #FF8B93 | M / + / − file markers in committed and working-copy lists; selected text/system high contrast overrides colors |
+
+## Light counterpart (0.24.0)
+
+`LightPalette.xaml` uses the same semantic keys: Chrome #F3F3F3, tabs #E8E8E8, sidebar #ECECEC, white Canvas/Input, Panel #F7F7F7, Raised #E4E4E4, Border #B0B0B0, Text/HistoryText #202020 and Muted #555555. Selection/hover use blue fills with white text; Accent #A0391D, Focus #245F9C. AuthorPeer is pale yellow #FFF3BF with ordinary dark text. Diff/marker colors use darker foregrounds over pale fills. All shared views consume these resources; switching adds no scans/reloads. Dark remains the initial/default appearance.
+
+History graph strokes use compact 16-DIP lanes, straight runs and rounded joins; merges are hollow circles with a center marker. Gold/red/green/blue/purple strokes have darker light-theme counterparts. Selected rows retain graph colors; OS high contrast uses system text. Core topology/lane calculation is unchanged.
 
 ## State rules
 
 - Distinguish surfaces by role, not arbitrary shades per window. Main history begins at the repository tabs; theme changes add no toolbar, padding band or data preparation.
 - Repository tabs: quiet inactive surface, lighter selected tab, hover feedback and a keyboard focus outline. Lower tabs: orange text plus underline; selection remains identifiable without color alone.
 - Buttons: raised or flat toolbar base, hover/pressed feedback, visible keyboard focus/default action outline. Disabled text and icon color override interaction text; retain actual command availability and its localized reason. No hover animations or theme-driven background work.
-- Rows: blue active selection, gray inactive selection, white selected text. Same-author yellow remains limited to unselected peers; graph/ref semantics and accessible relationships remain unchanged. Selection and keyboard behavior belong to native WPF controls.
+- Rows: blue active selection, theme-specific inactive selection, white selected text. Same-author yellow is a background limited to unselected peers, with unchanged ordinary text; graph/ref semantics and accessible relationships remain unchanged. Selection and keyboard behavior belong to native WPF controls.
 - Diff rows follow the same selection rules. Unselected additions/removals use shared green/red roles; hunk headings use Raised/Focus. Markers, old/new line numbers and localized accessible descriptions remain meaningful when high contrast removes the colors. No per-file ad hoc palette.
 - Binary comparisons reuse Raised/Border cards, RemovedText for Old and AddedText for New; LFS uses the existing selection badge. Extension and size remain normal text with accessible side/size meanings. No per-extension color scheme or bottom loading animation.
 - Editable fields, lists, menus, checkboxes/radio buttons and scrollbars share the palette. Use template parts required by WPF; do not replace commands, editable text, focus/selection logic or virtualization with visual-only imitations.
@@ -38,8 +44,8 @@ The screenshot suggests dark chrome and inactive tabs, a charcoal history surfac
 
 ## Scope and maintenance
 
-Shared styles live in `Resources/AppStyles.xaml`; `Services/AppTheme.cs` applies palette overrides at startup and on system high-contrast changes, and unsubscribes at exit. No dependency, settings schema change, theme selector, network request or Git-path change is introduced. Headless tests use the same resources with a plain test Application.
+Shared styles live in `Resources/AppStyles.xaml`; `Services/AppTheme.cs` applies the selected palette at startup, on Appearance selection and system high-contrast changes, and unsubscribes at exit. Schema 5 stores the selection; older profiles default to Dark. No new dependency, network request or Git-path change. Headless tests use the same resources with a plain test Application.
 
-Since 0.16.1, Shovel-owned window title bars use native DWM dark mode. Windows 11 caption/background/text/border colors follow Chrome, Text/Muted and Border; high contrast removes these overrides. Native caption buttons, resizing, dragging and system menus remain intact. Windows 10 receives a best-effort dark-mode request; unsupported attributes retain native defaults. Windows file/folder pickers and MessageBox dialogs remain OS-owned. Light mode and wider visual/accessibility polish stay deferred. Do not claim pixel parity or desktop certification from an offscreen render.
+Since 0.16.1, Shovel-owned window title bars use native DWM styling; 0.24.0 updates that styling on palette changes. Windows 11 caption/background/text/border colors follow Chrome, Text/Muted and Border; high contrast removes these overrides. Native caption buttons, resizing, dragging and system menus remain intact. Windows 10 receives a best-effort light/dark-mode request; unsupported attributes retain native defaults. Windows file/folder pickers and MessageBox dialogs remain OS-owned. Wider visual/accessibility polish stays deferred. Do not claim pixel parity or desktop certification from an offscreen render.
 
 Implementation uses stable [WPF styles/templates](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/controls/control-styles-and-templates). The .NET 10 [Window.ThemeMode API](https://learn.microsoft.com/en-us/dotnet/api/system.windows.window.thememode?view=windowsdesktop-10.0) is still marked experimental in official documentation checked 2026-10-28; this pass avoids adopting it or changing control metrics through Fluent theme migration.

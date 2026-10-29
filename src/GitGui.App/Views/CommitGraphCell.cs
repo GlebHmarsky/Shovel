@@ -14,17 +14,24 @@ public sealed class CommitGraphCell : FrameworkElement
     public static readonly DependencyProperty IsSelectedProperty = DependencyProperty.Register(nameof(IsSelected), typeof(bool),
         typeof(CommitGraphCell), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
     public bool IsSelected { get => (bool)GetValue(IsSelectedProperty); set => SetValue(IsSelectedProperty, value); }
-    private static readonly Brush[] Colors = [Frozen(42, 112, 179), Frozen(176, 77, 137), Frozen(37, 137, 111), Frozen(178, 113, 35), Frozen(112, 91, 178)];
-    public const double LaneSpacing = 20;
-    public static double WidthFor(int lanes) => Math.Max(84, lanes * LaneSpacing + 16);
+    private static readonly Brush[] Colors = [Frozen(244, 179, 28), Frozen(225, 80, 75), Frozen(75, 170, 133), Frozen(98, 159, 227), Frozen(179, 119, 206)];
+    private static readonly Brush[] LightColors = [Frozen(148, 100, 0), Frozen(181, 42, 39), Frozen(30, 116, 78), Frozen(38, 101, 173), Frozen(128, 65, 163)];
+    public const double LaneSpacing = 16;
+    public static double WidthFor(int lanes) => Math.Max(42, lanes * LaneSpacing + 16);
 
-    public CommitGraphCell() { ClipToBounds = true; IsHitTestVisible = false; }
+    public CommitGraphCell()
+    {
+        ClipToBounds = true; IsHitTestVisible = false;
+        // A semantic resource invalidates the drawing on live palette/high-contrast changes.
+        SetResourceReference(TextElement.ForegroundProperty, "Theme.HistoryText");
+    }
     protected override void OnRender(DrawingContext drawing)
     {
         base.OnRender(drawing);
         if (Row is not { } row) return;
-        Brush Color(int index) => IsSelected || SystemParameters.HighContrast ? TextElement.GetForeground(this) : Colors[index % Colors.Length];
-        Point PointAt(int lane, double y) => new(16 + lane * LaneSpacing, y * ActualHeight);
+        var colors = TryFindResource("Theme.IsDark") is false ? LightColors : Colors;
+        Brush Color(int index) => SystemParameters.HighContrast ? (IsSelected ? SystemColors.HighlightTextBrush : TextElement.GetForeground(this)) : colors[index % colors.Length];
+        Point PointAt(int lane, double y) => new(12 + lane * LaneSpacing, y * ActualHeight);
         foreach (var line in row.Lines)
         {
             var start = PointAt(line.FromLane, line.FromY);
@@ -33,17 +40,27 @@ public sealed class CommitGraphCell : FrameworkElement
             using (var context = geometry.Open())
             {
                 context.BeginFigure(start, false, false);
-                var middle = (start.Y + end.Y) / 2;
-                context.BezierTo(new(start.X, middle), new(end.X, middle), end, true, false);
+                if (start.X == end.X) context.LineTo(end, true, false);
+                else
+                {
+                    var middle = (start.Y + end.Y) / 2;
+                    var radius = Math.Min(4, Math.Min(Math.Abs(end.X - start.X), end.Y - start.Y) / 2);
+                    var direction = Math.Sign(end.X - start.X);
+                    context.LineTo(new(start.X, middle - radius), true, false);
+                    context.QuadraticBezierTo(new(start.X, middle), new(start.X + direction * radius, middle), true, false);
+                    context.LineTo(new(end.X - direction * radius, middle), true, false);
+                    context.QuadraticBezierTo(new(end.X, middle), new(end.X, middle + radius), true, false);
+                    context.LineTo(end, true, false);
+                }
             }
             geometry.Freeze();
             drawing.DrawGeometry(null, new Pen(Color(line.Color), 1.7), geometry);
         }
         var center = PointAt(row.NodeLane, .5);
         var brush = Color(row.NodeColor);
-        drawing.DrawEllipse(brush, null, center, 4.5, 4.5);
+        drawing.DrawEllipse(row.IsMerge ? null : brush, row.IsMerge ? new Pen(brush, 1.7) : null, center, row.IsMerge ? 5 : 3, row.IsMerge ? 5 : 3);
         // Merge nodes have a second ring; meaning does not rely on lane color.
-        if (row.IsMerge) drawing.DrawEllipse(null, new Pen(brush, 1.2), center, 7, 7);
+        if (row.IsMerge) drawing.DrawEllipse(brush, null, center, 1.5, 1.5);
     }
 
     private static Brush Frozen(byte red, byte green, byte blue)

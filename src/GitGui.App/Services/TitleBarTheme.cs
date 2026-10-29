@@ -14,6 +14,7 @@ public static class TitleBarTheme
         window.SourceInitialized += Refresh;
         window.Activated += Refresh;
         window.Deactivated += Refresh;
+        AppTheme.PaletteChanged += Refresh;
         SystemParameters.StaticPropertyChanged += SystemChanged;
         window.Closed += Closed;
 
@@ -28,6 +29,7 @@ public static class TitleBarTheme
             window.SourceInitialized -= Refresh;
             window.Activated -= Refresh;
             window.Deactivated -= Refresh;
+            AppTheme.PaletteChanged -= Refresh;
             window.Closed -= Closed;
             SystemParameters.StaticPropertyChanged -= SystemChanged;
         }
@@ -39,7 +41,7 @@ public static class TitleBarTheme
         var handle = new WindowInteropHelper(window).Handle;
         if (handle == IntPtr.Zero) return false;
         var accepted = true;
-        Set(20, highContrast ? 0 : 1); // DWMWA_USE_IMMERSIVE_DARK_MODE; best effort on Windows 10.
+        Set(20, highContrast || window.TryFindResource("Theme.IsDark") is false ? 0 : 1); // Best effort on Windows 10.
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return accepted;
         Set(35, highContrast ? -1 : Color("Theme.Chrome")); // CAPTION_COLOR / COLOR_DEFAULT
         Set(36, highContrast ? -1 : Color(window.IsActive ? "Theme.Text" : "Theme.Muted"));

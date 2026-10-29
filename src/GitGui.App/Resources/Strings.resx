@@ -739,4 +739,24 @@ Requested upstream: {2}</value></data>
   <data name="SidebarGone" xml:space="preserve"><value>Upstream missing</value></data>
   <data name="SidebarSubmoduleUnavailable" xml:space="preserve"><value>Submodule is not initialized or is inaccessible. Use Initialize / Update first.</value></data>
   <data name="SidebarTitle" xml:space="preserve"><value>Repository navigation</value></data>
+  <data name="WorkspaceOpenIn" xml:space="preserve"><value>Open in</value></data>
+  <data name="WorkspaceConsole" xml:space="preserve"><value>Console</value></data>
+  <data name="WorkspaceAppearance" xml:space="preserve"><value>Appearance</value></data>
+  <data name="WorkspaceBash" xml:space="preserve"><value>Open in Git Bash</value></data>
+  <data name="WorkspaceExplorer" xml:space="preserve"><value>Open in File Explorer</value></data>
+  <data name="WorkspaceRider" xml:space="preserve"><value>Open in Rider</value></data>
+  <data name="WorkspaceCode" xml:space="preserve"><value>Open in Visual Studio Code</value></data>
+  <data name="WorkspaceDark" xml:space="preserve"><value>Dark</value></data>
+  <data name="WorkspaceLight" xml:space="preserve"><value>Light</value></data>
+  <data name="WorkspaceAppearanceHelp" xml:space="preserve"><value>Choose the application theme. Windows high contrast takes precedence.</value></data>
+  <data name="WorkspaceRiderHelp" xml:space="preserve"><value>Open the root-level Unreal project, solution or C# project in Rider. With multiple candidates, open the repository folder.</value></data>
+  <data name="WorkspaceToolsHelp" xml:space="preserve"><value>Open this repository in an external application. Discovery happens after selection; missing tools can be selected manually.</value></data>
+  <data name="WorkspaceToolStarting" xml:space="preserve"><value>Opening external application…</value></data>
+  <data name="WorkspaceToolNotOpened" xml:space="preserve"><value>No application selected.</value></data>
+  <data name="WorkspaceToolOpened" xml:space="preserve"><value>Opening request sent. The external application controls its own window and lifetime.</value></data>
+  <data name="WorkspaceToolFailed" xml:space="preserve"><value>Could not open the external application. Check that the repository and application are accessible, then retry.</value></data>
+  <data name="WorkspaceChooseExecutable" xml:space="preserve"><value>{0}: select the application executable</value></data>
+  <data name="WorkspaceExecutableFilter" xml:space="preserve"><value>Application (*.exe)|*.exe</value></data>
+  <data name="WorkspacePreferenceSaveFailed" xml:space="preserve"><value>The preference works for this session but could not be saved. Settings remain available for recovery.</value></data>
+<data name="WorkspaceBashShortcut" xml:space="preserve"><value>Ctrl+Alt+T</value></data><data name="WorkspaceExplorerShortcut" xml:space="preserve"><value>Ctrl+Alt+O</value></data>
 </root>

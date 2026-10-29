@@ -34,7 +34,7 @@ public sealed class SettingsStore(string directory)
                 return Complete(new(), SettingsLoadStatus.Invalid);
             if (schema > AppSettings.CurrentSchemaVersion)
                 return Complete(new(), SettingsLoadStatus.NewerSchema);
-            if (schema is not (1 or 2 or 3 or AppSettings.CurrentSchemaVersion))
+            if (schema is not (1 or 2 or 3 or 4 or AppSettings.CurrentSchemaVersion))
                 return Complete(new(), SettingsLoadStatus.UnsupportedSchema);
 
             var settings = JsonSerializer.Deserialize<AppSettings>(_loadedBytes, JsonOptions);

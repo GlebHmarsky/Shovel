@@ -18,7 +18,7 @@
   <SolidColorBrush x:Key="Theme.SelectionText" Color="#FFFFFF" />
   <SolidColorBrush x:Key="Theme.Accent" Color="#F08060" />
   <SolidColorBrush x:Key="Theme.Focus" Color="#7BB7F5" />
-  <SolidColorBrush x:Key="Theme.AuthorPeer" Color="#FFF2A8" />
+  <SolidColorBrush x:Key="Theme.AuthorPeer" Color="#383622" />
   <SolidColorBrush x:Key="Theme.DiffAddedBackground" Color="#213A2B" />
   <SolidColorBrush x:Key="Theme.DiffRemovedBackground" Color="#46252A" />
   <SolidColorBrush x:Key="Theme.DiffAddedText" Color="#B8E6C4" />

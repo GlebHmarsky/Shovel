@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.23.0** adds a working repository sidebar, saved stashes in history and submodule open/update/sync; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.24.0** adds background author highlighting, equal-width tabs, desktop tool handoff and Dark/Light appearance; routine verification remains 26 checks. Includes local repository initialization. Local Changes menus provide confirmed Discard, selected-file Stash, External Diff, History/Blame, Ignore/LFS rules and Save as Patch. Includes Stashes, Continue/Skip/Abort, native dark chrome, binary/LFS cards, scoped file/hunk staging, commit/amend/Shift push, history/committed diffs and branch/network actions. Wider local checks run quietly after file actions.
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -62,6 +62,10 @@ Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build
 
 ## Using the workspace
 
+**0.24.0 workspace:** repository tabs divide the full strip equally. Same-author rows have a yellow background with unchanged text; selected rows keep normal styling. Top-right **Open in** launches Explorer, Rider or VS Code; **Console** opens Git Bash at this repository (Ctrl+Alt+T, Explorer Ctrl+Alt+O). Rider prefers a single root-level `.uproject`, then `.slnx`/`.sln`/`.csproj`; multiple/no candidates open the folder. Missing apps prompt for their executable, remembered locally. **Appearance → Dark / Light** updates immediately and persists. Windows high contrast overrides both. No Work button or startup/menu-time discovery. [Workflow](docs/product.md#workspace-toolbar-and-appearance-0240), [handoff and schema limits](docs/architecture.md#workspace-presentation-and-tool-handoff-0240).
+
+Optional focused checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-workspace` (four checks; isolated settings/Git, fake launch boundary and offscreen renders, no interactive tool launch).
+
 **0.23.0 sidebar:** single-click a branch/tag/fetched remote branch/stash to select its commit; double-click a local branch (or Enter) to switch. Branch right-click offers switch/delete/upstream actions; ↑/↓ are local upstream counts. Remotes offer explicit Fetch. Stashes offer Apply/Pop/confirmed Drop inline; the existing Repository → Stashes inspector retains Create and staged-state options. Submodules open as another tab and offer Initialize / Update to the recorded commit or Sync URL. No force/recursion/automatic commit. Lists load after first history and keep cached rows on failure. [Workflow and limits](docs/product.md#repository-sidebar-0230).
 
 Optional focused sidebar integration: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-sidebar` (four checks). `--render-sidebar` runs only its first list/input-binding/offscreen check. Neither is part of routine verification; no interactive window is shown. History currently supports at most 256 saved stashes, with an explicit error above that bound. Ref jumps have bounded output/time and can fail on very large histories without clearing useful rows.
@@ -84,7 +88,7 @@ Cached switch publishes immediately/validates identity off-thread. >30 s snapsho
 
 Pull badge = behind, Push = ahead of configured upstream **locally**, loaded after rows; separate push target not compared. Zero measured, dash pending/unavailable/failed; tooltip reason/time/upstream. Missing/detached/unborn/shallow cannot claim synchronized; failed refresh keeps stale counts, no implicit fetch.
 
-Menus, working toolbar actions and center timer remain; unfinished Explorer/Terminal/Editor/Tools/sidebar controls are omitted. Local changes and Stashes open owned modals; All Commits stays in the main workspace. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers yellow, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
+Menus, toolbar actions and center timer remain; the top-right tools and sidebar perform real actions. Local changes and the detailed Stashes inspector open owned modals; All Commits stays in the main workspace. Repository holds refresh/cancel/Git selection/Diagnostics/tab actions. Diagnostics includes bounded in-memory stderr/timings, not persistent content logs. Exact-author peers use yellow row backgrounds, selected row normal/high-contrast system colors; [product](docs/product.md) owns exact matching.
 
 ## Local Changes
 
@@ -142,7 +146,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.23.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.24.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -162,4 +166,4 @@ Current identity supports root on local fixed drive/no reparse components; UNC/r
 
 History uses one read chain/max two children; the modal has bounded cancelling status/diff chains. Mutations cancel old reads without waiting for their drain; close drains them. Bare repos rejected, linked actions coordinated within Shovel, external clients independent. Shallow ends distinct, missing partial objects fail without fetch. Detected merge/rebase/cherry-pick/revert sequences support recovery; mailbox/ambiguous state remains unsupported.
 
-History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared dark theme](docs/theme.md) applies to the client area; Shovel title bars use native dark styling (exact colors on Windows 11, best effort on Windows 10); pickers/message boxes remain system-owned. Light mode and further theme polish are deferred. Pending: arbitrary-line staging, image/text side-by-side diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.
+History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared Dark/Light themes](docs/theme.md) apply to the client area; Shovel title bars use native palette-aware styling (exact colors on Windows 11, best effort on Windows 10); pickers/message boxes remain system-owned. Dark/Light selection is available under Appearance; further theme polish remains deferred. Pending: arbitrary-line staging, image/text side-by-side diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.

@@ -41,6 +41,11 @@ public partial class MainWindow : Window
             new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
     }
 
+    private void OnToolbarMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu } button)
+        { menu.PlacementTarget = button; menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom; menu.IsOpen = true; }
+    }
     private void OnSidebarCommitLocated(object? sender, EventArgs e)
     { if (ViewModel.SelectedCommit is { } row) HistoryTable.ScrollIntoView(row); }
     private void OnSystemPropertyChanged(object? sender, PropertyChangedEventArgs e)
