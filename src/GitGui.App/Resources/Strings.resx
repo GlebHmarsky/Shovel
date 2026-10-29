@@ -783,4 +783,48 @@ Requested upstream: {2}</value></data>
   <data name="PullDefaultHelp" xml:space="preserve"><value>Pull upstream with Rebase; auto-stash off.</value></data>
   <data name="PullDefaultNeedsUpstream" xml:space="preserve"><value>Set an upstream or choose a target in Pull options.</value></data>
   <data name="PullDefaultTargetChanged" xml:space="preserve"><value>The upstream changed or uses a custom mapping. Refresh or choose the remote and branch in Pull options.</value></data>
+  <data name="FetchOptions" xml:space="preserve"><value>Fetch options…</value></data>
+  <data name="PushOptions" xml:space="preserve"><value>Push options…</value></data>
+  <data name="DefaultFetchHelp" xml:space="preserve"><value>Fetch the default remote.</value></data>
+  <data name="DefaultPushHelp" xml:space="preserve"><value>Push this branch to its configured push destination.</value></data>
+  <data name="DefaultFetchNeedsTarget" xml:space="preserve"><value>No unambiguous remote is configured. Choose a remote in Fetch options.</value></data>
+  <data name="DefaultPushNeedsTarget" xml:space="preserve"><value>No single branch push destination could be resolved. Choose a target in Push options.</value></data>
+  <data name="HistoryMenuCheckoutCommit" xml:space="preserve"><value>Checkout (Detached HEAD)</value></data>
+  <data name="HistoryMenuResetSoft" xml:space="preserve"><value>Soft…</value></data>
+  <data name="HistoryMenuResetMixed" xml:space="preserve"><value>Mixed…</value></data>
+  <data name="HistoryMenuResetHard" xml:space="preserve"><value>Hard…</value></data>
+  <data name="HistoryMenuRevertCommit" xml:space="preserve"><value>Revert commit</value></data>
+  <data name="HistoryCopySha" xml:space="preserve"><value>Copy SHA</value></data>
+  <data name="HistoryCopyFailed" xml:space="preserve"><value>The SHA could not be copied. The clipboard may be busy; try again.</value></data>
+  <data name="HistoryMenuHelp" xml:space="preserve"><value>Acts on this commit. Reopen the menu after history changes.</value></data>
+  <data name="HistoryResetMenu" xml:space="preserve"><value>Reset branch to here</value></data>
+  <data name="HistoryResetHelp" xml:space="preserve"><value>Choose how the branch, index and working files change.</value></data>
+  <data name="HistoryResetNeedsBranch" xml:space="preserve"><value>Reset requires a checked-out local branch.</value></data>
+  <data name="HistoryTargetUnavailable" xml:space="preserve"><value>The selected commit is unavailable. Refresh history and try again.</value></data>
+  <data name="HistoryRevertMainlineRequired" xml:space="preserve"><value>Choose the parent to keep as the mainline when reverting this merge.</value></data>
+  <data name="HistoryRevertParent" xml:space="preserve"><value>Relative to parent {0}: {1}</value></data>
+  <data name="HistoryRevertParentHelp" xml:space="preserve"><value>Undo changes relative to the chosen parent; Git records a new commit.</value></data>
+  <data name="HistoryEffectResetSoft" xml:space="preserve"><value>Soft moves the branch only. Staged and working-file changes are retained.</value></data>
+  <data name="HistoryEffectResetMixed" xml:space="preserve"><value>Mixed moves the branch and replaces the index. Working files stay unchanged; previously staged changes become unstaged.</value></data>
+  <data name="HistoryEffectResetHard" xml:space="preserve"><value>Hard moves the branch and replaces the index and tracked working files. Uncommitted changes are discarded. Untracked or ignored files obstructing target paths may also be deleted. Submodule contents are not reset.</value></data>
+  <data name="HistoryResetConfirm" xml:space="preserve"><value>Repository: {0}
+Branch: {1}
+Current commit: {2}
+Reset to: {3}
+
+{4}
+
+Reflog may help recover the old branch tip, but cannot guarantee recovery of discarded files. Continue?</value></data>
+  <data name="HistoryActionTarget" xml:space="preserve"><value>Selected commit: {0}
+Previous HEAD: {1}</value></data>
+  <data name="ActionTitleCheckoutCommit" xml:space="preserve"><value>Checkout commit (Detached HEAD)</value></data>
+  <data name="ActionTitleResetSoft" xml:space="preserve"><value>Soft reset</value></data>
+  <data name="ActionTitleResetMixed" xml:space="preserve"><value>Mixed reset</value></data>
+  <data name="ActionTitleResetHard" xml:space="preserve"><value>Hard reset</value></data>
+  <data name="ActionTitleRevertCommit" xml:space="preserve"><value>Revert commit</value></data>
+  <data name="ActionExplainCheckoutCommit" xml:space="preserve"><value>Check out the selected commit without moving a branch.</value></data>
+  <data name="ActionExplainResetSoft" xml:space="preserve"><value>Move the current branch; retain index and working files.</value></data>
+  <data name="ActionExplainResetMixed" xml:space="preserve"><value>Move the current branch and replace the index; retain working files.</value></data>
+  <data name="ActionExplainResetHard" xml:space="preserve"><value>Move the current branch and replace index and tracked files.</value></data>
+  <data name="ActionExplainRevertCommit" xml:space="preserve"><value>Create a commit that reverses the selected change.</value></data>
 </root>

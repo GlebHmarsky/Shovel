@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         DataContext = ViewModel = viewModel;
+        PreviewMouseRightButtonUp += (_, _) => Dispatcher.BeginInvoke(() => { if (_historyMenu?.IsOpen != true) ViewModel.EndHistoryMenu(); }, DispatcherPriority.Background);
         CommandBindings.Add(new(SystemCommands.MinimizeWindowCommand, (_, _) => SystemCommands.MinimizeWindow(this)));
         CommandBindings.Add(new(SystemCommands.MaximizeWindowCommand, (_, _) =>
         { if (WindowState == WindowState.Maximized) SystemCommands.RestoreWindow(this); else SystemCommands.MaximizeWindow(this); }));

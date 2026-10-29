@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_historyActionChecks) { await RunHistoryActionChecksAsync(); return; }
             if (_defaultPullChecks) { await RunDefaultPullChecksAsync(); return; }
             if (_draftIoChecks) { await RunDraftIoChecksAsync(); return; }
             if (_workspaceCleanupChecks) { await RunWorkspaceCleanupChecksAsync(); return; }

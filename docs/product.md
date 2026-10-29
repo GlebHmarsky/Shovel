@@ -10,7 +10,6 @@ Updated 2026-10-29. [Requirements](requirements.md) owns acceptance; [architectu
 
 ## Requested next workflows (not implemented)
 
-- **History context menu:** prioritize Checkout, Reset branch to here with Soft/Mixed/Hard choices, Copy SHA and Revert. Existing confirmation and Git protections still apply. Confirmed: Checkout checks out the selected commit directly and is explicitly labelled Detached HEAD; no branch-name prompt.
 - **Conflict resolution:** use the supplied Screenshot_19.png as a layout reference, with named source cards (for example stash/patch versus master), selectable sides and a selected external merge tool. One selected side takes that version; both sides lead to merging. C++/text conflicts need an in-app merge editor; binary files use explicit side selection, not a pretend text merge. Display actual available provenance; do not infer branches merely from generic ours/theirs labels, especially during rebase. Confirmed: checkboxes only choose a side; Resolve applies the chosen version and stages the file as resolved. Existing Continue/Skip/Abort stays separate from editing an individual conflict.
 - **LFS locking:** low priority, desired for a later experiment. Server capability/authentication and actual lock workflows are unverified. No live server test or automatic fetch is authorized by this planning discussion.
 
@@ -20,6 +19,16 @@ The general diff-view preference question was left unanswered; no side-by-side d
 
 The work environment is already trusted. No repository-trust modal on open, restore, first operation or ordinary dialog opening; no repeated consent checkbox for configured Git programs. Selecting the normal action authorizes it. **Do not introduce extra safety measures or approval layers without a concrete requirement.** Retain normal Git data-loss protections, destructive-action confirmation and required authentication/SSH host verification. This replaces older prototype-retention and routine trust-gate requirements; runtime gaps are tracked in TODO.
 
+## History actions and network split buttons (0.29.0)
+
+Right-click a history row (or use Menu / Shift+F10) for **Checkout (Detached HEAD)**, **Reset branch to here → Soft / Mixed / Hard**, **Copy SHA** and **Revert commit**. The menu captures that row's full object ID and cached repository state; opening it performs no Git or filesystem preparation. Reopen after a tab/page/refresh change. Copy includes the full hash. Checkout enters detached HEAD without creating a branch or forcing over dirty files; the repository panel labels that state.
+
+Reset requires an attached branch. Confirmation names the repository, branch, current tip and target, explaining the selected mode: Soft preserves index/worktree; Mixed resets the index but preserves working files; Hard replaces index/tracked working content and can delete obstructing untracked/ignored files. There is no automatic backup or rollback. The previous tip/output and Git reflog can help recover commits, not all discarded edits. Submodule contents are not recursively reset.
+
+Revert creates an inverse commit using Git's generated message. For a merge, choose the explicit numbered parent/hash; Shovel never guesses a mainline. Existing dirty/index protections and configured hooks/signing remain. Failures retain output/history; a conflicted Revert exposes the existing Continue/Skip/Abort workflow. New mutations are unavailable during an active sequence; Reset is not a substitute for Abort.
+
+**Fetch, Pull and Push** now have a direct main action and an adjacent arrow for their existing settings modal. Commit always opens its workspace. Fetch uses the current branch's configured remote, otherwise origin or a sole remote. Push uses Git's selected push remote and supported single-branch `simple` (default), `current`, or `upstream`/`tracking` destination; it can differ from Pull's upstream. Missing/ambiguous targets, `nothing`/`matching`, custom push refspecs, URL-only/dot remotes and automatic upstream creation require explicit options/setup. Main Push sends only the current branch, without force or tags. Options choices affect that attempt only. Pull defaults remain below. Submission owns validation, authentication, execution and top-center progress/cancellation; menu/options opening never queries a server.
+
 ## Direct Pull (0.28.0)
 
 Confirmed split-button behavior: **Pull** executes the current branch's configured upstream immediately; the adjacent arrow opens the existing Pull modal for alternate targets/settings and its normal submit flow. Keep the established default: **Rebase, auto-stash off**. Modal choices apply to that submission only; no new remembered settings. No options window or extra confirmation for the default action. Both routes share actual command progress, cancellation, retained errors/output and history reconciliation.
@@ -28,7 +37,7 @@ The arrow remains preparation-free. Direct Pull requires an attached branch and 
 
 ## Current workspace
 
-Implemented through **0.28.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.29.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
 

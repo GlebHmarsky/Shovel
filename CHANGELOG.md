@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.29.0 — 2026-10-29
+
+- Add history-row context actions for detached Checkout, confirmed Soft/Mixed/Hard branch Reset, full SHA copying and Revert. Merge reverts explicitly choose a mainline parent; conflicts use the existing recovery controls.
+- Keep menu construction local and immediate; freeze clicked targets, reject stale snapshots, retain Git dirty-file protections and reconcile real outcomes through shared progress/cancellation.
+- Give Fetch and Push direct main buttons plus preparation-free options arrows, alongside existing split Pull. Resolve supported default targets from local Git configuration; Commit continues to open its workspace.
+
 ## 0.28.0 — 2026-10-29
 
 - Make the main Pull button execute Rebase against the configured upstream with auto-stash off. Add an adjacent arrow opening the existing Pull settings dialog; alternate targets, Merge and auto-stash still execute through that modal.

@@ -4,7 +4,11 @@ Updated 2026-10-29. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-0.28.0: direct default Pull plus the existing options dialog on its adjacent arrow. Checkout and conflict-resolution choices are confirmed for subsequent increments. Routine verification remains 26 checks (maximum 30).
+- [x] **P1 — History context actions.** Clicked full SHA; detached Checkout; confirmed Soft/Mixed/Hard Reset; Copy SHA and Revert with explicit merge mainline. Preparation-free menu, shared execution/results/recovery and stale-target rejection.
+- [x] **P1 — Direct Fetch/Push with options arrows.** Use supported configured single-branch targets; preserve split Pull and modal Commit. No menu-time preparation.
+- [x] **P1 — Deliver 0.29.0.** Nine focused scenarios passed across history checks and the corrected network rerun; Dark/Light normal/minimum offscreen review; 26 routine checks in 62.4 seconds, matching ignored preview/package hashes, owning docs and descriptive commit. No interactive launch or live server test.
+
+0.29.0: history context actions and split Fetch/Pull/Push; Commit stays modal. Named-side conflict editing is next. Routine verification remains 26 checks (maximum 30).
 
 - [x] **P1 — Direct default Pull.** Main button uses Rebase/auto-stash off and configured upstream; arrow keeps the existing editable modal. Shared real execution/results/reconciliation; no options-time preparation or remembered-choice change.
 - [x] **P1 — Deliver 0.28.0.** Four focused checks/offscreen Dark/Light normal/minimum review; 26 routine checks in 51.6 seconds; matching ignored preview/package hashes, updated docs and descriptive commit. No interactive launch or live server test.
@@ -70,7 +74,6 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P1 — History context actions.** Checkout, Reset branch to here (Soft/Mixed/Hard), Copy SHA and Revert. Bind the selected commit, preserve dirty-worktree protections, show destructive scope and verify disposable outcomes. Checkout directly into explicitly labelled Detached HEAD; merge-commit revert must identify the mainline rather than guess.
 - [ ] **P1 — Named-side conflict editor.** Implement the [requested workflow](docs/product.md#requested-next-workflows-not-implemented): real source names, one-side resolution, in-app C++/text merge and selectable external tool; binary side selection. Preserve conflict/sequence state, cancellation and stale-file checks; checkboxes only select; Resolve applies the chosen version and stages it.
 - [ ] **P2 — Remaining signing/input recovery.** Broaden only for a concrete daily-use failure; not a prerequisite that displaces requested functionality. Existing hooks/signing stay enabled.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.

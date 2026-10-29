@@ -21,6 +21,7 @@ public sealed class GitActionViewModel : ObservableObject
     private Task _outputTask = Task.CompletedTask;
     private ActionContext? _context;
     private readonly Func<CancellationToken, Task<ActionContext>>? _prepareExecution;
+    private readonly Func<ActionContext, ActionOptions, CancellationToken, Task<ActionOptions>>? _prepareOptions;
     private readonly Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, Task<ActionResult>>? _execute;
     public ActionContext Context => _context ?? throw new InvalidOperationException();
     private readonly string _repository;
@@ -95,11 +96,13 @@ public sealed class GitActionViewModel : ObservableObject
 
     public GitActionViewModel(ActionContext context, GitAction action, GitActions actions, Func<Task> reconcile, string? initialBranch = null,
         IUserInteraction? interaction = null, Func<CancellationToken, Task<ActionContext>>? prepareExecution = null,
-        Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, Task<ActionResult>>? execute = null)
+        Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, Task<ActionResult>>? execute = null,
+        Func<ActionContext, ActionOptions, CancellationToken, Task<ActionOptions>>? prepareOptions = null)
     {
         _repository = context.Repository.Worktree; Action = action; _actions = actions; _reconcile = reconcile; _interaction = interaction;
         _prepareExecution = prepareExecution;
         _execute = execute;
+        _prepareOptions = prepareOptions;
         RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit && (!(IsFetch || IsPull || IsPush) || Remote is not null) &&
             (!IsNew || !string.IsNullOrWhiteSpace(NewName) && StartRefs.Contains(StartRef)) &&
             (!ChooseBranch || Branches.Contains(Branch)) && (!ChooseRemoteBranch || !string.IsNullOrWhiteSpace(RemoteBranch)));
@@ -162,12 +165,13 @@ public sealed class GitActionViewModel : ObservableObject
             ExecutionStarting?.Invoke(this, EventArgs.Empty);
             // Let ShowDialog unwind before creating prompts or starting Git. The shell owns this task.
             await Dispatcher.Yield(DispatcherPriority.Background);
-            if (_prepareExecution is not null)
+            if (_prepareExecution is not null || _prepareOptions is not null)
             {
                 Phase = UiText.Get("ActionStageValidating");
                 using var validation = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token);
                 validation.CancelAfter(TimeSpan.FromSeconds(45));
-                _context = await _prepareExecution(validation.Token);
+                if (_prepareExecution is not null) _context = await _prepareExecution(validation.Token);
+                if (_prepareOptions is not null) options = await _prepareOptions(Context, options, validation.Token);
             }
             var promptContext = UiText.Format("AuthContext", Title, CurrentRepository);
             await using var authentication = IsNetwork ? await Task.Run(() => _interaction?.CreateAuthenticationSession(promptContext, async (prompt, token) =>

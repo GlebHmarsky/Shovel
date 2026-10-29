@@ -18,6 +18,7 @@
     <KeyBinding Key="O" Modifiers="Control+Alt" Command="{Binding OpenToolCommand}" CommandParameter="Explorer"/>
   </Window.InputBindings>
   <Window.Resources>
+    <ContextMenu x:Key="HistoryRowMenu" Closed="OnHistoryMenuClosed" FlowDirection="{x:Static loc:UiText.Direction}" />
     <Style x:Key="CaptionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Width" Value="44"/><Setter Property="Height" Value="32"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/>
       <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FontSize" Value="23"/>
@@ -141,8 +142,13 @@
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M1,4 L7,4 9,6 19,6 19,17 1,17 Z"/><TextBlock Text="{loc:Text Key=OpenRepository}"/></StackPanel>
         </Button>
 
-        <Button Style="{StaticResource ToolbarButton}" Command="{Binding FetchCommand}" ToolTip="{Binding FetchActionHelp}" AutomationProperties.HelpText="{Binding FetchActionHelp}" AutomationProperties.Name="{loc:Text Key=Fetch}">
+        <Button Style="{StaticResource ToolbarButton}" Command="{Binding DefaultFetchCommand}" AutomationProperties.AutomationId="DefaultFetch" ToolTip="{Binding DefaultFetchHelp}" AutomationProperties.HelpText="{Binding DefaultFetchHelp}" AutomationProperties.Name="{loc:Text Key=Fetch}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M10,1 L10,14 M5,9 L10,14 15,9 M2,16 L2,20 18,20 18,16"/><TextBlock Text="{loc:Text Key=Fetch}"/></StackPanel>
+        </Button>
+        <Button Command="{Binding FetchCommand}" Width="22" Padding="4,6" Margin="0,0,3,0"
+                AutomationProperties.AutomationId="FetchOptions" AutomationProperties.Name="{loc:Text Key=FetchOptions}"
+                ToolTip="{loc:Text Key=FetchOptions}" AutomationProperties.HelpText="{Binding FetchActionHelp}">
+          <Path Data="M0,0 L6,0 3,4 Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="6" Height="4" Stretch="Fill"/>
         </Button>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
           <Button Style="{StaticResource ToolbarButton}" Command="{Binding DefaultPullCommand}" AutomationProperties.AutomationId="DefaultPull" AutomationProperties.Name="{loc:Text Key=Pull}" ToolTip="{Binding DefaultPullHelp}" AutomationProperties.HelpText="{Binding DefaultPullHelp}">
@@ -156,10 +162,15 @@
           </Button>
         </StackPanel>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
-          <Button Style="{StaticResource ToolbarButton}" Command="{Binding PushCommand}" AutomationProperties.Name="{loc:Text Key=Push}" ToolTip="{Binding PushActionHelp}" AutomationProperties.HelpText="{Binding PushActionHelp}">
+          <Button Style="{StaticResource ToolbarButton}" Command="{Binding DefaultPushCommand}" AutomationProperties.AutomationId="DefaultPush" AutomationProperties.Name="{loc:Text Key=Push}" ToolTip="{Binding DefaultPushHelp}" AutomationProperties.HelpText="{Binding DefaultPushHelp}">
             <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M3,18 C15,18 15,15 15,4 M10,9 L15,4 19,9"/><TextBlock Text="{loc:Text Key=Push}"/></StackPanel>
           </Button>
           <TextBlock Text="{Binding PushCount}" VerticalAlignment="Top" Margin="0,5,5,0" FontWeight="SemiBold" AutomationProperties.Name="{loc:Text Key=AheadCount}" AutomationProperties.HelpText="{Binding DivergenceHelp}" />
+          <Button Command="{Binding PushCommand}" Width="22" Padding="4,6" Margin="0,0,3,0"
+                  AutomationProperties.AutomationId="PushOptions" AutomationProperties.Name="{loc:Text Key=PushOptions}"
+                  ToolTip="{loc:Text Key=PushOptions}" AutomationProperties.HelpText="{Binding PushActionHelp}">
+            <Path Data="M0,0 L6,0 3,4 Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="6" Height="4" Stretch="Fill"/>
+          </Button>
         </StackPanel>
         <Button Style="{StaticResource ToolbarButton}" Command="{Binding ShowChangesCommand}" ToolTip="{loc:Text Key=CommitOpenHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{Binding CommitButtonLabel}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M2,10 L7,15 18,3"/><TextBlock Text="{Binding CommitButtonLabel}"/></StackPanel>
@@ -273,6 +284,9 @@
               </Style>
             </DataGrid.Style>
             <DataGrid.RowStyle><Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+              <Setter Property="ContextMenu" Value="{StaticResource HistoryRowMenu}"/>
+              <EventSetter Event="PreviewMouseRightButtonDown" Handler="OnHistoryRightDown"/>
+              <EventSetter Event="ContextMenuOpening" Handler="OnHistoryMenuOpening"/>
               <Setter Property="AutomationProperties.Name" Value="{Binding AccessibilityLabel}" />
               <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
                 <Condition Binding="{Binding IsSameAuthor}" Value="True"/>

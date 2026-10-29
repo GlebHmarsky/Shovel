@@ -8,6 +8,7 @@ public sealed partial class ShellViewModel
     public CommitFilesViewModel? CommitFiles { get => _commitFiles; private set => Set(ref _commitFiles, value); }
     private void UpdateCommitFiles()
     {
+        if (_historyMenuOpen) return;
         var path = SelectedRepository?.Directory; var commit = SelectedCommit?.Commit;
         if (_stopping || DetailsIndex != 4 || path is null || commit is null || _git is null || _reader is null)
         { StopCommitFiles(); return; }

@@ -21,6 +21,8 @@ public sealed partial class ShellViewModel
     public RelayCommand FetchCommand { get; private set; } = null!;
     public RelayCommand PullCommand { get; private set; } = null!;
     public RelayCommand DefaultPullCommand { get; private set; } = null!;
+    public RelayCommand DefaultFetchCommand { get; private set; } = null!;
+    public RelayCommand DefaultPushCommand { get; private set; } = null!;
     public RelayCommand PushCommand { get; private set; } = null!;
     public RelayCommand ContinueCommand { get; private set; } = null!;
     public RelayCommand SkipCommand { get; private set; } = null!;
@@ -59,6 +61,9 @@ public sealed partial class ShellViewModel
     public string DefaultPullHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? UiText.Get("ActionPullNeedsBranch") :
         UiText.Get(DefaultPullTarget is null ? "PullDefaultNeedsUpstream" : "PullDefaultHelp");
+    public string DefaultFetchHelp => UiText.Get(ActionUnavailableKey ?? (SelectedRepository?.Snapshot?.RemoteNames.Count > 0 ? "DefaultFetchHelp" : "ActionNoRemote"));
+    public string DefaultPushHelp => UiText.Get(ActionUnavailableKey ?? (SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? "ActionAttachedRequired" :
+        SelectedRepository.Snapshot.RemoteNames.Count == 0 ? "ActionNoRemote" : "DefaultPushHelp"));
     public string PushActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         LocalBranches.Count == 0 ? UiText.Get("ActionNeedsBranch") : DivergenceHelp;
     public string SwitchActionHelp => UiText.Get(ActionUnavailableKey ?? (LocalBranches.Count == 0 ? "ActionNeedsBranch" : "ActionTitleSwitchBranch"));
@@ -78,11 +83,13 @@ public sealed partial class ShellViewModel
         FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanAct);
         PullCommand = new(() => OpenAction(GitAction.Pull), () => CanAct && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
         DefaultPullCommand = new(() => ActionTask = OpenActionAsync(GitAction.Pull, null, defaultPull: true), () => CanAct && DefaultPullTarget is not null);
+        DefaultFetchCommand = new(() => ActionTask = OpenActionAsync(GitAction.Fetch, null, directNetwork: true), () => CanAct && SelectedRepository?.Snapshot?.RemoteNames.Count > 0);
+        DefaultPushCommand = new(() => ActionTask = OpenActionAsync(GitAction.Push, null, directNetwork: true), () => CanAct && SelectedRepository?.Snapshot is { HeadKind: HeadKind.Branch, RemoteNames.Count: > 0 });
         PushCommand = new(() => OpenAction(GitAction.Push), () => CanAct && LocalBranches.Count != 0);
         SwitchBranchCommand = new(branch => OpenAction(GitAction.SwitchBranch, branch), branch => CanAct && LocalBranches.Contains(branch));
     }
     private void OpenAction(GitAction action, string? branch = null) => ActionTask = OpenActionAsync(action, branch);
-    private async Task OpenActionAsync(GitAction action, string? branch, bool defaultPull = false)
+    private async Task OpenActionAsync(GitAction action, string? branch, bool defaultPull = false, bool directNetwork = false)
     {
         var tab = SelectedRepository!;
         var pullTarget = defaultPull ? DefaultPullTarget : null;
@@ -129,7 +136,7 @@ public sealed partial class ShellViewModel
                 if (pullTarget is { } target)
                     await _actions.ValidateDefaultPullTargetAsync(context, target.Remote, target.Branch, token);
                 return context;
-            });
+            }, prepareOptions: directNetwork ? (context, options, token) => _actions!.ResolveDefaultNetworkAsync(context, options, token) : null);
             if (pullTarget is { } selectedTarget)
             {
                 model.Remote = cached.Remotes.Single(remote => remote.Name == selectedTarget.Remote);
@@ -138,7 +145,7 @@ public sealed partial class ShellViewModel
             var previous = _lastAction;
             _preparingAction = false;
             SetLastAction(model);
-            if (recoveryAction || defaultPull) model.RunCommand.Execute(null);
+            if (recoveryAction || defaultPull || directNetwork) model.RunCommand.Execute(null);
             else _interaction!.ShowGitAction(model);
             model.DismissOptions(); attempted = model.HasAttempt;
             if (!model.HasAttempt) SetLastAction(previous);

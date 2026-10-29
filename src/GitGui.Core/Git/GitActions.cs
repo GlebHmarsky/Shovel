@@ -5,7 +5,7 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init, DeleteBranch, SetUpstream, UnsetUpstream, SubmoduleUpdate, SubmoduleSync, AddRemote }
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init, DeleteBranch, SetUpstream, UnsetUpstream, SubmoduleUpdate, SubmoduleSync, AddRemote, CheckoutCommit, ResetSoft, ResetMixed, ResetHard, RevertCommit }
 public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch, Recovering }
 public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
@@ -13,7 +13,7 @@ public sealed record ActionContext(GitInstallation Git, RepositoryIdentity Ident
     HistorySession History, IReadOnlyList<GitRemote> Remotes, string ConfigStamp);
 public sealed record ActionOptions(GitAction Action, string Branch = "", string StartRef = "HEAD",
     string Remote = "", string RemoteBranch = "", bool Checkout = true, bool AllRemotes = false,
-    bool AllTags = false, bool SetUpstream = false, PullStrategy PullStrategy = PullStrategy.Rebase, bool AutoStash = false);
+    bool AllTags = false, bool SetUpstream = false, PullStrategy PullStrategy = PullStrategy.Rebase, bool AutoStash = false, int Mainline = 0);
 public sealed class GitActionException(string code) : Exception(code) { public string Code { get; } = code; }
 public sealed record ActionResult(ProcessOutcome Outcome, int? ExitCode, string Output)
 {
@@ -107,7 +107,9 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                 if (status.StandardOutput.Length != 0) throw new GitActionException("ActionDirty");
             }
             var commands = new List<string[]>();
-            if (options.Action is GitAction.NewBranch or GitAction.SwitchBranch)
+            if (IsHistoryAction(options.Action))
+                commands.Add(await HistoryCommandAsync(context, options, token));
+            else if (options.Action is GitAction.NewBranch or GitAction.SwitchBranch)
             {
                 await ValidateBranch(options.Branch);
                 if (options.Action == GitAction.NewBranch)
@@ -169,6 +171,12 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                     _ => GitActionStage.UpdatingBranch
                 });
                 last = await Write(command);
+                if (options.Action == GitAction.RevertCommit && last.Outcome == ProcessOutcome.Exited)
+                {
+                    var observed = await reader.InspectAsync(git, path, token);
+                    var unmerged = await Read(git, path, ["ls-files", "--unmerged", "-z"], token);
+                    last = last with { Operation = observed.Operation, HasConflicts = unmerged.StandardOutput.Length != 0 };
+                }
                 if (!last.Success) return last with { Output = output.ToString() };
             }
             if (options.Action == GitAction.Pull)
@@ -230,6 +238,7 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                 var environment = EnvironmentForGit();
                 environment["GIT_OPTIONAL_LOCKS"] = null;
                 environment["GIT_MERGE_AUTOEDIT"] = "no";
+                if (options.Action == GitAction.RevertCommit) environment["GIT_EDITOR"] = "false";
                 // The broker exists only for this user-started operation, never history reads.
                 if (options.Action is GitAction.Fetch or GitAction.Pull or GitAction.Push or GitAction.SubmoduleUpdate)
                 {
