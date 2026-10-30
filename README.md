@@ -170,7 +170,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.30.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.30.1-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -194,4 +194,6 @@ History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; e
 
 ## Windows installer and updates
 
-Public source **Shovel** uses the [MIT license](LICENSE). Windows installer/update packaging uses pinned Velopack and a separate public **shovel-releases** repository; account configuration is intentionally unset. [GitHub setup, signing, build/publish commands and installed validation limits](docs/distribution.md). Build the matching preview once, then run `pwsh -File scripts/Build-Installer.ps1 -LocalOnly` for an unconfigured local installer. Configured release builds require repository/public/private-key parameters described there; no upload occurs during packaging. Optional focused checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-updates`.
+Public source **Shovel** uses the [MIT license](LICENSE). Windows installer/update packaging uses pinned Velopack and a separate public **shovel-releases** repository; the configured host is GlebHmarsky/shovel-releases, private until the owner enables public downloads. [GitHub setup, signing, build/publish commands and installed validation limits](docs/distribution.md). Build the matching preview once, then run `pwsh -File scripts/Build-Installer.ps1 -LocalOnly` for an unconfigured local installer. Configured release builds require repository/public/private-key parameters described there; no upload occurs during packaging. Optional focused checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-updates`.
+
+On this publishing PC: `pwsh -File scripts/Build-Installer.ps1 -PrivateKeyPath "$env:USERPROFILE/.shovel-signing/shovel-update.key"` builds a signed-feed release using the committed public key. Windows publisher signing is separate and remains unset.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.30.1 — 2026-10-30
+
+- Configure GlebHmarsky/Shovel as the source repository and GlebHmarsky/shovel-releases as the update host, with a permanent public verification key. The private signing key stays outside the repository.
+- Default release packaging to the configured repository and public key. Repositories remain private; unattended update access requires making shovel-releases public. No shared GitHub token is embedded.
+
 ## 0.30.0 — 2026-10-30
 
 - Add per-user self-contained Windows installer packaging with pinned Velopack, signed GitHub release feeds, automatic check/download, manual retry/cancel and an explicit idle-gated Restart and update action. Preserve existing settings/tabs/drafts.

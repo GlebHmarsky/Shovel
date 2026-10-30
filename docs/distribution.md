@@ -1,27 +1,24 @@
 # Windows installation and GitHub publishing
 
 Confirmed 2026-10-30: public source repository **Shovel**, MIT license, and separate public
-**shovel-releases**, under the owner's personal GitHub account. Account name is intentionally
-unset until those repositories exist. No account credentials are compiled into the app.
+**shovel-releases**, under the owner's personal GitHub account. Repositories are [GlebHmarsky/Shovel](https://github.com/GlebHmarsky/Shovel) and
+[GlebHmarsky/shovel-releases](https://github.com/GlebHmarsky/shovel-releases). Both are private during preparation. No account credentials are compiled into the app.
 [Architecture](architecture.md#windows-installer-and-updater-0300) owns implementation;
 [requirements](requirements.md#updates-and-distribution) owns acceptance;
 [TODO](../TODO.md) owns outstanding work.
 
 ## What to do on GitHub
 
-1. Create a **public** repository named `Shovel`. Leave initialization with a README/license/gitignore
-   off when uploading this existing Git history; the source already includes the selected MIT license.
-2. Create a **public** repository named `shovel-releases`. It may contain a README linking to Shovel;
-   application source stays in the source repository, installers/packages in Releases here.
-3. Invite collaborators only if they should have write access. Other people can read/fork the source
-   and propose pull requests, but cannot push changes into your repository without write access.
-   For extra review discipline, optionally protect the default branch with a pull-request requirement.
-4. Give the developer the exact repository URLs. Until then, ordinary development/preview builds make
-   no update requests. There is no need to buy hosting, run a server, or give every coworker a token.
+The repositories already exist. Keep them private during preparation. When ready, make
+**shovel-releases public** for unattended update access and make **Shovel public** for the
+planned MIT source release. The app never carries a shared access token; while downloads
+are private, an unauthenticated update check reports failure and leaves Shovel usable.
+Source visibility does not affect updater access, which only uses shovel-releases.
 
-GitHub's automatically generated source archives for shovel-releases contain only that repository's
-files. All released binaries are public downloads. GitHub is the download host; an installed Shovel
-continues to work when GitHub is unreachable. No GitHub Actions workflow publishes automatically.
+Only invite collaborators who should have write access. Other people may read/fork public
+source and propose pull requests, but cannot push directly without write access. No visibility
+change is performed by the local packaging scripts. GitHub's generated source archives for
+shovel-releases contain only that repository's files. No custom server is needed.
 
 ## First release on the owner's PC
 
@@ -30,30 +27,23 @@ and (for scripted publishing only) GitHub CLI logged into the owner's account wi
 The project-local `vpk` tool and NuGet dependency are pinned to 1.2.161; no global tool installation.
 Runtime packs are pinned to 10.0.12 for this delivery; refresh servicing deliberately before rollout.
 
-Create a private signing directory outside the repository, then generate an update-signing key:
-
-```powershell
-pwsh -File scripts/New-UpdateKey.ps1 `
-  -PrivateKeyPath 'C:\YOUR-PRIVATE-DIRECTORY\shovel-update.key' `
-  -PublicKeyPath 'C:\YOUR-PRIVATE-DIRECTORY\shovel-update.pub.pem'
-```
-
-The script never overwrites keys, restricts the private file to the current Windows user,
-and does not print it. Securely back up the private key: subsequent releases need the same key.
-Only the public key goes into installed builds. Key rotation needs a bridge release signed by
-an already trusted key; losing/compromising the key needs a separately distributed repair installer.
+The permanent signing key has been generated on this PC at
+`%USERPROFILE%\.shovel-signing\shovel-update.key`, with current-user-only access.
+Only `distribution/update-public.pem` is committed. Securely back up the private key outside
+GitHub; all later releases must use the same key. On a replacement publishing PC, restore
+this key rather than generating a new one. `New-UpdateKey.ps1` is available for a deliberately
+new signing identity; do not use it for routine releases. Key rotation needs a bridge release
+signed by the old key; loss/compromise needs a separate repair distribution.
 
 Build once on final code, then package using that matching preview's smoke-verification record:
 
 ```powershell
 pwsh -File scripts/Build-Preview.ps1
 pwsh -File scripts/Build-Installer.ps1 `
-  -Repository 'YOUR-USERNAME/shovel-releases' `
-  -PublicKeyPath 'C:\YOUR-PRIVATE-DIRECTORY\shovel-update.pub.pem' `
-  -PrivateKeyPath 'C:\YOUR-PRIVATE-DIRECTORY\shovel-update.key'
+  -PrivateKeyPath "$env:USERPROFILE/.shovel-signing/shovel-update.key"
 ```
 
-Replace the capitalized values; they are documentation examples. The scripts refuse mismatched
+The repository and public-key arguments default to the configured values. The scripts refuse mismatched
 verification fingerprints and refuse overwriting an existing version. Output:
 `Build/<version>-installer-win-stable`. The version comes from Directory.Build.props.
 The installer includes .NET and AskPass; users still need Git for Windows. Install location is
@@ -73,7 +63,7 @@ promise removal of every warning. Keep signing secrets out of command history an
 ## Publish each release
 
 ```powershell
-pwsh -File scripts/Publish-Release.ps1 -ArtifactDirectory 'Build/0.30.0-installer-win-stable'
+pwsh -File scripts/Publish-Release.ps1 -ArtifactDirectory 'Build/0.30.1-installer-win-stable'
 ```
 
 This **publishes externally** when you run it. It checks the package's checksums, creates a draft

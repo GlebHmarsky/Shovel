@@ -1,8 +1,8 @@
 #requires -Version 7.4
 [CmdletBinding(DefaultParameterSetName='Release')]
 param(
-    [Parameter(Mandatory, ParameterSetName='Release')][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$')][string]$Repository,
-    [Parameter(Mandatory, ParameterSetName='Release')][string]$PublicKeyPath,
+    [Parameter(ParameterSetName='Release')][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$')][string]$Repository = 'GlebHmarsky/shovel-releases',
+    [Parameter(ParameterSetName='Release')][string]$PublicKeyPath = (Join-Path $PSScriptRoot '../distribution/update-public.pem'),
     [Parameter(Mandatory, ParameterSetName='Release')][string]$PrivateKeyPath,
     [Parameter(Mandatory, ParameterSetName='Local')][switch]$LocalOnly,
     [ValidateSet('win-stable','win-test')][string]$Channel = 'win-stable',

@@ -74,7 +74,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P1 — Finish public installer rollout (0.30.0 branch).** Packaging, signed checks/downloads and explicit restart admission are implemented. Configure the personal GitHub owner and public Shovel/shovel-releases repositories, generate/back up the signing key, choose Windows publisher signing, and verify two installed versions on a disposable Windows user/VM. Prove native install/update/repair/uninstall, cross-session admission, retained settings/drafts and framework maintenance-log contents before coworker rollout. [Setup and limits](docs/distribution.md). No publication or system install has been performed.
+- [ ] **P1 — Finish public installer rollout (0.30.0 branch).** Packaging, signed checks/downloads and explicit restart admission are implemented. GlebHmarsky/Shovel and GlebHmarsky/shovel-releases exist privately and the permanent signing key is generated. Back up that key, make releases public for unattended updates, choose Windows publisher signing, and verify two installed versions on a disposable Windows user/VM. Prove native install/update/repair/uninstall, cross-session admission, retained settings/drafts and framework maintenance-log contents before coworker rollout. [Setup and limits](docs/distribution.md). No publication or system install has been performed.
 
 
 - [ ] **P1 — Named-side conflict editor.** Implement the [requested workflow](docs/product.md#requested-next-workflows-not-implemented): real source names, one-side resolution, in-app C++/text merge and selectable external tool; binary side selection. Preserve conflict/sequence state, cancellation and stale-file checks; checkboxes only select; Resolve applies the chosen version and stages it.
@@ -102,7 +102,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 ## Decisions before rollout
 
 - [ ] **Q2:** coworker Windows editions/builds, architectures, IT/proxy/no-admin constraints. Local SDK prerequisites are present.
-- [ ] **Q3/Q4:** personal GitHub username/URLs, release/signing owner and certificate/key custody. Public GitHub Releases, Velopack and MIT are confirmed; no private-host/VPN requirement.
+- [ ] **Q3/Q4:** release publication/access and certificate/key custody; GlebHmarsky repository URLs are configured. Public GitHub Releases, Velopack and MIT are confirmed; no private-host/VPN requirement.
 - [ ] Refresh pinned .NET 10 servicing patch before distribution; reverify.
 - [ ] Finalize Windows publisher signing before distribution. Per-user Shovel install identity retains existing Foundation settings and CommitDrafts locations. Shovel name is confirmed.
 
