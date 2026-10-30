@@ -2,16 +2,31 @@
 
 Confirmed 2026-10-30: public source repository **Shovel**, MIT license, and separate public
 **shovel-releases**, under the owner's personal GitHub account. Repositories are [GlebHmarsky/Shovel](https://github.com/GlebHmarsky/Shovel) and
-[GlebHmarsky/shovel-releases](https://github.com/GlebHmarsky/shovel-releases). Both are private during preparation. No account credentials are compiled into the app.
+[GlebHmarsky/shovel-releases](https://github.com/GlebHmarsky/shovel-releases). The source repository remains private; shovel-releases is now public for the authorized online update rehearsal. No account credentials are compiled into the app.
 [Architecture](architecture.md#windows-installer-and-updater-0300) owns implementation;
 [requirements](requirements.md#updates-and-distribution) owns acceptance;
 [TODO](../TODO.md) owns outstanding work.
 
+## Online rehearsal: 0.30.103 → 0.30.104
+
+Both versions are published in shovel-releases. Install the regular **0.30.103** setup once, then
+open **Help → Shovel updates → Check and download → Restart and update** to receive 0.30.104.
+The installed **Shovel Local Test 0.30.102** uses a local file feed and a different app identity/key;
+it cannot download these production packages. The regular installer lives at `%LOCALAPPDATA%\Shovel`
+and uses the existing `%LOCALAPPDATA%\GitGui` settings/drafts. Local Test can be uninstalled separately.
+
+Both builds passed 26 smoke checks (45.1 s and 45.2 s). The production `SignedReleaseSource` loaded
+from the verified preview successfully fetched the public latest feed without credentials, verified
+its permanent-key signature, downloaded the complete 68,696,154-byte 0.30.104 package, and verified
+its SHA-256. It reread the feed and verified the package again before reporting success.
+Reproduce with `scripts/Test-PublishedUpdate.ps1 -ExpectedVersion 0.30.104` while that version remains
+in the latest feed. This does not install the update or automate visible UI; manual installed
+restart acceptance remains pending. Windows publisher signing is still not configured.
+
 ## What to do on GitHub
 
-The repositories already exist. Keep them private during preparation. When ready, make
-**shovel-releases public** for unattended update access and make **Shovel public** for the
-planned MIT source release. The app never carries a shared access token; while downloads
+The releases repository is public for unattended update access. The source repository remains private;
+making Shovel public for the planned MIT source release is a separate future action. The app never carries a shared access token; while downloads
 are private, an unauthenticated update check reports failure and leaves Shovel usable.
 Source visibility does not affect updater access, which only uses shovel-releases.
 

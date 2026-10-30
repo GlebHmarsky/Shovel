@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.30.104 — 2026-10-30
+
+- First online update rehearsal for the GitHub-connected Shovel 0.30.103 installer. Check and download through Help, then explicitly restart to install.
+- Uses the same application identity and permanent signing key as 0.30.103; retains settings and drafts. No additional Git workflow changes.
+- The offline Shovel Local Test 0.30.102 fixture must first be replaced by the regular Shovel installer; it does not contact GitHub.
+
+## 0.30.103 — 2026-10-30
+
+- Provide the GitHub-connected Shovel installer for the first online update rehearsal. Uses the permanent release verification key and GlebHmarsky/shovel-releases stable feed.
+- This is the regular Shovel application, separate from the offline Shovel Local Test 0.30.102 fixture. Install this version once before testing an online update.
+- Windows publisher signing is not yet configured.
+
 ## 0.30.1 — 2026-10-30
 
 - Configure GlebHmarsky/Shovel as the source repository and GlebHmarsky/shovel-releases as the update host, with a permanent public verification key. The private signing key stays outside the repository.
