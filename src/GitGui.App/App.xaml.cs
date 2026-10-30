@@ -67,7 +67,9 @@ public partial class App : Application
             _shell = new ShellViewModel(reader, new UserInteraction(), identities,
                 persist: SaveIdentitySettingsAsync, trace: _trace, actions: new GitActions(runner, reader, identities));
             _updater = new AppUpdater(UpdateConfiguration.Load());
-            _updates = new UpdateViewModel(_updater, RestartForUpdateAsync);
+            _updates = new UpdateViewModel(_updater, RestartForUpdateAsync, () =>
+                _shell.LoadedSettings is { CanSave: false }
+                    ? UiText.Get("UpdateSettingsBlocked") + " " + _shell.SettingsNotice : null);
             _shell.ConfigureUpdates(_updates);
             _shell.DraftStore = new GitGui.Core.Drafts.CommitDraftStore(null, identities, _log.RecordDraftStorage);
             _shell.AppearanceChanged += (_, _) => _theme.Select(_shell.Appearance);

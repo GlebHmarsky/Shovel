@@ -145,6 +145,47 @@ internal static partial class Program
             await store.SaveAsync(new() { CheckUpdatesPeriodically=false }, default);
             Expect(!(await store.LoadAsync(default)).Settings.CheckUpdatesPeriodically, "Periodic preference persisted");
         });
+        await Check("Schema 6 profile permits update and preserves saved layout", async () =>
+        {
+            var directory = Path.Combine(_root, "schema6-profile"); Directory.CreateDirectory(directory);
+            var store = new GitGui.Core.Settings.SettingsStore(directory);
+            await File.WriteAllTextAsync(store.FilePath, """
+                {"SchemaVersion":6,"HistoryFilesWidth":277,"DetailsHeight":900,
+                 "CommitLayout":{"Width":1300,"Height":850,"FilesWidth":411,"MessageHeight":234,"ConflictSourcesFraction":0.6},
+                 "CheckUpdatesPeriodically":false}
+                """);
+            var loaded = await store.LoadAsync(default);
+            Expect(loaded.CanSave, "Previously rejected schema 6 is writable");
+            var model = new ShellViewModel(); model.CompleteStartup(loaded);
+            var window = new GitGui.App.Views.MainWindow(model); window.RestoreLayout(loaded.Settings);
+            var captured = model.CaptureSession(window.CaptureLayout());
+            Expect(captured.CommitLayout == loaded.Settings.CommitLayout && captured.HistoryFilesWidth == 277,
+                "Window capture retains fields owned by newer layout views");
+            model.BeginShutdown(); await model.WaitForIdleAsync();
+            Expect(await model.VerifyUpdateIdleAsync(default), "Compatible empty profile permits update");
+            await store.SaveAsync(captured, default);
+            var saved = await store.LoadAsync(default);
+            Expect(saved.CanSave && saved.Settings.CommitLayout == loaded.Settings.CommitLayout && saved.Settings.HistoryFilesWidth == 277,
+                "Saved layout survives restart round-trip");
+            Expect(File.Exists(store.FilePath + ".bak"), "Original settings backed up");
+        });
+        await Check("Future settings remain protected and explain blocked restart", async () =>
+        {
+            var directory = Path.Combine(_root, "future-profile"); Directory.CreateDirectory(directory);
+            var store = new GitGui.Core.Settings.SettingsStore(directory);
+            var bytes = Encoding.UTF8.GetBytes("{\"SchemaVersion\":999,\"FutureData\":\"preserve\"}");
+            await File.WriteAllBytesAsync(store.FilePath, bytes);
+            var loaded = await store.LoadAsync(default);
+            var model = new ShellViewModel(); model.CompleteStartup(loaded); model.BeginShutdown();
+            Expect(!loaded.CanSave && !await model.VerifyUpdateIdleAsync(default), "Unknown schema does not bypass update gate");
+            await ExpectAsyncThrows(() => store.SaveAsync(new(), default));
+            Expect(File.ReadAllBytes(store.FilePath).SequenceEqual(bytes), "Future data unchanged");
+            var vm = new UpdateViewModel(new FixtureUpdater(config), () => Task.FromResult(false),
+                () => GitGui.App.Localization.UiText.Get("UpdateSettingsBlocked"));
+            await vm.CheckAsync(); vm.RestartCommand.Execute(null); await vm.ActiveTask;
+            Expect(vm.Ready && vm.Status.Contains("settings", StringComparison.OrdinalIgnoreCase) &&
+                vm.Status.Contains("installer", StringComparison.OrdinalIgnoreCase), "Specific reason and recovery guidance shown");
+        });
         await CheckUpdateGateAndLayoutAsync(config);
     }
     private static async Task CheckUpdateGateAndLayoutAsync(UpdateConfiguration config)

@@ -7,6 +7,7 @@ public sealed class UpdateViewModel : ObservableObject
 {
     private readonly IAppUpdater _updater;
     private readonly Func<Task<bool>> _restart;
+    private readonly Func<string?>? _blockedReason;
     private CancellationTokenSource? _cancel;
     private UpdateSnapshot _snapshot;
     private bool _periodic = true, _stopping, _busy;
@@ -22,11 +23,12 @@ public sealed class UpdateViewModel : ObservableObject
     public bool Ready => _snapshot.Phase is UpdatePhase.Ready or UpdatePhase.Blocked;
     public bool Busy => _busy;
     public bool PeriodicChecks { get => _periodic; set => Set(ref _periodic, value); }
-    public string Status => _snapshot.Phase == UpdatePhase.Downloading ? UiText.Format("UpdateDownloading", _snapshot.Version, _snapshot.Percent) :
+    public string Status => _snapshot.Phase == UpdatePhase.Blocked && _blockedReason?.Invoke() is { Length: > 0 } reason ? reason :
+        _snapshot.Phase == UpdatePhase.Downloading ? UiText.Format("UpdateDownloading", _snapshot.Version, _snapshot.Percent) :
         _snapshot.Phase is UpdatePhase.Ready or UpdatePhase.Blocked ? UiText.Format("Update" + _snapshot.Phase, _snapshot.Version) : UiText.Get("Update" + _snapshot.Phase);
-    public UpdateViewModel(IAppUpdater updater, Func<Task<bool>> restart)
+    public UpdateViewModel(IAppUpdater updater, Func<Task<bool>> restart, Func<string?>? blockedReason = null)
     {
-        _updater = updater; _restart = restart;
+        _updater = updater; _restart = restart; _blockedReason = blockedReason;
         _snapshot = new(updater.Available ? UpdatePhase.Idle : updater.Configuration.IsConfigured ? UpdatePhase.Portable : UpdatePhase.Unconfigured);
         CheckCommand = new(() => ActiveTask = CheckAsync(), () => !_stopping && !_busy && updater.Available);
         CancelCommand = new(() => _cancel?.Cancel(), () => _busy && _snapshot.Phase != UpdatePhase.Installing);

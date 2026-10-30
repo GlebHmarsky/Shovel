@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.30.106 — 2026-10-30
+
+- Online update target for the repaired 0.30.105 installer. Includes the same schema-6 profile compatibility and specific blocked-settings guidance; no additional behavior changes.
+- To retry from the blocked 0.30.103/0.30.104 build, close Shovel, install 0.30.105 once, then use Help > Shovel updates to download and explicitly restart into this version.
+
+## 0.30.105 — 2026-10-30
+
+- Fix blocked update restarts when a profile was saved by a schema-6 Shovel build. Support its settings structure, preserve commit/history layout fields during window capture, and migrate older schemas without deleting the profile.
+- Explain read-only settings as the reason for a blocked restart and provide installer recovery guidance. Unknown future formats remain protected from writes.
+- Users blocked on 0.30.103/0.30.104 must close Shovel and run this installer once; no settings deletion or downgrade is needed.
+
 ## 0.30.104 — 2026-10-30
 
 - First online update rehearsal for the GitHub-connected Shovel 0.30.103 installer. Check and download through Help, then explicitly restart to install.

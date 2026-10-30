@@ -4,6 +4,23 @@ namespace GitGui.Core.Settings;
 
 public sealed record RepositoryPreference(string Path, HistoryScope Scope);
 public enum AppAppearance { Dark, Light }
+public sealed record CommitLayout
+{
+    public double Width { get; init; } = 1200;
+    public double Height { get; init; } = 800;
+    public bool Maximized { get; init; }
+    public double FilesWidth { get; init; } = 380;
+    public double UnstagedFraction { get; init; } = .5;
+    public double MessageHeight { get; init; } = 220;
+    public double ConflictSourcesFraction { get; init; } = .55;
+    public CommitLayout Normalize() => this with
+    {
+        Width = Bound(Width, 1200, 900, 7680), Height = Bound(Height, 800, 620, 4320),
+        FilesWidth = Bound(FilesWidth, 380, 250, 3000), UnstagedFraction = Bound(UnstagedFraction, .5, .1, .9),
+        MessageHeight = Bound(MessageHeight, 220, 180, 2000), ConflictSourcesFraction = Bound(ConflictSourcesFraction, .55, .2, .8)
+    };
+    private static double Bound(double value, double fallback, double min, double max) => double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
+}
 
 public enum NavigationSection
 {
@@ -12,13 +29,15 @@ public enum NavigationSection
 
 public sealed record AppSettings
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public double WindowWidth { get; init; } = 1200;
     public double WindowHeight { get; init; } = 800;
     public bool IsMaximized { get; init; }
     public double SidebarWidth { get; init; } = 210;
     public double DetailsHeight { get; init; } = 180;
+    public double HistoryFilesWidth { get; init; } = 340;
+    public CommitLayout CommitLayout { get; init; } = new();
     public NavigationSection SelectedSection { get; init; } = NavigationSection.History;
     public string[] RepositoryPaths { get; init; } = [];
     public RepositoryIdentityStamp[] RepositoryIdentities { get; init; } = [];
@@ -35,7 +54,9 @@ public sealed record AppSettings
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),
         WindowHeight = Clamp(WindowHeight, 800, 620, 2160),
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Max(160, SidebarWidth) : 210,
-        DetailsHeight = Clamp(DetailsHeight, 180, 80, 360),
+        DetailsHeight = Clamp(DetailsHeight, 180, 80, 3000),
+        HistoryFilesWidth = Clamp(HistoryFilesWidth, 340, 160, 3000),
+        CommitLayout = (CommitLayout ?? new()).Normalize(),
         SelectedSection = Enum.IsDefined(SelectedSection) ? SelectedSection : NavigationSection.History,
         Appearance = Enum.IsDefined(Appearance) ? Appearance : AppAppearance.Dark,
         RiderExecutable = Executable(RiderExecutable), CodeExecutable = Executable(CodeExecutable), BashExecutable = Executable(BashExecutable),

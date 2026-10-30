@@ -118,7 +118,7 @@ public partial class MainWindow : Window
         if (settings.IsMaximized) WindowState = WindowState.Maximized;
     }
 
-    public AppSettings CaptureLayout() => new()
+    public AppSettings CaptureLayout() => (ViewModel.LoadedSettings?.Settings ?? new AppSettings()) with
     {
         WindowWidth = RestoreBounds.Width,
         WindowHeight = RestoreBounds.Height,

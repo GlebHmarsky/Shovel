@@ -7,6 +7,19 @@ Confirmed 2026-10-30: public source repository **Shovel**, MIT license, and sepa
 [requirements](requirements.md#updates-and-distribution) owns acceptance;
 [TODO](../TODO.md) owns outstanding work.
 
+## Recover a blocked restart on 0.30.103 / 0.30.104
+
+These installers predate schema-6 settings used by the development branch. With such a profile,
+SettingsStore returns NewerSchema/CanSave=false, and the restart gate deliberately refuses to save
+or overwrite the file. The generic blocked message in those versions did not identify this cause.
+
+Close Shovel and install **0.30.105** once, preserving the existing profile. It supports the actual
+schema-6 layout structure and retains commit/history layout fields during window capture. Then use
+**Help → Shovel updates → Check and download → Restart and update** for **0.30.106**.
+Do not delete the profile or change its SchemaVersion number. Future unknown formats still block
+writes, now with explicit settings/installer guidance. The 0.30.106 release has the same fix and serves
+as the online update target. Installed UI/restart confirmation remains a user acceptance check.
+
 ## Online rehearsal: 0.30.103 → 0.30.104
 
 Both versions are published in shovel-releases. Install the regular **0.30.103** setup once, then

@@ -845,6 +845,7 @@ Previous HEAD: {1}</value></data>
   <data name="UpdateCancelled" xml:space="preserve"><value>Update check or download cancelled. Your installed version is unchanged.</value></data>
   <data name="UpdateFailed" xml:space="preserve"><value>Update failed. Check your connection and available disk space, then retry. An invalid, incomplete or withdrawn release is never installed. Your installed version is unchanged.</value></data>
   <data name="UpdateBlocked" xml:space="preserve"><value>Shovel {0} is ready, but installation is blocked. Finish Git operations and recovery in all tabs, close external Git tools, and make sure every saved repository is accessible and settings are writable.</value></data>
+  <data name="UpdateSettingsBlocked" xml:space="preserve"><value>Restart is blocked because this session cannot save its settings. Your settings file has been preserved. If it was created by a newer version, close Shovel and install the latest compatible installer; do not delete or downgrade the settings file.</value></data>
   <data name="UpdateInstalling" xml:space="preserve"><value>Saving your session and verifying the update before restarting…</value></data>
   <data name="UpdateReadyMenu" xml:space="preserve"><value>Update ready — restart when convenient</value></data>
   <data name="UpdateOtherInstance" xml:space="preserve"><value>Another installed Shovel instance is running, or an explicit update is in progress. Close other Shovel instances first. If an update was interrupted, run the latest installer to repair the application.</value></data>
