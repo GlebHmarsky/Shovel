@@ -111,6 +111,13 @@ retain the installed app; retry uses full packages and may download again rather
 
 ## Verification boundary
 
+The isolated offline `ShovelLocalTest` fixture now exercises native installation, signed local-feed
+update from 0.30.101 to 0.30.102, profile-sentinel retention, native uninstall and scoped clean sweep
+on this Windows PC. See [local test instructions](local-installer-test.md) and the kit's JSON results.
+This uses a copied test identity and a CLI update probe; visible Help-menu/restart and production
+GitHub transport remain unverified. Nothing was published. The remaining acceptance work below
+still applies to production distribution.
+
 Headless checks and packaging do not prove installed replacement, restart, Windows 10 behavior,
 SmartScreen, real GitHub connectivity, proxy/rate-limit behavior, native uninstallation or power-loss
 recovery. Before coworker distribution, test two configured versions on a disposable Windows user/VM:
