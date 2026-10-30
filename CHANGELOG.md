@@ -3,6 +3,7 @@
 ## 0.30.1 — 2026-10-30
 
 - Configure GlebHmarsky/Shovel as the source repository and GlebHmarsky/shovel-releases as the update host, with a permanent public verification key. The private signing key stays outside the repository.
+- Compare public/private keys by cryptographic identity so Windows checkout line-ending conversion does not break packaging.
 - Default release packaging to the configured repository and public key. Repositories remain private; unattended update access requires making shovel-releases public. No shared GitHub token is embedded.
 
 ## 0.30.0 — 2026-10-30

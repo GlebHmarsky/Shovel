@@ -30,7 +30,11 @@ try {
         $key = [Security.Cryptography.RSA]::Create()
         $key.ImportFromPem([IO.File]::ReadAllText((Resolve-Path -LiteralPath $PrivateKeyPath)))
         $publicKey = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $PublicKeyPath))
-        if ($key.KeySize -lt 3072 -or $key.ExportSubjectPublicKeyInfoPem().Trim() -ne $publicKey.Trim()) { throw 'Signing key does not match the public verification key.' }
+        $verificationKey = [Security.Cryptography.RSA]::Create()
+        try {
+            $verificationKey.ImportFromPem($publicKey)
+            if ($key.KeySize -lt 3072 -or -not [Security.Cryptography.CryptographicOperations]::FixedTimeEquals($key.ExportSubjectPublicKeyInfo(), $verificationKey.ExportSubjectPublicKeyInfo())) { throw 'Signing key does not match the public verification key.' }
+        } finally { $verificationKey.Dispose() }
     }
     $config = Join-Path $work 'updates.json'
     @{ Repository = $(if ($LocalOnly) { '' } else { $Repository }); PublicKey = $publicKey; Channel = $Channel } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding utf8NoBOM
