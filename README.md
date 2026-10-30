@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.30.0** adds named-side conflict resolution and text merging, merge/rebase banners, a saved startup history preview, stash history actions, themed modal tab chrome and tab dragging. Includes working history/branch/network actions, Local Changes, commit drafts and file/hunk staging. Routine verification remains 26 checks. [Workflow and limits](docs/product.md#conflict-resolution-and-faster-reopening-0300); [measured discard results](docs/roadmap.md#conflicts-and-usability-0300).
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.30.1** fixes slow unstaged LFS discard by matching Fork's file-checkout command, retaining native conversions and index hooks without invoking branch post-checkout automation. Includes the 0.30 conflict editor, startup preview and tab/stash improvements. Routine verification remains 26 checks. [Workflow and limits](docs/product.md#conflict-resolution-and-faster-reopening-0300); [discard measurements](docs/roadmap.md#lfs-discard-0301).
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -70,6 +70,8 @@ Data-directory must be absolute; default %LOCALAPPDATA%\GitGui\Foundation preser
 Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build/publish copies them). Askpass handles explicit network credentials/passphrases/host confirmation; browser/GCM/signing/interactive hooks/custom SSH still use existing tools. Shovel saves no prompt/credential data; configured helpers may store credentials. Live sign-in/focus/input unverified.
 
 ## Using the workspace
+
+**0.30.1 discard:** optional `--check-discard` runs six isolated discard checks (partial staging, literal paths, filters/hooks, locks and stale state); `--check-lfs` adds hydration and responsive cancellation coverage. `--measure-discard-lfs` measures one and 64 selected assets; `--measure-discard-lfs-trace` additionally reports allowlisted child timings and adds profiling overhead. These commands use disposable repositories and do not touch your repositories. [Results](docs/roadmap.md#lfs-discard-0301).
 
 **0.30.0:** [conflict editor, operation banner, startup cache, stash history menus and tab dragging](docs/product.md#conflict-resolution-and-faster-reopening-0300). Optional focused checks: `--check-conflicts` (7), `--check-usability` (7), `--check-lfs` (4; requires already installed Git LFS). `--check-startup` runs only the two cache checks. Use the same `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- <flag>` command. All use disposable repositories; no visible app or live server.
 

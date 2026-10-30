@@ -16,7 +16,7 @@ namespace GitGui.FoundationChecks;
 
 internal static partial class Program
 {
-    private static async Task RunFileActionChecksAsync()
+    private static async Task RunFileActionChecksAsync(bool discardOnly = false)
     {
         var runner = new FileMenuRunner(new WindowsProcessRunner()); var reader = new RepositoryReader(runner);
         var identity = new WindowsRepositoryIdentity(); var actions = new GitActions(runner, reader, identity); var git = await reader.DiscoverAsync(null, default);
@@ -56,6 +56,37 @@ internal static partial class Program
             Expect(await File.ReadAllTextAsync(Path.Combine(repo, "a.txt")) == "staged\n" && await Git(repo, "show", ":a.txt") == "staged", "Index and worktree retain staged version");
             Expect(await File.ReadAllTextAsync(Path.Combine(repo, "b.txt")) == "keep\n" && await Git(repo, "show", "HEAD:a.txt") == "base", "Unrelated content and HEAD preserved");
         });
+        await Check("Unstaged discard honors filters and index hooks without invoking post-checkout", async () =>
+        {
+            var repo = await Repo("discard hooks");
+            await Write(repo, ".gitattributes", "*.txt filter=fixture\n");
+            await Git(repo, "config", "filter.fixture.clean", "cat");
+            await Git(repo, "config", "filter.fixture.smudge", "sed s/base/converted/");
+            await Git(repo, "config", "filter.fixture.required", "true");
+            var hooks = Path.Combine(repo, ".git", "discard-hooks"); Directory.CreateDirectory(hooks);
+            await Git(repo, "config", "core.hooksPath", hooks.Replace('\\', '/'));
+            const string checkoutHook = "#!/bin/sh\nprintf '%s' \"$3\" > .git/checkout-marker\nexit 42\n";
+            await Write(repo, ".git/discard-hooks/post-checkout", checkoutHook);
+            await Write(repo, ".git/discard-hooks/post-index-change", "#!/bin/sh\nprintf index > .git/index-marker\n");
+            await Write(repo, "a.txt", "edited\n");
+            var result = await Act(repo, WorkingCopyAction.Discard, e => e.Path == "a.txt");
+            Expect(result.Result.Success && await File.ReadAllTextAsync(Path.Combine(repo, "a.txt")) == "converted\n", "Native smudge conversion retained");
+            Expect(await Git(repo, "show", ":a.txt") == "base" && File.Exists(Path.Combine(repo, ".git/index-marker")), "Index blob preserved and native index hook invoked");
+            Expect(!File.Exists(Path.Combine(repo, ".git/checkout-marker")) && await File.ReadAllTextAsync(Path.Combine(hooks, "post-checkout")) == checkoutHook, "File discard leaves post-checkout untouched and does not invoke it");
+            var branch = await Raw(repo, "switch", "-c", "hook-check");
+            Expect(branch.ExitCode != 0 && await File.ReadAllTextAsync(Path.Combine(repo, ".git/checkout-marker")) == "1", "Branch checkout retains the configured hook and its failure");
+        });
+        await Check("Unstaged discard reports required-filter failure and respects existing index locks", async () =>
+        {
+            var repo = await Repo("discard failure"); await Write(repo, ".gitattributes", "a.txt filter=fixture\n");
+            await Git(repo, "config", "filter.fixture.smudge", "exit 42"); await Git(repo, "config", "filter.fixture.required", "true");
+            await Write(repo, "a.txt", "edit\n");
+            var result = await Act(repo, WorkingCopyAction.Discard, e => e.Path == "a.txt");
+            Expect(!result.Result.Success && result.UpdatedContext is null && await Git(repo, "show", ":a.txt") == "base", "No false success or index content change on filter failure");
+            await Write(repo, "a.txt", "retry\n"); await Write(repo, ".git/index.lock", "owned fixture lock");
+            result = await Act(repo, WorkingCopyAction.Discard, e => e.Path == "a.txt");
+            Expect(!result.Result.Success && await File.ReadAllTextAsync(Path.Combine(repo, "a.txt")) == "retry\n" && File.Exists(Path.Combine(repo, ".git/index.lock")), "Native lock failure precedes worktree writes, without lock deletion");
+        });
         await Check("Discard staged removes both sides only for selected paths, including added and unborn files", async () =>
         {
             var repo = await Repo("staged"); await Write(repo, "a.txt", "index\n"); await Write(repo, "-日本語 [new].txt", "new\n"); await Git(repo, "add", ".");
@@ -68,13 +99,14 @@ internal static partial class Program
         });
         await Check("Discard restores deleted/renamed/binary paths and deletes only selected untracked files", async () =>
         {
-            var repo = await Repo("rename binary"); await File.WriteAllBytesAsync(Path.Combine(repo, "binary.dat"), [0, 1, 2]); await Git(repo, "add", "."); await Git(repo, "commit", "-m", "binary");
+            const string binary = "-日本語 [binary].dat";
+            var repo = await Repo("rename binary"); await File.WriteAllBytesAsync(Path.Combine(repo, binary), [0, 1, 2]); await Git(repo, "add", "."); await Git(repo, "commit", "-m", "binary");
             await Git(repo, "mv", "a.txt", "renamed [a].txt");
             Expect((await Act(repo, WorkingCopyAction.Discard, entry => entry.Group == ChangeGroup.Staged)).Result.Success && File.Exists(Path.Combine(repo, "a.txt")) && !File.Exists(Path.Combine(repo, "renamed [a].txt")), "Rename both endpoints restored");
-            File.Delete(Path.Combine(repo, "a.txt")); await File.WriteAllBytesAsync(Path.Combine(repo, "binary.dat"), [0, 3, 4]); await Write(repo, "new.txt", "delete\n"); await Write(repo, "keep.txt", "keep\n");
+            File.Delete(Path.Combine(repo, "a.txt")); await File.WriteAllBytesAsync(Path.Combine(repo, binary), [0, 3, 4]); await Write(repo, "new.txt", "delete\n"); await Write(repo, "keep.txt", "keep\n");
             var result = await Act(repo, WorkingCopyAction.Discard, entry => entry.Path != "keep.txt");
             Expect(result.Result.Success && File.Exists(Path.Combine(repo, "a.txt")) && !File.Exists(Path.Combine(repo, "new.txt")) && File.Exists(Path.Combine(repo, "keep.txt")), "Deletion restore and literal selected delete");
-            Expect((await File.ReadAllBytesAsync(Path.Combine(repo, "binary.dat"))).SequenceEqual(new byte[] { 0, 1, 2 }), "Binary restoration");
+            Expect((await File.ReadAllBytesAsync(Path.Combine(repo, binary))).SequenceEqual(new byte[] { 0, 1, 2 }), "Binary restoration with a literal Unicode/space/dash/glob path");
         });
         await Check("Discard rejects stale index/status and existing locks, with no automatic cleanup", async () =>
         {
@@ -89,6 +121,7 @@ internal static partial class Program
             await Write(repo, "a.txt", "base\n"); await Reject("CommitStale", () => actions.ExecuteWorkingCopyAsync(context, options, default));
             using var cancelled = new CancellationTokenSource(); cancelled.Cancel(); await ExpectException<OperationCanceledException>(() => actions.ExecuteWorkingCopyAsync(context, options, cancelled.Token));
         });
+        if (discardOnly) return;
         await Check("Selected stash preserves unrelated staged/worktree changes and saves selected binary/untracked content", async () =>
         {
             var repo = await Repo("stash"); await Write(repo, "a.txt", "selected index\n"); await Write(repo, "b.txt", "other index\n"); await Git(repo, "add", ".");

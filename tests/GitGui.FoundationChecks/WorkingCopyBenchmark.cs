@@ -62,7 +62,7 @@ internal static partial class Program
                 else { var diff = await Git(["diff", "--name-only", "--", .. targets]); Expect(diff.Length == 0, "LFS discard restored actual assets"); }
                 Console.WriteLine($"Sample {sample + 1} {action} ({count} files): execute {execution:F1} ms; fresh rows {rows:F1} ms; validation {result.ValidationMilliseconds:F1} ms; command {result.CommandMilliseconds:F1} ms; reconciliation {result.RefreshMilliseconds:F1} ms; processes {samples.Length}");
                 Console.WriteLine(string.Join("; ", samples.Select(s => $"{s.Name} {s.Milliseconds:F1} ms")));
-                foreach (var child in runner.Children) Console.WriteLine($"Restore child {child.Name}: {child.Milliseconds:F1} ms");
+                foreach (var child in runner.Children) Console.WriteLine($"Discard child {child.Name}: {child.Milliseconds:F1} ms");
             }
         }
         Console.WriteLine("Disposable 2,000-text-file / 1,001-branch fixture; " + (assets ? "plus 64 x 4 MiB binary assets with invalidated stat cache; " : "") +
@@ -76,7 +76,7 @@ internal static partial class Program
         public List<(string Name, double Milliseconds)> Children { get; } = [];
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
-            var trace = profile && request.Arguments.Contains("restore");
+            var trace = profile && (request.Arguments.Contains("restore") || request.Arguments.Contains("checkout-index"));
             if (trace) request = request with { Environment = new(request.Environment, StringComparer.OrdinalIgnoreCase) { ["GIT_TRACE2_EVENT"] = "1" } };
             var watch = Stopwatch.StartNew(); var result = await _inner.RunAsync(request, token, output);
             if (trace)
@@ -105,7 +105,7 @@ internal static partial class Program
                 }
                 result = result with { StandardError = Encoding.UTF8.GetBytes(ordinary.ToString()) };
             }
-            var commands = new[] { "rev-parse", "symbolic-ref", "for-each-ref", "remote", "config", "log", "status", "diff", "add", "restore", "reset", "cat-file", "check-attr" };
+            var commands = new[] { "rev-parse", "symbolic-ref", "for-each-ref", "remote", "config", "log", "status", "diff", "add", "restore", "checkout-index", "reset", "cat-file", "check-attr" };
             lock (Samples) Samples.Add((request.Arguments.FirstOrDefault(commands.Contains) ?? "other", watch.Elapsed.TotalMilliseconds));
             return result;
         }

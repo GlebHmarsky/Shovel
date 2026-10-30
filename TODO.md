@@ -4,6 +4,8 @@ Updated 2026-10-30. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Diagnose and fix EOM's slow LFS discard.** Retained Shovel output and Fork Activity Manager identify the command/hook difference; user confirmed Fork's unstaged-discard semantics. Native conversions/index hooks remain; hook files/branch/staged-discard behavior unchanged. Same EOM assets: old restore pipeline 33.4 s, fixed single/two-file selections 1.3–2.1 s, exact hashes and preserved stash. [Evidence and limits](docs/roadmap.md#lfs-discard-0301).
+- [x] **P1 — Deliver 0.30.1.** Focused discard/LFS checks; 26 routine checks in 52.8 seconds, zero build warnings/errors, matching ignored preview/checksums and owning docs. New preview launched and restored EOM; desktop discard submission remains an automation limitation. Large-batch/cold-cache limits remain below.
 - [x] **P1 — Conflict resolution.** Actual source labels, per-file side checkout/staging and UTF-8 result editing; merge/rebase banner with Resolve/Continue/Abort. Binary/LFS/deletion/rebase/stash and stale/failure paths covered by focused checks. Configured external tool works; tool chooser and additional encodings remain limits.
 - [x] **P1 — Startup and daily-use fixes.** Bounded saved last-selected history preview; real stash history Apply/Pop/Drop; themed disabled tab strip and persisted drag reorder. Headless cache publication and offscreen theme checks passed; native desktop input remains unverified.
 - [x] **P1 — Profile discard and correct LFS status.** Read-only authorized asset-repository inspection; disposable text/LFS single/batch measurements; overlapping validation and consolidated HEAD reads; restore filters/hooks preserved. Fixed false modified rows after hydrated LFS restores. See [results](docs/roadmap.md#conflicts-and-usability-0300).
@@ -13,7 +15,7 @@ Updated 2026-10-30. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [x] **P1 — Direct Fetch/Push with options arrows.** Use supported configured single-branch targets; preserve split Pull and modal Commit. No menu-time preparation.
 - [x] **P1 — Deliver 0.29.0.** Nine focused scenarios passed across history checks and the corrected network rerun; Dark/Light normal/minimum offscreen review; 26 routine checks in 62.4 seconds, matching ignored preview/package hashes, owning docs and descriptive commit. No interactive launch or live server test.
 
-0.30.0 adds conflict resolution and startup/tab/stash usability. Routine verification remains 26 checks (maximum 30). Discard's reported 30-second spike and one-second target remain open below.
+0.30.1 addresses the identified EOM discard bottleneck; 0.30.0 adds conflict resolution and startup/tab/stash usability. Routine verification remains 26 checks (maximum 30). Large-batch and cold-cache costs remain below.
 
 - [x] **P1 — Direct default Pull.** Main button uses Rebase/auto-stash off and configured upstream; arrow keeps the existing editable modal. Shared real execution/results/reconciliation; no options-time preparation or remembered-choice change.
 - [x] **P1 — Deliver 0.28.0.** Four focused checks/offscreen Dark/Light normal/minimum review; 26 routine checks in 51.6 seconds; matching ignored preview/package hashes, updated docs and descriptive commit. No interactive launch or live server test.
@@ -79,7 +81,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P1 — Finish representative LFS discard latency.** The 30-second unstaged Blueprint event was not reproduced; controlled timings still exceed the one-second target. Correlate validation/Git/reconciliation timings from the actual delayed attempt with asset size, LFS cache/filter/hook state and disk load. Keep exact bytes/rows correct and UI cancellable. Do not claim the event fixed from the current unpaired benchmark runs.
+- [ ] **P2 — Further large-batch LFS latency.** The identified EOM post-checkout delay is fixed with user-confirmed file-discard semantics. A 64 × 4 MiB fixture still takes 3.8 s, mostly status/hash verification beyond the roughly one-second native checkout; optimize only with exact-byte/race correctness. Cold/missing-LFS-cache and precise Shovel desktop timings remain unverified; preserve responsive cancellation and honest completion.
 - [ ] **P2 — Conflict editor extensions.** In-app external-tool chooser, more encodings and block-level merge controls; current configured-tool/UTF-8/side-selection workflow is delivered.
 - [ ] **P2 — Remaining signing/input recovery.** Broaden only for a concrete daily-use failure; not a prerequisite that displaces requested functionality. Existing hooks/signing stay enabled.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.

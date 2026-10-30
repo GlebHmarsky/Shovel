@@ -79,7 +79,7 @@ internal static partial class Program
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
-            if (request.Arguments.Contains("restore")) { Started.TrySetResult(); await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+            if (request.Arguments.Contains("checkout-index")) { Started.TrySetResult(); await Task.Delay(Timeout.InfiniteTimeSpan, token); }
             return await inner.RunAsync(request, token, output);
         }
     }

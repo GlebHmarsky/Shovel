@@ -30,7 +30,7 @@ During a merge/rebase, an orange banner above history offers **Resolve** (Local 
 
 On clean shutdown, Shovel saves the selected repository's last verified history page, selection and scroll. On restart it can show this explicitly labelled last-known view while fresh data loads. It never restores mutation readiness or replays commands. Missing/invalid/replaced-repository cache data is ignored. Tab dragging moves individual tabs left/right and persists their order; the disabled strip retains the selected theme while Commit is open.
 
-Discard keeps native Git filters/hooks and exact selected scope. Validation reads overlap and HEAD metadata uses one targeted query. Standard LFS v1 assets are compared locally with their stored SHA-256 pointer so restored assets leave Local Changes; custom filters/extension pointers remain conservatively visible. See [measured results and remaining latency](roadmap.md#conflicts-and-usability-0300); one-second performance is not established.
+Since **0.30.1**, unstaged discard uses Git's file checkout, matching Fork: native LFS/smudge conversion and index hooks remain enabled, while post-checkout branch automation does not run. Hook files, branch operations and staged-discard behavior are unchanged. Exact selected scope, partial staging, progress, cancellation and error reconciliation remain. Standard LFS v1 assets are compared locally with their stored SHA-256 pointer so restored assets leave Local Changes; custom filters/extension pointers remain conservatively visible. [Measurements and remaining limits](roadmap.md#lfs-discard-0301).
 
 ## History actions and network split buttons (0.29.0)
 
@@ -50,7 +50,7 @@ The arrow remains preparation-free. Direct Pull requires an attached branch and 
 
 ## Current workspace
 
-Implemented through **0.30.0**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
+Implemented through **0.30.1**; ordinary action buttons authorize their configured Git behavior without an extra consent step.
 
 Branch menu: delete local branch, set upstream to an existing remote-tracking branch, or unset upstream. Options use cached refs; submission validates targets. Deletion confirms branch/tip and retains Git's merged and checked-out-worktree protections. No force deletion or remote operation is implied.
 

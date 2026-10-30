@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.30.1 — 2026-10-30
+
+- Use Git's batched `checkout-index` for unstaged discard, matching Fork's observed command. Keep LFS/smudge conversion and index hooks; avoid invoking branch-oriented post-checkout automation for file discard. Hook files and branch/staged-discard behavior remain unchanged.
+- Reproduce the EOM delay: 32.7 seconds inside the old restore command; the new full pipeline measured 1.3–2.0 seconds for one asset and 1.4–2.1 seconds for two. Verify exact hydrated bytes, preserved stash/hooks, partial staging, lock/filter failures and responsive cancellation. These warm local measurements are not a universal one-second guarantee.
+
 ## 0.30.0 — 2026-10-30
 
 - Resolve individual conflicts with named current/incoming sources, native side checkout and staging, or a bounded in-app UTF-8 merge editor. Preserve rebase side semantics, binary/LFS assets, deletion choices, stale edits and failed-tool results. Show an orange merge/rebase banner with Resolve, Continue and Abort.

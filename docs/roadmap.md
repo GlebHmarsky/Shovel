@@ -4,6 +4,29 @@ Updated 2026-10-30. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### LFS discard (0.30.1)
+
+**2026-10-30:** EOM's configured post-checkout hook unconditionally invokes an external plugin updater after file restore: fetch, LFS pull and submodule reconciliation across sibling repositories. This appeared in the running 0.30.0 Shovel's retained discard output. Fork's Activity Manager showed `checkout-index --index --force --stdin -z` for the equivalent action. The user explicitly chose those unstaged-discard semantics: retain native LFS/smudge/index hooks, omit post-checkout for file discard, and leave hook files and branch/staged-discard behavior unchanged. [Implementation](architecture.md#conflicts-startup-preview-and-discard-profiling-0300).
+
+Authorized live measurements used two assets from the latest stash (65,939 and 3,028,749 baseline bytes), available local LFS objects and the existing 2,804,532-byte index. The worktree was clean on inspection. Only hash-verified fixture targets were replaced, and the stash was never applied/popped/dropped. Each sample verified exact baseline SHA-256, unchanged stash identity and unchanged post-checkout file. EOM returned clean. Replaying the previous restore command once through the same service pipeline took **33.401 s**: validation **0.457**, native command **32.707**, reconciliation **0.174**. This reproduces a tens-of-seconds delay, not the exact reported 50-second sample.
+
+| Measurement | Median | Range / sample count |
+| --- | ---: | --- |
+| Fixed Shovel, one EOM asset, validation through fresh rows | 1.869 s | 1.320–1.989 s; 3 |
+| Fixed Shovel, both EOM assets, validation through fresh rows | 1.739 s | 1.421–2.096 s; 3 |
+| Fork's observed native command replay, one asset | 0.846 s | 0.771–1.936 s; 3 |
+| Fork's observed native command replay, both assets | 0.823 s | 0.786–1.061 s; 3 |
+| Disposable fixture, one 4 MiB LFS asset | 1.352 s | 1.278–1.433 s; 3 |
+| Disposable fixture, 64 assets / 256 MiB | 3.792 s | 3.755–3.908 s; 3 |
+
+Shovel's EOM native command itself took **0.540–1.011 s**; validation **0.366–0.582 s**, scoped reconciliation **0.374–0.615 s**. These are warm-cache headless service measurements, excluding fixture setup, final independent hash verification and trailing full background refresh. Task-specific live harness remains ignored under artifacts; no repository content or raw process traces are committed/logged. The reusable disposable harness (`artifacts/discard-lfs-0301.txt`) retains 2,000 text files / 1,001 branches and invalidated asset stat times. Its 64-file validation/status/hash reconciliation still costs **2.4–2.9 s** combined; no universal one-second or cold/missing-LFS-cache guarantee.
+
+Actual Fork single-file and two-file UI discards succeeded with exact-byte checks and empty Local Changes. Each completed by the first observation, **3.38 / 3.35 s** after automation submission; those upper bounds include substantial UI tooling overhead and are not native command timings. Shovel's old retained output was inspected on desktop; automated submission through its nested modal could not be reliably targeted, so the numerical Shovel comparison uses its real service pipeline, not a desktop-latency claim.
+
+Relevant verification: **17 file-action checks** passed; after adding literal Unicode/space/dash/glob path coverage, all **6 optional discard checks** passed (`artifacts/discard-checks-0301.txt`). **4 LFS checks** passed, including native hydration/conflict staging and cancellation while discard is held; input-priority dispatcher response was **0.4 ms**. An initial test incorrectly required Git to propagate hook exit 42 verbatim; Git returned nonzero with the hook marker present, and the assertion now checks that actual contract.
+
+Delivery verification: **26 routine checks passed in 52.8 s**, zero build warnings/errors (`artifacts/preview-0.30.1-final.txt`). Matching ignored `Build/0.30.1-win-x64` preview: all 16 checksums and four tested assembly hashes/0.30.1 versions verified. Closed 0.30.0 cleanly and launched 0.30.1; EOM history and clean count restored. Its Local Changes modal displayed the controlled LFS edit and retained the dark tab strip; automated context-menu submission again dismissed the menu without reaching confirmation. The owned test edit was restored using native checkout-index and exact bytes/clean status reverified. Desktop discard latency remains unmeasured; service and responsiveness evidence above does not certify physical UI timing.
+
 ### Conflicts and usability (0.30.0)
 
 **2026-10-30:** named-side per-file conflict resolution/staging, bounded UTF-8 result editor, native binary/LFS/deletion choices and configured external merge tool; orange merge/rebase Resolve/Continue/Abort banner. Saved last-selected history preview, stash history Apply/Pop/Drop, themed disabled tab strip and persisted drag order are implemented. [Behavior/limits](product.md#conflict-resolution-and-faster-reopening-0300), [mechanisms](architecture.md#conflicts-startup-preview-and-discard-profiling-0300). No interactive launch or user-repository mutation.

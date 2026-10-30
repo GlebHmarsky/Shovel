@@ -42,9 +42,14 @@ public sealed partial class GitActions
                 if (tracked.Length > 0)
                 {
                     await WritePaths(tracked);
-                    result = await Write(staged && fresh.Commit is null
+                    // Match file-discard semantics: checkout-index applies configured smudge/LFS
+                    // filters and refreshes index stat data, without a branch post-checkout hook.
+                    // Staged discard still needs restore's HEAD/addition/deletion handling.
+                    result = !staged
+                        ? await Write(["checkout-index", "--index", "--force", "--stdin", "-z"], standardInputFile: pathFile)
+                        : await Write(fresh.Commit is null
                         ? ["rm", "--cached", "--ignore-unmatch", "-f", "--pathspec-from-file=" + pathFile, "--pathspec-file-nul"]
-                        : ["restore", "--worktree", "--no-recurse-submodules", .. staged ? new[] { "--staged", "--source=" + fresh.Commit } : [],
+                        : ["restore", "--worktree", "--no-recurse-submodules", "--staged", "--source=" + fresh.Commit,
                             "--pathspec-from-file=" + pathFile, "--pathspec-file-nul"]);
                     if (!result.Success) return await Finish(result);
                 }
@@ -196,13 +201,13 @@ public sealed partial class GitActions
         }
 
         Task WritePaths(string[] values) => File.WriteAllTextAsync(pathFile, string.Join('\0', values) + "\0", new UTF8Encoding(false), token);
-        async Task<ActionResult> Write(string[] arguments, string? indexFile = null)
+        async Task<ActionResult> Write(string[] arguments, string? indexFile = null, string? standardInputFile = null)
         {
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null; environment["GIT_EDITOR"] = "false";
             if (indexFile is not null) environment["GIT_INDEX_FILE"] = indexFile;
             var run = await runner.RunAsync(new(git.Executable, path, ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false",
                 "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "submodule.recurse=false", .. arguments])
-                { Environment = environment, Timeout = TimeSpan.FromMinutes(options.Action == WorkingCopyAction.ExternalDiff ? 10 : 5), MaximumOutputBytes = 1024 * 1024 }, token, progress);
+                { Environment = environment, StandardInputFile = standardInputFile, Timeout = TimeSpan.FromMinutes(options.Action == WorkingCopyAction.ExternalDiff ? 10 : 5), MaximumOutputBytes = 1024 * 1024 }, token, progress);
             commandTime += run.Duration.TotalMilliseconds;
             return new(run.Outcome, run.ExitCode, Redact(Decode(run) + Encoding.UTF8.GetString(run.StandardError)));
         }

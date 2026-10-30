@@ -25,6 +25,18 @@ internal static partial class Program
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();
         if (args.Length == 0 || args is ["--smoke"]) return RunRoutineChecks();
+        if (args is ["--check-discard"])
+        {
+            _routine = true;
+            _root = Path.GetFullPath("artifacts/discard-checks/" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_root);
+            var emptyConfig = Path.Combine(_root, "isolated.config"); File.WriteAllText(emptyConfig, "");
+            Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", emptyConfig);
+            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
+            using var deadline = RoutineDeadline(TimeSpan.FromMinutes(3), "Discard checks exceeded deadline");
+            RunFileActionChecksAsync(discardOnly: true).GetAwaiter().GetResult();
+            Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
+        }
         if (args is ["--check-startup"] or ["--check-lfs"] or ["--check-conflicts"] or ["--check-usability"] or ["--check-sidebar"] or ["--render-sidebar"] or ["--check-workspace"] or ["--check-operation-style"] or ["--check-history-layout"] or ["--check-workspace-cleanup"] or ["--check-draft-io"] or ["--check-default-pull"] or ["--check-history-actions"] or ["--check-default-network"])
         {
             _lfsChecks = args[0] == "--check-lfs"; _conflictChecks = args[0] == "--check-conflicts"; _startupChecks = args[0] == "--check-startup"; _usabilityChecks = args[0] == "--check-usability" || _startupChecks;
