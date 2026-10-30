@@ -16,6 +16,8 @@ public partial class CommitWindow : Window
     public CommitWindow(CommitViewModel model)
     {
         _model = model; DataContext = model; InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
+        RestoreLayout();
+        SizeChanged += (_, _) => FilesColumn.MaxWidth = Math.Max(250, ActualWidth - 445);
         Loaded += async (_, _) => await _model.StartLoading();
         PreviewKeyDown += OnKeyState; PreviewKeyUp += OnKeyState;
         PreviewMouseRightButtonUp += (_, _) => Dispatcher.BeginInvoke(() => { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); }, DispatcherPriority.Background);
@@ -23,6 +25,23 @@ public partial class CommitWindow : Window
         Deactivated += (_, _) => _model.ShiftHeld = false;
         Activated += (_, _) => _model.ShiftHeld = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         Closing += OnClosing;
+    }
+    public void RestoreLayout()
+    {
+        var layout = _model.Layout.Normalize(); var area = SystemParameters.WorkArea;
+        Width = Math.Min(layout.Width, area.Width); Height = Math.Min(layout.Height, area.Height);
+        FilesColumn.Width = new(Math.Min(layout.FilesWidth, Width - 445));
+        UnstagedRow.Height = new(layout.UnstagedFraction, GridUnitType.Star);
+        StagedRow.Height = new(1 - layout.UnstagedFraction, GridUnitType.Star);
+        MessageRow.Height = new(Math.Min(layout.MessageHeight, Math.Max(180, Height - 330)));
+        if (layout.Maximized) WindowState = WindowState.Maximized;
+    }
+    public void CaptureLayout()
+    {
+        var bounds = WindowState == WindowState.Normal ? new Rect(0, 0, Width, Height) : RestoreBounds;
+        _model.Layout = (_model.Layout with { Width = bounds.Width, Height = bounds.Height, Maximized = WindowState == WindowState.Maximized,
+            FilesWidth = FilesColumn.ActualWidth, UnstagedFraction = UnstagedRow.ActualHeight / Math.Max(1, UnstagedRow.ActualHeight + StagedRow.ActualHeight),
+            MessageHeight = MessageRow.ActualHeight }).Normalize();
     }
     private void OnKeyState(object sender, KeyEventArgs e)
     {
@@ -117,6 +136,7 @@ public partial class CommitWindow : Window
         // Even an already idle model may finish synchronously. Leave WPF's Closing callback
         // before closing again; otherwise the ordinary idle close throws VerifyNotClosing.
         await System.Windows.Threading.Dispatcher.Yield();
-        await _model.CloseAsync(); _allowClose = true; Close();
+        if (!_model.ConfirmCloseConflict()) { _closing = false; return; }
+        CaptureLayout(); await _model.CloseAsync(); _allowClose = true; Close();
     }
 }

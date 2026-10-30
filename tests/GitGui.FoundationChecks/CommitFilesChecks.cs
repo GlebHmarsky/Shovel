@@ -136,7 +136,7 @@ internal static partial class Program
         {
             var observed = new WorkingTimingRunner(); var localReader = new RepositoryReader(observed); var actions = new GitActions(observed, localReader, new WindowsRepositoryIdentity());
             var context = await actions.ReadWorkingCopyAsync(git, repo, default);
-            Expect(!observed.Samples.Any(s => s.Name == "for-each-ref") && context.Repository.Branch == "main", "No history enumeration for local context");
+            Expect(!observed.EnumeratedHistoryRefs && context.Repository.Branch == "main", "Local context permits the bounded HEAD query but never enumerates history refs");
             await Git("switch", "--detach"); context = await actions.ReadWorkingCopyAsync(git, repo, default);
             Expect(context.Repository.HeadKind == HeadKind.Detached && context.Repository.Commit is not null, "Detached retained");
             await Git("switch", "--orphan", "unborn"); context = await actions.ReadWorkingCopyAsync(git, repo, default);

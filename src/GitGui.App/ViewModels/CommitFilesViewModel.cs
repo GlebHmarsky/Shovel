@@ -7,6 +7,8 @@ namespace GitGui.App.ViewModels;
 public sealed record ParentChoice(string? Hash, string Label);
 public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallation git, string path, CommitRecord commit) : ObservableObject
 {
+    public ActivityJournal? Journal { get; init; }
+    private CommitRecord _commit = commit;
     public bool ShowParentSelector { get; init; } = true;
     public string? PreferredPath { get; init; }
     private CancellationTokenSource? _cancel;
@@ -22,10 +24,12 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
     private BinaryComparison? _binary;
     public BinaryComparison? Binary { get => _binary; private set { if (Set(ref _binary, value)) Changed(nameof(HasBinary)); } }
     public bool HasBinary => Binary is not null;
-    public IReadOnlyList<ParentChoice> Parents { get; } = commit.Parents.Count == 0
+    public IReadOnlyList<ParentChoice> Parents => _commit.Parents.Count == 0
         ? [new(null, UiText.Get("CommitFilesRoot"))]
-        : commit.Parents.Select((hash, i) => new ParentChoice(hash, UiText.Format("CommitFilesParent", i + 1, hash))).ToArray();
-    public string CommitHash => commit.Hash;
+        : _commit.Parents.Select((hash, i) => new ParentChoice(hash, UiText.Format("CommitFilesParent", i + 1, hash))).ToArray();
+    public string CommitHash => _commit.Hash;
+    private string _displayedPath = "";
+    public string DisplayedPath { get => _displayedPath; private set => Set(ref _displayedPath, value); }
     public ParentChoice? Parent { get => _parent; set { if (Set(ref _parent, value)) Refresh(); } }
     public ChangeRow? Selected { get => _selected; set { if (Set(ref _selected, value)) LoadDiff(); } }
     public IReadOnlyList<ChangeRow> Files { get => _files; private set => Set(ref _files, value); }
@@ -38,29 +42,34 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
     public RelayCommand CancelCommand => new(() => _cancel?.Cancel(), () => !_closed);
     public Task Pending { get; private set; } = Task.CompletedTask;
     public void Start() { if (_parent is null) Parent = Parents[0]; }
+    public void SelectCommit(CommitRecord value)
+    {
+        if (_closed || _commit.Hash == value.Hash && _commit.Parents.SequenceEqual(value.Parents) && _comparison is not null) return;
+        _commit = value; _parent = Parents[0]; _comparison = null;
+        Changed(nameof(CommitHash)); Changed(nameof(Parents)); Changed(nameof(Parent)); Refresh();
+    }
     public void Stop() { _closed = true; _generation++; _cancel?.Cancel(); _cancel = null; }
+    public void Pause() { _generation++; _cancel?.Cancel(); _cancel = null; _comparison = null; Busy = true; }
     private void Refresh()
     {
         if (_closed || Parent is null) return;
-        var priorParent = _comparison?.Parent; var parent = Parent.Hash;
-        if (_comparison is not null && priorParent != parent) { Files = []; Lines = []; Binary = null; _selected = null; Changed(nameof(Selected)); }
+        var parent = Parent.Hash; var hash = _commit.Hash; var selectedPath = Selected?.Change.Path ?? PreferredPath;
         _comparison = null;
         Queue(async token =>
         {
-            var comparison = await reader.ReadCommitFilesAsync(git, path, commit.Hash, parent, token);
+            var comparison = await reader.ReadCommitFilesAsync(git, path, hash, parent, token);
             var rows = await Task.Run(() => comparison.Files.Select(file => new ChangeRow(file)).ToArray(), token);
-            return () => { _comparison = comparison; Files = rows; Status = UiText.Format("CommitFilesCount", rows.Length); if (rows.Length == 0) { Lines = []; Notice = UiText.Get("DiffNoTextChanges"); } };
-        }, after: () => { var old = Selected?.Change.Path ?? PreferredPath; _selected = null; Selected = Files.FirstOrDefault(f => f.Change.Path == old || f.Change.OriginalPath == old) ?? Files.FirstOrDefault(); });
+            return () => { _comparison = comparison; Files = rows; Status = UiText.Format("CommitFilesCount", rows.Length); if (rows.Length == 0) { Lines = []; Binary = null; DisplayedPath = ""; Notice = UiText.Get("DiffNoTextChanges"); } };
+        }, after: () => { _selected = null; Selected = Files.FirstOrDefault(f => f.Change.Path == selectedPath || f.Change.OriginalPath == selectedPath) ?? Files.FirstOrDefault(); });
     }
     private void LoadDiff()
     {
         if (_closed || Selected is not { } row || _comparison is not { } comparison) return;
-        Lines = []; Binary = null; Notice = UiText.Get("DiffLoading");
         Queue(async token =>
         {
             var diff = await reader.ReadCommitFileDiffAsync(git, path, comparison, row.Change, token);
             var lines = await Task.Run(() => diff.Lines.Where(line => line.Kind != DiffLineKind.Metadata || line.Text.StartsWith("\\ No newline", StringComparison.Ordinal)).Select(line => new DiffRow(line)).ToArray(), token);
-            return () => { Lines = lines; Binary = BinaryComparison.Create(diff, row.Change); Output = diff.RawPatch; Notice = UiText.Format("DiffSummary" + diff.Kind,
+            return () => { Lines = lines; Binary = BinaryComparison.Create(diff, row.Change); DisplayedPath = row.Path; Output = diff.RawPatch; Notice = UiText.Format("DiffSummary" + diff.Kind,
                 diff.OldBytes?.ToString("N0") ?? UiText.Get("CountUnavailable"), diff.NewBytes?.ToString("N0") ?? UiText.Get("CountUnavailable"), diff.Added, diff.Removed); };
         });
     }
@@ -69,6 +78,8 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
         _cancel?.Cancel(); var previous = Pending; var generation = ++_generation;
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45)); _cancel = cancellation;
         Busy = true; Output = ""; Status = UiText.Get("CommitFilesLoading");
+        var attempt = new object(); var watch = System.Diagnostics.Stopwatch.StartNew(); var outcome = OperationOutcome.Cancelled;
+        Journal?.Record(new(attempt, UiText.Get("CommitFilesTitle"), Status, 0, OperationOutcome.Running), path, true);
         Pending = Run();
         async Task Run()
         {
@@ -79,11 +90,12 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
                 cancellation.Token.ThrowIfCancellationRequested();
                 var publish = await read(cancellation.Token);
                 if (_closed || generation != _generation || cancellation.IsCancellationRequested) return;
-                publish(); success = true;
+                publish(); success = true; outcome = OperationOutcome.Success;
                 if (after is null) Status = UiText.Format("CommitFilesCount", Files.Count);
             }
             catch (Exception error)
             {
+                outcome = error is OperationCanceledException ? OperationOutcome.Cancelled : OperationOutcome.Failed;
                 if (!_closed && generation == _generation)
                 {
                     Status = UiText.Get(error is GitReadException failure ? "GitError" + failure.Failure : error is OperationCanceledException ? "ActionResultCancelled" : "ActionReadFailed");
@@ -92,6 +104,8 @@ public sealed class CommitFilesViewModel(RepositoryReader reader, GitInstallatio
             }
             finally
             {
+                Journal?.Record(new(attempt, UiText.Get("CommitFilesTitle"), OperationActivity.CompletedPhase(outcome), watch.Elapsed.TotalSeconds, outcome), path, true,
+                    outcome == OperationOutcome.Failed ? Output : null);
                 if (generation == _generation) { _cancel = null; Busy = false; }
                 cancellation.Dispose();
             }

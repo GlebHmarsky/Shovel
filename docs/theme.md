@@ -53,6 +53,8 @@ The duration capsule uses an 11-DIP radius, fixed width and tabular digits. New 
 
 ## Scope and maintenance
 
+0.31.0 uses TabStrip for inactive repository tabs and Sidebar for the selected tab. Split toolbar arrows share the flat button surface, with nonzero count badges near their icons. Activity and inline conflict controls use the existing semantic text/selection/border/input brushes; source rows remain virtualized. Saved geometry follows settings schema 6. Normal inactive selection remains distinct; refresh must preserve focused containers instead of forcing keyboard focus or painting every selection active.
+
 Shared styles live in `Resources/AppStyles.xaml`; `Services/AppTheme.cs` applies the selected palette at startup, on Appearance selection and system high-contrast changes, and unsubscribes at exit. Schema 5 stores the selection; older profiles default to Dark. No new dependency, network request or Git-path change. Headless tests use the same resources with a plain test Application.
 
 Since 0.16.1, Shovel-owned window title bars use native DWM styling; 0.24.0 updates that styling on palette changes. Windows 11 caption/background/text/border colors follow Chrome, Text/Muted and Border; high contrast removes these overrides. Dialog caption buttons remain native. Since 0.26.0 the main window uses an integrated WindowChrome caption with SystemCommands buttons; move/resize/system-menu hit testing remains delegated to WPF/Windows. Windows 10 receives a best-effort light/dark-mode request; unsupported attributes retain native defaults. Windows file/folder pickers and MessageBox dialogs remain OS-owned. Wider visual/accessibility polish stays deferred. Do not claim pixel parity or desktop certification from an offscreen render.

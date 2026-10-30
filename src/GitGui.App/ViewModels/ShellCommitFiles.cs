@@ -13,8 +13,9 @@ public sealed partial class ShellViewModel
         if (_stopping || ShowingStartupPreview || DetailsIndex != 4 || path is null || commit is null || _git is null || _reader is null)
         { StopCommitFiles(); return; }
         if (_commitFilesPath == path && CommitFiles?.CommitHash == commit.Hash) return;
+        if (_commitFilesPath == path && CommitFiles is { } retained) { retained.SelectCommit(commit); return; }
         StopCommitFiles(); _commitFilesPath = path;
-        var model = new CommitFilesViewModel(_reader, _git, path, commit); CommitFiles = model;
+        var model = new CommitFilesViewModel(_reader, _git, path, commit) { Journal = Journal }; CommitFiles = model;
         StartAfterDrain();
         async void StartAfterDrain() { await _oldCommitFiles; if (ReferenceEquals(CommitFiles, model) && !_stopping) model.Start(); }
     }

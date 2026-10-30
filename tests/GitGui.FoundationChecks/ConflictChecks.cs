@@ -51,16 +51,20 @@ internal static partial class Program
         {
             var repo = await Conflict("editor"); var p = await Preview(repo);
             Expect(p.CanEdit && p.Current?.Text == "current\n" && p.Incoming?.Text == "incoming\n" && p.Base?.Text == "base\n" && p.IncomingSource.StartsWith("incoming · ", StringComparison.Ordinal), "Actual base/current/incoming and source branch/commit");
-            var model = new ConflictViewModel(p.Context, p.Change, actions); var window = new ConflictWindow(model);
+            var model = new ConflictViewModel(p.Context, p.Change, actions); var view = new ConflictView { DataContext = model };
             try
             {
-                await model.StartAsync(); var calls = runner.Calls; model.Current = true; model.Incoming = true;
+                await model.StartAsync(); var calls = runner.Calls;
+                Expect(model.Current && model.Incoming && model.CurrentLines[0].OldLine == "1", "Whole-file sources initially enabled with numbered lines");
+                model.Incoming = false; Expect(model.Text == "current\n", "Current whole-file preview");
+                model.Incoming = true; model.Current = false; Expect(model.Text == "incoming\n", "Incoming whole-file preview");
+                model.Current = true;
                 Expect(runner.Calls == calls && model.ResolveCommand.CanExecute(null), "Choosing sides performs no write/read");
                 foreach (var theme in new[] { AppAppearance.Dark, AppAppearance.Light })
                 {
                     AppTheme.Apply(Application.Current.Resources, false, theme);
                     foreach (var size in new[] { (1100, 740), (800, 570) })
-                    { Arrange((FrameworkElement)window.Content, size.Item1, size.Item2); SaveRender((FrameworkElement)window.Content, $"conflict-{theme}-{size.Item1}.png", size.Item1, size.Item2); }
+                    { Arrange(view, size.Item1, size.Item2); SaveRender(view, $"conflict-{theme}-{size.Item1}.png", size.Item1, size.Item2); }
                 }
                 model.ResolveCommand.Execute(null); await model.Work;
                 Expect(!model.Resolved && model.ResolveCommand.CanExecute(null), "Unedited markers reject without losing retry/editor state");
@@ -68,7 +72,24 @@ internal static partial class Program
                 Expect(model.Resolved && await Git(repo, "show", ":file.txt") == "current and incoming" && await Git(repo, "ls-files", "-u") == "", "Edited content really staged");
                 Expect(await File.ReadAllTextAsync(Path.Combine(repo, "keep.txt")) == "unrelated\n", "Unrelated file preserved");
             }
-            finally { await model.CloseAsync(); window.Close(); AppTheme.Apply(Application.Current.Resources, false); }
+            finally { await model.CloseAsync(); AppTheme.Apply(Application.Current.Resources, false); }
+        });
+        await Check("Commit pane resolves a whole-file side inline and reconciles the staged file", async () =>
+        {
+            var repo = await Conflict("inline"); var model = new CommitViewModel(repo, git, reader, actions, new CommitInteraction());
+            var window = new CommitWindow(model);
+            try
+            {
+                await model.StartLoading(); await model.FileTask;
+                Expect(model.HasConflict && model.Conflict is { Current: true, Incoming: true }, "Selected conflict opens in the existing diff pane");
+                var editor = model.Conflict!; editor.Current = false;
+                Expect(editor.Text == "incoming\n" && await Git(repo, "ls-files", "-u") != "", "Preview alone leaves index unmerged");
+                var content = (FrameworkElement)window.Content; Arrange(content, 1200, 800);
+                await Dispatcher.Yield(DispatcherPriority.ContextIdle); SaveRender(content, "inline-commit-conflict.png", 1200, 800);
+                editor.ResolveCommand.Execute(null); await editor.Work; await model.LoadingTask; await model.DiffTask;
+                Expect(editor.Resolved && !model.HasConflict && model.Staged.Any(r => r.Path == "file.txt") && await Git(repo, "show", ":file.txt") == "incoming", "Actual stage 3 applied and staged, then normal comparison restored");
+            }
+            finally { await model.CloseAsync(); window.Close(); }
         });
         await Check("Rebase names rebased and replayed sides correctly and resolves actual stage 2", async () =>
         {

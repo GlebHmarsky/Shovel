@@ -845,7 +845,7 @@ Previous HEAD: {1}</value></data>
   <data name="ConflictDeletedSide" xml:space="preserve"><value>File absent on this side. Selecting it resolves this path as deleted.</value></data>
   <data name="ConflictBinarySide" xml:space="preserve"><value>Binary, LFS, unsupported encoding or large content. Select this side to restore it through Git.</value></data>
   <data name="ConflictBinaryHelp" xml:space="preserve"><value>This file cannot be edited as text here. Select exactly one side, or use your configured external merge tool.</value></data>
-  <data name="ConflictEditorHelp" xml:space="preserve"><value>The result starts with the working file, including conflict markers. Edit it below; both selected sides use that edited result. Selecting a checkbox does not modify a file.</value></data>
+  <data name="ConflictEditorHelp" xml:space="preserve"><value>Choose a whole-file side, or keep both checked and edit the result below. Remove all conflict markers before resolving. Checkboxes only preview; Resolve applies and stages.</value></data>
   <data name="ConflictResolveHelp" xml:space="preserve"><value>Apply the selected side or edited result, then stage this file as resolved.</value></data>
   <data name="ConflictReloadRequired" xml:space="preserve"><value>Reload the conflict before another attempt. The displayed edit and output are retained.</value></data>
   <data name="ConflictDuration" xml:space="preserve"><value>{0:F1} s</value></data>
@@ -863,4 +863,17 @@ Previous HEAD: {1}</value></data>
   <data name="ConflictStillUnmerged" xml:space="preserve"><value>The tool returned, but this file is still unmerged. Its content and output are retained.</value></data>
   <data name="ConflictNoLongerUnmerged" xml:space="preserve"><value>This file is no longer unmerged. Close this editor and refresh Local Changes.</value></data>
   <data name="HistoryStartupCached" xml:space="preserve"><value>Last-known view from {0:g}. Loading current repository data…</value></data>
+  <data name="ActivityTitle" xml:space="preserve"><value>Activity log</value></data>
+  <data name="ActivityLocalStatus" xml:space="preserve"><value>Local Changes status</value></data>
+  <data name="ActivitySidebar" xml:space="preserve"><value>Branches, stashes and submodules</value></data>
+  <data name="ActivityCategories" xml:space="preserve"><value>Activity categories</value></data>
+  <data name="ActivityAll" xml:space="preserve"><value>All</value></data>
+  <data name="ActivityUser" xml:space="preserve"><value>User</value></data>
+  <data name="ActivityBackground" xml:space="preserve"><value>Background</value></data>
+  <data name="ActivityResize" xml:space="preserve"><value>Resize activity list</value></data>
+  <data name="ActivityRetention" xml:space="preserve"><value>Session only · latest 128 entries · output limited to 32 Ki characters per entry. URL credentials are redacted.</value></data>
+  <data name="ActivityOutputLimit" xml:space="preserve"><value>Further output omitted from this activity entry.</value></data>
+  <data name="CommitMetadata" xml:space="preserve"><value>Details</value></data>
+  <data name="ConflictResizeResult" xml:space="preserve"><value>Resize conflict sources and result</value></data>
+  <data name="DiffRetainedLoading" xml:space="preserve"><value>Loading selection… previous comparison remains visible.</value></data>
 </root>

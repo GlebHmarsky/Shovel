@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.30.1** fixes slow unstaged LFS discard by matching Fork's file-checkout command, retaining native conversions and index hooks without invoking branch post-checkout automation. Includes the 0.30 conflict editor, startup preview and tab/stash improvements. Routine verification remains 26 checks. [Workflow and limits](docs/product.md#conflict-resolution-and-faster-reopening-0300); [discard measurements](docs/roadmap.md#lfs-discard-0301).
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.31.0** retains comparisons during selection, embeds whole-file conflict resolution in Commit, saves pane sizes and adds All/User/Background activity. Includes the 0.30.1 LFS discard fix. Routine verification remains 26 checks. [Current behavior](docs/product.md#daily-use-interactions-0310); [discard measurements](docs/roadmap.md#lfs-discard-0301).
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -11,6 +11,8 @@ Top-center command durations now use a fixed capsule: running blue, success gree
 Optional focused verification after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-operation-style` (four checks; disposable Git, controlled WPF animation clock and offscreen normal/minimum Dark/Light renders). It does not show a window or certify desktop animation smoothness.
 
 ## Prerequisites
+
+QOL checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-qol` (six bounded checks for retained views/selection, layout migration, session activity and offscreen layouts). `--check-conflicts` includes eight disposable conflict scenarios and inline Commit staging. These are optional focused suites; normal packaging runs the unchanged smoke suite.
 
 History/caption checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-history-layout` (four opt-in checks; disposable stashes, topology/paging and offscreen caption/toolbar renders). [Caption and folded-stash behavior](docs/product.md#compact-caption-and-history-0260). Native caption interactions require separate authorized desktop validation.
 
@@ -178,7 +180,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.30.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Restores/builds/checks/publishes **Build/0.31.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 

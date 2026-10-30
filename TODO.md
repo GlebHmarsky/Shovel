@@ -4,6 +4,9 @@ Updated 2026-10-30. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Daily-use QOL.** Retain file/commit comparisons while loading; preserve unchanged selected rows; navigate history/stashes to Commit changes; embed whole-file conflict selection/editing/staging in Commit; persist pane/window sizes; quiet tabs/arrows/badges and add bounded All/User/Background activity. [Behavior and limits](docs/product.md#daily-use-interactions-0310).
+- [x] **P1 — Deliver 0.31.0.** Six QOL, eight conflict, eleven stash and ten commit-file checks passed; 26 smoke checks in 53.0 seconds, zero build warnings/errors, matching ignored preview/checksums and owning docs. Native input coverage, crash-time geometry and advanced merging remain limitations.
+
 - [x] **P1 — Diagnose and fix EOM's slow LFS discard.** Retained Shovel output and Fork Activity Manager identify the command/hook difference; user confirmed Fork's unstaged-discard semantics. Native conversions/index hooks remain; hook files/branch/staged-discard behavior unchanged. Same EOM assets: old restore pipeline 33.4 s, fixed single/two-file selections 1.3–2.1 s, exact hashes and preserved stash. [Evidence and limits](docs/roadmap.md#lfs-discard-0301).
 - [x] **P1 — Deliver 0.30.1.** Focused discard/LFS checks; 26 routine checks in 52.8 seconds, zero build warnings/errors, matching ignored preview/checksums and owning docs. New preview launched and restored EOM; desktop discard submission remains an automation limitation. Large-batch/cold-cache limits remain below.
 - [x] **P1 — Conflict resolution.** Actual source labels, per-file side checkout/staging and UTF-8 result editing; merge/rebase banner with Resolve/Continue/Abort. Binary/LFS/deletion/rebase/stash and stale/failure paths covered by focused checks. Configured external tool works; tool chooser and additional encodings remain limits.

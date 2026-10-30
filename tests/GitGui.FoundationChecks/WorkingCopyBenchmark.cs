@@ -74,8 +74,11 @@ internal static partial class Program
         private readonly WindowsProcessRunner _inner = new();
         public List<(string Name, double Milliseconds)> Samples { get; } = [];
         public List<(string Name, double Milliseconds)> Children { get; } = [];
+        public bool EnumeratedHistoryRefs { get; private set; }
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
+            if (request.Arguments.Contains("for-each-ref") && !request.Arguments.TakeLast(4).SequenceEqual(new[]
+                { "for-each-ref", "--include-root-refs", "--format=%(objectname)%00%(symref)%00%(objecttype)", "HEAD" })) EnumeratedHistoryRefs = true;
             var trace = profile && (request.Arguments.Contains("restore") || request.Arguments.Contains("checkout-index"));
             if (trace) request = request with { Environment = new(request.Environment, StringComparer.OrdinalIgnoreCase) { ["GIT_TRACE2_EVENT"] = "1" } };
             var watch = Stopwatch.StartNew(); var result = await _inner.RunAsync(request, token, output);

@@ -2,7 +2,17 @@
 
 Updated 2026-10-30. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
 
-## Purpose and delivery
+## Daily-use interactions (0.31.0)
+
+Selecting a file or commit retains the last completed, labelled comparison until the new one is ready. Loading/error status explains the retained view; a completed empty result clears it. Stale visible hunks cannot be staged. Unchanged refreshes preserve row identity and native focus instead of rebuilding the selected rows. Clicking a history commit or stash opens the bottom **Commit** changes tab; metadata remains under **Details**.
+
+The central repository button opens a session activity panel with **All / User / Background**, retained selection, operation outcome/duration and available Git output. It performs no preparation. Entries are bounded and are not persisted. Inactive repository tabs use the dark strip, the selected tab stays gray, and adjacent toolbar arrows use the same quiet surface. Nonzero ahead/behind counts appear beside the icons; zero/unknown counts are hidden.
+
+Commit window dimensions and file-list, staged/unstaged, message and conflict-result splits survive reopening and clean exit. The main history/file splitter is saved too; restored sizes are clamped to the available workspace. Layout changes are not crash-persistent.
+
+Conflict resolution now occupies the existing Commit diff pane. Both whole-file sides start checked; unchecking one previews the remaining source. **Resolve and stage** performs the native side operation and stages the file. Keeping both checked uses the editable result, initially the working file including markers; there is no automatic concatenation or block-level selection. Checkbox changes never mutate Git. This supersedes the separate editor described in the historical 0.30.0 workflow below.
+
+## Purpose
 
 **Shovel** is a lightweight Windows 10/11 Git client for about 30 initial coworkers using development repositories, including C++/TypeScript. Aim for Fork's restrained layout and Git Extensions' practical capabilities, with original assets. AI maintains the code; the shipped app needs no AI service. English first, localization-ready; install once with in-place updates when distribution is implemented.
 
@@ -22,9 +32,9 @@ The work environment is already trusted. No repository-trust modal on open, rest
 
 ## Conflict resolution and faster reopening (0.30.0)
 
-Select a conflicted file in Local Changes, then **Resolve conflict…**. The owned editor reads actual index stages after display. Current/incoming cards show available branch/ref names and commit IDs; during rebase they are explicitly the rebased result and replayed commit. Stash/patch conflicts with no recorded source retain honest generic labels. Checkboxes only select: **Resolve and stage** applies one chosen side or saves the editable merged result when both are selected, then stages that path. An absent side means deletion. Resolving a file does not continue a sequence automatically.
+Select a conflicted file in Local Changes. Since 0.31.0 its inline diff pane reads actual index stages after display. Current/incoming cards show available branch/ref names and commit IDs; during rebase they are explicitly the rebased result and replayed commit. Stash/patch conflicts with no recorded source retain honest generic labels. Checkboxes only select: **Resolve and stage** applies one chosen side or saves the editable merged result when both are selected, then stages that path. An absent side means deletion. Resolving a file does not continue a sequence automatically.
 
-Ordinary UTF-8 text up to 512 KiB, 20,000 lines and 16,384 characters per line supports side/base inspection, copy-side-to-result and direct editing. Remaining conflict markers are rejected without losing edits. Reload retains typed result text. Binary/LFS/filtered/other-encoding files use native side checkout or the configured external merge tool; no pointer is saved as an asset. The external button uses Git's merge.guitool/merge.tool; an in-app tool chooser remains deferred. Errors, duration and cancellation remain visible; failed staging keeps the saved result, while stale index/config/attributes/file data require reload. Closing unsaved editor text confirms that file. No automatic rollback or backup cleanup.
+Ordinary UTF-8 text up to 512 KiB, 20,000 lines and 16,384 characters per line supports numbered side inspection, whole-file preview and direct result editing. Remaining conflict markers are rejected without losing edits. Reload retains typed result text. Binary/LFS/filtered/other-encoding files use native side checkout or the configured external merge tool; no pointer is saved as an asset. The external button uses Git's merge.guitool/merge.tool; an in-app tool chooser remains deferred. Errors, duration and cancellation remain visible; failed staging keeps the saved result, while stale index/config/attributes/file data require reload. Closing unsaved editor text confirms that file. No automatic rollback or backup cleanup.
 
 During a merge/rebase, an orange banner above history offers **Resolve** (Local Changes), **Continue** and **Abort**. Abort uses the active Git operation and its existing target-specific destructive confirmation. Stash conflicts use per-file resolution without inventing a Continue/Abort sequence. History stash rows have their own **Apply / Pop / Drop** menu; Drop confirms the saved target, and submission validates the current selector/hash.
 

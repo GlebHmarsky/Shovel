@@ -34,6 +34,15 @@
       <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
       <Setter Property="StrokeThickness" Value="1.5" /><Setter Property="Margin" Value="0,0,0,4" />
     </Style>
+    <Style x:Key="ToolbarArrow" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
+      <Setter Property="MinWidth" Value="18"/><Setter Property="Width" Value="18"/><Setter Property="Padding" Value="3,6"/><Setter Property="Margin" Value="0,0,4,0"/>
+    </Style>
+    <Style x:Key="CountBadge" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource Theme.Raised}"/><Setter Property="BorderBrush" Value="{DynamicResource Theme.Border}"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="9"/><Setter Property="MinWidth" Value="17"/><Setter Property="Height" Value="17"/><Setter Property="Padding" Value="3,0"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/><Setter Property="VerticalAlignment" Value="Top"/><Setter Property="Margin" Value="20,-5,-4,0"/>
+      <Style.Triggers><DataTrigger Binding="{Binding}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding}" Value="—"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+    </Style>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <Style x:Key="HistoryText" TargetType="TextBlock" BasedOn="{StaticResource AuthorHighlightText}">
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -112,7 +121,7 @@
              AllowDrop="True" PreviewMouseMove="OnTabMouseMove" PreviewMouseLeftButtonUp="OnTabMouseUp" DragOver="OnTabDragOver" Drop="OnTabDrop"
              BorderThickness="0,0,0,1" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
              AutomationProperties.Name="{loc:Text Key=RepositoryTabs}" AutomationProperties.AutomationId="RepositoryTabs">
-      <ListBox.Template><ControlTemplate TargetType="ListBox"><Border Background="{DynamicResource Theme.Sidebar}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer Focusable="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"><ItemsPresenter/></ScrollViewer></Border></ControlTemplate></ListBox.Template>
+      <ListBox.Template><ControlTemplate TargetType="ListBox"><Border Background="{DynamicResource Theme.TabStrip}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer Focusable="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"><ItemsPresenter/></ScrollViewer></Border></ControlTemplate></ListBox.Template>
       <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate></ListBox.ItemsPanel>
       <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" TextAlignment="Center" TextTrimming="CharacterEllipsis" Padding="6,8" ToolTip="{Binding Directory}" FlowDirection="LeftToRight" /></DataTemplate></ListBox.ItemTemplate>
       <ListBox.ItemContainerStyle>
@@ -147,17 +156,16 @@
         <Button Style="{StaticResource ToolbarButton}" Command="{Binding DefaultFetchCommand}" AutomationProperties.AutomationId="DefaultFetch" ToolTip="{Binding DefaultFetchHelp}" AutomationProperties.HelpText="{Binding DefaultFetchHelp}" AutomationProperties.Name="{loc:Text Key=Fetch}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M10,1 L10,14 M5,9 L10,14 15,9 M2,16 L2,20 18,20 18,16"/><TextBlock Text="{loc:Text Key=Fetch}"/></StackPanel>
         </Button>
-        <Button Command="{Binding FetchCommand}" Width="22" Padding="4,6" Margin="0,0,3,0"
+        <Button Command="{Binding FetchCommand}" Style="{StaticResource ToolbarArrow}"
                 AutomationProperties.AutomationId="FetchOptions" AutomationProperties.Name="{loc:Text Key=FetchOptions}"
                 ToolTip="{loc:Text Key=FetchOptions}" AutomationProperties.HelpText="{Binding FetchActionHelp}">
           <Path Data="M0,0 L6,0 3,4 Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="6" Height="4" Stretch="Fill"/>
         </Button>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
           <Button Style="{StaticResource ToolbarButton}" Command="{Binding DefaultPullCommand}" AutomationProperties.AutomationId="DefaultPull" AutomationProperties.Name="{loc:Text Key=Pull}" ToolTip="{Binding DefaultPullHelp}" AutomationProperties.HelpText="{Binding DefaultPullHelp}">
-            <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M17,2 C5,2 5,5 5,16 M1,11 L5,16 10,11"/><TextBlock Text="{loc:Text Key=Pull}"/></StackPanel>
+            <StackPanel><Grid><Path Style="{StaticResource ToolbarIcon}" Data="M17,2 C5,2 5,5 5,16 M1,11 L5,16 10,11"/><Border Style="{StaticResource CountBadge}" DataContext="{Binding PullCount}"><TextBlock Text="{Binding}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" AutomationProperties.Name="{loc:Text Key=BehindCount}"/></Border></Grid><TextBlock Text="{loc:Text Key=Pull}"/></StackPanel>
           </Button>
-          <TextBlock Text="{Binding PullCount}" VerticalAlignment="Top" Margin="0,5,5,0" FontWeight="SemiBold" AutomationProperties.Name="{loc:Text Key=BehindCount}" AutomationProperties.HelpText="{Binding DivergenceHelp}" />
-          <Button Command="{Binding PullCommand}" Width="22" Padding="4,6" Margin="0,0,3,0" VerticalAlignment="Stretch"
+          <Button Command="{Binding PullCommand}" Style="{StaticResource ToolbarArrow}" VerticalAlignment="Stretch"
                   AutomationProperties.AutomationId="PullOptions" AutomationProperties.Name="{loc:Text Key=PullOptions}"
                   ToolTip="{loc:Text Key=PullOptions}" AutomationProperties.HelpText="{Binding PullActionHelp}">
             <Path Data="M0,0 L6,0 3,4 Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="6" Height="4" Stretch="Fill"/>
@@ -165,10 +173,9 @@
         </StackPanel>
         <StackPanel Orientation="Horizontal" ToolTip="{Binding DivergenceHelp}">
           <Button Style="{StaticResource ToolbarButton}" Command="{Binding DefaultPushCommand}" AutomationProperties.AutomationId="DefaultPush" AutomationProperties.Name="{loc:Text Key=Push}" ToolTip="{Binding DefaultPushHelp}" AutomationProperties.HelpText="{Binding DefaultPushHelp}">
-            <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M3,18 C15,18 15,15 15,4 M10,9 L15,4 19,9"/><TextBlock Text="{loc:Text Key=Push}"/></StackPanel>
+            <StackPanel><Grid><Path Style="{StaticResource ToolbarIcon}" Data="M3,18 C15,18 15,15 15,4 M10,9 L15,4 19,9"/><Border Style="{StaticResource CountBadge}" DataContext="{Binding PushCount}"><TextBlock Text="{Binding}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" AutomationProperties.Name="{loc:Text Key=AheadCount}"/></Border></Grid><TextBlock Text="{loc:Text Key=Push}"/></StackPanel>
           </Button>
-          <TextBlock Text="{Binding PushCount}" VerticalAlignment="Top" Margin="0,5,5,0" FontWeight="SemiBold" AutomationProperties.Name="{loc:Text Key=AheadCount}" AutomationProperties.HelpText="{Binding DivergenceHelp}" />
-          <Button Command="{Binding PushCommand}" Width="22" Padding="4,6" Margin="0,0,3,0"
+          <Button Command="{Binding PushCommand}" Style="{StaticResource ToolbarArrow}"
                   AutomationProperties.AutomationId="PushOptions" AutomationProperties.Name="{loc:Text Key=PushOptions}"
                   ToolTip="{loc:Text Key=PushOptions}" AutomationProperties.HelpText="{Binding PushActionHelp}">
             <Path Data="M0,0 L6,0 3,4 Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="6" Height="4" Stretch="Fill"/>
@@ -179,11 +186,15 @@
         </Button>
       </StackPanel>
       <Grid Grid.Column="1" MaxWidth="530"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <Border Margin="12,0" Padding="9,5" MaxWidth="430" Background="{DynamicResource Theme.Raised}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="6">
+      <Border x:Name="ActivityAnchor" Margin="12,0" Padding="9,5" MaxWidth="430" Background="{DynamicResource Theme.Raised}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="6">
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="17"/><RowDefinition Height="17"/><RowDefinition Height="Auto"/><RowDefinition Height="2"/></Grid.RowDefinitions>
-          <TextBlock Margin="38,0" Text="{Binding RepositoryTitle}" TextAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedRepository.Directory}" />
-          <TextBlock Grid.Row="1" Margin="38,0" Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource Theme.Muted}" ToolTip="{Binding SelectedRepository.State}" />
+          <Button Grid.RowSpan="2" Click="OnActivityLog" HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,38,0" BorderThickness="0" Background="Transparent" ToolTip="{loc:Text Key=ActivityTitle}" AutomationProperties.Name="{loc:Text Key=ActivityTitle}" AutomationProperties.AutomationId="ActivityLog">
+           <Grid><TextBlock Text="☰" VerticalAlignment="Center"/><StackPanel Margin="30,0,0,0">
+            <TextBlock Text="{Binding RepositoryTitle}" TextAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding SelectedRepository.Head, TargetNullValue={loc:Text Key=NoRepositorySelected}}" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource Theme.Muted}"/>
+           </StackPanel></Grid>
+          </Button>
           <StackPanel Grid.RowSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button Content="⋯" Command="{Binding ShowActionDetailsCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionDetails}" AutomationProperties.Name="{loc:Text Key=ActionDetails}" />
             <Button Content="×" Command="{Binding CancelCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionCancelHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{loc:Text Key=ActionCancel}" AutomationProperties.HelpText="{loc:Text Key=ActionCancelHelp}" />
@@ -192,11 +203,16 @@
           <ProgressBar Grid.Row="3" Height="2" IsIndeterminate="{Binding IsActionRunning}" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="{Binding OperationCaption}" AutomationProperties.AutomationId="ActionProgress" />
         </Grid>
       </Border>
+      <Popup x:Name="ActivityPopup" PlacementTarget="{Binding ElementName=ActivityAnchor}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="None">
+       <Border Background="{DynamicResource Theme.Canvas}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="6" Padding="4">
+        <views:ActivityLogView x:Name="ActivityLog" DataContext="{Binding Journal}" Width="1000" Height="480"/>
+       </Border>
+      </Popup>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
        <Button Style="{StaticResource ToolbarButton}" Command="{Binding NewBranchCommand}" ToolTip="{Binding BranchActionHelp}" AutomationProperties.HelpText="{Binding BranchActionHelp}" AutomationProperties.Name="{loc:Text Key=ActionTitleNewBranch}">
         <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M5,2 L5,18 M5,12 C5,7 15,13 15,4 M11,4 L19,4 M15,0 L15,8"/><TextBlock Text="{loc:Text Key=BranchToolbar}"/></StackPanel>
        </Button>
-       <Button Content="▾" Click="OnBranchMenu" Padding="3,6" IsEnabled="{Binding CanOpenBranchMenu}" ToolTip="{Binding BranchActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchActionHelp}" AutomationProperties.Name="{loc:Text Key=BranchMenu}">
+       <Button Content="▾" Click="OnBranchMenu" Style="{StaticResource ToolbarArrow}" IsEnabled="{Binding CanOpenBranchMenu}" ToolTip="{Binding BranchActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchActionHelp}" AutomationProperties.Name="{loc:Text Key=BranchMenu}">
         <Button.ContextMenu><ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
          <MenuItem Header="{loc:Text Key=ActionTitleNewBranch}" Command="{Binding NewBranchCommand}" ToolTip="{Binding BranchActionHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding BranchActionHelp}"/>
          <Separator/>
@@ -299,6 +315,7 @@
             <DataGrid.RowStyle><Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
               <Setter Property="ContextMenu" Value="{StaticResource HistoryRowMenu}"/>
               <EventSetter Event="PreviewMouseRightButtonDown" Handler="OnHistoryRightDown"/>
+              <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnHistorySelected"/>
               <EventSetter Event="ContextMenuOpening" Handler="OnHistoryMenuOpening"/>
               <Setter Property="AutomationProperties.Name" Value="{Binding AccessibilityLabel}" />
               <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
@@ -353,7 +370,7 @@
                       Background="{DynamicResource Theme.Border}"
                       AutomationProperties.Name="{loc:Text Key=ResizeDetails}" AutomationProperties.AutomationId="DetailsSplitter" />
         <TabControl SelectedIndex="{Binding DetailsIndex}" SelectionChanged="OnDetailsSelection" Grid.Row="2" Margin="0" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
-          <TabItem Header="{loc:Text Key=Commit}">
+          <TabItem Header="{loc:Text Key=CommitMetadata}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="14,10">
                 <TextBlock Text="{Binding SelectedCommit.Description, TargetNullValue={loc:Text Key=SelectCommit}}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10" />
@@ -411,7 +428,7 @@
               <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MinHeight="60" MaxHeight="250" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}" />
             </StackPanel></ScrollViewer>
           </TabItem>
-          <TabItem Header="{loc:Text Key=CommitFilesTitle}"><views:CommitFilesView DataContext="{Binding CommitFiles}"/></TabItem>
+          <TabItem Header="{loc:Text Key=Commit}"><views:CommitFilesView x:Name="HistoryFiles" DataContext="{Binding CommitFiles}"/></TabItem>
 </TabControl>
       </Grid>
     </Grid>

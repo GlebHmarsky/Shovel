@@ -9,7 +9,7 @@
    <ComboBox ItemsSource="{Binding Parents}" SelectedItem="{Binding Parent}" DisplayMemberPath="Label" MaxWidth="580" HorizontalAlignment="Left" AutomationProperties.Name="{loc:Text Key=CommitFilesCompare}"/>
   </DockPanel>
   <Grid Grid.Row="1">
-   <Grid.ColumnDefinitions><ColumnDefinition Width="260" MinWidth="130"/><ColumnDefinition Width="5"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <Grid.ColumnDefinitions><ColumnDefinition x:Name="FilesColumn" Width="340" MinWidth="160"/><ColumnDefinition Width="5"/><ColumnDefinition Width="*" MinWidth="240"/></Grid.ColumnDefinitions>
    <DataGrid ItemsSource="{Binding Files}" SelectedItem="{Binding Selected}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="None" RowHeaderWidth="0" RowHeight="24" SelectionUnit="FullRow" SelectionMode="Single" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" AutomationProperties.Name="{loc:Text Key=CommitFilesTitle}" AutomationProperties.AutomationId="CommitFiles">
     <DataGrid.Columns>
      <DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Style="{StaticResource FileChangeMarker}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
@@ -18,6 +18,8 @@
    </DataGrid>
    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitFilesResize}"/>
    <DockPanel Grid.Column="2">
+    <TextBlock DockPanel.Dock="Top" Text="{Binding DisplayedPath}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayedPath}" Margin="5,2" FontWeight="SemiBold"/>
+    <TextBlock DockPanel.Dock="Top" Text="{loc:Text Key=DiffRetainedLoading}" Visibility="{Binding Busy, Converter={StaticResource Visible}}" Foreground="{DynamicResource Theme.Muted}" TextTrimming="CharacterEllipsis" Margin="5,2"/>
     <TextBlock DockPanel.Dock="Top" Style="{StaticResource TextDiffOnly}" Text="{Binding Notice, TargetNullValue={loc:Text Key=SelectCommit}}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Notice}" Margin="5,2" Foreground="{DynamicResource Theme.Muted}" AutomationProperties.LiveSetting="Polite"/>
     <Grid>
     <DataGrid ItemsSource="{Binding Lines}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" HeadersVisibility="None" RowHeaderWidth="0" RowHeight="22" SelectionUnit="FullRow" SelectionMode="Extended" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" RowStyle="{StaticResource DiffRow}" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.AutomationId="CommitFileDiff">

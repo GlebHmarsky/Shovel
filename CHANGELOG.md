@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.31.0 — 2026-10-30
+
+- Retain the previous file/commit comparison during loading; preserve unchanged row identities on refresh and open Commit changes when selecting history or stashes.
+- Resolve conflicts inside the Commit diff pane with numbered whole-file sources, initially checked side selectors, editable result and real Resolve/stage. Keep normal Git LFS, deletion and rebase behavior.
+- Persist Commit dimensions and file/status/message/conflict splits plus history-file width. Darken inactive repository tabs, quiet toolbar arrows and hide zero ahead/behind badges.
+- Open a bounded, session-only All/User/Background activity log from the central repository button, with operation outcomes, timings and available Git output.
+- Verify retained views, settings migration, inline staging and activity filters with focused checks; retain the 26-check routine suite. Native focus/DPI/accessibility and crash-time layout persistence remain validation limits.
+
 ## 0.30.1 — 2026-10-30
 
 - Use Git's batched `checkout-index` for unstaged discard, matching Fork's observed command. Keep LFS/smudge conversion and index hooks; avoid invoking branch-oriented post-checkout automation for file discard. Hook files and branch/staged-discard behavior remain unchanged.

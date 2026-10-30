@@ -87,6 +87,7 @@ public sealed partial class ShellViewModel
         _sidebarTask = Load();
         async Task Load()
         {
+            using var activity = Journal.BeginRead(tab.Directory, UiText.Get("ActivitySidebar"));
             try
             {
                 await prior;
@@ -96,14 +97,16 @@ public sealed partial class ShellViewModel
                 if (cancel.IsCancellationRequested || SelectedRepository != tab || tab.Snapshot != snapshot) return;
                 tab.Sidebar = data; tab.Stashes.List = stashes; tab.SidebarReadAt = DateTimeOffset.UtcNow;
                 SidebarStatus = ""; PublishSidebar();
+                activity.Outcome = OperationOutcome.Success;
             }
             catch (OperationCanceledException) { }
             catch (GitReadException error)
             {
+                activity.Outcome = OperationOutcome.Failed;
                 if (SelectedRepository == tab && !cancel.IsCancellationRequested)
                 { tab.History.RawOutput = error.RawOutput; Changed(nameof(RawOutput)); SidebarStatus = UiText.Get("SidebarFailed"); }
             }
-            catch (Exception) { if (SelectedRepository == tab && !cancel.IsCancellationRequested) SidebarStatus = UiText.Get("SidebarFailed"); }
+            catch (Exception) { activity.Outcome = OperationOutcome.Failed; if (SelectedRepository == tab && !cancel.IsCancellationRequested) SidebarStatus = UiText.Get("SidebarFailed"); }
             finally { if (ReferenceEquals(_sidebarCancel, cancel)) _sidebarCancel = null; cancel.Dispose(); }
         }
     }
@@ -112,7 +115,7 @@ public sealed partial class ShellViewModel
     {
         if (SelectedRepository != tab || IsBusy || tab.History.Page is null) return;
         var existing = Commits.FirstOrDefault(row => row.Commit.Hash == hash);
-        if (existing is not null) { SelectedCommit = existing; SidebarCommitLocated?.Invoke(this, EventArgs.Empty); return; }
+        if (existing is not null) { SelectedCommit = existing; DetailsIndex = 4; SidebarCommitLocated?.Invoke(this, EventArgs.Empty); return; }
         _operationCancellation?.Cancel(); CancelCountRead();
         var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30)); _operationCancellation = cancel;
         var generation = ++_generation; var session = tab.History.Page.Session;
@@ -130,7 +133,7 @@ public sealed partial class ShellViewModel
                 state.Page = history; state.Rows = rows; state.Cursors.Clear(); state.Cursors.Add(history.Cursor); state.PageIndex = 0;
                 state.PageViews.Clear(); state.EstimatedBytes = rows.Sum(r => (long)r.Commit.Message.Length * 2 + 1024);
                 state.VerticalOffset = 0; state.Selected = rows.FirstOrDefault(r => r.Commit.Hash == hash); state.Notice = LoadedNotice(history);
-                located = true; PublishState(); SidebarCommitLocated?.Invoke(this, EventArgs.Empty); Status = UiText.Get("HistoryLoaded");
+                located = true; PublishState(); DetailsIndex = 4; SidebarCommitLocated?.Invoke(this, EventArgs.Empty); Status = UiText.Get("HistoryLoaded");
             }
             catch (GitReadException error)
             {

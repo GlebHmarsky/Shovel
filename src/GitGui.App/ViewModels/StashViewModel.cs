@@ -106,8 +106,9 @@ public sealed class StashViewModel : ObservableObject
     }
     private void Inspect()
     {
-        _inspectCancel?.Cancel(); _inspectCancel = null; var old = _inspect; var generation = ++_inspectGeneration; ClearInspection();
-        if (_closed || _running || Selected is not { } selected) return;
+        _inspectCancel?.Cancel(); _inspectCancel = null; var old = _inspect; var generation = ++_inspectGeneration;
+        if (_closed || _running || Selected is not { } selected) { ClearInspection(); return; }
+        Files?.Pause(); Status = UiText.Get("StashLoading");
         var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(45)); _inspectCancel = cancel;
         _inspect = Read();
         async Task Read()
@@ -117,11 +118,12 @@ public sealed class StashViewModel : ObservableObject
                 await Dispatcher.Yield(DispatcherPriority.Background); await old;
                 var data = await _actions.InspectStashAsync(_context.Git, _context.Identity, selected.Entry.Hash, cancel.Token);
                 if (_closed || generation != _inspectGeneration || cancel.IsCancellationRequested) return;
-                Comparisons = [new(UiText.Get("StashTracked"), data.Worktree with { Parents = [data.Worktree.Parents[0]] }),
+                _comparisons = [new(UiText.Get("StashTracked"), data.Worktree with { Parents = [data.Worktree.Parents[0]] }),
                     new(UiText.Get("StashStaged"), data.Index), new(UiText.Get("StashUnstaged"), data.Worktree with { Parents = [data.Worktree.Parents[1]] }),
                     .. data.Untracked is { } untracked ? new[] { new StashComparison(UiText.Get("StashUntracked"), untracked) } : []];
                 Details = selected.Entry.Hash + Environment.NewLine + data.Worktree.Message;
-                Comparison = Comparisons[0];
+                Changed(nameof(Comparisons)); Comparison = Comparisons[0];
+                Status = UiText.Format("StashCount", Rows.Count);
             }
             catch (Exception error) { if (!_closed && generation == _inspectGeneration) ShowError(error); }
             finally { if (generation == _inspectGeneration) _inspectCancel = null; cancel.Dispose(); }
@@ -129,8 +131,9 @@ public sealed class StashViewModel : ObservableObject
     }
     private void ShowComparison()
     {
-        StopFiles();
-        if (_closed || _running || Comparison is not { } choice) return;
+        if (_closed || _running) { StopFiles(); return; }
+        if (Comparison is not { } choice) return;
+        if (Files is { } retained) { retained.SelectCommit(choice.Commit); return; }
         var model = new CommitFilesViewModel(_reader, _context.Git, Repository, choice.Commit) { ShowParentSelector = false }; Files = model;
         Start();
         async void Start() { await _oldDetails; if (!_closed && ReferenceEquals(Files, model)) model.Start(); }

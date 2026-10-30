@@ -64,7 +64,9 @@ public sealed partial class ShellViewModel : ObservableObject
         set
         {
             if (_publishingState || State is not { } state || state.Selected == value || (value is not null && !state.Rows.Contains(value))) return;
-            state.Selected = value; HighlightAuthors(); Changed(); UpdateCommitFiles();
+            state.Selected = value; HighlightAuthors(); Changed();
+            if (value is not null) DetailsIndex = 4;
+            UpdateCommitFiles();
         }
     }
     public string HistoryProblem => State is { Rows.Count: > 0 } state &&
@@ -286,7 +288,9 @@ public sealed partial class ShellViewModel : ObservableObject
                         history.Session.References.Sum(reference => 2L * (reference.Name.Length + reference.Hash.Length) + 128);
                     return (formatted, bytes);
                 }, cancellation.Token);
-                var rows = prepared.Rows;
+                // A fresh read with unchanged tips must not replace focused row containers.
+                IReadOnlyList<CommitRow> rows = keepPage && state.Rows.Select(r => r.Commit.Hash).SequenceEqual(prepared.Rows.Select(r => r.Commit.Hash))
+                    ? state.Rows : prepared.Rows;
                 if (Obsolete()) return;
                 HistoryViewChanging?.Invoke(this, EventArgs.Empty);
                 var selectedHash = state.Selected?.Commit.Hash;
@@ -453,6 +457,7 @@ public sealed partial class ShellViewModel : ObservableObject
     }
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
+        CommitLayout = _commitLayout,
         Appearance = Appearance, RiderExecutable = _riderExecutable, CodeExecutable = _codeExecutable, BashExecutable = _bashExecutable,
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()

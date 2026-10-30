@@ -53,16 +53,16 @@
    <TextBlock Text="{Binding RepositoryLabel}" TextTrimming="CharacterEllipsis" ToolTip="{Binding RepositoryLabel}" VerticalAlignment="Center" FlowDirection="LeftToRight"/>
   </DockPanel>
   <Grid Grid.Row="1">
-   <Grid.ColumnDefinitions><ColumnDefinition Width="340" MinWidth="250"/><ColumnDefinition Width="5"/><ColumnDefinition Width="*" MinWidth="420"/></Grid.ColumnDefinitions>
+   <Grid.ColumnDefinitions><ColumnDefinition x:Name="FilesColumn" Width="380" MinWidth="250"/><ColumnDefinition Width="5"/><ColumnDefinition Width="*" MinWidth="420"/></Grid.ColumnDefinitions>
    <Grid>
-    <Grid.RowDefinitions><RowDefinition Height="*" MinHeight="110"/><RowDefinition Height="5"/><RowDefinition Height="*" MinHeight="110"/></Grid.RowDefinitions>
+    <Grid.RowDefinitions><RowDefinition x:Name="UnstagedRow" Height="*" MinHeight="110"/><RowDefinition Height="5"/><RowDefinition x:Name="StagedRow" Height="*" MinHeight="110"/></Grid.RowDefinitions>
     <DockPanel>
      <Border DockPanel.Dock="Top" Background="{DynamicResource Theme.Sidebar}" Padding="8,4"><DockPanel>
       <Button DockPanel.Dock="Right" Content="{Binding StageLabel}" Command="{Binding StageCommand}" Margin="6,0,0,0" ToolTip="{Binding StageHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding StageHelp}"/>
       <TextBlock Text="{Binding UnstagedTitle}" FontWeight="SemiBold" VerticalAlignment="Center"/>
      </DockPanel></Border>
      <Grid>
-      <DataGrid x:Name="UnstagedTable" Style="{StaticResource FileTable}" ItemsSource="{Binding Unstaged}" SelectedItem="{Binding SelectedUnstaged}" SelectionChanged="OnUnstagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesUnstaged}" AutomationProperties.AutomationId="UnstagedFiles">
+      <DataGrid x:Name="UnstagedTable" IsEnabled="{Binding CanSelectFiles}" Style="{StaticResource FileTable}" ItemsSource="{Binding Unstaged}" SelectedItem="{Binding SelectedUnstaged}" SelectionChanged="OnUnstagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesUnstaged}" AutomationProperties.AutomationId="UnstagedFiles">
        <DataGrid.Columns><DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Style="{StaticResource FileChangeMarker}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
       </DataGrid>
       <TextBlock Text="{loc:Text Key=CommitNoUnstaged}" Margin="14" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Unstaged.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
@@ -75,7 +75,7 @@
       <TextBlock Text="{Binding StagedTitle}" FontWeight="SemiBold" VerticalAlignment="Center"/>
      </DockPanel></Border>
      <Grid>
-      <DataGrid x:Name="StagedTable" Style="{StaticResource FileTable}" ItemsSource="{Binding Staged}" SelectedItem="{Binding SelectedStaged}" SelectionChanged="OnStagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesStaged}" AutomationProperties.AutomationId="StagedFiles">
+      <DataGrid x:Name="StagedTable" IsEnabled="{Binding CanSelectFiles}" Style="{StaticResource FileTable}" ItemsSource="{Binding Staged}" SelectedItem="{Binding SelectedStaged}" SelectionChanged="OnStagedSelection" AutomationProperties.Name="{loc:Text Key=ChangesStaged}" AutomationProperties.AutomationId="StagedFiles">
        <DataGrid.Columns><DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Style="{StaticResource FileChangeMarker}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn Header="{loc:Text Key=ChangesKind}" Binding="{Binding Kind}" Width="90" ElementStyle="{StaticResource FileText}"/><DataGridTextColumn Header="{loc:Text Key=ChangesPath}" Binding="{Binding Path}" Width="*" MinWidth="130" ElementStyle="{StaticResource FileText}"/></DataGrid.Columns>
       </DataGrid>
       <TextBlock Text="{loc:Text Key=CommitNoStaged}" Margin="14" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Staged.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
@@ -84,10 +84,11 @@
    </Grid>
    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitResizeDiff}"/>
    <Grid Grid.Column="2">
-    <Grid.RowDefinitions><RowDefinition Height="*" MinHeight="150"/><RowDefinition Height="5"/><RowDefinition Height="220" MinHeight="180"/></Grid.RowDefinitions>
-    <DockPanel Background="{DynamicResource Theme.Canvas}">
+    <Grid.RowDefinitions><RowDefinition Height="*" MinHeight="150"/><RowDefinition Height="5"/><RowDefinition x:Name="MessageRow" Height="220" MinHeight="180"/></Grid.RowDefinitions>
+    <DockPanel Background="{DynamicResource Theme.Canvas}" Visibility="{Binding ShowRegularDiff, Converter={StaticResource Visible}}">
      <StackPanel DockPanel.Dock="Top" Background="{DynamicResource Theme.Sidebar}">
       <TextBlock Text="{Binding DiffTitle}" Margin="10,6" TextTrimming="CharacterEllipsis" ToolTip="{Binding DiffTitle}" FontWeight="SemiBold" FlowDirection="LeftToRight"/>
+      <TextBlock Text="{loc:Text Key=DiffRetainedLoading}" Visibility="{Binding IsDiffLoading, Converter={StaticResource Visible}}" Margin="10,0,10,4" Foreground="{DynamicResource Theme.Muted}" FontSize="11"/>
       <Button Content="{loc:Text Key=ConflictOpen}" Command="{Binding ResolveConflictCommand}" Visibility="{Binding IsConflictSelected, Converter={StaticResource Visible}}" Margin="10,0,10,8" HorizontalAlignment="Left"/>
       <DockPanel Margin="8,0,8,5" Style="{StaticResource TextDiffOnly}">
        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="{Binding HunkActionLabel}" Command="{Binding ApplyHunksCommand}" Padding="7,2" Margin="0,0,6,0" ToolTip="{Binding HunkHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.HelpText="{Binding HunkHelp}" AutomationProperties.AutomationId="ApplyHunks"/><Button Content="↑" Command="{Binding PreviousHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffPreviousHunk}" AutomationProperties.Name="{loc:Text Key=DiffPreviousHunk}"/><Button Content="↓" Command="{Binding NextHunkCommand}" Padding="7,2" ToolTip="{loc:Text Key=DiffNextHunk}" AutomationProperties.Name="{loc:Text Key=DiffNextHunk}"/></StackPanel>
@@ -112,6 +113,7 @@
      <Grid Visibility="{Binding HasBinary, Converter={StaticResource Visible}}"><views:BinaryComparisonView DataContext="{Binding Binary}"/></Grid>
      </Grid>
     </DockPanel>
+    <Grid Visibility="{Binding HasConflict, Converter={StaticResource Visible}}"><views:ConflictView DataContext="{Binding Conflict}"/></Grid>
     <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitResizeMessage}"/>
     <Grid Grid.Row="2" Margin="12,8">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>

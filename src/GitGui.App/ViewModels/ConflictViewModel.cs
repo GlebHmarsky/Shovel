@@ -2,18 +2,20 @@ using System.Diagnostics;
 using System.Windows.Threading;
 using GitGui.App.Localization;
 using GitGui.Core.Git;
+using GitGui.Core.Processes;
 
 namespace GitGui.App.ViewModels;
 
 public sealed class ConflictViewModel : ObservableObject
 {
+    public ActivityJournal? Journal { get; init; }
     private readonly GitActions _actions;
     private WorkingCopyContext _context;
     private LocalChange _change;
     private ConflictPreview? _preview;
     private CancellationTokenSource? _cancel;
     private bool _busy, _current, _incoming, _closed, _canSubmit;
-    private string _text = "", _status = UiText.Get("ConflictLoading"), _output = "";
+    private string _text = "", _combinedText = "", _status = UiText.Get("ConflictLoading"), _output = "";
     private readonly Stopwatch _watch = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     public string Path => _change.Path;
@@ -23,10 +25,19 @@ public sealed class ConflictViewModel : ObservableObject
     public bool Busy { get => _busy; private set { Set(ref _busy, value); Refresh(); } }
     public bool CanChoose => !Busy && _preview is not null;
     public bool CanEdit => CanChoose && _preview?.CanEdit == true;
-    public bool Current { get => _current; set { if (Set(ref _current, value)) Refresh(); } }
-    public bool Incoming { get => _incoming; set { if (Set(ref _incoming, value)) Refresh(); } }
+    public bool Current { get => _current; set { if (Set(ref _current, value)) ChooseSides(); } }
+    public bool Incoming { get => _incoming; set { if (Set(ref _incoming, value)) ChooseSides(); } }
     public bool HasEditorChanges { get; private set; }
-    public string Text { get => _text; set { if (Set(ref _text, value)) { HasEditorChanges = true; _current = _incoming = true; Changed(nameof(Current)); Changed(nameof(Incoming)); Refresh(); } } }
+    public string Text { get => _text; set { if (Set(ref _text, value)) { _combinedText = value; HasEditorChanges = true; _current = _incoming = true; Changed(nameof(Current)); Changed(nameof(Incoming)); Refresh(); } } }
+    public IReadOnlyList<DiffRow> CurrentLines { get; private set; } = [];
+    public IReadOnlyList<DiffRow> IncomingLines { get; private set; } = [];
+    public bool IsText => _preview?.CanEdit == true;
+    public bool HasPreview => _preview is not null;
+    private void ChooseSides()
+    {
+        _text = Current && Incoming ? _combinedText : Current ? _preview?.Current?.Text ?? "" : Incoming ? _preview?.Incoming?.Text ?? "" : "";
+        Changed(nameof(Text)); Refresh();
+    }
     public string CurrentLabel => _preview is null ? "" : UiText.Format(_context.Repository.Recovery?.Kind == RecoveryKind.Rebase ? "ConflictRebasedSide" : "ConflictCurrentSide", _preview.CurrentSource);
     public string IncomingLabel => _preview is null ? "" : _context.Repository.Recovery?.Kind == RecoveryKind.Rebase ? UiText.Format("ConflictReplayedSide", _preview.IncomingSource) :
         _preview.IncomingSource.Length > 0 ? UiText.Format("ConflictIncomingSide", _preview.IncomingSource) : UiText.Get("ConflictIncomingUnknown");
@@ -74,17 +85,24 @@ public sealed class ConflictViewModel : ObservableObject
             }
             _preview = await _actions.ReadConflictAsync(_context, _change, _cancel!.Token);
             if (_closed) return;
-            if (!fresh || !HasEditorChanges) { _text = _preview.WorkingText ?? ""; HasEditorChanges = false; _current = _incoming = false; }
+            if (!fresh || !HasEditorChanges) { _combinedText = _text = _preview.WorkingText ?? ""; HasEditorChanges = false; _current = _incoming = true; }
+            var sides = await System.Threading.Tasks.Task.Run(() => (Numbered(_preview.Current?.Text), Numbered(_preview.Incoming?.Text)));
+            if (_closed) return;
+            CurrentLines = sides.Item1; IncomingLines = sides.Item2;
             _canSubmit = true;
-            foreach (var name in new[] { nameof(Text), nameof(Current), nameof(Incoming), nameof(CurrentLabel), nameof(IncomingLabel), nameof(CurrentText), nameof(IncomingText), nameof(BaseText), nameof(Help) }) Changed(name);
+            foreach (var name in new[] { nameof(Text), nameof(Current), nameof(Incoming), nameof(CurrentLabel), nameof(IncomingLabel), nameof(CurrentText), nameof(IncomingText), nameof(BaseText), nameof(Help), nameof(CurrentLines), nameof(IncomingLines), nameof(IsText) }) Changed(name);
             Status = UiText.Get("ConflictChoose");
         }
         catch (Exception error) { _canSubmit = false; Status = Explain(error); }
         finally { End(); }
     }
+    private static DiffRow[] Numbered(string? text) => text is null ? [] : text.Split('\n').Select((line, index) =>
+        new DiffRow(new(DiffLineKind.Context, line.TrimEnd('\r'), index + 1, index + 1))).ToArray();
     private async Task ResolveAsync(ConflictChoice choice)
     {
-        var resolution = new ConflictResolution(_preview!, choice, Text); Begin(mutation: true); HasMutation = true;
+        var resolution = new ConflictResolution(_preview!, choice, Text); HasMutation = true; Begin(mutation: true);
+        var outcome = OperationOutcome.Failed;
+        var attempt = new object(); Journal?.Record(new(attempt, Title, UiText.Get("ConflictResolving"), 0, OperationOutcome.Running), _context.Identity.Worktree, false);
         var retryWithoutReload = false;
         Status = UiText.Get("ConflictResolving");
         try
@@ -93,15 +111,21 @@ public sealed class ConflictViewModel : ObservableObject
             var result = await _actions.ExecuteWorkingCopyAsync(_context, new(WorkingCopyAction.ResolveConflict, [_change], Resolution: resolution), _cancel!.Token);
             Output = result.Result.Output;
             Resolved = result.Result.Success && !result.Result.HasConflicts;
+            outcome = Resolved ? OperationOutcome.Success : result.Result.Outcome == ProcessOutcome.Cancelled ? OperationOutcome.Cancelled : OperationOutcome.Failed;
             Status = UiText.Get(result.Result.MessageCode ?? (Resolved ? "ConflictResolved" : "ActionResult" + result.Result.Outcome));
         }
         catch (Exception error)
         {
+            if (error is OperationCanceledException) outcome = OperationOutcome.Cancelled;
             retryWithoutReload = error is GitActionException { Code: "ConflictMarkersRemain" or "ConflictTextLimit" or "ConflictToolMissing" };
             Status = Explain(error);
         }
-        finally { _canSubmit = retryWithoutReload; End(); }
-        if (Resolved && !_closed) Completed?.Invoke(this, EventArgs.Empty);
+        finally
+        {
+            _canSubmit = retryWithoutReload; End();
+            Journal?.Record(new(attempt, Title, Status, _watch.Elapsed.TotalSeconds, outcome), _context.Identity.Worktree, false, Output);
+        }
+        if (!_closed && !retryWithoutReload) Completed?.Invoke(this, EventArgs.Empty);
     }
     private void Begin(bool mutation = false) { _cancel = new(mutation ? TimeSpan.FromMinutes(10) : TimeSpan.FromSeconds(45)); Busy = true; _watch.Restart(); _timer.Start(); }
     private void End() { _watch.Stop(); _timer.Stop(); _cancel?.Dispose(); _cancel = null; Busy = false; Changed(nameof(Duration)); }
@@ -111,6 +135,7 @@ public sealed class ConflictViewModel : ObservableObject
     {
         foreach (var command in new[] { ResolveCommand, ExternalCommand, ReloadCommand, CancelCommand, UseCurrentTextCommand, UseIncomingTextCommand }) command?.Refresh();
         Changed(nameof(CanChoose)); Changed(nameof(CanEdit)); Changed(nameof(ResolveHelp));
+        Changed(nameof(HasPreview));
     }
     public async Task CloseAsync() { _closed = true; _cancel?.Cancel(); await Work; _timer.Stop(); }
 }

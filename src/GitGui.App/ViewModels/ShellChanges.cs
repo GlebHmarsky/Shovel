@@ -18,6 +18,7 @@ public sealed record ChangeRow(LocalChange Change)
 public sealed partial class ShellViewModel
 {
     private bool _commitOpen;
+    private GitGui.Core.Settings.CommitLayout _commitLayout = new();
     public ICommitDraftStore? DraftStore { private get; set; }
     private CommitViewModel? _commitModel;
     private CancellationTokenSource? _countCancel;
@@ -45,6 +46,7 @@ public sealed partial class ShellViewModel
         CancelCountRead(); _sidebarCancel?.Cancel(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
         var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
             _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities));
+        model.Layout = _commitLayout; model.Journal = Journal;
         _commitModel = model;
         void OnChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
         {
@@ -62,6 +64,7 @@ public sealed partial class ShellViewModel
         finally
         {
             await model.CloseAsync();
+            _commitLayout = model.Layout.Normalize(); PreferenceTask = SavePreferencesAsync();
             if (model.HasMutation)
                 foreach (var related in Repositories.Where(item => item == tab || item.Snapshot?.CommonDirectory == tab.Snapshot?.CommonDirectory))
                 { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; related.Changes.ReadAt = default; }
@@ -80,6 +83,7 @@ public sealed partial class ShellViewModel
         var git = _git; _countTask = ReadAsync();
         async Task ReadAsync()
         {
+            using var activity = Journal.BeginRead(tab.Directory, UiText.Get("ActivityLocalStatus"));
             try
             {
                 await Dispatcher.Yield(DispatcherPriority.Background); await previous;
@@ -93,8 +97,9 @@ public sealed partial class ShellViewModel
                 // This lightweight count does not authorize actions; opening the editor obtains a full context.
                 tab.Changes.Rows = rows; tab.Changes.ReadAt = data.ReadAt; tab.Changes.Context = null;
                 TrimChangesCache(tab);
+                activity.Outcome = OperationOutcome.Success;
             }
-            catch (Exception) { if (generation == _countGeneration && SelectedRepository == tab) tab.Changes.ReadAt = default; }
+            catch (Exception error) { activity.Outcome = error is OperationCanceledException ? OperationOutcome.Cancelled : OperationOutcome.Failed; if (generation == _countGeneration && SelectedRepository == tab) tab.Changes.ReadAt = default; }
             finally { if (generation == _countGeneration) { _countCancel = null; PublishChanges(); } cancellation.Dispose(); }
         }
     }

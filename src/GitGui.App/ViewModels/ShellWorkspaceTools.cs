@@ -33,6 +33,7 @@ public sealed partial class ShellViewModel
     }
     private void RestoreWorkspacePreferences(AppSettings settings)
     {
+        _commitLayout = settings.CommitLayout;
         _riderExecutable = settings.RiderExecutable; _codeExecutable = settings.CodeExecutable; _bashExecutable = settings.BashExecutable;
         SetAppearance(settings.Appearance);
     }

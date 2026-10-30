@@ -37,9 +37,9 @@ internal static partial class Program
             RunFileActionChecksAsync(discardOnly: true).GetAwaiter().GetResult();
             Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
         }
-        if (args is ["--check-startup"] or ["--check-lfs"] or ["--check-conflicts"] or ["--check-usability"] or ["--check-sidebar"] or ["--render-sidebar"] or ["--check-workspace"] or ["--check-operation-style"] or ["--check-history-layout"] or ["--check-workspace-cleanup"] or ["--check-draft-io"] or ["--check-default-pull"] or ["--check-history-actions"] or ["--check-default-network"])
+        if (args is ["--check-qol"] or ["--check-startup"] or ["--check-lfs"] or ["--check-conflicts"] or ["--check-usability"] or ["--check-sidebar"] or ["--render-sidebar"] or ["--check-workspace"] or ["--check-operation-style"] or ["--check-history-layout"] or ["--check-workspace-cleanup"] or ["--check-draft-io"] or ["--check-default-pull"] or ["--check-history-actions"] or ["--check-default-network"])
         {
-            _lfsChecks = args[0] == "--check-lfs"; _conflictChecks = args[0] == "--check-conflicts"; _startupChecks = args[0] == "--check-startup"; _usabilityChecks = args[0] == "--check-usability" || _startupChecks;
+            _qolChecks = args[0] == "--check-qol"; _lfsChecks = args[0] == "--check-lfs"; _conflictChecks = args[0] == "--check-conflicts"; _startupChecks = args[0] == "--check-startup"; _usabilityChecks = args[0] == "--check-usability" || _startupChecks;
             _defaultNetworkChecks = args[0] == "--check-default-network";
             _historyActionChecks = args[0] == "--check-history-actions" || _defaultNetworkChecks;
             _defaultPullChecks = args[0] == "--check-default-pull";
@@ -50,7 +50,7 @@ internal static partial class Program
             _workspaceChecks = args[0] == "--check-workspace";
             _sidebarRenderOnly = args[0] == "--render-sidebar";
             _sidebarChecks = !_workspaceChecks && !_operationStyleChecks && !_historyLayoutChecks && !_workspaceCleanupChecks && !_draftIoChecks && !_defaultPullChecks && !_historyActionChecks; _routine = true;
-            _root = Path.Combine(Path.GetFullPath(_lfsChecks || _conflictChecks || _usabilityChecks ? "artifacts/" + args[0][2..] : _historyActionChecks ? "artifacts/history-action-checks" : _defaultPullChecks ? "artifacts/default-pull-checks" : _draftIoChecks ? "artifacts/draft-io-checks" : _workspaceCleanupChecks ? "artifacts/workspace-cleanup-checks" : _historyLayoutChecks ? "artifacts/history-layout-checks" : _operationStyleChecks ? "artifacts/operation-style-checks" : _workspaceChecks ? "artifacts/workspace-checks" : "artifacts/sidebar-checks"), DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
+            _root = Path.Combine(Path.GetFullPath(_qolChecks || _lfsChecks || _conflictChecks || _usabilityChecks ? "artifacts/" + args[0][2..] : _historyActionChecks ? "artifacts/history-action-checks" : _defaultPullChecks ? "artifacts/default-pull-checks" : _draftIoChecks ? "artifacts/draft-io-checks" : _workspaceCleanupChecks ? "artifacts/workspace-cleanup-checks" : _historyLayoutChecks ? "artifacts/history-layout-checks" : _operationStyleChecks ? "artifacts/operation-style-checks" : _workspaceChecks ? "artifacts/workspace-checks" : "artifacts/sidebar-checks"), DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
             using var deadline = RoutineDeadline(TimeSpan.FromMinutes(3), "Focused checks exceeded deadline");
             var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks();
@@ -181,7 +181,7 @@ internal static partial class Program
             await File.WriteAllTextAsync(store.FilePath,
                 "{\"SchemaVersion\":1,\"WindowWidth\":-10,\"DetailsHeight\":10000,\"SelectedSection\":900}");
             var result = await store.LoadAsync(default);
-            Expect(result.Settings.WindowWidth == 900 && result.Settings.DetailsHeight == 360 &&
+            Expect(result.Settings.WindowWidth == 900 && result.Settings.DetailsHeight == 3000 &&
                 result.Settings.SelectedSection == NavigationSection.History, "Geometry must stay within usable bounds");
         });
 

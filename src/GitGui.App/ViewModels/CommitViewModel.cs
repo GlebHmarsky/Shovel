@@ -35,6 +35,8 @@ public sealed record DiffRow(DiffLine Line, int HunkId = -1)
 
 public sealed partial class CommitViewModel : ObservableObject
 {
+    public GitGui.Core.Settings.CommitLayout Layout { get; set; } = new();
+    public ActivityJournal? Journal { get; set; }
     private readonly GitActions _actions;
     private readonly RepositoryReader _reader;
     private readonly IUserInteraction _interaction;
@@ -61,6 +63,7 @@ public sealed partial class CommitViewModel : ObservableObject
     public bool HasDiffError { get => _hasDiffError; private set => Set(ref _hasDiffError, value); }
     public BinaryComparison? Binary { get => _binary; private set { if (Set(ref _binary, value)) Changed(nameof(HasBinary)); } }
     public bool HasBinary => Binary is not null;
+    public bool IsDiffLoading => _diffLoading;
     private ChangeRow? _diffChange;
     private int[] _selectedHunks = [];
     private string? _automaticAmendMessage;
@@ -166,8 +169,8 @@ public sealed partial class CommitViewModel : ObservableObject
         UnstageCommand = new(() => StartAction(WorkingCopyAction.Unstage), () => Ready && (ShiftHeld ? Staged.Count : _stagedSelection.Count) > 0);
         CommitCommand = new(() => StartAction(WorkingCopyAction.Commit), () => CommitUnavailable == UiText.Get("CommitReady"));
         RefreshCommand = new(() => { if (IsBusy) Cancel(); else StartLoading(); }, () => !_closed);
-        NextHunkCommand = new(() => MoveHunk(1), () => DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
-        PreviousHunkCommand = new(() => MoveHunk(-1), () => DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
+        NextHunkCommand = new(() => MoveHunk(1), () => !_diffLoading && DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
+        PreviousHunkCommand = new(() => MoveHunk(-1), () => !_diffLoading && DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
         ApplyHunksCommand = new(() =>
         {
             if (CanApplyHunks) StartAction(_diffChange!.Change.Group == ChangeGroup.Staged ? WorkingCopyAction.UnstageHunks : WorkingCopyAction.StageHunks,
@@ -181,6 +184,7 @@ public sealed partial class CommitViewModel : ObservableObject
     public Task StartLoading() { if (!_closed && !_mutating) { _ = _draft?.StartOrRetryAsync(); LoadingTask = LoadAsync(); } return LoadingTask; }
     private async Task LoadAsync(bool reconcile = false, bool background = false)
     {
+        using var activity = Journal?.BeginRead(Directory, UiText.Get("ActivityLocalStatus"));
         _readCancel?.Cancel(); var previous = LoadingTask; var generation = ++_readGeneration;
         if (!background) { _diffCancel?.Cancel(); _diffCancel = null; _diffGeneration++; _diffLoading = false; _fileDiff = null; _selectedHunks = []; }
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45)); _readCancel = cancellation;
@@ -207,8 +211,9 @@ public sealed partial class CommitViewModel : ObservableObject
             ScheduleMergeMessage(context);
             if (context.Repository.Commit is null || context.Repository.Operation != RepositoryOperation.None) { _amend = false; Changed(nameof(Amend)); }
             SnapshotChanged?.Invoke(this, EventArgs.Empty);
+            if (activity is not null) activity.Outcome = OperationOutcome.Success;
         }
-        catch (Exception error) { if (!_closed && generation == _readGeneration) { _state.ReadAt = default;
+        catch (Exception error) { if (activity is not null) activity.Outcome = error is OperationCanceledException ? OperationOutcome.Cancelled : OperationOutcome.Failed; if (!_closed && generation == _readGeneration) { _state.ReadAt = default;
             Status = background ? UiText.Format("CommitBackgroundRefreshFailed", _state.LastResult) : Explain(error); CaptureError(error); } }
         finally
         {
@@ -221,8 +226,12 @@ public sealed partial class CommitViewModel : ObservableObject
     }
     private void PublishRows()
     {
-        _unstaged = _state.Rows.Where(row => row.Change.Group is ChangeGroup.Unstaged or ChangeGroup.Untracked or ChangeGroup.Conflicted).ToArray();
-        _staged = _state.Rows.Where(row => row.Change.Group == ChangeGroup.Staged).ToArray();
+        var reusable = _unstaged.Concat(_staged).ToDictionary(row => row.Change);
+        _state.Rows = _state.Rows.Select(row => reusable.GetValueOrDefault(row.Change) ?? row).ToArray();
+        var unstaged = _state.Rows.Where(row => row.Change.Group is ChangeGroup.Unstaged or ChangeGroup.Untracked or ChangeGroup.Conflicted).ToArray();
+        var staged = _state.Rows.Where(row => row.Change.Group == ChangeGroup.Staged).ToArray();
+        if (!_unstaged.SequenceEqual(unstaged)) _unstaged = unstaged;
+        if (!_staged.SequenceEqual(staged)) _staged = staged;
         var prior = _state.Selected?.Change;
         _state.Selected = _state.Rows.FirstOrDefault(row => row.Change.Path == prior?.Path && row.Change.Group == prior?.Group)
             ?? _state.Rows.FirstOrDefault(row => row.Change.Path == prior?.Path) ?? Unstaged.FirstOrDefault() ?? Staged.FirstOrDefault();
@@ -245,6 +254,7 @@ public sealed partial class CommitViewModel : ObservableObject
         // file read after it has completed (or while it is already in flight).
         if (valid.FirstOrDefault() is { } row)
         {
+            if (!CanSelectFiles || !CanLeaveConflict(row)) { PublishRows(); return; }
             _publishing = true;
             try
             {
@@ -252,7 +262,7 @@ public sealed partial class CommitViewModel : ObservableObject
                 else { SelectedUnstaged = row; SelectedStaged = null; _stagedSelection = []; }
             }
             finally { _publishing = false; }
-            if (_state.Selected != row || DiffTitle != row.Path) { _state.Selected = row; QueueDiff(row); }
+            if (_state.Selected != row || _diffChange != row) { _state.Selected = row; QueueDiff(row); }
         }
         RefreshCommands();
     }
@@ -262,11 +272,15 @@ public sealed partial class CommitViewModel : ObservableObject
         _diffCancel?.Cancel(); var previous = DiffTask; var generation = ++_diffGeneration;
         HasDiffError = false;
         _fileDiff = null; _diffChange = row; _selectedHunks = [];
-        if (!retain || DiffTitle != row?.Path) { Binary = null; DiffRows = []; SelectedDiff = null; DiffNotice = UiText.Get(row is null ? "DiffChooseFile" : "DiffLoading"); }
-        DiffTitle = row?.Path ?? "";
+        Changed(nameof(HasConflict)); Changed(nameof(ShowRegularDiff));
+        if (row?.Change.Group == ChangeGroup.Conflicted && _state.Context is not null && !_closed && !_mutating)
+        { FileTask = OpenConflictAsync(); return; }
+        if (row is null) { Binary = null; DiffRows = []; SelectedDiff = null; DiffTitle = ""; DiffNotice = UiText.Get("DiffChooseFile"); }
         if (_closed || _mutating || row is null || _state.Context is not { } context) { _diffLoading = false; UpdateBusy(); return; }
         var options = new DiffOptions(IgnoreWhitespace, WholeFile);
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45)); _diffCancel = cancellation; _diffLoading = true; UpdateBusy();
+        var attempt = new object(); var watch = Stopwatch.StartNew(); var outcome = OperationOutcome.Cancelled;
+        Journal?.Record(new(attempt, UiText.Get("DiffView"), UiText.Get("DiffLoading"), 0, OperationOutcome.Running), Directory, true);
         DiffTask = RunAsync();
         async Task RunAsync()
         {
@@ -283,16 +297,17 @@ public sealed partial class CommitViewModel : ObservableObject
                     return diff.Lines.Select((line, index) => new DiffRow(line, hunkIds[index])).ToArray();
                 }, cancellation.Token);
                 if (_closed || generation != _diffGeneration || cancellation.IsCancellationRequested) return;
-                _fileDiff = diff; DiffRows = lines; Binary = BinaryComparison.Create(diff, row.Change);
+                _fileDiff = diff; DiffRows = lines; Binary = BinaryComparison.Create(diff, row.Change); DiffTitle = row.Path; SelectedDiff = null; outcome = OperationOutcome.Success;
                 var oldBytes = diff.OldBytes?.ToString("N0", System.Globalization.CultureInfo.CurrentCulture) ?? UiText.Get("CountUnavailable");
                 var newBytes = diff.NewBytes?.ToString("N0", System.Globalization.CultureInfo.CurrentCulture) ?? UiText.Get("CountUnavailable");
                 DiffNotice = UiText.Format("DiffSummary" + diff.Kind, oldBytes, newBytes, diff.Added, diff.Removed);
                 if (row.Change.Group == ChangeGroup.Conflicted) DiffNotice = UiText.Get("DiffConflict");
                 if (lines.Length == 0 && diff.Kind == FileDiffKind.Text) DiffNotice = UiText.Get(IgnoreWhitespace ? "DiffNoWhitespaceChanges" : "DiffNoTextChanges");
             }
-            catch (Exception error) { if (!_closed && generation == _diffGeneration) { DiffNotice = Explain(error); HasDiffError = true; CaptureError(error); } }
+            catch (Exception error) { outcome = error is OperationCanceledException ? OperationOutcome.Cancelled : OperationOutcome.Failed; if (!_closed && generation == _diffGeneration) { DiffNotice = Explain(error); HasDiffError = true; CaptureError(error); } }
             finally
             {
+                Journal?.Record(new(attempt, UiText.Get("DiffView"), OperationActivity.CompletedPhase(outcome), watch.Elapsed.TotalSeconds, outcome), Directory, true);
                 if (generation == _diffGeneration) { _diffCancel = null; _diffLoading = false; UpdateBusy(); }
                 cancellation.Dispose();
             }
@@ -428,7 +443,7 @@ public sealed partial class CommitViewModel : ObservableObject
     {
         if (_mutating) { if (!_elapsed.IsRunning) _elapsed.Restart(); _timer.Start(); }
         else { _timer.Stop(); _elapsed.Stop(); }
-        foreach (var name in new[] { nameof(IsBusy), nameof(IsMutating), nameof(CanEditMessage), nameof(Ready), nameof(CanAmend), nameof(Summary), nameof(RefreshLabel) }) Changed(name);
+        foreach (var name in new[] { nameof(IsBusy), nameof(IsDiffLoading), nameof(IsMutating), nameof(CanEditMessage), nameof(Ready), nameof(CanAmend), nameof(Summary), nameof(RefreshLabel) }) Changed(name);
         RefreshCommands();
     }
     private void RefreshCommands()
@@ -443,6 +458,8 @@ public sealed partial class CommitViewModel : ObservableObject
     public async Task CloseAsync()
     {
         _closed = true; ShiftHeld = false; _fileCancel?.Cancel(); Cancel();
+        if (Conflict is { } conflict) { conflict.PropertyChanged -= OnConflictChanged; conflict.Completed -= OnConflictCompleted; await conflict.CloseAsync(); }
+        await _conflictDrain;
         await FileTask;
         await LoadingTask; await DiffTask; await OperationTask; await CloseDraftAsync(); _timer.Stop();
     }

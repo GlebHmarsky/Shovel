@@ -4,6 +4,7 @@ namespace GitGui.App.ViewModels;
 
 public sealed partial class ShellViewModel
 {
+    public ActivityJournal Journal { get; } = new();
     private OperationActivity? _activity;
     private bool _showWorkspaceStatus;
     public OperationActivity? Activity => _activity;
@@ -32,6 +33,9 @@ public sealed partial class ShellViewModel
     }
     private void PublishActivity(OperationActivity? activity)
     {
+        if (activity is not null && SelectedRepository is { } tab)
+            Journal.Record(activity, tab.Directory, ReferenceEquals(activity.Attempt, _readAttempt),
+                ReferenceEquals(activity.Attempt, _readAttempt) ? (activity.IsComplete ? RawOutput : null) : _commitModel?.RawOutput ?? CurrentAction?.RawOutput);
         if (activity is null || !ReferenceEquals(activity.Attempt, _activity?.Attempt)) _showWorkspaceStatus = false;
         if (Set(ref _activity, activity, nameof(Activity))) Changed(nameof(OperationCaption));
     }
