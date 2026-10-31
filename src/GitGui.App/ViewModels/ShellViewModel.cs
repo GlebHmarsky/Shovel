@@ -182,6 +182,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public void CompleteStartup(SettingsLoadResult result)
     {
         LoadedSettings = result;
+        if (Updates is not null) Updates.PeriodicChecks = result.Settings.CheckUpdatesPeriodically;
         RestoreWorkspacePreferences(result.Settings);
         Repositories.Clear(); _knownIdentities.Clear();
         foreach (var path in result.Settings.RepositoryPaths)
@@ -458,6 +459,8 @@ public sealed partial class ShellViewModel : ObservableObject
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
         CommitLayout = _commitLayout,
+
+        CheckUpdatesPeriodically = Updates?.PeriodicChecks ?? true,
         Appearance = Appearance, RiderExecutable = _riderExecutable, CodeExecutable = _codeExecutable, BashExecutable = _bashExecutable,
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()

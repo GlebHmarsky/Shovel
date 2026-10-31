@@ -21,6 +21,7 @@ internal static partial class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args is ["--check-updates"]) return RunUpdateChecks();
         if (args.FirstOrDefault() == "--measure-history-performance") return HistoryPerformanceHarness.Run(args);
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();

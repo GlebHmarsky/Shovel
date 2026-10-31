@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.31.0** retains comparisons during selection, embeds whole-file conflict resolution in Commit, saves pane sizes and adds All/User/Background activity. Includes the 0.30.1 LFS discard fix. Routine verification remains 26 checks. [Current behavior](docs/product.md#daily-use-interactions-0310); [discard measurements](docs/roadmap.md#lfs-discard-0301).
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.32.0** integrates the Windows installer and signed GitHub updates with the current master features. It retains comparisons during selection, embeds whole-file conflict resolution in Commit, saves pane sizes and adds All/User/Background activity. Includes the 0.30.1 LFS discard fix. Routine verification remains 26 checks. [Current behavior](docs/product.md#daily-use-interactions-0310); [discard measurements](docs/roadmap.md#lfs-discard-0301).
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -180,7 +180,7 @@ Fourth/fifth: three stage/unstage samples on a disposable 2,000-file/1,001-branc
 powershell -NoProfile -File .\scripts\Build-Preview.ps1
 ```
 
-Restores/builds/checks/publishes **Build/0.31.0-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
+Local-only command: restores/builds/checks/publishes **Build/<version>-win-x64/Shovel.exe**, with helper/files/START-HERE/SHA256SUMS/changelog. Keep files together; runtime needed, SDK not needed to run. Unsigned local folder, no installer/updater/hosting/keys/push.
 
 Build ignored/untracked; never overwrite an existing version. Partial publish stays in ignored artifacts. Increment Directory.Build.props and changelog once/delivery. User-requested 0.3.1 old-preview cleanup was one-time; subsequent versions retained. No additional prerequisite missing on this development host.
 
@@ -188,7 +188,7 @@ Build ignored/untracked; never overwrite an existing version. Partial publish st
 
 | File | Content/handling |
 | --- | --- |
-| settings.json | Schema 5: layout/up to 20 tabs/order/selection/appearance/tool paths/legacy scope/identity; All Commits written since 0.7.0. No credentials/history. Schemas 1/2/3/4 migrate without consent; stamps saved after successful reads. Invalid/inaccessible/newer/unsupported or externally changed file is not overwritten. |
+| settings.json | Schema 6: layout/up to 20 tabs/order/selection/appearance/tool paths/legacy scope/identity; All Commits written since 0.7.0. No credentials/history. Schemas 1–5 migrate without consent; stamps saved after successful reads. Invalid/inaccessible/newer/unsupported or externally changed file is not overwritten. |
 | history-view.json | Rebuildable last-selected history page (commit/ref/author/path metadata, selection and scroll), schema 1, 200 rows / 4 MiB. Clean-shutdown writes only; delete while closed to clear. Never authorizes mutations. |
 | settings.json.bak | Previous valid bytes, including pre-migration data; no automatic restore. |
 | diagnostics.jsonl / .1 | UTC + typed codes; draft retry/failure adds only operation, storage stage and numeric native error; ~256 KiB each, bounded queue/best effort including fatal exit; no raw output/exceptions/paths/content. |
@@ -202,3 +202,19 @@ Current identity supports root on local fixed drive/no reparse components; UNC/r
 History uses one read chain/max two children; the modal has bounded cancelling status/diff chains. Mutations cancel old reads without waiting for their drain; close drains them. Bare repos rejected, linked actions coordinated within Shovel, external clients independent. Shallow ends distinct, missing partial objects fail without fetch. Detected merge/rebase/cherry-pick/revert sequences support recovery; mailbox/ambiguous state remains unsupported.
 
 History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; errors explicit, no false truncation. Deep --skip can time out. Full selected fields within read bound, abbreviated rows. The [shared Dark/Light themes](docs/theme.md) apply to the client area; Shovel title bars use native palette-aware styling (exact colors on Windows 11, best effort on Windows 10); pickers/message boxes remain system-owned. Dark/Light selection is available under Appearance; further theme polish remains deferred. Pending: arbitrary-line staging, image/text side-by-side diffs, broader mutations/filtering, auth routes, locales/accessibility/DPI, representative performance and installed updates. See TODO for priorities, roadmap for measured limits.
+
+## Windows installer and updates
+
+Master includes the updater and the latest Git workflows. The source repository GlebHmarsky/Shovel remains private under MIT; GlebHmarsky/shovel-releases is public. **Every delivered build is a release**, available through Help → Shovel updates.
+
+Increment `Directory.Build.props`, add release notes to CHANGELOG, then run:
+
+```powershell
+pwsh -NoProfile -File scripts/Build-Release.ps1
+```
+
+This runs smoke verification once, builds the Windows x64 self-contained installer, signs the feed with the existing `%USERPROFILE%/.shovel-signing/shovel-update.key`, uploads via the current Git Credential Manager login, and verifies an anonymous download using Shovel's production update source. GitHub CLI is not required for stable releases. The installer is `Build/<version>-installer-win-stable/Shovel-Setup.exe`. No private key or login token is uploaded.
+
+The command refuses changed existing builds and published version reuse. An upload failure leaves a draft for inspection and does not advance latest. Fix the cause before retrying; never overwrite a published version. `Build-Preview.ps1` is an explicit local-only development tool, not completed delivery. `Build-Installer.ps1 -LocalOnly` remains an unconfigured offline fixture.
+
+[Distribution and recovery](docs/distribution.md) covers install locations, permanent key backup, schema-compatible repair, and validation limits. Windows publisher signing is separate and still unset. Installed UI/restart acceptance remains distinct from headless and network verification.

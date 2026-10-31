@@ -46,6 +46,9 @@ public partial class MainWindow : Window
             new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
     }
 
+    private void OnUpdates(object sender, RoutedEventArgs e)
+    { if (ViewModel.Updates is { } updates) new UpdateWindow(updates) { Owner = this }.ShowDialog(); }
+
     private void OnHistoryWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
         if (_restoringScroll || ViewModel.IsBusy || FindScroll(HistoryTable) is not { } scroll) return;
@@ -132,14 +135,15 @@ public partial class MainWindow : Window
     public AppSettings CaptureLayout()
     {
         CaptureHistoryScroll(null, EventArgs.Empty);
-        return new()
+        return (ViewModel.LoadedSettings?.Settings ?? new AppSettings()) with
     {
         WindowWidth = RestoreBounds.Width,
         WindowHeight = RestoreBounds.Height,
         IsMaximized = WindowState == WindowState.Maximized,
         SidebarWidth = SidebarColumn.ActualWidth,
         DetailsHeight = DetailsRow.ActualHeight,
-        HistoryFilesWidth = HistoryFiles.FilesColumn.ActualWidth,
+        HistoryFilesWidth = HistoryFiles.FilesColumn.ActualWidth > 0 ? HistoryFiles.FilesColumn.ActualWidth :
+            ViewModel.LoadedSettings?.Settings.HistoryFilesWidth ?? 340,
         SelectedSection = NavigationSection.History
         };
     }

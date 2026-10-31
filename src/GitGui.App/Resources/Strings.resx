@@ -876,4 +876,30 @@ Previous HEAD: {1}</value></data>
   <data name="CommitMetadata" xml:space="preserve"><value>Details</value></data>
   <data name="ConflictResizeResult" xml:space="preserve"><value>Resize conflict sources and result</value></data>
   <data name="DiffRetainedLoading" xml:space="preserve"><value>Loading selection… previous comparison remains visible.</value></data>
+
+  <data name="UpdateTitle" xml:space="preserve"><value>Shovel updates</value></data>
+  <data name="UpdateInstalledLabel" xml:space="preserve"><value>Installed version</value></data>
+  <data name="UpdateCheck" xml:space="preserve"><value>Check and download</value></data>
+  <data name="UpdateCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="UpdateRestart" xml:space="preserve"><value>Restart and update</value></data>
+  <data name="UpdateNotes" xml:space="preserve"><value>Release notes</value></data>
+  <data name="UpdatePeriodic" xml:space="preserve"><value>Check every four hours while Shovel is open</value></data>
+  <data name="UpdatePrivacy" xml:space="preserve"><value>Startup checks contact GitHub after the window opens. Requests reveal normal HTTP metadata, including your IP address; no repository content, credentials or device identifier is sent. Installation requires Restart and update.</value></data>
+  <data name="UpdateUnconfigured" xml:space="preserve"><value>Update hosting is not configured in this build. Set the release repository and public verification key when packaging.</value></data>
+  <data name="UpdatePortable" xml:space="preserve"><value>Automatic updates require an installed copy of Shovel. Use the Windows installer first.</value></data>
+  <data name="UpdateIdle" xml:space="preserve"><value>Ready to check for updates.</value></data>
+  <data name="UpdateChecking" xml:space="preserve"><value>Checking for updates…</value></data>
+  <data name="UpdateCurrent" xml:space="preserve"><value>Shovel is up to date.</value></data>
+  <data name="UpdateDownloading" xml:space="preserve"><value>Downloading Shovel {0}: {1}%</value></data>
+  <data name="UpdateReady" xml:space="preserve"><value>Shovel {0} is ready. Restart and update when your Git work is finished.</value></data>
+  <data name="UpdateCancelled" xml:space="preserve"><value>Update check or download cancelled. Your installed version is unchanged.</value></data>
+  <data name="UpdateFailed" xml:space="preserve"><value>Update failed. Check your connection and available disk space, then retry. An invalid, incomplete or withdrawn release is never installed. Your installed version is unchanged.</value></data>
+  <data name="UpdateBlocked" xml:space="preserve"><value>Shovel {0} is ready, but installation is blocked. Finish Git operations and recovery in all tabs, close external Git tools, and make sure every saved repository is accessible and settings are writable.</value></data>
+  <data name="UpdateSettingsBlocked" xml:space="preserve"><value>Restart is blocked because this session cannot save its settings. Your settings file has been preserved. If it was created by a newer version, close Shovel and install the latest compatible installer; do not delete or downgrade the settings file.</value></data>
+  <data name="UpdateInstalling" xml:space="preserve"><value>Saving your session and verifying the update before restarting…</value></data>
+  <data name="UpdateReadyMenu" xml:space="preserve"><value>Update ready — restart when convenient</value></data>
+  <data name="UpdateOtherInstance" xml:space="preserve"><value>Another installed Shovel instance is running, or an explicit update is in progress. Close other Shovel instances first. If an update was interrupted, run the latest installer to repair the application.</value></data>
+  <data name="UpdateToolsQuestion" xml:space="preserve"><value>Shovel opened an external editor or terminal whose completion cannot be tracked. Have you finished its Git commands, hooks, authentication and merge work?</value></data>
+  <data name="UpdateReadyShort" xml:space="preserve"><value>Update ready</value></data>
+  <data name="UpdateClose" xml:space="preserve"><value>Close</value></data>
 </root>

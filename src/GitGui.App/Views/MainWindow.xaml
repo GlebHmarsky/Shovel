@@ -112,6 +112,8 @@
         <MenuItem Header="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
       </MenuItem>
       <MenuItem Header="{loc:Text Key=HelpMenu}">
+        <MenuItem Header="{loc:Text Key=UpdateTitle}" Click="OnUpdates" />
+        <MenuItem Header="{loc:Text Key=UpdateReadyMenu}" Click="OnUpdates" Visibility="{Binding Updates.Ready, Converter={StaticResource BoolToVisibility}}" />
         <MenuItem Header="{Binding Version}" IsEnabled="False" />
         <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
       </MenuItem>
@@ -227,6 +229,7 @@
        </Button>
       </StackPanel></Grid>
       <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="{loc:Text Key=UpdateReadyShort}" Click="OnUpdates" Visibility="{Binding Updates.Ready, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding Updates.Status}"/>
         <Button Style="{StaticResource ToolbarButton}" Click="OnToolbarMenu" IsEnabled="{Binding CanOpenTools}" ToolTip="{Binding WorkspaceToolsHelp}" AutomationProperties.Name="{loc:Text Key=WorkspaceOpenIn}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M3,16 L3,10 C3,5 12,5 16,5 M12,1 L17,5 12,10"/><TextBlock Text="{loc:Text Key=WorkspaceOpenIn}"/></StackPanel>
           <Button.ContextMenu><ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.0 — 2026-10-31
+
+- Merge Windows installation and signed GitHub updates into master while retaining the newer conflict editor, retained comparisons, layout persistence, startup cache, activity log and LFS discard fixes.
+- Make every delivered build a published update: Build-Release verifies, packages, signs, uploads through the existing GitHub login and checks an anonymous download. Developer compile checks remain local.
+- Preserve schema-6 settings and the explicit settings-blocked recovery message. Published versions are immutable and must increase; source remains private and download hosting remains public.
+
 ## 0.31.0 — 2026-10-30
 
 - Retain the previous file/commit comparison during loading; preserve unchanged row identities on refresh and open Commit changes when selecting history or stashes.
@@ -19,6 +25,41 @@
 - Restore the last selected repository's saved history view while fresh data loads; mark it as last-known and keep mutations dependent on current data. Add Apply/Pop/Drop to stash history menus, keep the tab strip themed under the Commit modal, and drag tabs to reorder their saved positions.
 - Overlap discard validation and collapse HEAD metadata queries. Correct false modified rows for hydrated standard LFS assets using local pointer/hash comparison, without running filters during background reads. Add isolated single/batch discard profiling; the reported 30-second spike and Fork-equivalent latency remain unverified.
 - Add optional conflict, usability and LFS checks; retain the 26-check routine budget. Document cache storage, editor limits, measured performance and remaining desktop validation.
+
+## 0.30.106 — 2026-10-30
+
+- Online update target for the repaired 0.30.105 installer. Includes the same schema-6 profile compatibility and specific blocked-settings guidance; no additional behavior changes.
+- To retry from the blocked 0.30.103/0.30.104 build, close Shovel, install 0.30.105 once, then use Help > Shovel updates to download and explicitly restart into this version.
+
+## 0.30.105 — 2026-10-30
+
+- Fix blocked update restarts when a profile was saved by a schema-6 Shovel build. Support its settings structure, preserve commit/history layout fields during window capture, and migrate older schemas without deleting the profile.
+- Explain read-only settings as the reason for a blocked restart and provide installer recovery guidance. Unknown future formats remain protected from writes.
+- Users blocked on 0.30.103/0.30.104 must close Shovel and run this installer once; no settings deletion or downgrade is needed.
+
+## 0.30.104 — 2026-10-30
+
+- First online update rehearsal for the GitHub-connected Shovel 0.30.103 installer. Check and download through Help, then explicitly restart to install.
+- Uses the same application identity and permanent signing key as 0.30.103; retains settings and drafts. No additional Git workflow changes.
+- The offline Shovel Local Test 0.30.102 fixture must first be replaced by the regular Shovel installer; it does not contact GitHub.
+
+## 0.30.103 — 2026-10-30
+
+- Provide the GitHub-connected Shovel installer for the first online update rehearsal. Uses the permanent release verification key and GlebHmarsky/shovel-releases stable feed.
+- This is the regular Shovel application, separate from the offline Shovel Local Test 0.30.102 fixture. Install this version once before testing an online update.
+- Windows publisher signing is not yet configured.
+
+## 0.30.1 (installer branch) — 2026-10-30
+
+- Configure GlebHmarsky/Shovel as the source repository and GlebHmarsky/shovel-releases as the update host, with a permanent public verification key. The private signing key stays outside the repository.
+- Compare public/private keys by cryptographic identity so Windows checkout line-ending conversion does not break packaging.
+- Default release packaging to the configured repository and public key. Repositories remain private; unattended update access requires making shovel-releases public. No shared GitHub token is embedded.
+
+## 0.30.0 (installer branch) — 2026-10-30
+
+- Add per-user self-contained Windows installer packaging with pinned Velopack, signed GitHub release feeds, automatic check/download, manual retry/cancel and an explicit idle-gated Restart and update action. Preserve existing settings/tabs/drafts.
+- Add local release signing/publishing scripts, stable/test channels and GitHub setup instructions. Hosting remains unconfigured until the owner supplies their account; native installed update/repair/uninstall still need disposable Windows validation.
+- Publish source under the MIT license with third-party notices.
 
 ## 0.29.0 — 2026-10-29
 

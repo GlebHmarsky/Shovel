@@ -25,6 +25,10 @@ public partial class App : Application
     private DiagnosticLog? _log;
     private SettingsStore? _settings;
     private ShellViewModel? _shell;
+    private CancellationTokenSource _updateCancellation = new();
+    private AppUpdater? _updater;
+    private UpdateViewModel? _updates;
+    private Task _automaticUpdates = Task.CompletedTask;
     private Task _startupTask = Task.CompletedTask;
     private bool _closing;
     private bool _allowClose;
@@ -62,6 +66,11 @@ public partial class App : Application
             var identities = new WindowsRepositoryIdentity();
             _shell = new ShellViewModel(reader, new UserInteraction(), identities,
                 persist: SaveIdentitySettingsAsync, trace: _trace, actions: new GitActions(runner, reader, identities));
+            _updater = new AppUpdater(UpdateConfiguration.Load());
+            _updates = new UpdateViewModel(_updater, RestartForUpdateAsync, () =>
+                _shell.LoadedSettings is { CanSave: false }
+                    ? UiText.Get("UpdateSettingsBlocked") + " " + _shell.SettingsNotice : null);
+            _shell.ConfigureUpdates(_updates);
             _shell.DraftStore = new GitGui.Core.Drafts.CommitDraftStore(null, identities, _log.RecordDraftStorage);
             _shell.StartupCache = new HistoryCacheStore(directory);
             _shell.AppearanceChanged += (_, _) => _theme.Select(_shell.Appearance);
@@ -85,6 +94,7 @@ public partial class App : Application
             if (_closing || _fatal) return;
             window.RestoreLayout(result.Settings);
             _shell!.CompleteStartup(result);
+            _automaticUpdates = _updates!.RunAutomaticChecksAsync(_updateCancellation.Token);
             _log!.Record(result.CanSave ? DiagnosticEvent.SettingsLoaded : DiagnosticEvent.SettingsReadOnly);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
@@ -116,6 +126,10 @@ public partial class App : Application
         _startupCancellation.Cancel();
         try
         {
+            _updateCancellation.Cancel();
+            _updates?.Stop();
+            if (_updates is not null) await _updates.ActiveTask;
+            await _automaticUpdates;
             await _startupTask;
             await _shell.WaitForIdleAsync();
             await _shell.WorkspaceToolTask;
@@ -143,6 +157,10 @@ public partial class App : Application
                     {
                         _closing = false;
                         _shell.ResumeAfterSaveFailure();
+                        _updates?.Resume();
+                        _updateCancellation.Dispose();
+                        _updateCancellation = new();
+                        _automaticUpdates = _updates!.RunAutomaticChecksAsync(_updateCancellation.Token);
                         return;
                     }
                 }
@@ -156,6 +174,47 @@ public partial class App : Application
             Shutdown();
         }
         catch (Exception exception) { FailAndExit(exception); }
+    }
+
+    private async Task<bool> RestartForUpdateAsync()
+    {
+        if (_closing || _fatal || _shell?.CanPrepareUpdate != true || MainWindow is not MainWindow window) return false;
+        _closing = true;
+        _shell.BeginShutdown(); // Close command admission before any await or final repository inspection.
+        var marked = false;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            await _shell.WaitForIdleAsync().WaitAsync(timeout.Token);
+            await _shell.PreferenceTask.WaitAsync(timeout.Token);
+            if (_shell.ToolsNeedUpdateAcknowledgment && MessageBox.Show(window, UiText.Get("UpdateToolsQuestion"),
+                UiText.Get("UpdateTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return false;
+            if (!await _shell.VerifyUpdateIdleAsync(timeout.Token)) return false;
+            var snapshot = _shell.CaptureSession(window.CaptureLayout());
+            await _settingsWrites.WaitAsync(timeout.Token);
+            try { await Task.Run(() => _settings!.SaveAsync(snapshot, timeout.Token), timeout.Token); }
+            finally { _settingsWrites.Release(); }
+            await Task.Run(() => _updater!.VerifyReadyAsync(timeout.Token), timeout.Token);
+            if (!await _shell.VerifyUpdateIdleAsync(timeout.Token)) return false;
+            // Prevent another installed launch in the exit/apply gap. The framework's restarted hook clears it.
+            await Task.Run(Program.MarkHandoff, timeout.Token); marked = true;
+            _updater!.Apply();
+            _startupCancellation.Cancel();
+            _updateCancellation.Cancel();
+            _updates!.Stop();
+            _allowClose = true;
+            Shutdown();
+            return true;
+        }
+        finally
+        {
+            if (!_allowClose)
+            {
+                if (marked) Program.CancelHandoff();
+                _closing = false;
+                _shell.ResumeAfterSaveFailure();
+            }
+        }
     }
 
     private static string ResolveDataDirectory(string[] arguments)
@@ -193,6 +252,10 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _theme?.Dispose();
+        _updates?.Stop();
+        _updater?.Dispose();
+        _updateCancellation.Cancel();
+        _updateCancellation.Dispose();
         _startupCancellation.Cancel();
         _startupCancellation.Dispose();
         if (_ownsProfile) _profileMutex!.ReleaseMutex();

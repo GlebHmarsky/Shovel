@@ -66,7 +66,7 @@ The established work environment is trusted. **Do not add extra safety measures,
 
 ## Updates and distribution
 
-Deferred implementation; these define the requested install-once experience, not prerequisites for unrelated Git features.
+0.30.0 implements installer packaging and signed checks/downloads with explicit restart gating. GitHub owner/key configuration and installed acceptance remain open; these are not prerequisites for unrelated Git features. [Distribution](distribution.md) owns the publishing procedure.
 
 | ID | Requirement |
 | --- | --- |
@@ -76,7 +76,7 @@ Deferred implementation; these define the requested install-once experience, not
 | U4 | Verify feed/package authenticity before execution; updater signatures differ from Windows signing. Protect keys; match package/metadata/channel/architecture/version; reject invalid signatures. HTTPS/hash alone is not publisher authentication. |
 | U5 | Recoverable offline/timeout/proxy/auth/interruption/space/install/crash status. Failed check/download leaves installed app usable; reject HTML/login responses, never disable verification. |
 | U6 | Preserve settings/tabs/drafts/recovery through schema migration/backups; document bad-release repair. Claim rollback only after updater and data-compatibility testing. |
-| U7 | Approved private/offsite access without embedded shared secrets. Publish immutable packages before manifest; outage never disables installed app. |
+| U7 | Public GitHub Releases approved; offsite HTTPS access without embedded shared secrets. Publish immutable packages before manifest; outage never disables installed app. |
 | D1 | Clean uninstall/license notices/signed distribution options; preserve repos/Git/shared credentials/tools, explicit app-data retention choice. |
 
 ## Verification and acceptance

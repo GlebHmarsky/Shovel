@@ -4,6 +4,9 @@ Updated 2026-10-30. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Merge installer/updater into master and make releases the delivery default.** 0.32.0 retains current UI/Git features and settings compatibility; Build-Release packages, signs, publishes and verifies each delivery. Source stays private; release host stays public. See distribution for the command and roadmap for verification evidence.
+
+
 - [x] **P1 — Daily-use QOL.** Retain file/commit comparisons while loading; preserve unchanged selected rows; navigate history/stashes to Commit changes; embed whole-file conflict selection/editing/staging in Commit; persist pane/window sizes; quiet tabs/arrows/badges and add bounded All/User/Background activity. [Behavior and limits](docs/product.md#daily-use-interactions-0310).
 - [x] **P1 — Deliver 0.31.0.** Six QOL, eight conflict, eleven stash and ten commit-file checks passed; 26 smoke checks in 53.0 seconds, zero build warnings/errors, matching ignored preview/checksums and owning docs. Native input coverage, crash-time geometry and advanced merging remain limitations.
 
@@ -86,6 +89,10 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 - [ ] **P2 — Further large-batch LFS latency.** The identified EOM post-checkout delay is fixed with user-confirmed file-discard semantics. A 64 × 4 MiB fixture still takes 3.8 s, mostly status/hash verification beyond the roughly one-second native checkout; optimize only with exact-byte/race correctness. Cold/missing-LFS-cache and precise Shovel desktop timings remain unverified; preserve responsive cancellation and honest completion.
 - [ ] **P2 — Conflict editor extensions.** In-app external-tool chooser, more encodings and block-level merge controls; current configured-tool/UTF-8/side-selection workflow is delivered.
+
+- [ ] **P1 — Finish public installer rollout (0.30.0 branch).** Packaging, signed checks/downloads and explicit restart admission are implemented. GlebHmarsky/Shovel remains private; shovel-releases is public with signed 0.30.103 and 0.30.104 releases, and anonymous production feed/package verification passed. Back up the permanent key, choose Windows publisher signing, and verify two installed versions on a disposable Windows user/VM. Prove native install/update/repair/uninstall, cross-session admission, retained settings/drafts and framework maintenance-log contents before coworker rollout. [Setup and limits](docs/distribution.md). Online 0.30.103 → 0.30.104 exposed a schema-6 profile compatibility gap. Repair 0.30.105 supports the saved format and preserves layout; 0.30.106 is its online update target. Fourteen updater regressions and both 26-check smoke runs pass; installed Help-menu/restart acceptance remains pending. Isolated offline ShovelLocalTest 0.30.101 → 0.30.102 native installation/update/uninstall and scoped cleanup passed; interactive installed acceptance remains pending; anonymous production transport verification has passed. See docs/local-installer-test.md.
+
+
 - [ ] **P2 — Remaining signing/input recovery.** Broaden only for a concrete daily-use failure; not a prerequisite that displaces requested functionality. Existing hooks/signing stay enabled.
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
@@ -103,18 +110,20 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Network MVP.** Clone, remote editing/removal and broader auth/input; adding remotes and setting upstream are delivered. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
-- [ ] **P2 — Pilot distribution, after personal replacement.** Select updater/installer/hosting/signing, per-user install, channels/pilot/repair, migration/localization; pass U1–U7/D1 on installed Windows.
+- [ ] **P2 — Installed distribution acceptance.** 0.30.0 selects Velopack/public GitHub Releases; finish the explicit rollout task above and pass U1–U7/D1 on installed Windows, including key-rotation and uninstall-data-choice requirements.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/tag management/reflog/force-with-lease and advanced stash variants; disposable destructive fixtures. Reset/Revert and per-file conflict editing are delivered; extensions remain above.
 - [ ] **P2 — Extended compatibility.** Additional submodule management (add/remove/deinit/recursive/remote-latest), worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization. Selected submodule open/update/sync is delivered.
 
 ## Decisions before rollout
 
 - [ ] **Q2:** coworker Windows editions/builds, architectures, IT/proxy/no-admin constraints. Local SDK prerequisites are present.
-- [ ] **Q3/Q4:** private/offsite/VPN access, host, release/signing owner, certificate/key custody, updater/installer; architecture compares candidates.
+- [ ] **Q3/Q4:** release publication/access and certificate/key custody; GlebHmarsky repository URLs are configured. Public GitHub Releases, Velopack and MIT are confirmed; no private-host/VPN requirement.
 - [ ] Refresh pinned .NET 10 servicing patch before distribution; reverify.
-- [ ] Finalize publisher/install/data identity before first installer; plan migration from Foundation profile. Shovel name is confirmed.
+- [ ] Finalize Windows publisher signing before distribution. Per-user Shovel install identity retains existing Foundation settings and CommitDrafts locations. Shovel name is confirmed.
 
 ## Completed
+
+- [x] **0.30.0 / 2026-10-30 (installer branch):** Windows self-contained packaging, signed public-GitHub update checks/downloads, restart admission and publishing scripts; MIT source license. 12 focused checks, 26 final smoke checks, local installer and disposable signing-fixture packaging verified. GitHub owner and installed rollout remain in the explicit task above. [Evidence](docs/roadmap.md#current-status).
 
 - [x] **0.24.0 / 2026-10-29:** background-only author peers, rounded graph lines, equal tabs, Explorer/Rider/VS Code/Bash toolbar and persisted Dark/Light appearance. Four optional focused checks, normal/minimum offscreen review; 26 routine checks in 32.2 seconds and verified preview. Actual desktop handoffs remain unverified. [Evidence](docs/roadmap.md#current-status).
 

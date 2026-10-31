@@ -74,6 +74,7 @@ public sealed partial class ShellViewModel
             }
             if (_stopping) return;
             await _repositoryTools.LaunchAsync(request ?? throw new System.IO.FileNotFoundException(), cancel.Token);
+            if (tool != RepositoryTool.Explorer) _unverifiedToolHandoff = true;
             if (SelectedRepository == tab) Status = UiText.Get("WorkspaceToolOpened");
         }
         catch (Exception) { if (SelectedRepository == tab && !_stopping) Status = UiText.Get("WorkspaceToolFailed"); }

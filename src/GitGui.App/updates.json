@@ -1,0 +1,5 @@
+{
+  "Repository": "GlebHmarsky/shovel-releases",
+  "PublicKey": "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAz6hTjhBfjPbW1HeQt1ME\n4kEkZOeNCfyBNCuj29u42JEdtbvrwxk6B5tLxT0r74NKUIQvWCK347oiVwO072O8\ntl++3eTiAJLrXBLv7yDSbuW5EFt5b2ZlQWflFwCWLlIhg9XUIh8hkymo4ACAuZWQ\nLopBtRKPWk8S6GzWaM0KlLJQLpXE3Mt3OYFzVEJ1j7cgLoWzxxCQ2THfRYJs6Qa5\n9gZahIa7SOdchYYQiPAP57GNVLmHr7YdTz3bzxOQ0dDvzp1MOLnIIfLCWiDhfziG\ndMjeFDYImu5R3x6nOeRlXG80df9Nngd8UN4eYtCD/QLiK6ypdOqTRoPwZEmeuZfn\nQJwTMGjH1i/GiaawPQhwNv9jHRuDkRWasYmKJ7FMQtgeykByj2yHpG307PsYbAch\nDHpw9mwhgJqQaB6b76DqdIghcgUzLG/uCGBXiFCIzUQ3mWdwYuGuLNu/pZFfyONi\n8bdT9SyhMfQtK7+NDieCLfhBwfqdlvex4Z59Y9p44zBlAgMBAAE=\n-----END PUBLIC KEY-----",
+  "Channel": "win-stable"
+}
