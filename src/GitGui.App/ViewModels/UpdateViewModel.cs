@@ -10,7 +10,7 @@ public sealed class UpdateViewModel : ObservableObject
     private readonly Func<string?>? _blockedReason;
     private CancellationTokenSource? _cancel;
     private UpdateSnapshot _snapshot;
-    private bool _periodic = true, _stopping, _busy;
+    private bool _periodic = true, _stopping, _busy, _launchCheckStarted;
     public Task ActiveTask { get; private set; } = Task.CompletedTask;
     public RelayCommand CheckCommand { get; }
     public RelayCommand CancelCommand { get; }
@@ -38,11 +38,11 @@ public sealed class UpdateViewModel : ObservableObject
     { _snapshot = snapshot; Changed(nameof(Status)); Changed(nameof(Notes)); Changed(nameof(Ready)); Refresh(); }
     private void Refresh()
     { Changed(nameof(Busy)); CheckCommand?.Refresh(); CancelCommand?.Refresh(); RestartCommand?.Refresh(); }
-    public async Task CheckAsync()
+    public async Task CheckAsync(CancellationToken token = default)
     {
         if (_stopping || _busy || !_updater.Available) return;
         _busy = true; Refresh();
-        using var cancel = new CancellationTokenSource(TimeSpan.FromMinutes(10)); _cancel = cancel;
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(token); cancel.CancelAfter(TimeSpan.FromMinutes(10)); _cancel = cancel;
         // No fire-and-forget progress callbacks: dispatch synchronously onto the captured UI context.
         var context = SynchronizationContext.Current;
         var progress = new InlineProgress<UpdateSnapshot>(value =>
@@ -66,13 +66,19 @@ public sealed class UpdateViewModel : ObservableObject
     }
     public void Stop() { _stopping = true; _cancel?.Cancel(); Refresh(); }
     public void Resume() { _stopping = false; Refresh(); }
+    public async Task CheckOnLaunchAsync(CancellationToken token)
+    {
+        if (_launchCheckStarted || _stopping || _busy || token.IsCancellationRequested || !_updater.Available) return;
+        _launchCheckStarted = true;
+        await CheckAsync(token);
+        if (!_stopping && !token.IsCancellationRequested && Ready) await RestartAsync();
+    }
     public async Task RunAutomaticChecksAsync(CancellationToken token)
     {
         if (!_updater.Available) return;
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(15 + Random.Shared.Next(15)), token);
-            if (!_stopping && !_busy) { ActiveTask = CheckAsync(); await ActiveTask; }
+            ActiveTask = CheckOnLaunchAsync(token); await ActiveTask;
             while (!token.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromHours(4) + TimeSpan.FromMinutes(Random.Shared.Next(30)), token);

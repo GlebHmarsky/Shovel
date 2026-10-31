@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.34.0 — 2026-11-01
+
+- Check for updates immediately on every installed launch and automatically restart after a verified download, even with periodic checks disabled.
+- Drain restored repository reads before restart validation; retain operation/recovery/settings gates and manual retry on blocked updates. Failed/offline checks keep Shovel usable.
+
 ## 0.33.0 — 2026-10-31
 
 - Clone repositories from a URL or absolute local path, optionally selecting a branch/tag, with progress, authentication, cancellation and automatic history opening. Preserve native filters/hooks and any partial Git result.

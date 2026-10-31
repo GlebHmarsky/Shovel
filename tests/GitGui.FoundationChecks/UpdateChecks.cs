@@ -118,7 +118,42 @@ internal static partial class Program
             File.WriteAllBytes(path, new byte[package.Length]);
             await ExpectAsyncThrows(() => SignedReleaseSource.VerifyPackageAsync(asset, path, default));
         });
-        await Check("Automatic download requires explicit restart and retains blocked state", async () =>
+        await Check("Launch checks immediately download and request restart even with periodic checks disabled", async () =>
+        {
+            var fake = new FixtureUpdater(config); var restarts = 0;
+            using var stop = new CancellationTokenSource();
+            var restarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var vm = new UpdateViewModel(fake, () => { restarts++; restarted.SetResult(); return Task.FromResult(true); }) { PeriodicChecks = false };
+            var loop = vm.RunAutomaticChecksAsync(stop.Token);
+            await restarted.Task.WaitAsync(TimeSpan.FromSeconds(3)); stop.Cancel(); await loop;
+            Expect(fake.Checks == 1 && restarts == 1, "Immediate startup check and verified-ready restart");
+            await vm.CheckOnLaunchAsync(default);
+            Expect(fake.Checks == 1 && restarts == 1, "Resume does not repeat the launch attempt");
+            var nextLaunch = new UpdateViewModel(fake, () => { restarts++; return Task.FromResult(true); });
+            await nextLaunch.CheckOnLaunchAsync(default);
+            Expect(fake.Checks == 2 && restarts == 2, "Every new launch checks again");
+        });
+        await Check("Launch failures, cancellation, current and portable builds never install; blocked restart is retained", async () =>
+        {
+            var restarts = 0;
+            foreach (var phase in new[] { UpdatePhase.Current, UpdatePhase.Failed, UpdatePhase.Cancelled })
+            {
+                var vm = new UpdateViewModel(new FixtureUpdater(config) { ResultPhase = phase }, () => { restarts++; return Task.FromResult(true); });
+                await vm.CheckOnLaunchAsync(default);
+            }
+            var offline = new UpdateViewModel(new FixtureUpdater(config) { Fail = true }, () => { restarts++; return Task.FromResult(true); });
+            await offline.CheckOnLaunchAsync(default);
+            var portable = new FixtureUpdater(config) { Available = false };
+            await new UpdateViewModel(portable, () => { restarts++; return Task.FromResult(true); }).CheckOnLaunchAsync(default);
+            using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+            var skipped = new FixtureUpdater(config);
+            await new UpdateViewModel(skipped, () => { restarts++; return Task.FromResult(true); }).CheckOnLaunchAsync(cancelled.Token);
+            Expect(restarts == 0 && portable.Checks == 0 && skipped.Checks == 0, "No inappropriate restart or cancelled network work");
+            var blocked = new UpdateViewModel(new FixtureUpdater(config), () => { restarts++; return Task.FromResult(false); });
+            await blocked.CheckOnLaunchAsync(default);
+            Expect(restarts == 1 && blocked.Ready && blocked.Status.Contains("blocked", StringComparison.OrdinalIgnoreCase) && blocked.RestartCommand.CanExecute(null), "Blocked auto-restart keeps manual retry");
+        });
+        await Check("Manual download retains explicit restart and blocked state", async () =>
         {
             var fake = new FixtureUpdater(config); var restartCount = 0;
             var vm = new UpdateViewModel(fake, () => { restartCount++; return Task.FromResult(false); });
@@ -262,9 +297,10 @@ internal static partial class Program
         public UpdateConfiguration Configuration => configuration;
         public bool Available { get; set; } = true;
         public bool Fail { get; set; }
+        public UpdatePhase ResultPhase { get; set; } = UpdatePhase.Ready;
         public int Checks { get; private set; }
         public Task CheckAndDownloadAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
-        { Checks++; if (Fail) throw new IOException(); progress.Report(new(UpdatePhase.Ready, "0.31.0")); return Task.CompletedTask; }
+        { token.ThrowIfCancellationRequested(); Checks++; if (Fail) throw new IOException(); progress.Report(new(ResultPhase, "0.31.0")); return Task.CompletedTask; }
         public Task VerifyReadyAsync(CancellationToken token) => Task.CompletedTask;
         public void Apply() => throw new Exception("Must never apply during a check");
     }

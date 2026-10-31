@@ -4,6 +4,12 @@ Updated 2026-10-31. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### Automatic launch updates (0.34.0)
+
+**2026-11-01:** user requested check/download/apply on every launch. Installed startup now checks immediately, independently of periodic preferences, and automatically requests the existing verified restart after download. It drains initial repository reads before closing admission so fast downloads do not cancel identity discovery. One launch attempt per process avoids repeat restarts after failed close/resume. Manual/periodic downloads keep explicit restart. Busy/recovery/unknown repositories and settings failures retain the blocked update without bypassing the gate.
+
+Release build passed with zero warnings/errors; **16 focused updater checks passed** (`artifacts/updates-0.34.0.txt`), covering immediate launch, each new instance, disabled periodic preference, once-only attempt, blocked restart, failure/current/cancellation/portable cases, existing feed/package signatures and gate/settings checks. No production App startup, actual update installation or visible desktop was exercised. Build-Release publication/smoke evidence follows after delivery. Older installed clients require one manual update to acquire this policy.
+
 ### Clone and remote management (0.33.0)
 
 **2026-10-31:** implemented the next Network MVP increment: preparation-free Clone and cached remote management, real native checkout/configuration mutations, authentication/cancellation, partial-result retention and history reconciliation. [Product](product.md#clone-and-remote-management-0330) owns UX; [architecture](architecture.md#clone-and-remote-management-0330) owns bounds and semantics.

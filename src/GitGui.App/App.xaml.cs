@@ -179,12 +179,16 @@ public partial class App : Application
     private async Task<bool> RestartForUpdateAsync()
     {
         if (_closing || _fatal || _shell?.CanPrepareUpdate != true || MainWindow is not MainWindow window) return false;
+        // A fast launch download can finish before the restored repository identities are known.
+        // Drain startup reads before closing admission; BeginShutdown would otherwise cancel them.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await _shell.WaitForIdleAsync().WaitAsync(timeout.Token);
+        if (_closing || _fatal || !_shell.CanPrepareUpdate) return false;
         _closing = true;
         _shell.BeginShutdown(); // Close command admission before any await or final repository inspection.
         var marked = false;
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
             await _shell.WaitForIdleAsync().WaitAsync(timeout.Token);
             await _shell.PreferenceTask.WaitAsync(timeout.Token);
             if (_shell.ToolsNeedUpdateAcknowledgment && MessageBox.Show(window, UiText.Get("UpdateToolsQuestion"),

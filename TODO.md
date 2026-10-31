@@ -4,6 +4,8 @@ Updated 2026-10-31. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Automatic launch updates (0.34.0).** Immediately check/download/verify on each installed launch and automatically request the existing guarded restart. No delay, periodic-preference exemption, verification bypass or repeated restart loop. Blocked/cancelled/failed attempts remain usable. Installed restart acceptance remains in the rollout task.
+
 - [x] **P1 — Clone and remote URL management.** Preparation-free Clone/Manage remotes forms; native checkout with filters/hooks, authentication/cancellation, partial-result retention and automatic history opening; cached fetch/push URL editing and confirmed local remote removal with identity/configuration checks and reconciliation. [Flow and limits](docs/product.md#clone-and-remote-management-0330).
 - [x] **P1 — Deliver 0.33.0.** 11 clone/remote and 2 shared network checks passed; Build-Release passed 26 smoke checks in 31.8 s, packaged the exact committed source, published the signed update feed on Shovel and verified an anonymous full-package download. [Release evidence and limits](docs/roadmap.md#clone-and-remote-management-0330).
 
