@@ -91,8 +91,11 @@ public sealed partial class GitActions
             {
                 var targets = FileActionPaths(options.Entries);
                 foreach (var target in targets) ValidateRegularTarget(path, target);
-                reviewedPaths = reader.ReadLocalChangesAsync(git, path, false, token,
-                    targets.Length <= 128 && targets.Sum(item => item.Length + 3) < 16000 ? targets : null, context.FilterOverrides, normalizeLfs: false);
+                reviewedPaths = ReadDiscardChanges();
+                async Task<LocalChanges> ReadDiscardChanges() =>
+                    await reader.TryReadLfsDiscardChangesAsync(context, options.Entries, token) ??
+                    await reader.ReadLocalChangesAsync(git, path, false, token,
+                        targets.Length <= 128 && targets.Sum(item => item.Length + 3) < 16000 ? targets : null, context.FilterOverrides, normalizeLfs: false);
             }
             await Task.WhenAll(inspection, configuration, reviewedPaths ?? Task.CompletedTask);
             var fresh = await inspection;

@@ -33,21 +33,28 @@ public sealed partial class RepositoryReader
             {
                 token.ThrowIfCancellationRequested();
                 if (!_statusPointers.TryGetValue(entry.IndexObject, out var pointer) || pointer.Oid.Length == 0) continue;
-                var file = WorkingCopyPath(path, entry.Path);
-                try
-                {
-                    if (HasReparseComponent(path, file)) continue;
-                    var before = FileStamp(file);
-                    if (before.Length != pointer.Size) continue;
-                    await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                    if (stream.Length != pointer.Size) continue;
-                    var oid = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, token));
-                    if (oid == pointer.Oid && before == FileStamp(file)) clean.Add(entry);
-                }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException) { /* Keep uncertain rows visible. */ }
+                if (await MatchesLfsContentAsync(path, entry.Path, pointer, token) == true) clean.Add(entry);
             }
         }
         return clean.Count == 0 ? entries : entries.Where(e => !clean.Contains(e)).ToArray();
+    }
+
+    // A null result is uncertain, not clean: callers must retain the row or use native status.
+    // No mutable file-hash cache: every observation reads the bytes under a shared read lock.
+    private static async Task<bool?> MatchesLfsContentAsync(string root, string relative, StatusPointer pointer, CancellationToken token)
+    {
+        var file = WorkingCopyPath(root, relative);
+        try
+        {
+            if (HasReparseComponent(root, file)) return null;
+            var before = FileStamp(file);
+            if (before.Length != pointer.Size) return null;
+            await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            if (stream.Length != pointer.Size) return null;
+            var oid = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, token));
+            return before == FileStamp(file) ? oid == pointer.Oid : null;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
     }
 
     private async Task ReadStatusPointersAsync(GitInstallation git, string path, string[] hashes, CancellationToken token)

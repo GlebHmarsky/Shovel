@@ -2,6 +2,8 @@
 
 Updated 2026-10-31. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
 
+**0.36.1 Beta:** standard LFS selections use faster exact-content validation and reconciliation during Discard. Confirmation, native filters/hooks, progress and Cancel keep their existing behavior. Unsupported/mixed selections use normal Git status; no optimistic removal of changed rows. [Measured results and limits](roadmap.md#lfs-discard-refactor-0361-beta).
+
 ## Clone and remote management (0.33.0)
 
 **File / Repository → Clone repository** opens immediately with source URL or absolute local path, destination and optional branch/tag. Submit clones into a new or empty directory with progress, Cancel and the existing authentication prompts, then opens the resulting repository and history. Normal filters, LFS and checkout hooks remain enabled. A cancelled/failed clone reports its result and leaves any native Git partial output in place; Shovel opens a valid remaining repository without replaying the clone or deleting files.

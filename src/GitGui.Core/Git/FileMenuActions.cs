@@ -220,7 +220,9 @@ public sealed partial class GitActions
                 try
                 {
                     var stamp = await IndexStampAsync(fresh, observe.Token);
-                    var changed = await reader.ReadLocalChangesAsync(git, path, false, observe.Token, paths, context.FilterOverrides);
+                    var changed = options.Action == WorkingCopyAction.Discard
+                        ? await reader.TryReadLfsDiscardChangesAsync(context, entries, observe.Token) : null;
+                    changed ??= await reader.ReadLocalChangesAsync(git, path, false, observe.Token, paths, context.FilterOverrides);
                     if (stamp == await IndexStampAsync(fresh, observe.Token))
                     {
                         var targets = paths.ToHashSet(StringComparer.Ordinal);

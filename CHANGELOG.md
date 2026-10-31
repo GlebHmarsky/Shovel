@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.1 — 2026-11-01
+
+- Reduce standard LFS discard validation and refresh costs by checking selected index pointers and actual hydrated bytes directly; retain native status for unsupported or uncertain selections.
+- Share exact-content verification between status and discard, with no mutable file-hash cache. Preserve native checkout, LFS filters, index hooks, partial staging, cancellation and honest failure reporting.
+- Add focused concurrent-edit, stale-index, fallback and missing-LFS-object checks. Publish Beta only; Stable remains 0.35.0.
+
 ## 0.36.0 — 2026-11-01 (Beta)
 
 - Select an external merge tool inside the Commit conflict pane from configured names and common Git-supported tools; keep the configured default when preferred.

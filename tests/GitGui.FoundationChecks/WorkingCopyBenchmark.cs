@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
 using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
@@ -32,9 +33,11 @@ internal static partial class Program
             await File.WriteAllTextAsync(Path.Combine(repo, ".gitattributes"), "*.uasset filter=lfs diff=lfs merge=lfs -text\n");
         }
         for (var i = 0; i < 2000; i++) await File.WriteAllTextAsync(Path.Combine(repo, $"file-{i}.txt"), "baseline\n");
+        byte[]? assetHash = null;
         if (assets)
         {
             var bytes = new byte[4 * 1024 * 1024]; new Random(17).NextBytes(bytes); bytes[0] = 0;
+            assetHash = SHA256.HashData(bytes);
             for (var i = 0; i < 64; i++) await File.WriteAllBytesAsync(Path.Combine(repo, $"asset-{i}.uasset"), bytes);
         }
         await Git("add", "."); await Git("commit", "-m", "Fixture"); var hash = await Git("rev-parse", "HEAD");
@@ -59,7 +62,12 @@ internal static partial class Program
                 var samples = runner.Samples.ToArray();
                 if (!discard) await reader.ReadFileDiffAsync(context, context.Changes.Entries.Single(e => e.Path == "file-0.txt"), new(), default);
                 else if (!lfs) foreach (var target in targets) Expect(await File.ReadAllTextAsync(Path.Combine(repo, target)) == "baseline\n", "Discard restored exact bytes");
-                else { var diff = await Git(["diff", "--name-only", "--", .. targets]); Expect(diff.Length == 0, "LFS discard restored actual assets"); }
+                else foreach (var target in targets)
+                {
+                    await using var restored = File.OpenRead(Path.Combine(repo, target));
+                    Expect(restored.Length == 4 * 1024 * 1024 && (await SHA256.HashDataAsync(restored)).SequenceEqual(assetHash!),
+                        "LFS discard restored exact hydrated bytes, not a pointer stub");
+                }
                 Console.WriteLine($"Sample {sample + 1} {action} ({count} files): execute {execution:F1} ms; fresh rows {rows:F1} ms; validation {result.ValidationMilliseconds:F1} ms; command {result.CommandMilliseconds:F1} ms; reconciliation {result.RefreshMilliseconds:F1} ms; processes {samples.Length}");
                 Console.WriteLine(string.Join("; ", samples.Select(s => $"{s.Name} {s.Milliseconds:F1} ms")));
                 foreach (var child in runner.Children) Console.WriteLine($"Discard child {child.Name}: {child.Milliseconds:F1} ms");
@@ -108,7 +116,7 @@ internal static partial class Program
                 }
                 result = result with { StandardError = Encoding.UTF8.GetBytes(ordinary.ToString()) };
             }
-            var commands = new[] { "rev-parse", "symbolic-ref", "for-each-ref", "remote", "config", "log", "status", "diff", "add", "restore", "checkout-index", "reset", "cat-file", "check-attr" };
+            var commands = new[] { "rev-parse", "symbolic-ref", "for-each-ref", "remote", "config", "log", "status", "diff", "add", "restore", "checkout-index", "reset", "cat-file", "check-attr", "ls-files" };
             lock (Samples) Samples.Add((request.Arguments.FirstOrDefault(commands.Contains) ?? "other", watch.Elapsed.TotalMilliseconds));
             return result;
         }

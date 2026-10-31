@@ -4,6 +4,21 @@ Updated 2026-10-31. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### LFS discard refactor (0.36.1 Beta)
+
+**2026-11-01:** the code review identified duplicate raw-content status scans around native LFS checkout as the next TODO bottleneck. Added narrowly eligible selected-file verification and extracted the shared SHA-256 content verifier; no cached mutable-file hashes or optimistic clean results. Ordinary/mixed/unsupported selections retain native status. [Architecture](architecture.md#selected-lfs-discard-verification-0361) owns eligibility and fallback details.
+
+Same-host disposable benchmark: 2,000 text files, 1,001 branches, 64 × 4 MiB LFS assets with invalidated stat caches, three samples per selection size. Medians include validation, native checkout and actual reconciled rows; independent byte verification is excluded from timing.
+
+| Selection | 0.36.0 baseline | 0.36.1 revised | Revised validation / native / reconciliation |
+| --- | ---: | ---: | ---: |
+| One asset | 1.215 s (1.125–1.334) | 1.104 s (1.012–1.188) | 0.385 / 0.566 / 0.126 s |
+| 64 assets / 256 MiB | 3.691 s (3.603–4.159) | 2.009 s (1.745–2.546) | 0.651 / 1.011 / 0.347 s |
+
+Final batch median improved **46%**; single-file median improved **9%**. Logs: `artifacts/discard-baseline-0.36.0.txt`, `artifacts/discard-final-0.36.1.txt`. The final harness independently verifies each restored asset length and SHA-256, excluding that work from timing. An earlier revised run measured 1.016/1.878 s medians (`artifacts/discard-optimized-0.36.1.txt`); the final run includes native checkout variability up to 1.407 s. Stage columns are separate medians, so they need not sum to the median total. These are headless warm-local-object measurements, not EOM/Fork desktop p95. Cold remote hydration, larger/mixed/sparse selections and physical desktop responsiveness remain unmeasured. Missing local objects without a remote are tested as a native failure; no successful remote hydration claim.
+
+Release compilation passed without warnings/errors. **11 focused LFS checks and 6 discard checks passed**, covering partial staging, literal paths, real native hooks, same-size/same-timestamp edits, stale snapshots/index changes, changed-size/deletion/native-status fallback, ordinary-text probe avoidance, missing local objects and cancellation. A held discard yielded to the input-priority dispatcher in **0.3 ms**; this is headless dispatcher evidence, not physical desktop timing. Logs: `artifacts/lfs-0.36.1.txt`, `artifacts/discard-checks-0.36.1.txt`. Signed Beta packaging/publication follows; Stable remains pinned to 0.35.0.
+
 ### External merge-tool chooser (0.36.0 Beta)
 
 **2026-11-01:** advanced the conflict-editor TODO with named external-tool selection inside the existing Commit pane. Background preview reads configured command/path names and includes common Git tools; opening/selecting performs zero preparation. Explicit launch freezes the selected name, revalidates configuration/file/index state, uses native mergetool and verifies actual staged resolution. Configuration remains unchanged. Executable-path setup, extra encodings and block-level merging remain TODO.

@@ -13,6 +13,7 @@ internal static partial class Program
     private static bool _lfsChecks;
     private static async Task RunLfsChecksAsync()
     {
+        await RunLfsDiscardChecksAsync();
         var runner = new WindowsProcessRunner(); var reader = new RepositoryReader(runner);
         var actions = new GitActions(runner, reader, new WindowsRepositoryIdentity()); var git = await reader.DiscoverAsync(null, default);
         var repo = Fixture("LFS asset resolution");

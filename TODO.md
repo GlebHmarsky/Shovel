@@ -4,6 +4,9 @@ Updated 2026-10-31. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P2 — Refactor selected LFS discard verification (0.36.1).** Share exact-byte hashing, remove redundant raw status scans for supported selections, retain native fallback and concurrent edits. Same-host median: one asset 1.215 → 1.104 s; 64 assets 3.691 → 2.009 s. [Evidence and limits](docs/roadmap.md#lfs-discard-refactor-0361-beta).
+- [ ] **P1 — Deliver 0.36.1 Beta.** Complete focused checks, unchanged release smoke, signed packaging/publication and anonymous download verification; leave Stable at 0.35.0.
+
 - [x] **P1 — Deliver 0.36.0 Beta.** Inline external merge-tool chooser; 10 focused conflict checks and 26 smoke checks (45.7 s), signed Beta publication and anonymous package verification. Stable remains 0.35.0. [Evidence and limits](docs/roadmap.md#external-merge-tool-chooser-0360-beta).
 
 - [x] **P1 — Stable/Beta channels (0.35.0).** Persisted selector/default Stable, isolated signed feeds and package validation, pending-update invalidation, no cross-channel downgrade; routine Build-Release defaults to Beta. Explicitly publish the common baseline to both; future Stable releases require owner approval.
@@ -101,7 +104,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Next priorities
 
-- [ ] **P2 — Further large-batch LFS latency.** The identified EOM post-checkout delay is fixed with user-confirmed file-discard semantics. A 64 × 4 MiB fixture still takes 3.8 s, mostly status/hash verification beyond the roughly one-second native checkout; optimize only with exact-byte/race correctness. Cold/missing-LFS-cache and precise Shovel desktop timings remain unverified; preserve responsive cancellation and honest completion.
+- [ ] **P2 — Remaining LFS performance acceptance.** 0.36.1 reduces the 64 × 4 MiB fixture median to 2.01 s while verifying exact bytes; native checkout itself is about 1.01 s. Verify cold remote hydration, larger/mixed selections and precise EOM desktop timings when authorized. Missing local objects without a remote, partial staging, concurrent bytes/index changes and cancellation have focused coverage. Preserve honest completion; do not bypass native LFS or hooks to reach a timing target. [Evidence](docs/roadmap.md#lfs-discard-refactor-0361-beta).
 - [x] **P2 — External merge-tool chooser (0.36.0 Beta).** Select cached configured/common Git tool names in the inline conflict pane; explicit native launch, actual staged-result checking, unchanged Git configuration and stale/failure handling.
 - [ ] **P2 — Remaining conflict editor extensions.** More encodings, block-level merge controls and executable-path/custom-command configuration UI; named tool selection and configured-tool/UTF-8/whole-side workflows are delivered.
 
