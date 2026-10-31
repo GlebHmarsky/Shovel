@@ -4,13 +4,15 @@ Updated 2026-10-31. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
-## Clone and remote management (0.33.0)
+### Clone and remote management (0.33.0)
 
 **2026-10-31:** implemented the next Network MVP increment: preparation-free Clone and cached remote management, real native checkout/configuration mutations, authentication/cancellation, partial-result retention and history reconciliation. [Product](product.md#clone-and-remote-management-0330) owns UX; [architecture](architecture.md#clone-and-remote-management-0330) owns bounds and semantics.
 
 Final source build passed with zero warnings/errors. **11 focused checks passed** (`artifacts/network-workflows-0.33.0.txt`): normal filter/checkout-hook execution; default/explicit branch, detached tag and empty clone; destination/input protection; authentication cancellation and preserved partial repository; bound shell opening/cancel/navigation; fetch/push/fallback edits preserving local state; partial second-write failure; inherited/multiple URLs; stale config/locks; actual-target removal confirmation; Dark/Light offscreen forms. Reviewed renders under `artifacts/network-workflow-checks/20261031-215327-4ba77c59588f41dfbf257edbcf565f64`. The **2 existing default Fetch/Push checks also passed** after sharing authentication environment setup (`artifacts/default-network-0.33.0.txt`). These checks use disposable repositories and isolated Git configuration; no live server or visible window.
 
-Signed Build-Release delivery and its unchanged 26-check smoke suite are the remaining release step. No running installation has been replaced. Broader GCM/browser/custom SSH interaction, installed input/accessibility/restart acceptance, and large-clone performance remain unverified. Full native clones retain the process host's ten-minute/1-MiB bound; longer, shallow/bare/recursive options and broader remote URL forms remain TODO.
+**Delivered:** `scripts/Build-Release.ps1` passed the unchanged **26-check smoke suite in 31.8 s**, built matching preview/self-contained installer artifacts and published [v0.33.0-win-stable](https://github.com/GlebHmarsky/Shovel/releases/tag/v0.33.0-win-stable) from source commit `0b3d06a43cabb14aad9de9d1cd835eb3a1dcb9e6`. The production update client anonymously fetched the signed feed and **68,750,419-byte** full package, verified SHA-256 `FF388828FF3371AC14AF0AE3FEDDE48F698FA180F86C965C7F947AF221D12197`, reread the feed and verified the package again. Evidence: `artifacts/release-0.33.0.txt` and `artifacts/published-update-probe-991fc31ee4de44e89890354cb958bd55/download/RESULT.json`. Ignored artifacts: `Build/0.33.0-win-x64` and `Build/0.33.0-installer-win-stable`. Update-feed signing is verified; Windows publisher signing remains unset and Velopack reports this explicitly.
+
+No running installation has been replaced. Broader GCM/browser/custom SSH interaction, installed input/accessibility/restart acceptance, and large-clone performance remain unverified. Full native clones retain the process host's ten-minute/1-MiB bound; longer, shallow/bare/recursive options and broader remote URL forms remain TODO.
 
 ## Earlier releases
 
