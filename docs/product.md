@@ -1,6 +1,6 @@
 # Product
 
-Updated 2026-10-31. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
+Updated 2026-11-01. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
 
 **0.36.1 Beta:** standard LFS selections use faster exact-content validation and reconciliation during Discard. Confirmation, native filters/hooks, progress and Cancel keep their existing behavior. Unsupported/mixed selections use normal Git status; no optimistic removal of changed rows. [Measured results and limits](roadmap.md#lfs-discard-refactor-0361-beta).
 

@@ -1,6 +1,6 @@
 # Roadmap and decision register
 
-Updated 2026-10-31. [Product](product.md): UX; [requirements](requirements.md): acceptance; [architecture](architecture.md): implementation; [TODO](../TODO.md): only task checklist. This file holds milestone/evidence history and unresolved decisions.
+Updated 2026-11-01. [Product](product.md): UX; [requirements](requirements.md): acceptance; [architecture](architecture.md): implementation; [TODO](../TODO.md): only task checklist. This file holds milestone/evidence history and unresolved decisions.
 
 ## Current status
 
@@ -17,7 +17,9 @@ Same-host disposable benchmark: 2,000 text files, 1,001 branches, 64 × 4 MiB LF
 
 Final batch median improved **46%**; single-file median improved **9%**. Logs: `artifacts/discard-baseline-0.36.0.txt`, `artifacts/discard-final-0.36.1.txt`. The final harness independently verifies each restored asset length and SHA-256, excluding that work from timing. An earlier revised run measured 1.016/1.878 s medians (`artifacts/discard-optimized-0.36.1.txt`); the final run includes native checkout variability up to 1.407 s. Stage columns are separate medians, so they need not sum to the median total. These are headless warm-local-object measurements, not EOM/Fork desktop p95. Cold remote hydration, larger/mixed/sparse selections and physical desktop responsiveness remain unmeasured. Missing local objects without a remote are tested as a native failure; no successful remote hydration claim.
 
-Release compilation passed without warnings/errors. **11 focused LFS checks and 6 discard checks passed**, covering partial staging, literal paths, real native hooks, same-size/same-timestamp edits, stale snapshots/index changes, changed-size/deletion/native-status fallback, ordinary-text probe avoidance, missing local objects and cancellation. A held discard yielded to the input-priority dispatcher in **0.3 ms**; this is headless dispatcher evidence, not physical desktop timing. Logs: `artifacts/lfs-0.36.1.txt`, `artifacts/discard-checks-0.36.1.txt`. Signed Beta packaging/publication follows; Stable remains pinned to 0.35.0.
+Release compilation passed without warnings/errors. **11 focused LFS checks and 6 discard checks passed**, covering partial staging, literal paths, real native hooks, same-size/same-timestamp edits, stale snapshots/index changes, changed-size/deletion/native-status fallback, ordinary-text probe avoidance, missing local objects and cancellation. A held discard yielded to the input-priority dispatcher in **0.3 ms**; this is headless dispatcher evidence, not physical desktop timing. Logs: `artifacts/lfs-0.36.1.txt`, `artifacts/discard-checks-0.36.1.txt`.
+
+**Delivered:** `Build-Release.ps1 -Channel win-beta` passed **26 smoke checks in 48.6 s**, built the matching preview/self-contained installer from source `c4523d2` and published [Beta 0.36.1](https://github.com/GlebHmarsky/Shovel/releases/tag/v0.36.1-win-beta). Anonymous production verification passed for the signed feed and complete **68,757,480-byte** package, SHA-256 `799CED34156983109976F38E5EB3CE03932B3B9C7F1630FFF77DB24F27A094C3`. Evidence: `artifacts/release-0.36.1-beta.txt`, `artifacts/published-update-probe-9f94d41d48224873bccf249fe9919217/download/RESULT.json`. GitHub confirms Beta is a published prerelease and **Stable latest remains 0.35.0**. Windows publisher signing remains unset. No running installation or user repository was changed.
 
 ### External merge-tool chooser (0.36.0 Beta)
 

@@ -1,11 +1,11 @@
 # Implementation checklist
 
-Updated 2026-10-31. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-11-01. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
 
 - [x] **P2 — Refactor selected LFS discard verification (0.36.1).** Share exact-byte hashing, remove redundant raw status scans for supported selections, retain native fallback and concurrent edits. Same-host median: one asset 1.215 → 1.104 s; 64 assets 3.691 → 2.009 s. [Evidence and limits](docs/roadmap.md#lfs-discard-refactor-0361-beta).
-- [ ] **P1 — Deliver 0.36.1 Beta.** Complete focused checks, unchanged release smoke, signed packaging/publication and anonymous download verification; leave Stable at 0.35.0.
+- [x] **P1 — Deliver 0.36.1 Beta.** 11 LFS and 6 discard checks; 26 smoke checks in 48.6 s, matching preview/installer, signed update feed and anonymous full-package verification. Stable latest remains 0.35.0. [Evidence and limits](docs/roadmap.md#lfs-discard-refactor-0361-beta).
 
 - [x] **P1 — Deliver 0.36.0 Beta.** Inline external merge-tool chooser; 10 focused conflict checks and 26 smoke checks (45.7 s), signed Beta publication and anonymous package verification. Stable remains 0.35.0. [Evidence and limits](docs/roadmap.md#external-merge-tool-chooser-0360-beta).
 
