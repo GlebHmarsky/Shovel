@@ -4,6 +4,12 @@ Updated 2026-10-31. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### External merge-tool chooser (0.36.0 Beta)
+
+**2026-11-01:** advanced the conflict-editor TODO with named external-tool selection inside the existing Commit pane. Background preview reads configured command/path names and includes common Git tools; opening/selecting performs zero preparation. Explicit launch freezes the selected name, revalidates configuration/file/index state, uses native mergetool and verifies actual staged resolution. Configuration remains unchanged. Executable-path setup, extra encodings and block-level merging remain TODO.
+
+Release compilation passed without warnings/errors. **10 focused conflict checks passed** (`artifacts/conflicts-0.36.0.txt`), including a chosen script tool succeeding against a failing default, exact staged text, selection without Git work, unchanged default, invalid/stale selection rejection, existing binary/deletion/rebase/stash and failed-tool/index-lock cases. Reviewed Dark/Light normal/minimum offscreen renders under `artifacts/check-conflicts/20261031-221547-cb81e5543f3e4682a53704afedd57b95`. Native third-party GUI launch/input remains unverified; fixtures execute only disposable script tools. Beta-only Build-Release delivery follows; Stable must remain 0.35.0.
+
 ### Stable and Beta channels (0.35.0)
 
 **2026-11-01:** owner requested a common baseline, then Beta-only task builds with explicit approval for Stable. Added a saved Stable/Beta selector, default Stable; both launch and manual checks use that channel, switching clears pending packages, selection is disabled during update work, and equal/older versions cannot be installed across channels. GitHub Stable uses latest; versioned Beta releases are prereleases with a separate signed `beta` feed. Build-Release defaults to Beta. [Distribution](distribution.md#stable-and-beta-delivery-confirmed-2026-11-01) owns promotion commands and limits.

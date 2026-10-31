@@ -20,6 +20,7 @@
     <Button Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Padding="8,3"/>
     <Button Content="{loc:Text Key=ConflictReload}" Command="{Binding ReloadCommand}" Padding="8,3"/>
     <Button Content="{loc:Text Key=ConflictExternal}" Command="{Binding ExternalCommand}" Padding="8,3"/>
+    <ComboBox ItemsSource="{Binding Tools}" DisplayMemberPath="Label" SelectedValuePath="Name" SelectedValue="{Binding ExternalTool}" IsEnabled="{Binding CanChoose}" Width="165" Margin="4,0" AutomationProperties.Name="{loc:Text Key=ConflictToolLabel}" ToolTip="{loc:Text Key=ConflictToolHelp}" ToolTipService.ShowOnDisabled="True"/>
    </WrapPanel>
    <TextBlock Text="{Binding Help}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Help}" Foreground="{DynamicResource Theme.Muted}"/>
   </StackPanel>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.0 — 2026-11-01 (Beta)
+
+- Select an external merge tool inside the Commit conflict pane from configured names and common Git-supported tools; keep the configured default when preferred.
+- Launch the chosen tool through native Git, preserve configuration and validate stale state and actual resolution/staging. Selection itself performs no Git work.
+- Publish only to Beta; Stable remains 0.35.0 pending owner approval.
+
 ## 0.35.0 — 2026-11-01
 
 - Choose Stable or Beta updates in Help → Shovel updates; persist the choice for automatic launch and manual checks. Stable remains the default.

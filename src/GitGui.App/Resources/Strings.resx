@@ -935,4 +935,8 @@ Previous HEAD: {1}</value></data>
   <data name="UpdateStable" xml:space="preserve"><value>Stable — tested releases</value></data>
   <data name="UpdateBeta" xml:space="preserve"><value>Beta — latest builds for testing</value></data>
   <data name="UpdateChannelHelp" xml:space="preserve"><value>Applies to manual and launch checks. Switching clears pending updates; use Check and download now or restart Shovel. Returning to Stable waits for a newer stable version; it does not downgrade.</value></data>
+  <data name="ConflictToolDefault" xml:space="preserve"><value>Configured default</value></data>
+  <data name="ConflictToolLabel" xml:space="preserve"><value>External merge tool</value></data>
+  <data name="ConflictToolHelp" xml:space="preserve"><value>Choose a tool, then select External merge tool. Git checks availability on launch. This does not change Git configuration or save editor text.</value></data>
+  <data name="ConflictToolInvalid" xml:space="preserve"><value>The selected merge tool is no longer available in this preview. Reload the conflict and select it again.</value></data>
 </root>

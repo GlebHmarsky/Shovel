@@ -130,6 +130,35 @@ internal static partial class Program
             var p = await Preview(repo); Expect(p.IncomingSource == "" && p.Context.Repository.Recovery is null, "No inferred stash branch/sequence");
             Expect((await Resolve(p, ConflictChoice.Incoming)).Result.Success && await Git(repo, "show", ":file.txt") == "saved", "Stash side resolved");
         });
+        await Check("Named external tool selection is inert and runs the selected configured tool through Git", async () =>
+        {
+            var repo = await Conflict("selected tool");
+            await Git(repo, "config", "merge.tool", "bad-default");
+            await Git(repo, "config", "mergetool.bad-default.cmd", "exit 1");
+            await Git(repo, "config", "mergetool.selected.cmd", "printf 'selected result\\n' > \"$MERGED\"");
+            await Git(repo, "config", "mergetool.selected.trustExitCode", "true");
+            var p = await Preview(repo);
+            Expect(p.Tools.Contains("selected") && p.Tools.Contains("bad-default") && p.Tools.Contains("winmerge"), "Configured and built-in names cached");
+            var vm = new ConflictViewModel(p.Context, p.Change, actions); await vm.StartAsync();
+            var index = await Git(repo, "ls-files", "-u");
+            var calls = runner.Calls; vm.ExternalTool = "selected";
+            Expect(runner.Calls == calls, "Tool selection performs no Git preparation");
+            Expect(await Git(repo, "ls-files", "-u") == index && !vm.HasMutation, "Selection leaves index and work unchanged");
+            vm.ExternalCommand.Execute(null); await vm.Work;
+            Expect(vm.Resolved && await Git(repo, "show", ":file.txt") == "selected result", "Chosen tool stages exact result despite failing default");
+            Expect(await Git(repo, "config", "merge.tool") == "bad-default", "Selection never changes default configuration");
+            await vm.CloseAsync();
+        });
+        await Check("External tool rejects stale configuration and names outside the reviewed choices", async () =>
+        {
+            var repo = await Conflict("stale tool"); var p = await Preview(repo);
+            await Reject("ConflictToolInvalid", () => actions.ExecuteWorkingCopyAsync(p.Context,
+                new(WorkingCopyAction.ResolveConflict, [p.Change], Resolution: new(p, ConflictChoice.External, ExternalTool: "--bad")), default));
+            await Git(repo, "config", "mergetool.changed.cmd", "exit 1");
+            await Reject("CommitStale", () => actions.ExecuteWorkingCopyAsync(p.Context,
+                new(WorkingCopyAction.ResolveConflict, [p.Change], Resolution: new(p, ConflictChoice.External, ExternalTool: "winmerge")), default));
+            Expect((await Git(repo, "ls-files", "-u")).Length > 0, "Rejected attempts preserve unmerged index");
+        });
         await Check("Merge tool failure and index lock retain unresolved state and edited file", async () =>
         {
             var repo = await Conflict("tool"); await Git(repo, "config", "merge.tool", "fixture");

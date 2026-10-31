@@ -12,6 +12,8 @@ Clone is a normal full checkout with default `origin`; recursive submodule, shal
 
 ## Daily-use interactions (0.31.0)
 
+**0.36.0 Beta:** the inline conflict toolbar now offers an external merge-tool chooser beside its launch button. Keep **Configured default**, choose a named Git-configured tool, or select a common Git-supported tool. Selection does no preparation and changes no configuration; launch runs native Git mergetool for this file and checks whether it was resolved/staged. Availability is checked on launch; tool errors/output and cancellation remain in the existing operation flow. Editor text is not saved by the external-tool action. Tool executable paths/custom commands still belong in Git configuration; this selector lasts for the current conflict editor.
+
 Selecting a file or commit retains the last completed, labelled comparison until the new one is ready. Loading/error status explains the retained view; a completed empty result clears it. Stale visible hunks cannot be staged. Unchanged refreshes preserve row identity and native focus instead of rebuilding the selected rows. Clicking a history commit or stash opens the bottom **Commit** changes tab; metadata remains under **Details**.
 
 The central repository button opens a session activity panel with **All / User / Background**, retained selection, operation outcome/duration and available Git output. It performs no preparation. Entries are bounded and are not persisted. Inactive repository tabs use the dark strip, the selected tab stays gray, and adjacent toolbar arrows use the same quiet surface. Nonzero ahead/behind counts appear beside the icons; zero/unknown counts are hidden.

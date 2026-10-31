@@ -8,6 +8,10 @@ namespace GitGui.App.ViewModels;
 
 public sealed class ConflictViewModel : ObservableObject
 {
+    public sealed record ToolOption(string Name, string Label);
+    public IReadOnlyList<ToolOption> Tools { get; private set; } = [new("", UiText.Get("ConflictToolDefault"))];
+    private string _externalTool = "";
+    public string ExternalTool { get => _externalTool; set => Set(ref _externalTool, value ?? ""); }
     public ActivityJournal? Journal { get; init; }
     private readonly GitActions _actions;
     private WorkingCopyContext _context;
@@ -85,6 +89,9 @@ public sealed class ConflictViewModel : ObservableObject
             }
             _preview = await _actions.ReadConflictAsync(_context, _change, _cancel!.Token);
             if (_closed) return;
+            Tools = [new("", UiText.Get("ConflictToolDefault")), .. _preview.Tools.Select(name => new ToolOption(name, name))];
+            if (!Tools.Any(t => t.Name == ExternalTool)) ExternalTool = "";
+            Changed(nameof(Tools));
             if (!fresh || !HasEditorChanges) { _combinedText = _text = _preview.WorkingText ?? ""; HasEditorChanges = false; _current = _incoming = true; }
             var sides = await System.Threading.Tasks.Task.Run(() => (Numbered(_preview.Current?.Text), Numbered(_preview.Incoming?.Text)));
             if (_closed) return;
@@ -100,7 +107,7 @@ public sealed class ConflictViewModel : ObservableObject
         new DiffRow(new(DiffLineKind.Context, line.TrimEnd('\r'), index + 1, index + 1))).ToArray();
     private async Task ResolveAsync(ConflictChoice choice)
     {
-        var resolution = new ConflictResolution(_preview!, choice, Text); HasMutation = true; Begin(mutation: true);
+        var resolution = new ConflictResolution(_preview!, choice, Text, ExternalTool); HasMutation = true; Begin(mutation: true);
         var outcome = OperationOutcome.Failed;
         var attempt = new object(); Journal?.Record(new(attempt, Title, UiText.Get("ConflictResolving"), 0, OperationOutcome.Running), _context.Identity.Worktree, false);
         var retryWithoutReload = false;

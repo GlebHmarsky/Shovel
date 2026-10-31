@@ -7,9 +7,10 @@ namespace GitGui.Core.Git;
 
 public sealed record ConflictSide(int Stage, string Hash, string Mode, string? Text);
 public sealed record ConflictPreview(WorkingCopyContext Context, LocalChange Change, ConflictSide? Base, ConflictSide? Current,
-    ConflictSide? Incoming, string CurrentSource, string IncomingSource, string WorktreeStamp, string? WorkingText, bool Utf8Bom, bool CanEdit, string Attributes);
+    ConflictSide? Incoming, string CurrentSource, string IncomingSource, string WorktreeStamp, string? WorkingText, bool Utf8Bom, bool CanEdit, string Attributes)
+{ public IReadOnlyList<string> Tools { get; init; } = []; }
 public enum ConflictChoice { Current, Incoming, Edited, External }
-public sealed record ConflictResolution(ConflictPreview Preview, ConflictChoice Choice, string Text = "");
+public sealed record ConflictResolution(ConflictPreview Preview, ConflictChoice Choice, string Text = "", string ExternalTool = "");
 
 public sealed partial class GitActions
 {
@@ -70,9 +71,21 @@ public sealed partial class GitActions
         }
         if (await IndexStampAsync(snapshot, token) != context.IndexStamp ||
             stamp != await RepositoryReader.WorktreeContentStampAsync(path, change.Path, token)) throw new GitActionException("CommitStale");
+        var tools = new HashSet<string>(StringComparer.Ordinal) { "bc", "kdiff3", "meld", "p4merge", "tortoisemerge", "vscode", "winmerge" };
+        var configured = await Raw(git, path, ["config", "--name-only", "--get-regexp", @"^mergetool\..*\.(cmd|path)$"], token);
+        if (configured.Outcome != ProcessOutcome.Exited || configured.ExitCode is not (0 or 1)) throw ReadFailure(configured);
+        foreach (var key in Decode(configured).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var name = key.TrimEnd('\r'); var end = name.LastIndexOf('.');
+            if (name.StartsWith("mergetool.", StringComparison.Ordinal) && end > 10 && ValidMergeTool(name[10..end])) tools.Add(name[10..end]);
+        }
         return new ConflictPreview(context, change, sides.GetValueOrDefault(1), sides.GetValueOrDefault(2), sides.GetValueOrDefault(3), current, incoming,
-            stamp, working, bytes is not null && bytes.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf }), editable, attributeStamp);
+            stamp, working, bytes is not null && bytes.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf }), editable, attributeStamp)
+            { Tools = tools.Order(StringComparer.Ordinal).Take(64).ToArray() };
     }, token);
+
+    private static bool ValidMergeTool(string name) => name.Length is > 0 and <= 128 && !name.StartsWith('-') &&
+        name.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
 
     private static string? ConflictText(byte[] bytes)
     {
@@ -101,8 +114,9 @@ public sealed partial class GitActions
         ActionResult result;
         if (resolution.Choice == ConflictChoice.External)
         {
-            string? tool = null;
-            foreach (var key in new[] { "merge.guitool", "merge.tool" })
+            string? tool = resolution.ExternalTool;
+            if (tool.Length > 0 && (!ValidMergeTool(tool) || !preview.Tools.Contains(tool))) throw new GitActionException("ConflictToolInvalid");
+            foreach (var key in tool.Length == 0 ? new[] { "merge.guitool", "merge.tool" } : [])
             {
                 var value = await Raw(context.Git, path, ["config", "--get", key], token);
                 if (value.ExitCode == 0) { tool = Decode(value).Trim(); break; }
