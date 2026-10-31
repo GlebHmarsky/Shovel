@@ -38,5 +38,5 @@ p=source/'src/GitGui.App/Resources/Strings.resx'; s=p.read_text(encoding='utf-8'
 s=re.sub(r'(<data name="UpdatePrivacy"[^>]*><value>).*?(</value>)', r'\1Offline test: update checks read the signed local test feed. No GitHub update requests are made. Keep the test kit in its original folder. Installation requires Restart and update.\2', s)
 p.write_text(s,encoding='utf-8')
 p=source/'src/GitGui.App/ViewModels/UpdateViewModel.cs'; s=p.read_text(encoding='utf-8').replace('$"https://github.com/{Configuration.Repository}/releases"',json.dumps(str(kit/'feed'))); p.write_text(s,encoding='utf-8')
-(source/'src/GitGui.App/updates.json').write_text(json.dumps(dict(Repository='GlebHmarsky/shovel-releases',PublicKey=public,Channel='win-test')),encoding='utf-8')
+(source/'src/GitGui.App/updates.json').write_text(json.dumps(dict(Repository='GlebHmarsky/Shovel',PublicKey=public,Channel='win-test')),encoding='utf-8')
 print(source)

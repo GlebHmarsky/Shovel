@@ -3,7 +3,8 @@ param([Parameter(Mandatory)][string]$ArtifactDirectory)
 $ErrorActionPreference='Stop'
 $directory=(Resolve-Path -LiteralPath $ArtifactDirectory).Path
 $info=Get-Content (Join-Path $directory 'release-info.json') -Raw | ConvertFrom-Json
-if($info.LocalOnly -or $info.Channel -ne 'win-stable' -or $info.Repository -ne 'GlebHmarsky/shovel-releases' -or $info.Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Not a configured Shovel stable release.' }
+if($info.LocalOnly -or $info.Channel -ne 'win-stable' -or $info.Repository -ne 'GlebHmarsky/Shovel' -or $info.Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Not a configured Shovel stable release.' }
+if($info.SourceCommit -notmatch '^[a-f0-9]{40}$'){throw 'Release source commit is missing or invalid.'}
 $hashes=@{}
 foreach($line in Get-Content (Join-Path $directory 'SHA256SUMS.txt')) {
  if($line -notmatch '^([a-f0-9]{64})  ([A-Za-z0-9_.-]+)$'){throw 'Invalid checksum entry.'}
@@ -36,6 +37,8 @@ $api="https://api.github.com/repos/$($info.Repository)"
 try {
  $repo=Invoke-RestMethod $api -Headers $headers
  if($repo.private){throw 'Stable update downloads require a public releases repository. This script never changes visibility.'}
+ $source=Invoke-RestMethod "$api/commits/master" -Headers $headers
+ if($source.sha -ne $info.SourceCommit){throw 'Published master does not match this installer source commit. Reconcile source before publishing.'}
  $latest=$null
  try {$latest=Invoke-RestMethod "$api/releases/latest" -Headers $headers}
  catch {if([int]$_.Exception.Response.StatusCode -ne 404){throw}}
@@ -48,7 +51,7 @@ try {
  try {$existing=Invoke-RestMethod "$api/releases/tags/$tag" -Headers $headers}
  catch {if([int]$_.Exception.Response.StatusCode -ne 404){throw}}
  if($existing){throw "Release $tag already exists. Inspect any incomplete draft; never overwrite a published version."}
- $body=@{tag_name=$tag;name="Shovel $($info.Version)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$false}|ConvertTo-Json
+ $body=@{tag_name=$tag;target_commitish=$info.SourceCommit;name="Shovel $($info.Version)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$false}|ConvertTo-Json
  $release=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body $body
  Write-Output "Uploading draft $tag (ID $($release.id)). Failures leave it unpublished for inspection."
  foreach($file in $files) {

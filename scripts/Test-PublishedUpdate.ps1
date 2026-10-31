@@ -1,8 +1,9 @@
 #requires -Version 7.4
-param([Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$ExpectedVersion)
+param([Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$ExpectedVersion,
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$ClientVersion=$ExpectedVersion)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-$preview=Join-Path $root "Build/$ExpectedVersion-win-x64"
+$preview=Join-Path $root "Build/$ClientVersion-win-x64"
 foreach($name in @('Shovel.dll','Velopack.dll')) { if(!(Test-Path (Join-Path $preview $name))){throw 'Build the matching preview first.'} }
 $work=Join-Path $root ('artifacts/published-update-probe-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $work | Out-Null
@@ -40,7 +41,8 @@ if (!final.Assets.Any(a => a.Version == asset.Version && a.SHA256 == asset.SHA25
     throw new InvalidDataException("Release changed during verification.");
 await SignedReleaseSource.VerifyPackageAsync(asset, package, CancellationToken.None);
 var result = JsonSerializer.Serialize(new {
-    Passed = true, Version = expected, Feed = source.FeedUri, Package = source.PackageUri(asset),
+    Passed = true, Version = expected, ClientVersion = typeof(UpdateConfiguration).Assembly.GetName().Version?.ToString(3),
+    Repository = config.Repository, Feed = source.FeedUri, Package = source.PackageUri(asset),
     asset.Size, asset.SHA256, Anonymous = true, Installed = false,
     VerifiedUtc = DateTime.UtcNow
 }, new JsonSerializerOptions { WriteIndented = true });

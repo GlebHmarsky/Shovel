@@ -1,7 +1,7 @@
 #requires -Version 7.4
 [CmdletBinding(DefaultParameterSetName='Release')]
 param(
-    [Parameter(ParameterSetName='Release')][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$')][string]$Repository = 'GlebHmarsky/shovel-releases',
+    [Parameter(ParameterSetName='Release')][ValidateSet('GlebHmarsky/Shovel')][string]$Repository = 'GlebHmarsky/Shovel',
     [Parameter(ParameterSetName='Release')][string]$PublicKeyPath = (Join-Path $PSScriptRoot '../distribution/update-public.pem'),
     [Parameter(Mandatory, ParameterSetName='Release')][string]$PrivateKeyPath,
     [Parameter(Mandatory, ParameterSetName='Local')][switch]$LocalOnly,
@@ -10,6 +10,12 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$sourceCommit = (git -C $root rev-parse HEAD)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot identify release source commit.' }
+if (-not $LocalOnly) {
+    $pending = git -C $root status --porcelain
+    if ($LASTEXITCODE -ne 0 -or $pending) { throw 'Commit the release source before packaging a distributable installer.' }
+}
 . (Join-Path $PSScriptRoot 'Get-SourceFingerprint.ps1')
 $version = [string]([xml](Get-Content -LiteralPath (Join-Path $root 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid project version.' }
@@ -89,7 +95,7 @@ try {
             $signature = $key.SignData([IO.File]::ReadAllBytes($feed), [Security.Cryptography.HashAlgorithmName]::SHA256, [Security.Cryptography.RSASignaturePadding]::Pss)
             [IO.File]::WriteAllBytes("$feed.sig", $signature)
         }
-        @{ Version=$version; Repository=$(if ($LocalOnly) { '' } else { $Repository }); Channel=$Channel; SourceFingerprint=$evidence.SourceFingerprint; LocalOnly=[bool]$LocalOnly; Authenticode=[bool]$AuthenticodeSignParameters } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $releases 'release-info.json') -Encoding utf8NoBOM
+        @{ Version=$version; Repository=$(if ($LocalOnly) { '' } else { $Repository }); Channel=$Channel; SourceCommit=$sourceCommit; SourceFingerprint=$evidence.SourceFingerprint; LocalOnly=[bool]$LocalOnly; Authenticode=[bool]$AuthenticodeSignParameters } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $releases 'release-info.json') -Encoding utf8NoBOM
         Get-ChildItem -LiteralPath $releases -File | Sort-Object Name | ForEach-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $_.Name } | Set-Content -LiteralPath (Join-Path $releases 'SHA256SUMS.txt') -Encoding utf8NoBOM
         $prefix = [IO.Path]::GetFullPath($root).TrimEnd('\') + '\'
         foreach ($candidate in @($releases,$output)) {

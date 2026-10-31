@@ -3,6 +3,7 @@ param([Parameter(Mandatory)][string]$ArtifactDirectory)
 $ErrorActionPreference = 'Stop'
 $directory = (Resolve-Path -LiteralPath $ArtifactDirectory).Path
 $info = Get-Content -LiteralPath (Join-Path $directory 'release-info.json') -Raw | ConvertFrom-Json
+if ($info.Repository -ne 'GlebHmarsky/Shovel') { throw 'All future releases belong in GlebHmarsky/Shovel.' }
 if ($info.Channel -eq 'win-stable') {
     & (Join-Path $PSScriptRoot 'Publish-StableRelease.ps1') -ArtifactDirectory $directory
     return

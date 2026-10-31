@@ -1,8 +1,6 @@
 # Windows installation and GitHub publishing
 
-Confirmed 2026-10-30: public source repository **Shovel**, MIT license, and separate public
-**shovel-releases**, under the owner's personal GitHub account. Repositories are [GlebHmarsky/Shovel](https://github.com/GlebHmarsky/Shovel) and
-[GlebHmarsky/shovel-releases](https://github.com/GlebHmarsky/shovel-releases). The source repository remains private; shovel-releases is now public for the authorized online update rehearsal. No account credentials are compiled into the app.
+Confirmed 2026-10-31: **[GlebHmarsky/Shovel](https://github.com/GlebHmarsky/Shovel)** is the single public MIT source repository and release host. New installers embed this repository; all future publication targets it. The permanent signing key and application identity are unchanged. No GitHub credentials are compiled into the app.
 [Architecture](architecture.md#windows-installer-and-updater-0300) owns implementation;
 [requirements](requirements.md#updates-and-distribution) owns acceptance;
 [TODO](../TODO.md) owns outstanding work.
@@ -19,7 +17,7 @@ pwsh -NoProfile -File scripts/Build-Release.ps1
 This verifies/builds the preview, packages the self-contained installer, signs the update feed,
 publishes through the existing Git Credential Manager login and checks an anonymous full-package
 download through the production updater. It does not install or restart the running application.
-Push the verified source delivery to master. This publication is standing user authorization;
+Commit before running the command. It requires clean master, pushes source, and verifies that the public master commit matches the installer metadata before creating its release tag. This publication is standing user authorization;
 normal release work does not require another confirmation. Raw builds/focused tests remain local.
 Explicit local-only output can use Build-Preview or Build-LocalTest without publishing.
 
@@ -58,17 +56,13 @@ Reproduce with `scripts/Test-PublishedUpdate.ps1 -ExpectedVersion 0.30.104` whil
 in the latest feed. This does not install the update or automate visible UI; manual installed
 restart acceptance remains pending. Windows publisher signing is still not configured.
 
-## What to do on GitHub
+## One repository and migration
 
-The releases repository is public for unattended update access. The source repository remains private;
-making Shovel public for the planned MIT source release is a separate future action. The app never carries a shared access token; while downloads
-are private, an unauthenticated update check reports failure and leaves Shovel usable.
-Source visibility does not affect updater access, which only uses shovel-releases.
+Use Shovel for code, issues and Releases. Releases are tagged at the exact source commit used to build the installer. Public visibility allows downloads; only invited collaborators with write access can push changes.
 
-Only invite collaborators who should have write access. Other people may read/fork public
-source and propose pull requests, but cannot push directly without write access. No visibility
-change is performed by the local packaging scripts. GitHub's generated source archives for
-shovel-releases contain only that repository's files. No custom server is needed.
+0.32.1 is the migration build. Its identical signed artifacts are published once on the previous shovel-releases host as well, because already installed binaries still check that URL. Once installed, 0.32.1 checks only Shovel. The former repository is archived after both download paths are verified; it is not a future publishing destination. Deleting it before older installations migrate would break their update checks. A direct latest installer from Shovel is the recovery route if an old endpoint is eventually removed. Offline Local Test builds still require a regular installer.
+
+No visibility change or old-host publication is performed by routine build scripts. All new release configurations and publishers accept only GlebHmarsky/Shovel. There is no custom update server.
 
 ## First release on the owner's PC
 

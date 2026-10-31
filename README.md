@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.32.0** integrates the Windows installer and signed GitHub updates with the current master features. It retains comparisons during selection, embeds whole-file conflict resolution in Commit, saves pane sizes and adds All/User/Background activity. Includes the 0.30.1 LFS discard fix. Routine verification remains 26 checks. [Current behavior](docs/product.md#daily-use-interactions-0310); [discard measurements](docs/roadmap.md#lfs-discard-0301).
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.32.1** unifies public source and releases in this repository and integrates the Windows installer and signed GitHub updates with the current master features. It retains comparisons during selection, embeds whole-file conflict resolution in Commit, saves pane sizes and adds All/User/Background activity. Includes the 0.30.1 LFS discard fix. Routine verification remains 26 checks. [Current behavior](docs/product.md#daily-use-interactions-0310); [discard measurements](docs/roadmap.md#lfs-discard-0301).
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -205,9 +205,11 @@ History: 4 MiB/read, 64 lanes, 15 s/command, 45 s/read chain, 128 cursors/tab; e
 
 ## Windows installer and updates
 
-Master includes the updater and the latest Git workflows. The source repository GlebHmarsky/Shovel remains private under MIT; GlebHmarsky/shovel-releases is public. **Every delivered build is a release**, available through Help → Shovel updates.
+Master includes the updater and the latest Git workflows. GlebHmarsky/Shovel is the single public source and release repository under MIT. **Every delivered build is a release**, available through Help → Shovel updates.
 
-Increment `Directory.Build.props`, add release notes to CHANGELOG, then run:
+[Download the latest Windows installer](https://github.com/GlebHmarsky/Shovel/releases/latest/download/Shovel-Setup.exe). Already installed: use Help → Shovel updates.
+
+Increment `Directory.Build.props`, add release notes to CHANGELOG, commit the changes on master, then run:
 
 ```powershell
 pwsh -NoProfile -File scripts/Build-Release.ps1
@@ -215,6 +217,8 @@ pwsh -NoProfile -File scripts/Build-Release.ps1
 
 This runs smoke verification once, builds the Windows x64 self-contained installer, signs the feed with the existing `%USERPROFILE%/.shovel-signing/shovel-update.key`, uploads via the current Git Credential Manager login, and verifies an anonymous download using Shovel's production update source. GitHub CLI is not required for stable releases. The installer is `Build/<version>-installer-win-stable/Shovel-Setup.exe`. No private key or login token is uploaded.
 
-The command refuses changed existing builds and published version reuse. An upload failure leaves a draft for inspection and does not advance latest. Fix the cause before retrying; never overwrite a published version. `Build-Preview.ps1` is an explicit local-only development tool, not completed delivery. `Build-Installer.ps1 -LocalOnly` remains an unconfigured offline fixture.
+The command requires clean master, pushes the source, and tags the release at the exact packaged source commit. It refuses changed existing builds and published version reuse. An upload failure leaves a draft for inspection and does not advance latest. Fix the cause before retrying; never overwrite a published version. `Build-Preview.ps1` is an explicit local-only development tool, not completed delivery. `Build-Installer.ps1 -LocalOnly` remains an unconfigured offline fixture.
 
 [Distribution and recovery](docs/distribution.md) covers install locations, permanent key backup, schema-compatible repair, and validation limits. Windows publisher signing is separate and still unset. Installed UI/restart acceptance remains distinct from headless and network verification.
+
+Version 0.32.1 switches installed update checks to this repository. Older installed builds can receive that migration version from the archived shovel-releases endpoint; after updating, they use only Shovel. The offline Local Test fixture still requires a regular installer.

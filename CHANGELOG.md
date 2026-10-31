@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.1 — 2026-10-31
+
+- Use the public GlebHmarsky/Shovel repository for both source and all future installer releases/update checks, retaining the existing signing key and app identity.
+- Require committed master for delivery, push source before publishing, and attach release tags to the exact packaged source commit.
+- Publish this migration version once on the previous shovel-releases host so existing clients can switch without reinstalling; retain that host read-only for migration, with no future builds there.
+
+
 ## 0.32.0 — 2026-10-31
 
 - Merge Windows installation and signed GitHub updates into master while retaining the newer conflict editor, retained comparisons, layout persistence, startup cache, activity log and LFS discard fixes.
