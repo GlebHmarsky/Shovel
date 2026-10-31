@@ -60,7 +60,8 @@ public sealed partial class ShellViewModel
         var remotes = snapshot.RemoteNames.Concat(remoteRefs.Select(r => r.Name[13..].Split('/')[0])).Distinct().Select(name =>
             new SidebarNode(name, "↔", "", remoteRefs.Where(r => r.Name.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)).Select(r =>
                 new SidebarNode(r.Name[(14 + name.Length)..], "⑂", "", [], Jump(r.Hash), Menu: [new(UiText.Get("SidebarLocate"), Jump(r.Hash))])).ToArray(),
-                Menu: snapshot.RemoteNames.Contains(name) ? [Menu("ActionTitleFetch", () => RunSidebarAction(tab, GitAction.Fetch, remote: name))] : []));
+                Menu: snapshot.RemoteNames.Contains(name) ? [Menu("ActionTitleFetch", () => RunSidebarAction(tab, GitAction.Fetch, remote: name)),
+                    new(UiText.Get("RemoteManageTitle"), new(() => ActionTask = ManageRemotesAsync(name), () => CanUse() && tab.RemoteConfiguration is not null))] : []));
         var tags = refs.Where(r => r.Name.StartsWith("refs/tags/", StringComparison.Ordinal)).Select(r =>
             new SidebarNode(r.Name[10..], "◇", "", [], Jump(r.Hash), Menu: [new(UiText.Get("SidebarLocate"), Jump(r.Hash))]));
         var stashes = (tab.Stashes.List?.Entries ?? []).Select(entry => new SidebarNode(entry.Message, "▣", entry.Selector, [], Jump(entry.Hash),
@@ -73,7 +74,7 @@ public sealed partial class ShellViewModel
             [Menu("SidebarOpenSubmodule", () => ActionTask = OpenSubmoduleAsync(tab, module)),
              Menu("ActionTitleSubmoduleUpdate", () => RunSidebarAction(tab, GitAction.SubmoduleUpdate, module.Path, start: module.Hash)),
              Menu("ActionTitleSubmoduleSync", () => RunSidebarAction(tab, GitAction.SubmoduleSync, module.Path, start: module.Hash))]));
-        SidebarNodes = [Group("Branches", branches), Group("Remotes", remotes) with { Menu = [new(UiText.Get("RemoteAddTitle"), AddRemoteCommand)] }, Group("Tags", tags), Group("Stashes", stashes), Group("Submodules", modules)];
+        SidebarNodes = [Group("Branches", branches), Group("Remotes", remotes) with { Menu = [new(UiText.Get("RemoteAddTitle"), AddRemoteCommand), new(UiText.Get("RemoteManageTitle"), ManageRemotesCommand)] }, Group("Tags", tags), Group("Stashes", stashes), Group("Submodules", modules)];
         Changed(nameof(SidebarNodes));
     }
 
@@ -94,9 +95,14 @@ public sealed partial class ShellViewModel
                 var identity = new RepositoryIdentity(snapshot.Worktree, snapshot.GitDirectory, snapshot.CommonDirectory, known.Fingerprint);
                 var data = await _reader!.ReadSidebarAsync(git, tab.Directory, cancel.Token);
                 var stashes = await _actions.ReadStashesAsync(git, identity, cancel.Token);
+                RemoteConfigurationSnapshot? remotes = null;
+                // A remote configuration problem must not suppress branches, stashes or submodules.
+                try { remotes = await _actions.ReadRemoteConfigurationAsync(git, tab.Directory, cancel.Token); }
+                catch (GitReadException) when (!cancel.IsCancellationRequested) { }
+                catch (GitActionException) { }
                 if (cancel.IsCancellationRequested || SelectedRepository != tab || tab.Snapshot != snapshot) return;
-                tab.Sidebar = data; tab.Stashes.List = stashes; tab.SidebarReadAt = DateTimeOffset.UtcNow;
-                SidebarStatus = ""; PublishSidebar();
+                tab.Sidebar = data; tab.Stashes.List = stashes; tab.RemoteConfiguration = remotes; tab.SidebarReadAt = DateTimeOffset.UtcNow;
+                SidebarStatus = ""; PublishSidebar(); RefreshBranchManagement();
                 activity.Outcome = OperationOutcome.Success;
             }
             catch (OperationCanceledException) { }

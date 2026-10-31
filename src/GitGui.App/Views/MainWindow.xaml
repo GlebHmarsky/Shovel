@@ -70,6 +70,7 @@
       </StackPanel>
     <Menu HorizontalAlignment="Left" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="{loc:Text Key=MainMenu}">
       <MenuItem Header="{loc:Text Key=FileMenu}">
+        <MenuItem Header="{loc:Text Key=ActionTitleClone}" Command="{Binding CloneRepositoryCommand}" ToolTip="{Binding CloneRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
         <MenuItem Header="{loc:Text Key=NewRepository}" Command="{Binding NewRepositoryCommand}" ToolTip="{Binding NewRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
@@ -83,6 +84,8 @@
         <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
       </MenuItem>
       <MenuItem Header="{loc:Text Key=RepositoryMenu}">
+        <MenuItem Header="{loc:Text Key=ActionTitleClone}" Command="{Binding CloneRepositoryCommand}" ToolTip="{Binding CloneRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
+        <MenuItem Header="{loc:Text Key=RemoteManageTitle}" Command="{Binding ManageRemotesCommand}" ToolTip="{Binding ManageRemotesHelp}" ToolTipService.ShowOnDisabled="True" />
         <MenuItem Header="{loc:Text Key=RemoteAddTitle}" Command="{Binding AddRemoteCommand}" />
         <MenuItem Header="{loc:Text Key=BranchManageTitleSetUpstream}" Command="{Binding SetBranchUpstreamCommand}" />
         <MenuItem Header="{loc:Text Key=BranchManageTitleUnsetUpstream}" Command="{Binding UnsetBranchUpstreamCommand}" />

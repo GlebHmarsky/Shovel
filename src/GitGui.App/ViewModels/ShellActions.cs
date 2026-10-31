@@ -11,7 +11,7 @@ public sealed partial class ShellViewModel
     private bool _actionOpen, _preparingAction;
     public bool ActionOpen => _actionOpen || _commitOpen;
     private GitActionViewModel? _lastAction;
-    public GitActionViewModel? CurrentAction => _lastAction?.Action == GitAction.Init && (ActionOpen || SelectedRepository == _initializationOwner) ||
+    public GitActionViewModel? CurrentAction => (_lastAction?.Action is GitAction.Init or GitAction.Clone) && (ActionOpen || SelectedRepository == _initializationOwner) ||
         string.Equals(_lastAction?.CurrentRepository, SelectedRepository?.Directory, StringComparison.OrdinalIgnoreCase) ? _lastAction : null;
     public bool HasAction => CurrentAction?.HasAttempt == true;
     public bool IsActionRunning => CurrentAction?.IsRunning == true;
@@ -75,6 +75,7 @@ public sealed partial class ShellViewModel
         _actions = actions;
         NewRepositoryCommand = new(() => ActionTask = InitializeRepositoryAsync(), () => CanNavigate && !IsBusy &&
             _reader is not null && _interaction is not null && _actions is not null && Repositories.Count < 20);
+        CloneRepositoryCommand = new(() => ActionTask = CloneRepositoryAsync(), () => NewRepositoryCommand.CanExecute(null));
         InitializeStashes();
         InitializeBranchManagement();
         ContinueCommand = new(() => OpenAction(GitAction.Continue), () => CanRecover);

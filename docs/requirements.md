@@ -1,8 +1,10 @@
 # Requirements and acceptance
 
-Updated 2026-10-30. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
+Updated 2026-10-31. Confirmed unless marked proposed. IDs remain stable. [Product](product.md) owns UX; [architecture](architecture.md) mechanisms; [roadmap](roadmap.md) evidence. Deferred scope may advance when requested; phase labels do not veto independent feature work.
 
 ## Git functionality and compatibility
+
+**Clone/remotes acceptance (0.33.0, G1/G2/G5/G7/G13):** options opening and dismissal perform no preparation. Submission executes native Git with progress, cancellation, retained errors and existing authentication; successful clones automatically open history, including empty/detached repositories. Keep filters/hooks and partial results; refuse nonempty destinations without removing user files. Remote URL changes preserve working/index files and local branches, remove requires target-specific confirmation, and no edit/removal performs network discovery. Stale configuration, locks and partially completed URL updates must report actual results and reconcile. Multi-URL/inherited configuration is not silently flattened. Disposable Git and headless renders do not establish live-server authentication, large-clone latency or installed desktop behavior.
 
 **QOL acceptance (0.31.0):** file/commit switches keep the previous labelled comparison until a generation-matched result arrives; empty success clears it and failure retains it. Old hunks cannot authorize actions. Unchanged refreshes retain selected row objects, and history/stash selection opens Commit changes. Whole-file conflict controls live inside the existing Commit pane, start with both sources selected and apply/stage only on submission. Persist window/pane geometry across clean sessions with bounded schema migration. The central activity panel filters real user/background operations without reads on opening, caps entries/output, redacts URL credentials and writes no activity log to disk. Preserve normal input, theme/high-contrast roles and responsive cancellation; headless checks do not certify physical focus or DPI behavior.
 

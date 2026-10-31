@@ -1,6 +1,6 @@
 # Shovel
 
-Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.32.1** unifies public source and releases in this repository and integrates the Windows installer and signed GitHub updates with the current master features. It retains comparisons during selection, embeds whole-file conflict resolution in Commit, saves pane sizes and adds All/User/Background activity. Includes the 0.30.1 LFS discard fix. Routine verification remains 26 checks. [Current behavior](docs/product.md#daily-use-interactions-0310); [discard measurements](docs/roadmap.md#lfs-discard-0301).
+Windows 10/11 Git client, C# / WPF / .NET 10 LTS. **0.33.0** adds repository cloning and cached remote URL editing/removal, with real Git results, cancellation and reconciliation. Includes retained comparisons, inline conflicts, saved pane sizes, activity history and the LFS discard fix. Signed installers and updates are published here through Build-Release. Routine verification remains 26 checks. [Clone/remotes](docs/product.md#clone-and-remote-management-0330); [daily-use behavior](docs/product.md#daily-use-interactions-0310); [discard measurements](docs/roadmap.md#lfs-discard-0301).
 
 [AGENTS](AGENTS.md) owns session guidance; [product](docs/product.md) UX; [requirements](docs/requirements.md) acceptance; [architecture](docs/architecture.md) mechanisms/limits; [roadmap](docs/roadmap.md) evidence; [TODO](TODO.md) implementation priorities.
 
@@ -11,6 +11,8 @@ Top-center command durations now use a fixed capsule: running blue, success gree
 Optional focused verification after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-operation-style` (four checks; disposable Git, controlled WPF animation clock and offscreen normal/minimum Dark/Light renders). It does not show a window or certify desktop animation smoothness.
 
 ## Prerequisites
+
+Clone/remote checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-network-workflows` (11 focused checks; disposable Git/filter/hook/auth-cancellation fixtures, real bound actions, partial/stale/locked configuration and offscreen Dark/Light forms). No visible app, live server or installation is exercised. [Evidence and limits](docs/roadmap.md#clone-and-remote-management-0330).
 
 QOL checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-qol` (six bounded checks for retained views/selection, layout migration, session activity and offscreen layouts). `--check-conflicts` includes eight disposable conflict scenarios and inline Commit staging. These are optional focused suites; normal packaging runs the unchanged smoke suite.
 

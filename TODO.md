@@ -1,8 +1,11 @@
 # Implementation checklist
 
-Updated 2026-10-30. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-10-31. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
+
+- [x] **P1 — Clone and remote URL management.** Preparation-free Clone/Manage remotes forms; native checkout with filters/hooks, authentication/cancellation, partial-result retention and automatic history opening; cached fetch/push URL editing and confirmed local remote removal with identity/configuration checks and reconciliation. [Flow and limits](docs/product.md#clone-and-remote-management-0330).
+- [ ] **P1 — Deliver 0.33.0.** Finish focused clone/remote and shared network checks, run the unchanged final smoke suite through Build-Release, publish signed artifacts to Shovel and verify an anonymous production update download. Record exact results in roadmap.
 
 - [x] **P1 — Consolidate source and updates in public Shovel.** 0.32.1 is published and signed on the main repository; clean-master delivery tags the exact source commit. The old host is archived with one final migration release. Both anonymous download routes were verified; all future publishing is restricted to Shovel.
 
@@ -112,7 +115,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
-- [ ] **P1 — Network MVP.** Clone, remote editing/removal and broader auth/input; adding remotes and setting upstream are delivered. Pull rebase/merge/auto-stash and sequence recovery are delivered; retain their failure coverage.
+- [ ] **P1 — Broader network authentication/input.** Credential Manager/browser sign-in, custom SSH commands and interactive signing/hooks remain. Clone and local remote add/edit/remove, upstream management, Pull rebase/merge/auto-stash and sequence recovery are delivered. Add explicit longer/shallow/bare/recursive clone options only with supported UI and failure coverage; current bounds are documented.
 - [ ] **P2 — Installed distribution acceptance.** 0.30.0 selects Velopack/public GitHub Releases; finish the explicit rollout task above and pass U1–U7/D1 on installed Windows, including key-rotation and uninstall-data-choice requirements.
 - [ ] **P2 — Advanced workflows.** Merge/rebase/interactive rebase/cherry-pick/tag management/reflog/force-with-lease and advanced stash variants; disposable destructive fixtures. Reset/Revert and per-file conflict editing are delivered; extensions remain above.
 - [ ] **P2 — Extended compatibility.** Additional submodule management (add/remove/deinit/recursive/remote-latest), worktree/LFS/shallow/partial/sparse management, tray and large-repo optimization. Selected submodule open/update/sync is delivered.

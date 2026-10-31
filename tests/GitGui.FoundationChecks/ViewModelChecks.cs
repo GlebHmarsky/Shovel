@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_networkWorkflowChecks) { await RunNetworkWorkflowChecksAsync(); return; }
             if (_qolChecks) { await RunQolChecksAsync(); return; }
             if (_lfsChecks) { await RunLfsChecksAsync(); return; }
             if (_conflictChecks) { await RunConflictChecksAsync(); return; }

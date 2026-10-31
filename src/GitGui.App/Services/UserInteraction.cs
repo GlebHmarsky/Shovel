@@ -10,6 +10,8 @@ namespace GitGui.App.Services;
 
 public interface IUserInteraction
 {
+    RepositoryCloneOptions? ChooseRepositoryClone() => null;
+    RemoteManagementOptions? ChooseRemoteManagement(RemoteManagementViewModel model) => null;
     RemoteSetupOptions? ChooseRemoteSetup(RemoteSetupViewModel model) => null;
     string? ChooseWorkspaceExecutable(RepositoryTool tool) => null;
     BranchManagementOptions? ChooseBranchManagement(BranchManagementViewModel model) => null;
@@ -35,6 +37,13 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public RepositoryCloneOptions? ChooseRepositoryClone()
+    {
+        var model = new RepositoryCloneViewModel(this);
+        return new RepositoryCloneWindow(model) { Owner = Owner }.ShowDialog() == true ? model.Options : null;
+    }
+    public RemoteManagementOptions? ChooseRemoteManagement(RemoteManagementViewModel model) =>
+        new RemoteManagementWindow(model) { Owner = Owner }.ShowDialog() == true ? model.Result : null;
     public RemoteSetupOptions? ChooseRemoteSetup(RemoteSetupViewModel model)
     {
         var window = new RemoteSetupWindow(model) { Owner = Owner };

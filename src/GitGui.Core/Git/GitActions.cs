@@ -5,7 +5,7 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init, DeleteBranch, SetUpstream, UnsetUpstream, SubmoduleUpdate, SubmoduleSync, AddRemote, CheckoutCommit, ResetSoft, ResetMixed, ResetHard, RevertCommit }
+public enum GitAction { NewBranch, SwitchBranch, Fetch, Pull, Push, Continue, Skip, Abort, StashCreate, StashApply, StashPop, StashDrop, Init, DeleteBranch, SetUpstream, UnsetUpstream, SubmoduleUpdate, SubmoduleSync, AddRemote, CheckoutCommit, ResetSoft, ResetMixed, ResetHard, RevertCommit, Clone, EditRemote, RemoveRemote }
 public enum GitActionStage { Validating, Fetching, CheckingFetchedTip, Rebasing, Merging, Pushing, UpdatingBranch, Recovering }
 public enum PullStrategy { Rebase, Merge }
 public sealed record GitRemote(string Name, string FetchAddress, string PushAddress);
@@ -242,17 +242,7 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                 // The broker exists only for this user-started operation, never history reads.
                 if (options.Action is GitAction.Fetch or GitAction.Pull or GitAction.Push or GitAction.SubmoduleUpdate)
                 {
-                    if (authentication is not null)
-                        foreach (var pair in authentication.Environment) environment[pair.Key] = pair.Value;
-                    var sshConfig = await Raw(git, path, ["config", "--get", "core.sshCommand"], token);
-                    if (sshConfig.ExitCode == 0) throw new GitActionException("ActionCustomSsh");
-                    var root = Directory.GetParent(Path.GetDirectoryName(git.Executable)!)!;
-                    if (root.Name is "mingw64" or "mingw32" or "ucrt64") root = root.Parent!;
-                    var ssh = Path.Combine(root.FullName, "usr", "bin", "ssh.exe");
-                    if (!File.Exists(ssh)) throw new GitActionException("ActionSshMissing");
-                    environment["GIT_SSH_COMMAND"] = "'" + ssh.Replace('\\', '/').Replace("'", "'\\''") +
-                        (authentication is null ? "' -oBatchMode=yes -oStrictHostKeyChecking=yes" : "' -oBatchMode=no -oStrictHostKeyChecking=ask");
-                    environment["GIT_SSH_VARIANT"] = "ssh";
+                    await ConfigureNetworkEnvironmentAsync(git, path, environment, authentication, token);
                 }
                 var result = await runner.RunAsync(new(git.Executable, path,
                     ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",

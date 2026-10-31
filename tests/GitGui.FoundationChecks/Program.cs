@@ -22,6 +22,15 @@ internal static partial class Program
     private static int Main(string[] args)
     {
         if (args is ["--check-updates"]) return RunUpdateChecks();
+        if (args is ["--check-network-workflows"])
+        {
+            _networkWorkflowChecks = true; _routine = true;
+            _root = Path.GetFullPath("artifacts/network-workflow-checks/" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_root);
+            using var deadline = RoutineDeadline(TimeSpan.FromMinutes(3), "Network workflow checks exceeded deadline");
+            var app = new HeadlessApplication(); app.InitializeComponent(); RunViewModelChecks();
+            Console.WriteLine($"{_passed} passed; {_failed} failed. Fixtures: {_root}"); return _failed == 0 ? 0 : 1;
+        }
         if (args.FirstOrDefault() == "--measure-history-performance") return HistoryPerformanceHarness.Run(args);
         if (args.FirstOrDefault() == "--version") { Console.WriteLine("git version 2.46.0"); return 0; }
         if (args.FirstOrDefault() == "--probe") return RunProbeAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();

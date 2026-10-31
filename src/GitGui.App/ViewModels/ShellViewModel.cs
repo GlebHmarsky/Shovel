@@ -389,7 +389,7 @@ public sealed partial class ShellViewModel : ObservableObject
         var cached = Repositories.Where(tab => tab.History.Page is not null).OrderBy(tab => tab.History.LastUse).ToList();
         while (cached.Count > CachedTabLimit || (cached.Count > 1 && cached.Sum(tab => tab.History.EstimatedBytes) > 32 * 1024 * 1024))
         {
-            var oldest = cached.First(tab => tab != active); oldest.History.Clear(); oldest.Sidebar = null; oldest.SidebarReadAt = default; oldest.Stashes.List = null; cached.Remove(oldest);
+            var oldest = cached.First(tab => tab != active); oldest.History.Clear(); oldest.Sidebar = null; oldest.RemoteConfiguration = null; oldest.SidebarReadAt = default; oldest.Stashes.List = null; cached.Remove(oldest);
         }
     }
     private async Task<bool> PersistRepositoryIdentitiesAsync()
@@ -440,6 +440,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RefreshWorkspaceTools();
         RefreshSidebarCommands();
         NewRepositoryCommand?.Refresh();
+        CloneRepositoryCommand?.Refresh(); Changed(nameof(CloneRepositoryHelp));
         Changed(nameof(NewRepositoryHelp));
         StashesCommand?.Refresh();
         RefreshBranchManagement();

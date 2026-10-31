@@ -14,13 +14,14 @@ public sealed partial class ShellViewModel
     private void InitializeBranchManagement()
     {
         AddRemoteCommand = new(() => ActionTask = AddRemoteAsync(), () => CanAct);
+        ManageRemotesCommand = new(() => ActionTask = ManageRemotesAsync(), () => CanAct && SelectedRepository?.RemoteConfiguration is not null);
         DeleteBranchCommand = new(() => ActionTask = ManageBranchAsync(BranchManagementAction.Delete), () => CanAct && LocalBranches.Count != 0);
         SetBranchUpstreamCommand = new(() => ActionTask = ManageBranchAsync(BranchManagementAction.SetUpstream), () => CanAct && LocalBranches.Count != 0);
         UnsetBranchUpstreamCommand = new(() => ActionTask = ManageBranchAsync(BranchManagementAction.UnsetUpstream), () => CanAct && LocalBranches.Count != 0);
     }
     private void RefreshBranchManagement()
     {
-        AddRemoteCommand?.Refresh(); DeleteBranchCommand?.Refresh(); SetBranchUpstreamCommand?.Refresh(); UnsetBranchUpstreamCommand?.Refresh();
+        AddRemoteCommand?.Refresh(); ManageRemotesCommand?.Refresh(); Changed(nameof(ManageRemotesHelp)); DeleteBranchCommand?.Refresh(); SetBranchUpstreamCommand?.Refresh(); UnsetBranchUpstreamCommand?.Refresh();
         Changed(nameof(BranchManagementHelp));
     }
     private async Task ManageBranchAsync(BranchManagementAction action, string? selectedBranch = null)

@@ -23,6 +23,7 @@ public sealed class GitActionViewModel : ObservableObject
     private readonly Func<CancellationToken, Task<ActionContext>>? _prepareExecution;
     private readonly Func<ActionContext, ActionOptions, CancellationToken, Task<ActionOptions>>? _prepareOptions;
     private readonly Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, Task<ActionResult>>? _execute;
+    private readonly Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, IAuthenticationSession?, Task<ActionResult>>? _authenticatedExecute;
     public ActionContext Context => _context ?? throw new InvalidOperationException();
     private readonly string _repository;
     private bool _dismissed;
@@ -32,7 +33,7 @@ public sealed class GitActionViewModel : ObservableObject
     public bool IsFetch => Action == GitAction.Fetch;
     public bool IsPull => Action == GitAction.Pull;
     public bool IsPush => Action == GitAction.Push;
-    public bool IsNetwork => IsFetch || IsPull || IsPush || Action == GitAction.SubmoduleUpdate;
+    public bool IsNetwork => IsFetch || IsPull || IsPush || Action is GitAction.SubmoduleUpdate or GitAction.Clone;
     public bool ChooseBranch => IsPush || IsSwitch;
     public bool ChooseRemoteBranch => IsPush || IsPull;
     public string Title => UiText.Get((Action is GitAction.DeleteBranch or GitAction.SetUpstream or GitAction.UnsetUpstream ? "BranchManageTitle" : "ActionTitle") + Action);
@@ -67,9 +68,9 @@ public sealed class GitActionViewModel : ObservableObject
     public bool Rebase { get => Strategy == PullStrategy.Rebase; set { if (value) Strategy = PullStrategy.Rebase; } }
     public bool Merge { get => Strategy == PullStrategy.Merge; set { if (value) Strategy = PullStrategy.Merge; } }
     public bool IsRunning { get => _running; private set { if (Set(ref _running, value)) { Changed(nameof(CanEdit)); Changed(nameof(CanCancel)); Refresh(); } } }
-    public bool CanEdit => (_context is not null || _execute is not null) && !_dismissed && !IsRunning && !_attempted;
+    public bool CanEdit => (_context is not null || _execute is not null || _authenticatedExecute is not null) && !_dismissed && !IsRunning && !_attempted;
     public bool HasAttempt => _attempted;
-    public string RunUnavailableReason => UiText.Get(_context is null && _execute is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
+    public string RunUnavailableReason => UiText.Get(_context is null && _execute is null && _authenticatedExecute is null ? "ActionReadFailed" : IsRunning ? "ActionRunning" : HasAttempt ? "ActionAlreadyAttempted" :
         (IsFetch || IsPull || IsPush) && Remote is null ? "ActionNoRemote" :
         IsNew && string.IsNullOrWhiteSpace(NewName) ? "ActionEnterBranchName" :
         IsNew && !StartRefs.Contains(StartRef) ? "ActionNoStart" :
@@ -119,6 +120,12 @@ public sealed class GitActionViewModel : ObservableObject
     }
     private void InitializeTimer() => _timer.Tick += (_, _) =>
     { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
+    public GitActionViewModel(string repository, GitActions actions, Func<Task> reconcile, IUserInteraction interaction,
+        Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, IAuthenticationSession?, Task<ActionResult>> execute)
+    {
+        _repository = repository; Action = GitAction.Clone; _actions = actions; _reconcile = reconcile; _interaction = interaction; _authenticatedExecute = execute;
+        RunCommand = new(() => RunningTask = RunAsync(), () => CanEdit); InitializeTimer();
+    }
     public void DismissOptions()
     {
         if (HasAttempt) return;
@@ -192,8 +199,9 @@ public sealed class GitActionViewModel : ObservableObject
             }, _cancel.Token)) : null;
             void Output(GitGui.Core.Processes.ProcessOutput output)
                 { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }
-            if (_execute is not null) Phase = UiText.Get("ActionRunning");
-            var result = _execute is not null ? await _execute(_cancel.Token, Output) : await _actions.ExecuteAsync(Context, options, _cancel.Token, Output, authentication,
+            if (_execute is not null || _authenticatedExecute is not null) Phase = UiText.Get("ActionRunning");
+            var result = _authenticatedExecute is not null ? await _authenticatedExecute(_cancel.Token, Output, authentication) :
+                _execute is not null ? await _execute(_cancel.Token, Output) : await _actions.ExecuteAsync(Context, options, _cancel.Token, Output, authentication,
                 stage => _dispatcher.BeginInvoke(() =>
                 {
                     if (_gitFinished || _cancel.IsCancellationRequested) return;

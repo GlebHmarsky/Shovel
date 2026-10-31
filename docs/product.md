@@ -1,6 +1,14 @@
 # Product
 
-Updated 2026-10-30. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
+Updated 2026-10-31. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
+
+## Clone and remote management (0.33.0)
+
+**File / Repository → Clone repository** opens immediately with source URL or absolute local path, destination and optional branch/tag. Submit clones into a new or empty directory with progress, Cancel and the existing authentication prompts, then opens the resulting repository and history. Normal filters, LFS and checkout hooks remain enabled. A cancelled/failed clone reports its result and leaves any native Git partial output in place; Shovel opens a valid remaining repository without replaying the clone or deleting files.
+
+**Repository → Manage remotes**, also available from the sidebar remote menus, uses cached local configuration. Save updates the fetch URL and optional push URL; clearing the latter restores Git's fetch-URL fallback. Remove confirms the remote/repository target, then removes local remote configuration and tracking refs. Neither action contacts the server or changes local branch tips/working files. Execution rechecks repository identity and configuration and refreshes after failures as well as success. Multiple/inherited/credential-bearing URLs cannot be edited in this form; unsupported cases remain visible with a reason.
+
+Clone is a normal full checkout with default `origin`; recursive submodule, shallow/bare controls and custom SSH-command interaction remain outside this increment. [Architecture](architecture.md#clone-and-remote-management-0330) owns execution bounds; live authentication and installed desktop acceptance remain separate from headless evidence.
 
 ## Daily-use interactions (0.31.0)
 
@@ -14,9 +22,9 @@ Conflict resolution now occupies the existing Commit diff pane. Both whole-file 
 
 ## Purpose
 
-**Shovel** is a lightweight Windows 10/11 Git client for about 30 initial coworkers using development repositories, including C++/TypeScript. Aim for Fork's restrained layout and Git Extensions' practical capabilities, with original assets. AI maintains the code; the shipped app needs no AI service. English first, localization-ready; install once with in-place updates when distribution is implemented.
+**Shovel** is a lightweight Windows 10/11 Git client for about 30 initial coworkers using development repositories, including C++/TypeScript. Aim for Fork's restrained layout and Git Extensions' practical capabilities, with original assets. AI maintains the code; the shipped app needs no AI service. English first, localization-ready; signed-feed installers and in-place updates are implemented, with broader installed acceptance still pending.
 
-**Confirmed priorities, 2026-10-29:** first replace Fork for the owner's daily work and personal testing; broader coworker distribution comes later. Motivations are inspectable source, control over workflow/visual details, fewer routine clicks and evaluating AI-maintained software. These motivations are not a security finding about Fork or a security guarantee for Shovel; public source publication under MIT and a separate public shovel-releases repository were confirmed on 2026-10-30.
+**Confirmed priorities, 2026-10-29:** first replace Fork for the owner's daily work and personal testing; broader coworker distribution comes later. Motivations are inspectable source, control over workflow/visual details, fewer routine clicks and evaluating AI-maintained software. These motivations are not a security finding about Fork or a security guarantee for Shovel. Public MIT source and all new releases share GlebHmarsky/Shovel (2026-10-31); the previous separate release host is an archived migration endpoint. [Distribution](distribution.md) owns publishing and recovery.
 
 <a id="requested-next-workflows-not-implemented"></a>
 ## Requested workflow direction

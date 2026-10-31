@@ -902,4 +902,33 @@ Previous HEAD: {1}</value></data>
   <data name="UpdateToolsQuestion" xml:space="preserve"><value>Shovel opened an external editor or terminal whose completion cannot be tracked. Have you finished its Git commands, hooks, authentication and merge work?</value></data>
   <data name="UpdateReadyShort" xml:space="preserve"><value>Update ready</value></data>
   <data name="UpdateClose" xml:space="preserve"><value>Close</value></data>
+  <data name="ActionTitleClone" xml:space="preserve"><value>Clone repository…</value></data>
+  <data name="CloneSubmit" xml:space="preserve"><value>Clone</value></data>
+  <data name="CloneSource" xml:space="preserve"><value>Repository URL or absolute local path</value></data>
+  <data name="CloneDirectory" xml:space="preserve"><value>Destination folder</value></data>
+  <data name="CloneBranch" xml:space="preserve"><value>Branch or tag (optional)</value></data>
+  <data name="CloneReady" xml:space="preserve"><value>Clone into a new or empty folder, then open its history. Leave the branch blank to use the remote default.</value></data>
+  <data name="CloneInvalid" xml:space="preserve"><value>Enter a repository URL or absolute local path and an absolute destination folder. Leave the branch blank to use the remote default.</value></data>
+  <data name="CloneNotEmpty" xml:space="preserve"><value>The destination folder is not empty. Choose a new or empty folder.</value></data>
+  <data name="CloneSucceeded" xml:space="preserve"><value>Repository cloned.</value></data>
+  <data name="CloneIncomplete" xml:space="preserve"><value>Clone did not complete. Git output is retained; any partial repository has been left in place.</value></data>
+  <data name="CloneUnverified" xml:space="preserve"><value>Git completed cloning, but Shovel could not inspect the destination. Open the folder again to retry.</value></data>
+  <data name="RemoteManageTitle" xml:space="preserve"><value>Manage remotes…</value></data>
+  <data name="RemoteFetchUrl" xml:space="preserve"><value>Fetch URL or local path</value></data>
+  <data name="RemotePushUrl" xml:space="preserve"><value>Push URL (blank uses the fetch URL)</value></data>
+  <data name="RemoteSave" xml:space="preserve"><value>Save</value></data>
+  <data name="ActionTitleEditRemote" xml:space="preserve"><value>Edit remote</value></data>
+  <data name="ActionTitleRemoveRemote" xml:space="preserve"><value>Remove remote</value></data>
+  <data name="RemoteManageReady" xml:space="preserve"><value>Edit the selected remote locally. Saving does not contact the server.</value></data>
+  <data name="RemoteManageEmpty" xml:space="preserve"><value>No editable local remote configuration is available. Use Add remote to create one.</value></data>
+  <data name="RemoteManageUnsupported" xml:space="preserve"><value>This remote has multiple URLs or an unsupported URL. Edit it with Git, or remove the remote.</value></data>
+  <data name="RemoteManageChanged" xml:space="preserve"><value>Remote configuration changed since it was loaded. Refresh the repository and reopen Manage remotes.</value></data>
+  <data name="RemoteManageLoading" xml:space="preserve"><value>Remote configuration is loading. Refresh the repository to retry if loading failed.</value></data>
+  <data name="RemoteRemoveConfirm" xml:space="preserve"><value>Remove remote '{0}' from '{1}'? Its local configuration and remote-tracking references will be removed. Local branches, working files and the server repository remain unchanged.</value></data>
+  <data name="ActionExplainClone" xml:space="preserve"><value>Clone the selected source into the destination folder and open its history.</value></data>
+  <data name="ActionExplainEditRemote" xml:space="preserve"><value>Update the selected remote's local fetch and push URLs.</value></data>
+  <data name="ActionExplainRemoveRemote" xml:space="preserve"><value>Remove the selected remote's local configuration and remote-tracking references.</value></data>
+  <data name="CloneCancelled" xml:space="preserve"><value>Clone cancelled. Any partial repository has been left in place.</value></data>
+  <data name="CloneTimedOut" xml:space="preserve"><value>Clone exceeded the ten-minute limit. Any partial repository has been left in place; use Git in a terminal for longer clones.</value></data>
+  <data name="CloneOutputLimit" xml:space="preserve"><value>Clone stopped at the output limit. Output and any partial repository are retained; use Git in a terminal for this clone.</value></data>
 </root>

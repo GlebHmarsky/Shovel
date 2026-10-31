@@ -1,0 +1,20 @@
+<Window x:Class="GitGui.App.Views.RemoteManagementWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{loc:Text Key=RemoteManageTitle}" Width="660" Height="460" ResizeMode="NoResize" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+ FlowDirection="{x:Static loc:UiText.Direction}" FontFamily="Segoe UI" FontSize="13" Background="{DynamicResource Theme.Sidebar}" Foreground="{DynamicResource Theme.Text}">
+ <Grid Margin="22"><Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+   <TextBlock Text="{loc:Text Key=RemoteManageTitle}" FontSize="22" FontWeight="SemiBold"/>
+   <Label Content="{loc:Text Key=RemoteAddName}" Target="{Binding ElementName=RemoteInput}" Margin="0,12,0,0"/>
+   <ComboBox x:Name="RemoteInput" ItemsSource="{Binding Remotes}" SelectedItem="{Binding Selected}" DisplayMemberPath="Name" AutomationProperties.Name="{loc:Text Key=RemoteAddName}"/>
+   <Label Content="{loc:Text Key=RemoteFetchUrl}" Target="{Binding ElementName=LocationInput}" Margin="0,8,0,0"/>
+   <TextBox x:Name="LocationInput" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RemoteFetchUrl}"/>
+   <Label Content="{loc:Text Key=RemotePushUrl}" Target="{Binding ElementName=PushInput}" Margin="0,8,0,0"/>
+   <TextBox x:Name="PushInput" Text="{Binding PushLocation, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RemotePushUrl}"/>
+   <TextBlock Text="{Binding Readiness}" TextWrapping="Wrap" Margin="0,14,0,0" AutomationProperties.LiveSetting="Polite"/>
+  </StackPanel></ScrollViewer>
+  <DockPanel Grid.Row="1" Margin="0,12,0,0">
+   <Button DockPanel.Dock="Left" Content="{loc:Text Key=ActionTitleRemoveRemote}" Command="{Binding RemoveCommand}" ToolTip="{Binding Readiness}" ToolTipService.ShowOnDisabled="True" HorizontalAlignment="Left"/>
+   <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="{loc:Text Key=RemoteSave}" Command="{Binding SaveCommand}" ToolTip="{Binding Readiness}" ToolTipService.ShowOnDisabled="True" IsDefault="True" MinWidth="90"/><Button Content="{loc:Text Key=ActionCancel}" IsCancel="True" Margin="8,0,0,0" MinWidth="90"/></StackPanel>
+  </DockPanel>
+ </Grid>
+</Window>

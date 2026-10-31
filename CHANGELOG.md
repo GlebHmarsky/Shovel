@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.33.0 — 2026-10-31
+
+- Clone repositories from a URL or absolute local path, optionally selecting a branch/tag, with progress, authentication, cancellation and automatic history opening. Preserve native filters/hooks and any partial Git result.
+- Edit local fetch/push URLs and confirm remote removal from cached Repository/sidebar menus. Recheck configuration before writing, preserve local files/branches and reconcile partial failures.
+- Add focused disposable-Git and headless-theme coverage while retaining the 26-check release smoke suite and signed Shovel update delivery.
+
 ## 0.32.1 — 2026-10-31
 
 - Use the public GlebHmarsky/Shovel repository for both source and all future installer releases/update checks, retaining the existing signing key and app identity.
