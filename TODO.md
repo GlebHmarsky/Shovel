@@ -5,6 +5,7 @@ Updated 2026-10-31. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Current phase
 
 - [x] **P1 — Stable/Beta channels (0.35.0).** Persisted selector/default Stable, isolated signed feeds and package validation, pending-update invalidation, no cross-channel downgrade; routine Build-Release defaults to Beta. Explicitly publish the common baseline to both; future Stable releases require owner approval.
+- [x] **P1 — Deliver common 0.35.0 baseline.** 17 updater checks; 26 smoke checks in 33.1 s; same source/version published as Stable release and Beta prerelease. Both signed anonymous downloads verified; Beta left Stable latest unchanged. [Evidence](docs/roadmap.md#stable-and-beta-channels-0350). Installed channel-switch/restart acceptance remains with the owner.
 
 - [x] **P1 — Automatic launch updates (0.34.0).** Immediately check/download/verify on each installed launch and automatically request the existing guarded restart. No delay, periodic-preference exemption, verification bypass or repeated restart loop. Blocked/cancelled/failed attempts remain usable. Installed restart acceptance remains in the rollout task.
 - [x] **P1 — Deliver 0.34.0.** 16 updater checks and 26 smoke checks (32.9 s); Build-Release published the signed feed and installer on Shovel and verified an anonymous full-package download. [Evidence](docs/roadmap.md#automatic-launch-updates-0340).
