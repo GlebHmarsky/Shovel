@@ -10,9 +10,9 @@ Read [product](docs/product.md), [requirements](docs/requirements.md), [architec
 - Do not add extra safety measures or approval layers without a concrete requirement. Keep normal Git protections against data loss, required authentication/SSH host verification, argument handling, cancellation and accurate state. Confirm genuinely destructive actions with their actual targets.
 - This policy supersedes older prototype-retention, UI-first and routine trust/approval instructions. Historical evidence describes past behavior, not current obligations. Documentation changes do not imply runtime fixes.
 
-## Release delivery — confirmed 2026-10-31
+## Release delivery — confirmed 2026-11-01
 
-Master includes the installer/updater branch. GlebHmarsky/Shovel is the single public source and release repository. All future builds and update checks use it. The former shovel-releases repository is retained only as an archived migration endpoint for older installations, not a second publishing destination. Every delivered build is a signed-feed Windows release available through Help > Shovel updates. The signing key stays outside Git; public verification key is committed. Windows publisher signing remains separate and unset. See [distribution](docs/distribution.md) for the command and recovery procedure.
+Master includes the installer/updater branch. GlebHmarsky/Shovel is the single public source and release repository. All future builds and update checks use it. The former shovel-releases repository is retained only as an archived migration endpoint for older installations, not a second publishing destination. Every task still delivers a signed-feed Windows build. Routine delivery is Beta only; Stable requires explicit owner approval after testing. 0.35.0 alone is authorized as the common Stable/Beta starting version. Build-Release defaults to win-beta; use -Channel win-stable only for explicitly approved Stable delivery. Help > Shovel updates persists the user channel, default Stable. The signing key stays outside Git; public verification key is committed. Windows publisher signing remains separate and unset. See [distribution](docs/distribution.md) for the command and recovery procedure.
 
 ## Project and implementation
 

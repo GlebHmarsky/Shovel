@@ -68,6 +68,8 @@ The established work environment is trusted. **Do not add extra safety measures,
 
 ## Updates and distribution
 
+**Channel policy, confirmed 2026-11-01:** persisted Stable/Beta selector, Stable default; every launch/manual check uses only the chosen signed feed. Switching invalidates pending updates and cannot downgrade/equal-version reinstall. Disable selection during update work. Routine tasks publish Beta prereleases only; owner approval authorizes Stable. The 0.35.0 baseline is explicitly authorized on both. Verify both anonymous download paths and that Beta leaves GitHub latest Stable unchanged.
+
 0.30.0 implements installer packaging and signed checks/downloads with explicit restart gating. GitHub owner/key configuration and installed acceptance remain open; these are not prerequisites for unrelated Git features. [Distribution](distribution.md) owns the publishing procedure.
 
 | ID | Requirement |

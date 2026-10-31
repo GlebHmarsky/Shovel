@@ -57,7 +57,7 @@ internal static partial class Program
         });
         await Check("Signed unsupported packages and unsafe filenames are rejected", () =>
         {
-            foreach (var replacement in new[] { "../Shovel.nupkg", "https://other.invalid/package", "Shovel-0.31.0-win-test-full.nupkg" })
+            foreach (var replacement in new[] { "../Shovel.nupkg", "https://other.invalid/package", "Shovel-0.31.0-win-beta-full.nupkg" })
             {
                 var bad = JsonSerializer.SerializeToUtf8Bytes(new { Assets=new[] { assetJson with { FileName=replacement } } });
                 ExpectThrows(() => SignedReleaseSource.VerifyFeed(config, bad, Sign(bad)));
@@ -77,7 +77,7 @@ internal static partial class Program
             Expect(File.ReadAllBytes(path).SequenceEqual(package), "Exact verified package");
             Expect(handler.Requests.Count == 3 && handler.Requests.All(u => u.Host == "github.com" && u.Query == ""), "No API or device identifier");
             Expect(handler.Requests.Last().AbsolutePath.Contains("/v0.31.0-win-stable/"), "Immutable package URL");
-            Expect(new SignedReleaseSource(config with { Channel="win-test" }, client).FeedUri.AbsolutePath.Contains("/download/test/"), "Separate test feed");
+            Expect(new SignedReleaseSource(config with { Channel="win-beta" }, client).FeedUri.AbsolutePath.Contains("/download/beta/"), "Separate test feed");
         });
         await Check("Wrong hash and cancelled downloads leave no partial package", async () =>
         {
@@ -172,6 +172,23 @@ internal static partial class Program
             var empty = new FixtureUpdater(new("", "", "win-stable")) { Available=false };
             var inactive = new UpdateViewModel(empty, () => Task.FromResult(false));
             await inactive.CheckAsync(); Expect(empty.Checks == 0, "Placeholder configuration never contacts a host");
+        });
+        await Check("Channel selection clears pending updates, persists and isolates signed feeds", async () =>
+        {
+            var fake = new FixtureUpdater(config);
+            var vm = new UpdateViewModel(fake, () => Task.FromResult(false));
+            await vm.CheckAsync(); Expect(vm.Ready, "Fixture ready");
+            vm.SelectedChannel = 1;
+            Expect(vm.Channel == "win-beta" && !vm.Ready && !vm.RestartCommand.CanExecute(null), "Switch invalidates pending install");
+            var store = new GitGui.Core.Settings.SettingsStore(Path.Combine(_root, "channel-settings")); await store.LoadAsync(default);
+            await store.SaveAsync(new() { UpdateChannel = vm.Channel }, default);
+            Expect((await store.LoadAsync(default)).Settings.UpdateChannel == "win-beta", "Selection persists");
+            var betaConfig = config with { Channel = "win-beta" };
+            var betaFeed = JsonSerializer.SerializeToUtf8Bytes(new { Assets = new[] { assetJson with { FileName = "Shovel-0.31.0-win-beta-full.nupkg" } } });
+            Expect(SignedReleaseSource.VerifyFeed(betaConfig, betaFeed, Sign(betaFeed)).Assets.Count() == 1, "Beta signed package accepted");
+            ExpectThrows(() => SignedReleaseSource.VerifyFeed(config, betaFeed, Sign(betaFeed)));
+            ExpectThrows(() => SignedReleaseSource.VerifyFeed(betaConfig, feed, signature));
+            vm.SelectedChannel = 0; Expect(vm.Channel == "win-stable" && !vm.Ready, "Stable switch also clears pending state");
         });
         await Check("Update preferences survive settings round-trip", async () =>
         {
@@ -294,7 +311,8 @@ internal static partial class Program
     }
     private sealed class FixtureUpdater(UpdateConfiguration configuration) : IAppUpdater
     {
-        public UpdateConfiguration Configuration => configuration;
+        public UpdateConfiguration Configuration { get; private set; } = configuration;
+        public void SelectChannel(string channel) => Configuration = Configuration with { Channel = channel };
         public bool Available { get; set; } = true;
         public bool Fail { get; set; }
         public UpdatePhase ResultPhase { get; set; } = UpdatePhase.Ready;

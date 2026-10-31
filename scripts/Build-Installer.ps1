@@ -5,7 +5,7 @@ param(
     [Parameter(ParameterSetName='Release')][string]$PublicKeyPath = (Join-Path $PSScriptRoot '../distribution/update-public.pem'),
     [Parameter(Mandatory, ParameterSetName='Release')][string]$PrivateKeyPath,
     [Parameter(Mandatory, ParameterSetName='Local')][switch]$LocalOnly,
-    [ValidateSet('win-stable','win-test')][string]$Channel = 'win-stable',
+    [ValidateSet('win-stable','win-beta')][string]$Channel = 'win-stable',
     [string]$AuthenticodeSignParameters
 )
 $ErrorActionPreference = 'Stop'

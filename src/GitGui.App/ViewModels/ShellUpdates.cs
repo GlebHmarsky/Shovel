@@ -11,7 +11,7 @@ public sealed partial class ShellViewModel
     {
         Updates = updates;
         updates.PropertyChanged += (_, e) =>
-        { if (e.PropertyName == nameof(UpdateViewModel.PeriodicChecks) && IsReady && !_stopping) PreferenceTask = SavePreferencesAsync(); };
+        { if (e.PropertyName is nameof(UpdateViewModel.PeriodicChecks) or nameof(UpdateViewModel.SelectedChannel) && IsReady && !_stopping) PreferenceTask = SavePreferencesAsync(); };
         Changed(nameof(Updates));
     }
     public bool ToolsNeedUpdateAcknowledgment => _unverifiedToolHandoff;

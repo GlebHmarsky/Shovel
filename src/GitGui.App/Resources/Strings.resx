@@ -884,7 +884,7 @@ Previous HEAD: {1}</value></data>
   <data name="UpdateRestart" xml:space="preserve"><value>Restart and update</value></data>
   <data name="UpdateNotes" xml:space="preserve"><value>Release notes</value></data>
   <data name="UpdatePeriodic" xml:space="preserve"><value>Check every four hours while Shovel is open</value></data>
-  <data name="UpdatePrivacy" xml:space="preserve"><value>Startup checks contact GitHub after the window opens. Requests reveal normal HTTP metadata, including your IP address; no repository content, credentials or device identifier is sent. Installation requires Restart and update.</value></data>
+  <data name="UpdatePrivacy" xml:space="preserve"><value>Checks contact GitHub and send normal HTTP metadata, including your IP address; no repository content, credentials or device identifier. Launch updates restart automatically when idle; manual checks offer Restart and update.</value></data>
   <data name="UpdateUnconfigured" xml:space="preserve"><value>Update hosting is not configured in this build. Set the release repository and public verification key when packaging.</value></data>
   <data name="UpdatePortable" xml:space="preserve"><value>Automatic updates require an installed copy of Shovel. Use the Windows installer first.</value></data>
   <data name="UpdateIdle" xml:space="preserve"><value>Ready to check for updates.</value></data>
@@ -931,4 +931,8 @@ Previous HEAD: {1}</value></data>
   <data name="CloneCancelled" xml:space="preserve"><value>Clone cancelled. Any partial repository has been left in place.</value></data>
   <data name="CloneTimedOut" xml:space="preserve"><value>Clone exceeded the ten-minute limit. Any partial repository has been left in place; use Git in a terminal for longer clones.</value></data>
   <data name="CloneOutputLimit" xml:space="preserve"><value>Clone stopped at the output limit. Output and any partial repository are retained; use Git in a terminal for this clone.</value></data>
+  <data name="UpdateChannelQuestion" xml:space="preserve"><value>Where should Shovel get updates?</value></data>
+  <data name="UpdateStable" xml:space="preserve"><value>Stable — tested releases</value></data>
+  <data name="UpdateBeta" xml:space="preserve"><value>Beta — latest builds for testing</value></data>
+  <data name="UpdateChannelHelp" xml:space="preserve"><value>Applies to manual and launch checks. Switching clears pending updates; use Check and download now or restart Shovel. Returning to Stable waits for a newer stable version; it does not downgrade.</value></data>
 </root>

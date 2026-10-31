@@ -183,6 +183,7 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         LoadedSettings = result;
         if (Updates is not null) Updates.PeriodicChecks = result.Settings.CheckUpdatesPeriodically;
+        if (Updates is not null) Updates.SelectedChannel = result.Settings.UpdateChannel == "win-beta" ? 1 : 0;
         RestoreWorkspacePreferences(result.Settings);
         Repositories.Clear(); _knownIdentities.Clear();
         foreach (var path in result.Settings.RepositoryPaths)
@@ -462,6 +463,7 @@ public sealed partial class ShellViewModel : ObservableObject
         CommitLayout = _commitLayout,
 
         CheckUpdatesPeriodically = Updates?.PeriodicChecks ?? true,
+        UpdateChannel = Updates?.Channel ?? "win-stable",
         Appearance = Appearance, RiderExecutable = _riderExecutable, CodeExecutable = _codeExecutable, BashExecutable = _bashExecutable,
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()

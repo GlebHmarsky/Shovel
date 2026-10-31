@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.35.0 — 2026-11-01
+
+- Choose Stable or Beta updates in Help → Shovel updates; persist the choice for automatic launch and manual checks. Stable remains the default.
+- Separate signed feeds and GitHub release/prerelease packages, clear pending updates on channel changes and prevent downgrades/equal-version reinstalls.
+- Publish this common baseline on both channels. All subsequent task builds default to Beta; Stable requires explicit owner approval after testing.
+
 ## 0.34.0 — 2026-11-01
 
 - Check for updates immediately on every installed launch and automatically restart after a verified download, even with periodic checks disabled.

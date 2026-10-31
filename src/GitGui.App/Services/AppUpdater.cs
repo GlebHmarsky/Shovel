@@ -12,6 +12,7 @@ public interface IAppUpdater
 {
     UpdateConfiguration Configuration { get; }
     bool Available { get; }
+    void SelectChannel(string channel) { }
     Task CheckAndDownloadAsync(IProgress<UpdateSnapshot> progress, CancellationToken token);
     Task VerifyReadyAsync(CancellationToken token);
     void Apply();
@@ -20,10 +21,10 @@ public interface IAppUpdater
 public sealed class AppUpdater : IAppUpdater, IDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(10) };
-    private readonly UpdateManager? _manager;
-    private readonly SignedReleaseSource? _source;
+    private UpdateManager? _manager;
+    private SignedReleaseSource? _source;
     private VelopackAsset? _ready;
-    public UpdateConfiguration Configuration { get; }
+    public UpdateConfiguration Configuration { get; private set; }
     public bool Available => _manager is { IsInstalled: true, IsPortable: false };
     public AppUpdater(UpdateConfiguration configuration)
     {
@@ -32,6 +33,14 @@ public sealed class AppUpdater : IAppUpdater, IDisposable
         if (!configuration.IsConfigured) return;
         _source = new(configuration, _http, VelopackLocator.Current.RootAppDir);
         _manager = new(_source, new UpdateOptions { ExplicitChannel = configuration.Channel }, VelopackLocator.Current);
+    }
+    public void SelectChannel(string channel)
+    {
+        if (channel is not ("win-stable" or "win-beta")) throw new ArgumentException(nameof(channel));
+        Configuration = Configuration with { Channel = channel }; _ready = null;
+        if (!Configuration.IsConfigured) return;
+        _source = new(Configuration, _http, VelopackLocator.Current.RootAppDir);
+        _manager = new(_source, new UpdateOptions { ExplicitChannel = channel, AllowVersionDowngrade = false }, VelopackLocator.Current);
     }
     public async Task CheckAndDownloadAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
     {
@@ -43,6 +52,9 @@ public sealed class AppUpdater : IAppUpdater, IDisposable
         token.ThrowIfCancellationRequested();
         if (update is null) { progress.Report(new(UpdatePhase.Current)); return; }
         var asset = update.TargetFullRelease;
+        // Channel changes must not reinstall equal versions or downgrade a newer Beta.
+        if (!Version.TryParse(asset.Version.ToString(), out var offered) || offered <= Version.Parse(typeof(AppUpdater).Assembly.GetName().Version!.ToString(3)))
+        { progress.Report(new(UpdatePhase.Current)); return; }
         progress.Report(new(UpdatePhase.Downloading, asset.Version.ToString()));
         await _manager.DownloadUpdatesAsync(update, percent => progress.Report(new(UpdatePhase.Downloading,
             asset.Version.ToString(), percent)), token);

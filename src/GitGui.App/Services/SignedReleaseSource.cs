@@ -13,7 +13,7 @@ namespace GitGui.App.Services;
 public sealed record UpdateConfiguration(string Repository, string PublicKey, string Channel)
 {
     public bool IsConfigured => Regex.IsMatch(Repository, @"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$") &&
-        PublicKey.Contains("-----BEGIN PUBLIC KEY-----", StringComparison.Ordinal) && Channel is "win-stable" or "win-test";
+        PublicKey.Contains("-----BEGIN PUBLIC KEY-----", StringComparison.Ordinal) && Channel is "win-stable" or "win-beta";
     public static UpdateConfiguration Load()
     {
         using var stream = typeof(UpdateConfiguration).Assembly.GetManifestResourceStream("GitGui.App.updates.json")!;
@@ -29,7 +29,7 @@ public sealed class SignedReleaseSource(UpdateConfiguration configuration, HttpC
     private VelopackAsset[] _verified = [];
     public string FeedName => $"releases.{configuration.Channel}.json";
     public Uri FeedUri => new($"https://github.com/{configuration.Repository}/releases/" +
-        (configuration.Channel == "win-stable" ? "latest/download/" : "download/test/") + FeedName);
+        (configuration.Channel == "win-stable" ? "latest/download/" : "download/beta/") + FeedName);
 
     public async Task<VelopackAssetFeed> GetReleaseFeed(IVelopackLogger logger, string? appId, string channel,
         Guid? stagingId = null, VelopackAsset? latestLocalRelease = null)
@@ -66,7 +66,7 @@ public sealed class SignedReleaseSource(UpdateConfiguration configuration, HttpC
 
     public static async Task EnforceVersionFloorAsync(VelopackAssetFeed feed, string directory, string channel, CancellationToken token)
     {
-        if (channel is not ("win-stable" or "win-test")) throw new InvalidDataException();
+        if (channel is not ("win-stable" or "win-beta")) throw new InvalidDataException();
         var path = Path.Combine(directory, "shovel-trusted-version-" + channel);
         var latest = feed.Assets.MaxBy(a => a.Version)!.Version;
         if (File.Exists(path))

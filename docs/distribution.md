@@ -1,5 +1,13 @@
 # Windows installation and GitHub publishing
 
+## Stable and Beta delivery (confirmed 2026-11-01)
+
+Every task still produces a build. **Routine delivery publishes Beta only**: `pwsh -NoProfile -File scripts/Build-Release.ps1` defaults to `win-beta`. Stable requires the owner's explicit approval after testing: use `-Channel win-stable` on the approved source/version with its matching verified preview. Do not silently promote newer source. 0.35.0 is the explicitly authorized common starting version on both channels; subsequent versions go only to Beta until approved.
+
+Stable releases use immutable `vVERSION-win-stable` tags and GitHub latest. Beta releases use immutable `vVERSION-win-beta` tags, prerelease status and `make_latest=false`; their signed feed is copied to the fixed `beta` prerelease after the versioned package is published. Channel selection in **Help → Shovel updates** is persisted (default Stable), applies to launch/manual checks and clears any pending package. A newer Beta is never downgraded when switching to Stable. Both installers use the same app/profile identity; they are alternative channels, not side-by-side applications.
+
+Each channel is independently signed/verified, with channel-specific package names and replay floors. Feed-copy replacement can briefly expose an unavailable/mismatched Beta feed; verification fails closed and leaves the app usable, and retry uses the complete feed. Routine builds never advance Stable. [GitHub release API semantics](https://docs.github.com/en/rest/releases/releases) checked 2026-11-01. Anonymous verification supports `scripts/Test-PublishedUpdate.ps1 -ExpectedVersion VERSION -Channel win-beta` or `win-stable`. Publisher signing remains separate and unset.
+
 Confirmed 2026-10-31: **[GlebHmarsky/Shovel](https://github.com/GlebHmarsky/Shovel)** is the single public MIT source repository and release host. New installers embed this repository; all future publication targets it. The permanent signing key and application identity are unchanged. No GitHub credentials are compiled into the app.
 [Architecture](architecture.md#windows-installer-and-updater-0300) owns implementation;
 [requirements](requirements.md#updates-and-distribution) owns acceptance;
@@ -9,7 +17,7 @@ Confirmed 2026-10-31: **[GlebHmarsky/Shovel](https://github.com/GlebHmarsky/Shov
 
 From **0.34.0**, installed launches immediately check, download, verify and automatically restart into a newer release when the existing idle/save gate permits it. Failed or blocked attempts leave Shovel usable and retain manual retry. Periodic-check preferences do not disable launch checks. Older clients need one manual **Help → Shovel updates → Check and download → Restart and update** (or the latest installer) to acquire this behavior. Portable previews do not update themselves.
 
-Every delivered build is a new immutable stable release. Increment `Directory.Build.props` above
+Every routine delivered build is a new immutable Beta prerelease; Stable needs explicit owner approval. Increment `Directory.Build.props` above
 all previously published versions, write its changelog entry, then run:
 
 ```powershell

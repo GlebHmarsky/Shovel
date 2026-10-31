@@ -4,6 +4,12 @@ Updated 2026-10-31. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### Stable and Beta channels (0.35.0)
+
+**2026-11-01:** owner requested a common baseline, then Beta-only task builds with explicit approval for Stable. Added a saved Stable/Beta selector, default Stable; both launch and manual checks use that channel, switching clears pending packages, selection is disabled during update work, and equal/older versions cannot be installed across channels. GitHub Stable uses latest; versioned Beta releases are prereleases with a separate signed `beta` feed. Build-Release defaults to Beta. [Distribution](distribution.md#stable-and-beta-delivery-confirmed-2026-11-01) owns promotion commands and limits.
+
+Release compilation passed without warnings/errors; 17 focused updater checks passed (`artifacts/updates-0.35.0.txt`). Added channel persistence, pending-result invalidation and wrong-channel signed-package refusal; existing launch/recovery/signature checks passed. Reviewed normal/minimum Dark/Light headless update-window renders under `artifacts/update-checks/c424d2e9f98642a5a4c9ad3f9be55800`. Actual installed switching/restart remains user acceptance. Common-baseline packaging/publication evidence will follow; no running installation is changed by delivery.
+
 ### Automatic launch updates (0.34.0)
 
 **2026-11-01:** user requested check/download/apply on every launch. Installed startup now checks immediately, independently of periodic preferences, and automatically requests the existing verified restart after download. It drains initial repository reads before closing admission so fast downloads do not cancel identity discovery. One launch attempt per process avoids repeat restarts after failed close/resume. Manual/periodic downloads keep explicit restart. Busy/recovery/unknown repositories and settings failures retain the blocked update without bypassing the gate.

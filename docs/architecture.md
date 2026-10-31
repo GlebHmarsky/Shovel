@@ -1,5 +1,7 @@
 # Architecture and distribution
 
+**0.35.0 channels:** additive `AppSettings.UpdateChannel` normalizes unknown values to Stable. Shell restores it before automatic launch checks and persists selector changes. `AppUpdater.SelectChannel` rebuilds its manager/source and clears the ready asset; the view model also clears ready state and blocks selection while busy. Signed feeds, package names and replay floors are channel-specific. The updater explicitly rejects equal/older application versions after checking, including cross-channel changes. `win-beta` uses the fixed `beta` prerelease feed and immutable versioned prerelease packages; Stable retains latest. [Distribution](distribution.md#stable-and-beta-delivery-confirmed-2026-11-01) owns publication commands/policy and transient Beta feed replacement limits.
+
 Updated 2026-10-31. C# / WPF / .NET 10 LTS confirmed. Runtime 0.33.0 adds clone and remote URL management to the signed installer/updater and existing Git workflows. [Product](product.md) owns current UX; [requirements](requirements.md) obligations; [TODO](../TODO.md) tasks; [roadmap](roadmap.md) decisions/evidence. Mechanisms and historical milestones follow; future designs below are proposals.
 
 ## Clone and remote management (0.33.0)

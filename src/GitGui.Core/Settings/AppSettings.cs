@@ -44,6 +44,7 @@ public sealed record AppSettings
     public RepositoryPreference[] RepositoryPreferences { get; init; } = [];
     public string? SelectedRepositoryPath { get; init; }
     public bool CheckUpdatesPeriodically { get; init; } = true;
+    public string UpdateChannel { get; init; } = "win-stable";
     public AppAppearance Appearance { get; init; } = AppAppearance.Dark;
     public string? RiderExecutable { get; init; }
     public string? CodeExecutable { get; init; }
@@ -51,6 +52,7 @@ public sealed record AppSettings
 
     public AppSettings Normalize() => this with
     {
+        UpdateChannel = UpdateChannel == "win-beta" ? "win-beta" : "win-stable",
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),
         WindowHeight = Clamp(WindowHeight, 800, 620, 2160),
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Max(160, SidebarWidth) : 210,

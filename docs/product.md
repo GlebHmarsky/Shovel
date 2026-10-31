@@ -243,6 +243,8 @@ Reference: original attachment unavailable; 2026-10-25 screenshot confirmed head
 
 ## Update experience (confirmed)
 
+**0.35.0:** choose **Stable — tested releases** or **Beta — latest builds for testing** in Help → Shovel updates. Stable is the default; the saved choice controls both launch and manual checks. Changing it clears a staged update and requires a fresh check, with the selector disabled during checking/installing. Switching to Stable from a newer Beta waits for a newer Stable rather than downgrading. Each task produces Beta; Stable publication follows explicit owner approval. 0.35.0 starts both channels at the same version.
+
 **0.34.0, confirmed 2026-10-31:** every installed launch immediately checks for an update, downloads and verifies it, then automatically restarts into it. This launch check runs even when periodic checks are disabled. Git work, recovery, unknown repository state or unsavable settings block restart and retain the update under **Help → Shovel updates** for manual retry. Startup remains usable during network work or failure. Manual and optional four-hour checks still require **Restart and update**; closing never installs. Settings/tabs/drafts/recovery data and signature/package checks are preserved. Public MIT source and signed update feeds use GlebHmarsky/Shovel; [distribution](distribution.md) owns installation/recovery. Actual installed restart acceptance remains separate from headless checks.
 
 States: checking, current, available, downloading, verifying, ready, postponed, blocked by work, installing, failed, recovered. [Update requirements](requirements.md#updates-and-distribution) owns install/authenticity/failure acceptance.

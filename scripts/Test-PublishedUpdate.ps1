@@ -1,5 +1,5 @@
 #requires -Version 7.4
-param([Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$ExpectedVersion,
+param([ValidateSet('win-stable','win-beta')][string]$Channel='win-stable', [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$ExpectedVersion,
     [ValidatePattern('^\d+\.\d+\.\d+$')][string]$ClientVersion=$ExpectedVersion)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
@@ -30,13 +30,13 @@ Directory.CreateDirectory(output);
 using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
 http.DefaultRequestHeaders.UserAgent.ParseAdd("Shovel-Updater/1.0");
 // Deliberately no Authorization header, cookies or GitHub credentials.
-var config = UpdateConfiguration.Load();
+var config = UpdateConfiguration.Load() with { Channel = args[2] };
 var source = new SignedReleaseSource(config, http, output);
-var feed = await source.GetReleaseFeed(QuietUpdateLogger.Instance, "Shovel", "win-stable");
+var feed = await source.GetReleaseFeed(QuietUpdateLogger.Instance, "Shovel", config.Channel);
 var asset = feed.Assets.Single(a => a.Version.ToString() == expected);
 var package = Path.Combine(output, asset.FileName);
 await source.DownloadReleaseEntry(QuietUpdateLogger.Instance, asset, package, _ => { });
-var final = await source.GetReleaseFeed(QuietUpdateLogger.Instance, "Shovel", "win-stable");
+var final = await source.GetReleaseFeed(QuietUpdateLogger.Instance, "Shovel", config.Channel);
 if (!final.Assets.Any(a => a.Version == asset.Version && a.SHA256 == asset.SHA256 && a.Size == asset.Size))
     throw new InvalidDataException("Release changed during verification.");
 await SignedReleaseSource.VerifyPackageAsync(asset, package, CancellationToken.None);
@@ -49,6 +49,6 @@ var result = JsonSerializer.Serialize(new {
 await File.WriteAllTextAsync(Path.Combine(output, "RESULT.json"), result);
 Console.WriteLine(result);
 '@ | Set-Content (Join-Path $work 'Program.cs')
-dotnet run --project (Join-Path $work 'OnlineProbe.csproj') -c Release -p:UseSharedCompilation=false -- $ExpectedVersion (Join-Path $work 'download')
+dotnet run --project (Join-Path $work 'OnlineProbe.csproj') -c Release -p:UseSharedCompilation=false -- $ExpectedVersion (Join-Path $work 'download') $Channel
 if($LASTEXITCODE -ne 0){throw 'Published update download verification failed.'}
 Write-Output "Evidence: $work/download/RESULT.json"

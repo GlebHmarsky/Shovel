@@ -19,6 +19,19 @@ public sealed class UpdateViewModel : ObservableObject
     public string InstalledVersion => typeof(UpdateViewModel).Assembly.GetName().Version?.ToString(3) ?? "";
     public string Endpoint => Configuration.IsConfigured ? $"https://github.com/{Configuration.Repository}/releases" : UiText.Get("UpdateUnconfigured");
     public string Channel => Configuration.Channel;
+    public bool CanSelectChannel => !_busy && !_stopping;
+    public int SelectedChannel
+    {
+        get => Channel == "win-beta" ? 1 : 0;
+        set
+        {
+            var channel = value == 1 ? "win-beta" : "win-stable";
+            if (!CanSelectChannel || channel == Channel) return;
+            _updater.SelectChannel(channel);
+            Publish(new(_updater.Available ? UpdatePhase.Idle : UpdatePhase.Portable));
+            Changed(nameof(Channel)); Changed(nameof(SelectedChannel));
+        }
+    }
     public string Notes => _snapshot.Notes;
     public bool Ready => _snapshot.Phase is UpdatePhase.Ready or UpdatePhase.Blocked;
     public bool Busy => _busy;
@@ -37,7 +50,7 @@ public sealed class UpdateViewModel : ObservableObject
     private void Publish(UpdateSnapshot snapshot)
     { _snapshot = snapshot; Changed(nameof(Status)); Changed(nameof(Notes)); Changed(nameof(Ready)); Refresh(); }
     private void Refresh()
-    { Changed(nameof(Busy)); CheckCommand?.Refresh(); CancelCommand?.Refresh(); RestartCommand?.Refresh(); }
+    { Changed(nameof(Busy)); Changed(nameof(CanSelectChannel)); CheckCommand?.Refresh(); CancelCommand?.Refresh(); RestartCommand?.Refresh(); }
     public async Task CheckAsync(CancellationToken token = default)
     {
         if (_stopping || _busy || !_updater.Available) return;
