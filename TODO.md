@@ -4,6 +4,9 @@ Updated 2026-10-30. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Consolidate source and updates in public Shovel.** 0.32.1 is published and signed on the main repository; clean-master delivery tags the exact source commit. The old host is archived with one final migration release. Both anonymous download routes were verified; all future publishing is restricted to Shovel.
+
+
 - [x] **P1 — Merge installer/updater into master and make releases the delivery default.** 0.32.0 retains current UI/Git features and settings compatibility; Build-Release packages, signs, publishes and verifies each delivery. Source and release hosting now share public GlebHmarsky/Shovel; old hosting is only a migration endpoint. See distribution for the command and roadmap for verification evidence.
 
 
