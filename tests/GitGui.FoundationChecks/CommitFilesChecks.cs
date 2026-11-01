@@ -98,8 +98,8 @@ internal static partial class Program
             var actions = new GitActions(runner, reader, new WindowsRepositoryIdentity());
             var shell = new ShellViewModel(reader, new CommitInteraction(), new WindowsRepositoryIdentity(), actions: actions);
             shell.CompleteStartup(new(new() { RepositoryPaths = [repo], SelectedRepositoryPath = repo }, GitGui.Core.Settings.SettingsLoadStatus.Loaded));
-            await shell.WaitForIdleAsync(); Expect(shell.CommitFiles is null, "No unsolicited file read before Changes opens");
-            shell.DetailsIndex = 4; var model = shell.CommitFiles!; await Drain(model);
+            await shell.WaitForIdleAsync(); Expect(shell.Commits.Count > 0 && shell.CommitFiles is not null, "Visible Commit overview loads files after history");
+            shell.DetailsIndex = 0; var model = shell.CommitFiles!; await Drain(model);
             shell.SelectedCommit = shell.Commits.Single(c => c.Commit.Hash == second); model = shell.CommitFiles!;
             await Dispatcher.Yield(DispatcherPriority.ContextIdle); await Drain(model);
             Expect(model.Files.Count == 5 && model.CommitHash == second, "Selected history commit drives real files");
@@ -110,7 +110,7 @@ internal static partial class Program
             var details = VisualDescendants<TabControl>(content).Single(); var filesView = VisualDescendants<CommitFilesView>(content).Single();
             var output = VisualDescendants<Expander>(filesView).Single();
             Expect(output.TransformToAncestor(content).Transform(new Point(0, output.ActualHeight)).Y <= content.ActualHeight, "Minimum-size Git output remains inside the workspace");
-            shell.DetailsIndex = 0; Expect(shell.CommitFiles is null, "Leave Changes releases active model");
+            shell.DetailsIndex = 2; Expect(shell.CommitFiles is null, "Leave comparison tabs releases active model");
             shell.BeginShutdown(); await shell.WaitForIdleAsync(); window.Close();
         });
         await Check("Changes panel binds real files/diffs, semantic markers and normal/minimum offscreen layout", async () =>

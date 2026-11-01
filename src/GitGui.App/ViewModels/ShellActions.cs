@@ -81,7 +81,7 @@ public sealed partial class ShellViewModel
         ContinueCommand = new(() => OpenAction(GitAction.Continue), () => CanRecover);
         SkipCommand = new(() => OpenAction(GitAction.Skip), () => CanRecover && CanSkipRecovery);
         AbortCommand = new(() => OpenAction(GitAction.Abort), () => CanRecover);
-        ShowActionDetailsCommand = new(() => RevealDetails(3), () => HasAction);
+        ShowActionDetailsCommand = new(() => RevealDetails(2), () => HasAction);
         NewBranchCommand = new(() => OpenAction(GitAction.NewBranch), () => CanAct);
         FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanAct);
         PullCommand = new(() => OpenAction(GitAction.Pull), () => CanAct && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
@@ -154,7 +154,7 @@ public sealed partial class ShellViewModel
             if (!model.HasAttempt) SetLastAction(previous);
             else
             {
-                DetailsIndex = 3;
+                DetailsIndex = 2;
                 Status = UiText.Get("ActionRunning");
                 // The options window is gone; keep owning the operation through fresh inspection.
                 await model.RunningTask;
@@ -199,7 +199,7 @@ public sealed partial class ShellViewModel
     }
     private void NotifyActionContext()
     {
-        if (!HasAction && DetailsIndex == 3) DetailsIndex = 0;
+        if (!HasAction && DetailsIndex == 2) DetailsIndex = 0;
         Changed(nameof(CurrentAction)); Changed(nameof(HasAction)); Changed(nameof(IsActionRunning)); Changed(nameof(OperationStatus));
         ShowActionDetailsCommand?.Refresh(); CancelCommand?.Refresh();
     }

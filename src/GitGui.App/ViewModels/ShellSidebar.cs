@@ -121,7 +121,7 @@ public sealed partial class ShellViewModel
     {
         if (SelectedRepository != tab || IsBusy || tab.History.Page is null) return;
         var existing = Commits.FirstOrDefault(row => row.Commit.Hash == hash);
-        if (existing is not null) { SelectedCommit = existing; DetailsIndex = 4; SidebarCommitLocated?.Invoke(this, EventArgs.Empty); return; }
+        if (existing is not null) { SelectedCommit = existing; SidebarCommitLocated?.Invoke(this, EventArgs.Empty); return; }
         _operationCancellation?.Cancel(); CancelCountRead();
         var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30)); _operationCancellation = cancel;
         var generation = ++_generation; var session = tab.History.Page.Session;
@@ -139,7 +139,7 @@ public sealed partial class ShellViewModel
                 state.Page = history; state.Rows = rows; state.Cursors.Clear(); state.Cursors.Add(history.Cursor); state.PageIndex = 0;
                 state.PageViews.Clear(); state.EstimatedBytes = rows.Sum(r => (long)r.Commit.Message.Length * 2 + 1024);
                 state.VerticalOffset = 0; state.Selected = rows.FirstOrDefault(r => r.Commit.Hash == hash); state.Notice = LoadedNotice(history);
-                located = true; PublishState(); DetailsIndex = 4; SidebarCommitLocated?.Invoke(this, EventArgs.Empty); Status = UiText.Get("HistoryLoaded");
+                located = true; PublishState(); SidebarCommitLocated?.Invoke(this, EventArgs.Empty); Status = UiText.Get("HistoryLoaded");
             }
             catch (GitReadException error)
             {
@@ -201,7 +201,7 @@ public sealed partial class ShellViewModel
             }, stash is null && historyStashAction is null ? null : (token, output) => _actions!.ExecuteStashAsync(prepared!, stash!, token, output));
             operation.Branch = branch; operation.StartRef = start;
             if (remote.Length > 0) operation.Remote = operation.Remotes.FirstOrDefault(r => r.Name == remote);
-            SetLastAction(operation); DetailsIndex = 3; operation.RunCommand.Execute(null); await operation.RunningTask; Status = operation.Summary;
+            SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); await operation.RunningTask; Status = operation.Summary;
         }
         finally { SetActionOpen(false); BeginSidebarRead(tab); await _sidebarTask; }
     }

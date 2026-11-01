@@ -65,7 +65,7 @@ public sealed partial class ShellViewModel : ObservableObject
         {
             if (_publishingState || State is not { } state || state.Selected == value || (value is not null && !state.Rows.Contains(value))) return;
             state.Selected = value; HighlightAuthors(); Changed();
-            if (value is not null) DetailsIndex = 4;
+
             UpdateCommitFiles();
         }
     }
@@ -464,6 +464,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
         CheckUpdatesPeriodically = Updates?.PeriodicChecks ?? true,
         UpdateChannel = Updates?.Channel ?? "win-stable",
+        UiScale = Services.UiScale.Value,
         Appearance = Appearance, RiderExecutable = _riderExecutable, CodeExecutable = _codeExecutable, BashExecutable = _bashExecutable,
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()

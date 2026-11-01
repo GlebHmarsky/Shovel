@@ -14,7 +14,7 @@ Optional focused verification after building: `dotnet run --project tests/GitGui
 
 Clone/remote checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-network-workflows` (11 focused checks; disposable Git/filter/hook/auth-cancellation fixtures, real bound actions, partial/stale/locked configuration and offscreen Dark/Light forms). No visible app, live server or installation is exercised. [Evidence and limits](docs/roadmap.md#clone-and-remote-management-0330).
 
-QOL checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-qol` (six bounded checks for retained views/selection, layout migration, session activity and offscreen layouts). `--check-conflicts` includes eight disposable conflict scenarios and inline Commit staging. These are optional focused suites; normal packaging runs the unchanged smoke suite.
+QOL checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-qol` (seven bounded checks for retained views/selection, commit overview, saved scale, layout migration, session activity and offscreen layouts). `--check-conflicts` includes seventeen disposable conflict scenarios and inline Commit staging. These are optional focused suites; normal packaging runs the unchanged smoke suite.
 
 History/caption checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-history-layout` (four opt-in checks; disposable stashes, topology/paging and offscreen caption/toolbar renders). [Caption and folded-stash behavior](docs/product.md#compact-caption-and-history-0260). Native caption interactions require separate authorized desktop validation.
 

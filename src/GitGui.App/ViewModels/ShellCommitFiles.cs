@@ -10,7 +10,7 @@ public sealed partial class ShellViewModel
     {
         if (_historyMenuOpen) return;
         var path = SelectedRepository?.Directory; var commit = SelectedCommit?.Commit;
-        if (_stopping || ShowingStartupPreview || DetailsIndex != 4 || path is null || commit is null || _git is null || _reader is null)
+        if (_stopping || ShowingStartupPreview || DetailsIndex is not (0 or 1) || path is null || commit is null || _git is null || _reader is null)
         { StopCommitFiles(); return; }
         if (_commitFilesPath == path && CommitFiles?.CommitHash == commit.Hash) return;
         if (_commitFilesPath == path && CommitFiles is { } retained) { retained.SelectCommit(commit); return; }

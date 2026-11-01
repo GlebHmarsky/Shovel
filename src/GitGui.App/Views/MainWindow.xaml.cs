@@ -27,6 +27,8 @@ public partial class MainWindow : Window
         CommandBindings.Add(new(SystemCommands.MaximizeWindowCommand, (_, _) =>
         { if (WindowState == WindowState.Maximized) SystemCommands.RestoreWindow(this); else SystemCommands.MaximizeWindow(this); }));
         CommandBindings.Add(new(SystemCommands.CloseWindowCommand, (_, _) => SystemCommands.CloseWindow(this)));
+        GitGui.App.Services.UiScale.Changed += SaveScale;
+        Closed += (_, _) => GitGui.App.Services.UiScale.Changed -= SaveScale;
         HighContrast = SystemParameters.HighContrast;
         SystemParameters.StaticPropertyChanged += OnSystemPropertyChanged;
         viewModel.HistoryViewChanging += CaptureHistoryScroll;
@@ -45,6 +47,8 @@ public partial class MainWindow : Window
         BindingOperations.SetBinding(HistoryTable.Columns[0], DataGridColumn.MinWidthProperty,
             new Binding(nameof(ShellViewModel.GraphWidth)) { Source = viewModel });
     }
+
+    private void SaveScale(object? sender, EventArgs e) => ViewModel.SaveScalePreference();
 
     private void OnUpdates(object sender, RoutedEventArgs e)
     { if (ViewModel.Updates is { } updates) new UpdateWindow(updates) { Owner = this }.ShowDialog(); }
@@ -71,7 +75,7 @@ public partial class MainWindow : Window
     }
     private void OnHistorySelected(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (sender is DataGridRow { Item: CommitRow row }) { ViewModel.SelectedCommit = row; ViewModel.DetailsIndex = 4; }
+        if (sender is DataGridRow { Item: CommitRow row }) { ViewModel.SelectedCommit = row; }
     }
     private void OnSidebarCommitLocated(object? sender, EventArgs e)
     { if (ViewModel.SelectedCommit is { } row) HistoryTable.ScrollIntoView(row); }
@@ -151,11 +155,11 @@ public partial class MainWindow : Window
     private void OnDetailsSelection(object sender, SelectionChangedEventArgs e)
     {
         if (e.OriginalSource != sender || HistoryRow is null || DetailsRow is null) return;
-        var changes = ((TabControl)sender).SelectedIndex == 4;
-        if (changes && !_changesLayout) DetailsRow.Height = new(Math.Max(260, DetailsRow.Height.Value));
+        var changes = ((TabControl)sender).SelectedIndex is 0 or 1;
+        if (changes && !_changesLayout) DetailsRow.Height = new(Math.Max(420, DetailsRow.Height.Value));
         _changesLayout = changes;
         HistoryRow.MinHeight = changes ? 160 : 300;
-        DetailsRow.MinHeight = changes ? 200 : 80;
+        DetailsRow.MinHeight = ((TabControl)sender).SelectedIndex == 0 ? 320 : changes ? 200 : 80;
         FitDetails();
     }
     private void OnWorkspaceSizeChanged(object sender, SizeChangedEventArgs e)
@@ -170,6 +174,7 @@ public partial class MainWindow : Window
         // A child's desired height can exceed its viewport. Use the finite shell height,
         // excluding chrome/footer, so the details panel cannot cover the status bar.
         var available = ShellLayout.ActualHeight - ShellLayout.RowDefinitions.Where((_, index) => index != 3).Sum(row => row.ActualHeight);
+        DetailsRow.MinHeight = Math.Min(_changesLayout ? 320 : 80, Math.Max(80, available - HistoryRow.MinHeight - 5));
         DetailsRow.MaxHeight = Math.Max(DetailsRow.MinHeight, available - HistoryRow.MinHeight - 5);
     }
 }

@@ -31,6 +31,7 @@ public sealed record AppSettings
 {
     public const int CurrentSchemaVersion = 6;
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
+    public double UiScale { get; init; } = 1;
     public double WindowWidth { get; init; } = 1200;
     public double WindowHeight { get; init; } = 800;
     public bool IsMaximized { get; init; }
@@ -52,6 +53,7 @@ public sealed record AppSettings
 
     public AppSettings Normalize() => this with
     {
+        UiScale = double.IsFinite(UiScale) ? Math.Clamp(Math.Round(UiScale * 10) / 10, .7, 2) : 1,
         UpdateChannel = UpdateChannel == "win-beta" ? "win-beta" : "win-stable",
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),
         WindowHeight = Clamp(WindowHeight, 800, 620, 2160),

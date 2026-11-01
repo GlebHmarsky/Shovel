@@ -17,6 +17,9 @@ public static class Program
     public static void Main(string[] args)
     {
         var locator = new Services.ShovelUpdateLocator();
+        // Match the installer shortcut identity instead of letting Windows infer a
+        // version-directory executable identity on each update.
+        if (OperatingSystem.IsWindows()) SetCurrentProcessExplicitAppUserModelID(locator.AppUserModelId ?? "velopack.Shovel");
         var fastHook = args.Length >= 2 && args[0] is "--veloapp-install" or "--veloapp-updated" or "--veloapp-obsolete" or "--veloapp-uninstall";
         if (locator.CurrentlyInstalledVersion is not null && !locator.IsPortable && !fastHook)
         {
@@ -41,4 +44,6 @@ public static class Program
     }
     internal static void MarkHandoff() => File.WriteAllText(HandoffFile, "Pending explicit update. Repair with the latest installer if interrupted.");
     internal static void CancelHandoff() => File.Delete(HandoffFile);
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
 }

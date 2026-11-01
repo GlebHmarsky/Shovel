@@ -1,5 +1,14 @@
 # Architecture and distribution
 
+## Workspace refinements (0.38.0)
+
+Bottom indices are Commit=0, Changes=1, Operations=2. Both comparison tabs share one bounded CommitFilesViewModel and its existing cancellation/generation handling; selecting history no longer forces an index. Metadata appears once above the Commit comparison.
+
+AppSettings.UiScale is additive schema-6 data, normalized to tenths within .7–2. UiScale attaches via TitleBarTheme to app-owned windows, scales their content through LayoutTransform and handles Ctrl+Plus/Minus without autorepeat. Shell preference writes persist changes; startup restoration does not trigger premature profile writes.
+
+Program explicitly sets the process AppUserModelID from the existing installed locator before UI creation. Read-only inspection found the current pinned target uses the stable current/Shovel.exe path and both its property and installed manifest use velopack.Shovel. No pin or installation was modified. [Windows startup identity contract](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-setcurrentprocessexplicitappusermodelid) checked 2026-11-01. An installed update is still needed to establish the observed pin problem is resolved. Tab dragging uses a non-hit-testable adorner and actual container boundaries, a shared computed drop index and finally-cleanup for temporary transforms.
+
+
 **0.35.0 channels:** additive `AppSettings.UpdateChannel` normalizes unknown values to Stable. Shell restores it before automatic launch checks and persists selector changes. `AppUpdater.SelectChannel` rebuilds its manager/source and clears the ready asset; the view model also clears ready state and blocks selection while busy. Signed feeds, package names and replay floors are channel-specific. The updater explicitly rejects equal/older application versions after checking, including cross-channel changes. `win-beta` uses the fixed `beta` prerelease feed and immutable versioned prerelease packages; Stable retains latest. [Distribution](distribution.md#stable-and-beta-delivery-confirmed-2026-11-01) owns publication commands/policy and transient Beta feed replacement limits.
 
 Updated 2026-11-01. C# / WPF / .NET 10 LTS confirmed. Runtime 0.33.0 adds clone and remote URL management to the signed installer/updater and existing Git workflows. [Product](product.md) owns current UX; [requirements](requirements.md) obligations; [TODO](../TODO.md) tasks; [roadmap](roadmap.md) decisions/evidence. Mechanisms and historical milestones follow; future designs below are proposals.

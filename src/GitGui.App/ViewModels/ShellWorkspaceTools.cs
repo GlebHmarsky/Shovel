@@ -33,6 +33,7 @@ public sealed partial class ShellViewModel
     }
     private void RestoreWorkspacePreferences(AppSettings settings)
     {
+        UiScale.Set(settings.UiScale);
         _commitLayout = settings.CommitLayout;
         _riderExecutable = settings.RiderExecutable; _codeExecutable = settings.CodeExecutable; _bashExecutable = settings.BashExecutable;
         SetAppearance(settings.Appearance);
@@ -42,6 +43,7 @@ public sealed partial class ShellViewModel
         Appearance = appearance;
         Changed(nameof(IsDarkAppearance)); Changed(nameof(IsLightAppearance)); AppearanceChanged?.Invoke(this, EventArgs.Empty);
     }
+    public void SaveScalePreference() { if (IsReady && !_stopping) PreferenceTask = SavePreferencesAsync(); }
     private async Task SavePreferencesAsync()
     {
         if (_persist is null || LoadedSettings?.CanSave != true) return;

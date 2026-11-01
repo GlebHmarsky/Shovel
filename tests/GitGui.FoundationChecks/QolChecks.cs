@@ -47,13 +47,13 @@ internal static partial class Program
             model.SelectCommit(empty); await DrainFiles(model);
             Expect(model.Files.Count == 0 && model.Lines.Count == 0 && model.Binary is null && !model.Busy, "Completed empty commit clears stale comparison"); model.Stop();
         });
-        await Check("Unchanged history keeps selected row identity and user commit selection opens Commit changes", async () =>
+        await Check("Unchanged history keeps selected row identity and commit selection preserves the bottom tab", async () =>
         {
             var rows = shell.Commits; var selected = shell.SelectedCommit;
             shell.RefreshTabCommand.Execute(shell.SelectedRepository); await shell.WaitForIdleAsync();
             Expect(ReferenceEquals(rows, shell.Commits) && ReferenceEquals(selected, shell.SelectedCommit), "Refresh preserves row containers and selection");
-            shell.DetailsIndex = 3; shell.SelectedCommit = shell.Commits.Single(r => r.Commit.Hash == changed.Hash);
-            Expect(shell.DetailsIndex == 4 && shell.CommitFiles is not null, "Selection opens changes, not operations");
+            shell.DetailsIndex = 1; shell.SelectedCommit = shell.Commits.Single(r => r.Commit.Hash == changed.Hash);
+            Expect(shell.DetailsIndex == 1 && shell.CommitFiles is not null, "Selection preserves the chosen Changes tab");
             await DrainFiles(shell.CommitFiles!);
         });
         foreach (var name in new[] { "a.txt", "b.txt" }) await File.WriteAllTextAsync(Path.Combine(repo, name), "edited " + name + "\n");
@@ -77,9 +77,9 @@ internal static partial class Program
             await File.WriteAllTextAsync(store.FilePath, "{\"SchemaVersion\":5,\"DetailsHeight\":620}");
             var loaded = await store.LoadAsync(default); Expect(loaded.Status == SettingsLoadStatus.Migrated && loaded.Settings.DetailsHeight == 620, "Migration preserves expanded history details");
             var layout = new CommitLayout { Width = 1250, Height = 850, FilesWidth = 475, UnstagedFraction = .6, MessageHeight = 240, ConflictSourcesFraction = .65 };
-            await store.SaveAsync(loaded.Settings with { CommitLayout = layout, HistoryFilesWidth = 420 }, default);
+            await store.SaveAsync(loaded.Settings with { CommitLayout = layout, HistoryFilesWidth = 420, UiScale = 1.3 }, default);
             var restored = (await new SettingsStore(folder).LoadAsync(default)).Settings;
-            Expect(restored.CommitLayout == layout && restored.HistoryFilesWidth == 420, "Every pane dimension survives restart");
+            Expect(restored.CommitLayout == layout && restored.HistoryFilesWidth == 420 && restored.UiScale == 1.3, "Every pane dimension survives restart");
             var model = new CommitViewModel(repo, git, reader, actions, new CommitInteraction()) { Layout = restored.CommitLayout };
             var window = new CommitWindow(model); Arrange((FrameworkElement)window.Content, 1250, 850); window.CaptureLayout();
             Expect(Math.Abs(model.Layout.FilesWidth - 475) < 1 && Math.Abs(model.Layout.UnstagedFraction - .6) < .02 && Math.Abs(model.Layout.MessageHeight - 240) < 1, "Actual layout restores split positions");
@@ -99,6 +99,31 @@ internal static partial class Program
             for (var i = 0; i < 150; i++) journal.Record(new(new object(), "Read", "done", .1, OperationOutcome.Success), repo, true);
             Expect(journal.Entries.Count == 128, "Session entries bounded");
             return Task.CompletedTask;
+        });
+        await Check("Commit overview exposes files and diffs; application scale updates and remains bounded", async () =>
+        {
+            shell.DetailsIndex = 0; shell.SelectedCommit = shell.Commits.Single(r => r.Commit.Hash == changed.Hash);
+            await DrainFiles(shell.CommitFiles!);
+            Expect(shell.CommitFiles!.Files.Count == 2, "Selected commit publishes both changed files");
+            shell.CommitFiles.Selected = shell.CommitFiles.Files.Last(); await DrainFiles(shell.CommitFiles);
+            Expect(shell.CommitFiles.Lines.Count > 0, "File selection loads actual comparison");
+            foreach (var theme in new[] { AppAppearance.Dark, AppAppearance.Light })
+            {
+                AppTheme.Apply(Application.Current.Resources, false, theme);
+                var window = new MainWindow(shell); var content = (FrameworkElement)window.Content;
+                try
+                {
+                    UiScale.Set(1.3);
+                    Expect(content.LayoutTransform is System.Windows.Media.ScaleTransform { ScaleX: 1.3, ScaleY: 1.3 }, "Existing windows receive scale changes");
+                    Expect(shell.CaptureSession(new()).UiScale == 1.3, "Session captures chosen scale");
+                    UiScale.Set(1); Arrange(content, 1200, 800); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                    SaveRender(content, $"commit-overview-{theme}.png", 1200, 800);
+                    UiScale.Set(9); Expect(UiScale.Value == 2, "Maximum scale bounded");
+                    UiScale.Set(double.NaN); Expect(UiScale.Value == 1, "Invalid scale recovers to default");
+                }
+                finally { window.Close(); UiScale.Set(1); }
+            }
+            AppTheme.Apply(Application.Current.Resources, false);
         });
         await Check("Dark and light workspace and activity layouts retain usable compact controls", async () =>
         {

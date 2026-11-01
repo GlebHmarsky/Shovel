@@ -69,7 +69,7 @@ public sealed partial class ShellViewModel
                         options.Upstream?.Name ?? UiText.Get("BranchManageNoUpstream"));
                     return result with { Output = target + Environment.NewLine + result.Output };
                 });
-            _preparingAction = false; SetLastAction(operation); DetailsIndex = 3;
+            _preparingAction = false; SetLastAction(operation); DetailsIndex = 2;
             operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
             await operation.RunningTask;
             Status = operation.Summary;

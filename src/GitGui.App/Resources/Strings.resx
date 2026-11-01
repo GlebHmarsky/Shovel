@@ -4,7 +4,7 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
-  <data name="AppTitle" xml:space="preserve"><value>Shovel — Preview</value></data>
+  <data name="AppTitle" xml:space="preserve"><value>Shovel</value></data>
   <data name="RepositoryTabs" xml:space="preserve"><value>Repositories</value></data>
   <data name="NoRepositories" xml:space="preserve"><value>No repositories open</value></data>
   <data name="Fetch" xml:space="preserve"><value>Fetch</value></data>
@@ -944,4 +944,5 @@ Previous HEAD: {1}</value></data>
   <data name="ConflictToolLabel" xml:space="preserve"><value>External merge tool</value></data>
   <data name="ConflictToolHelp" xml:space="preserve"><value>Choose a tool, then select External merge tool. Git checks availability on launch. This does not change Git configuration or save editor text.</value></data>
   <data name="ConflictToolInvalid" xml:space="preserve"><value>The selected merge tool is no longer available in this preview. Reload the conflict and select it again.</value></data>
+  <data name="ChangesTab" xml:space="preserve"><value>Changes</value></data>
 </root>

@@ -94,7 +94,7 @@ public sealed partial class ShellViewModel
                 var result = await _actions!.ExecuteAsync(prepared!, new(action, StartRef: row.Commit.Hash, Mainline: mainline), token, output);
                 return result with { Output = UiText.Format("HistoryActionTarget", row.Commit.Hash, snapshot.Commit ?? UiText.Get("NoBranch")) + Environment.NewLine + result.Output };
             });
-            SetLastAction(operation); DetailsIndex = 3; operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
+            SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
             await operation.RunningTask; Status = operation.Summary;
         }
         finally { SetActionOpen(false); if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); } }

@@ -33,7 +33,7 @@ public sealed partial class ShellViewModel
                 result = await _actions!.CloneRepositoryAsync(_git, options, token, output, authentication);
                 return result.Action;
             });
-            _preparingAction = false; SetLastAction(model); DetailsIndex = 3;
+            _preparingAction = false; SetLastAction(model); DetailsIndex = 2;
             model.RunCommand.Execute(null); await model.RunningTask; Status = model.Summary;
         }
         finally

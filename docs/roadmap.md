@@ -4,6 +4,11 @@ Updated 2026-11-01. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### Workspace refinements (0.38.0 Beta)
+
+2026-11-01: implemented the requested combined Commit overview/files/diff, comparison-only Changes, removed bottom Repository/Diagnostics, preserved tab selection, persisted keyboard scaling, plain Shovel title and repository drag feedback. Added explicit startup AppUserModelID matching the inspected existing pin and installer. No user pin or installed app was modified. Physical keyboard/drag and installed-update taskbar acceptance remain unverified; 7 focused QOL checks and 10 committed-file checks passed; Release compilation has zero warnings/errors. Minimum-height clipping found by the focused check was fixed by bounding the pane minimum to available space. Logs: `artifacts/qol-0.38.0.txt`, `artifacts/commit-files-0.38.0.txt`. Reviewed overview renders under `artifacts/check-qol/20261101-101934-b9a989b5bb5849d0a6476c6a0fa1c0b9`; final minimum-size checks under `artifacts/commit-files-checks/20261101-102159-c22f28be17c94929862757c047648774`. Release evidence follows below.
+
+
 ### UTF-16 conflict editing (0.37.0 Beta)
 
 **2026-11-01:** advanced the conflict-editor TODO with BOM-marked UTF-16 LE/BE inside the existing Commit pane. Sources and working result carry explicit encoding metadata; the result label follows whole-side selection or the working-file encoding for edits. Strict decoding/encoding preserves BOM, byte order, leading content U+FEFF, Unicode and existing line endings. The 512-KiB saved-byte limit includes BOM; invalid Unicode and markers fail before writing. Native side selection, filters/hooks, stale-state checks, cancellation and failed-save retention remain in the existing flow. [Product](product.md#daily-use-interactions-0310) owns current UX and limits; [architecture](architecture.md#retained-comparisons-inline-conflicts-and-activity-0310) owns encoding details.

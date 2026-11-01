@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.38.0 — 2026-11-01 (Beta)
+
+- Combine author, commit message, refs, SHA and clickable files/diffs in the bottom Commit view. Keep Changes as the comparison-only view; remove Repository and Diagnostics tabs and preserve the selected tab across commit selections.
+- Add persisted Ctrl+Plus/Minus application scaling in 10% steps (70–200%), with no settings control yet. Remove Preview from the title.
+- Use the installed shortcut app identity at process startup; add a translucent repository drag label, insertion marker and neighboring-tab feedback.
+
+
 ## 0.37.0 — 2026-11-01 (Beta)
 
 - Edit BOM-marked UTF-16 little- and big-endian conflicts inside the existing Commit diff pane, alongside UTF-8. Show the result encoding and preserve it when saving and staging.

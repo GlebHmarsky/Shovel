@@ -81,7 +81,7 @@
         <MenuItem Header="{Binding HistoryRange}" IsEnabled="False" />
         <MenuItem Header="{Binding HistoryNotice}" IsEnabled="False" />
         <MenuItem Header="{loc:Text Key=FirstHistoryPage}" Command="{Binding FirstHistoryCommand}" />
-        <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
+
       </MenuItem>
       <MenuItem Header="{loc:Text Key=RepositoryMenu}">
         <MenuItem Header="{loc:Text Key=ActionTitleClone}" Command="{Binding CloneRepositoryCommand}" ToolTip="{Binding CloneRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
@@ -103,7 +103,7 @@
         <MenuItem Header="{loc:Text Key=FirstHistoryPage}" Command="{Binding FirstHistoryCommand}" />
         <Separator />
         <MenuItem Header="{loc:Text Key=ChooseGit}" Command="{Binding ChooseGitCommand}" />
-        <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
+
         <Separator />
         <MenuItem Header="{loc:Text Key=MoveLeft}" Command="{Binding MoveLeftCommand}" />
         <MenuItem Header="{loc:Text Key=MoveRight}" Command="{Binding MoveRightCommand}" />
@@ -118,7 +118,7 @@
         <MenuItem Header="{loc:Text Key=UpdateTitle}" Click="OnUpdates" />
         <MenuItem Header="{loc:Text Key=UpdateReadyMenu}" Click="OnUpdates" Visibility="{Binding Updates.Ready, Converter={StaticResource BoolToVisibility}}" />
         <MenuItem Header="{Binding Version}" IsEnabled="False" />
-        <MenuItem Header="{loc:Text Key=Diagnostics}" Command="{Binding DiagnosticsCommand}" />
+
       </MenuItem>
     </Menu>
     </Grid>
@@ -364,9 +364,7 @@
               <DataGridTextColumn Header="{loc:Text Key=HistoryHash}" Binding="{Binding ShortHash}" Width="115" MinWidth="115" ElementStyle="{StaticResource HistoryText}" />
             </DataGrid.Columns>
           </DataGrid>
-          <Button Grid.Row="1" Content="{Binding HistoryProblem}" Command="{Binding DiagnosticsCommand}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" MaxWidth="420" AutomationProperties.LiveSetting="Polite">
-            <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding HistoryProblem}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style>
-          </Button>
+          <TextBlock Grid.Row="1" Text="{Binding HistoryProblem}" ToolTip="{Binding RawOutput}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" MaxWidth="420" TextWrapping="Wrap"/>
           <TextBlock Grid.Row="1" Text="{Binding HistoryNotice}" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="450" Margin="16" IsHitTestVisible="False">
             <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Foreground" Value="{DynamicResource Theme.HistoryText}"/><Style.Triggers><DataTrigger Binding="{Binding Commits.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding HighContrast, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"><Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
           </TextBlock>
@@ -376,56 +374,18 @@
                       Background="{DynamicResource Theme.Border}"
                       AutomationProperties.Name="{loc:Text Key=ResizeDetails}" AutomationProperties.AutomationId="DetailsSplitter" />
         <TabControl SelectedIndex="{Binding DetailsIndex}" SelectionChanged="OnDetailsSelection" Grid.Row="2" Margin="0" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
-          <TabItem Header="{loc:Text Key=CommitMetadata}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-              <StackPanel Margin="14,10">
-                <TextBlock Text="{Binding SelectedCommit.Description, TargetNullValue={loc:Text Key=SelectCommit}}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10" />
-                <TextBlock Text="{Binding SelectedCommit.RefLabels}" TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.Name="{loc:Text Key=CommitReferences}">
-                  <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding SelectedCommit.RefLabels}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-                </TextBlock>
-                <TextBlock Text="{loc:Text Key=CommitMessage}" FontWeight="SemiBold" />
-                <TextBox Text="{Binding SelectedCommit.MessagePreview, Mode=OneWay}" MaxHeight="220" VerticalScrollBarVisibility="Auto" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AcceptsReturn="True" AutomationProperties.Name="{loc:Text Key=CommitMessage}" />
-                <TextBlock Text="{Binding SelectedCommit.MessageNotice}" TextWrapping="Wrap" />
-                <TextBlock Text="{loc:Text Key=HistoryAuthor}" FontWeight="SemiBold" Margin="0,8,0,0" />
-                <TextBox Text="{Binding SelectedCommit.AuthorDetails, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=HistoryAuthor}" />
-                <TextBlock Text="{loc:Text Key=Committer}" FontWeight="SemiBold" Margin="0,8,0,0" />
-                <TextBox Text="{Binding SelectedCommit.CommitterDetails, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=Committer}" />
-                <TextBlock Text="{loc:Text Key=HistoryHash}" FontWeight="SemiBold" Margin="0,8,0,0" />
-                <TextBox Text="{Binding SelectedCommit.Commit.Hash, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=HistoryHash}" />
-                <TextBlock Text="{loc:Text Key=CommitParents}" FontWeight="SemiBold" Margin="0,8,0,0" />
-                <TextBox Text="{Binding SelectedCommit.Parents, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=CommitParents}" />
+          <TabItem Header="{loc:Text Key=Commit}">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Top" Margin="12,6">
+                <TextBlock Text="{Binding SelectedCommit.AuthorDetails}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding SelectedCommit.RefLabels}" Foreground="{DynamicResource Theme.Muted}" TextTrimming="CharacterEllipsis"/>
+                <TextBox Text="{Binding SelectedCommit.Commit.Hash, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Padding="0"/>
+                <TextBox Text="{Binding SelectedCommit.MessagePreview, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Padding="0" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="70" VerticalScrollBarVisibility="Auto"/>
               </StackPanel>
-            </ScrollViewer>
+              <views:CommitFilesView x:Name="HistoryFiles" DataContext="{Binding CommitFiles}"/>
+            </DockPanel>
           </TabItem>
-          <TabItem Header="{loc:Text Key=RepositoryDetails}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-              <StackPanel Margin="16">
-                <TextBlock Text="{Binding SelectedRepository.State}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                <TextBlock Text="{Binding SelectedRepository.ReadAt}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                <TextBlock Text="{loc:Text Key=RepositoryPath}" FontWeight="SemiBold" />
-                <TextBox Text="{Binding SelectedRepository.Directory, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=RepositoryPath}" />
-                <TextBlock Text="{loc:Text Key=WorktreePath}" FontWeight="SemiBold" Margin="0,8,0,0" />
-                <TextBox Text="{Binding SelectedRepository.Snapshot.Worktree, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=WorktreePath}" />
-                <TextBlock Text="{loc:Text Key=CommonDirectory}" FontWeight="SemiBold" Margin="0,8,0,0" />
-                <TextBox Text="{Binding SelectedRepository.Snapshot.CommonDirectory, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=CommonDirectory}" />
-                <TextBlock Text="{loc:Text Key=HeadCommit}" FontWeight="SemiBold" Margin="0,8,0,0" />
-                <TextBox Text="{Binding SelectedRepository.Snapshot.Commit, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" FlowDirection="LeftToRight" TextWrapping="Wrap" AutomationProperties.Name="{loc:Text Key=HeadCommit}" />
-              </StackPanel>
-            </ScrollViewer>
-          </TabItem>
-          <TabItem Header="{loc:Text Key=Diagnostics}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12">
-              <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
-              <TextBlock Text="{Binding SettingsNotice}" TextWrapping="Wrap"/>
-              <TextBlock Grid.Row="1" Text="{Binding HistoryNotice}" TextWrapping="Wrap"/>
-              <TextBlock Text="{loc:Text Key=HistoryLimits}" TextWrapping="Wrap"/>
-              <TextBlock Text="{Binding GitStatus}" />
-              <TextBlock Text="{loc:Text Key=RawOutput}" FontWeight="SemiBold" />
-              <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="160" VerticalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=RawOutput}" />
-              <TextBlock Text="{loc:Text Key=TimingNotice}" TextWrapping="Wrap" />
-              <TextBox Text="{Binding TimingDetails, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MaxHeight="160" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=TimingNotice}" />
-            </StackPanel></ScrollViewer>
-          </TabItem>
+          <TabItem Header="{loc:Text Key=ChangesTab}"><views:CommitFilesView DataContext="{Binding CommitFiles}"/></TabItem>
           <TabItem Header="{loc:Text Key=ActionDetailsTab}" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12" DataContext="{Binding CurrentAction}">
               <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -434,7 +394,7 @@
               <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MinHeight="60" MaxHeight="250" Margin="0,8,0,0" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}" />
             </StackPanel></ScrollViewer>
           </TabItem>
-          <TabItem Header="{loc:Text Key=Commit}"><views:CommitFilesView x:Name="HistoryFiles" DataContext="{Binding CommitFiles}"/></TabItem>
+
 </TabControl>
       </Grid>
     </Grid>

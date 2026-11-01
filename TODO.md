@@ -4,6 +4,10 @@ Updated 2026-11-01. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Workspace refinements (0.38.0).** Combined Commit overview/files/diff, retained bottom tab, saved keyboard scale, title and drag feedback; explicit shortcut-matching process identity.
+- [ ] **P1 — Deliver 0.38.0 Beta.** Focused QOL/commit checks, smoke, signed feed and anonymous package verification. Stable stays 0.35.0.
+- [ ] **P2 — Installed taskbar/physical input acceptance.** Verify a real update preserves the pinned grouping/launch behavior and exercise scale shortcuts and native tab drag; no installed app or pin was changed during this delivery.
+
 - [x] **P2 — UTF-16 conflict editing (0.37.0 Beta).** BOM-marked LE/BE sources and result encoding in the existing pane, exact encoded writes, strict Unicode/byte bounds and preserved native side/tool fallback. [Behavior and limits](docs/product.md#daily-use-interactions-0310).
 - [x] **P1 — Deliver 0.37.0 Beta.** 17 conflict checks and Dark/Light normal/minimum review; 26 smoke checks in 53.3 s; matching preview/installer, signed update feed and anonymous full-package verification. Stable remains 0.35.0. [Evidence and limits](docs/roadmap.md#utf-16-conflict-editing-0370-beta).
 

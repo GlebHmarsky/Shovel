@@ -1,5 +1,12 @@
 # Product
 
+## Workspace refinements (0.38.0)
+
+The bottom **Commit** tab combines author/date, refs, SHA and a single full commit message above clickable changed files and the existing text/binary diff. **Changes** keeps the comparison-only view; Operations remains available for actual operations. Repository/Diagnostics bottom tabs are removed. Selecting commits or locating them from the sidebar preserves the chosen bottom tab.
+
+**Ctrl+Plus / Ctrl+Minus** (including numeric keypad) changes all app-owned windows by 10%, bounded to 70–200%. Scale is saved in the existing profile and restored at launch; there is no visible scale setting yet. “Preview” is removed from the caption. Tab dragging displays the repository name in a translucent gray card, a drop boundary and a small shift of the neighboring tab. Escape cancels without reordering.
+
+
 Updated 2026-11-01. [Requirements](requirements.md) owns acceptance; [architecture](architecture.md) owns mechanisms; [roadmap](roadmap.md) owns delivery evidence.
 
 **0.36.1 Beta:** standard LFS selections use faster exact-content validation and reconciliation during Discard. Confirmation, native filters/hooks, progress and Cancel keep their existing behavior. Unsupported/mixed selections use normal Git status; no optimistic removal of changed rows. [Measured results and limits](roadmap.md#lfs-discard-refactor-0361-beta).
@@ -18,7 +25,7 @@ Clone is a normal full checkout with default `origin`; recursive submodule, shal
 
 **0.36.0 Beta:** the inline conflict toolbar now offers an external merge-tool chooser beside its launch button. Keep **Configured default**, choose a named Git-configured tool, or select a common Git-supported tool. Selection does no preparation and changes no configuration; launch runs native Git mergetool for this file and checks whether it was resolved/staged. Availability is checked on launch; tool errors/output and cancellation remain in the existing operation flow. Editor text is not saved by the external-tool action. Tool executable paths/custom commands still belong in Git configuration; this selector lasts for the current conflict editor.
 
-Selecting a file or commit retains the last completed, labelled comparison until the new one is ready. Loading/error status explains the retained view; a completed empty result clears it. Stale visible hunks cannot be staged. Unchanged refreshes preserve row identity and native focus instead of rebuilding the selected rows. Clicking a history commit or stash opens the bottom **Commit** changes tab; metadata remains under **Details**.
+Selecting a file or commit retains the last completed, labelled comparison until the new one is ready. Loading/error status explains the retained view; a completed empty result clears it. Stale visible hunks cannot be staged. Unchanged refreshes preserve row identity and native focus instead of rebuilding the selected rows. Since 0.38.0 selecting a history commit or stash preserves the bottom tab; Commit combines metadata and comparisons, while Changes shows comparisons alone.
 
 The central repository button opens a session activity panel with **All / User / Background**, retained selection, operation outcome/duration and available Git output. It performs no preparation. Entries are bounded and are not persisted. Inactive repository tabs use the dark strip, the selected tab stays gray, and adjacent toolbar arrows use the same quiet surface. Nonzero ahead/behind counts appear beside the icons; zero/unknown counts are hidden.
 

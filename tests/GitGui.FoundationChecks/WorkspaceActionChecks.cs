@@ -96,7 +96,7 @@ internal static partial class Program
                 Expect(shell.CurrentAction is { Succeeded: true, IsRunning: false } && !shell.ActionOpen && shell.CanNavigate, "Success retained after reinspection");
                 Expect(shell.SelectedRepository!.Snapshot!.Commit == expected.Commit && shell.Commits.Any(row => row.Commit.Hash == expected.Commit), "Local HEAD and visible history really advanced");
                 Expect(await File.ReadAllTextAsync(Path.Combine(repo, "incoming.txt")) == "real incoming content" && shell.PullCount == "0", "Worktree updated and behind count refreshed");
-                Expect(shell.CurrentAction!.RawOutput.Length > 0 && shell.OperationStatus.Contains(UiText.Get("ActionCompletedShort")) && shell.DetailsIndex == 3,
+                Expect(shell.CurrentAction!.RawOutput.Length > 0 && shell.OperationStatus.Contains(UiText.Get("ActionCompletedShort")) && shell.DetailsIndex == 2,
                     "Completion and original Git output remain available");
                 Arrange(content, 1200, 760); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 SaveRender(content, "pull-completed.png", 1200, 760);
@@ -120,7 +120,7 @@ internal static partial class Program
             Expect(shell.SelectedRepository!.Snapshot!.Commit == expected.Commit && shell.Commits.Count > 0, "Failed fetch retains inspectable history");
             var result = shell.CurrentAction; var original = shell.SelectedRepository;
             shell.SelectedRepository = shell.Repositories[1]; await shell.WaitForIdleAsync();
-            Expect(!shell.HasAction && shell.CurrentAction is null && shell.DetailsIndex != 3, "Another repository never displays this result");
+            Expect(!shell.HasAction && shell.CurrentAction is null && shell.DetailsIndex != 2, "Another repository never displays this result");
             shell.SelectedRepository = original; await shell.WaitForIdleAsync();
             Expect(ReferenceEquals(shell.CurrentAction, result), "Bounded last result remains available on its original tab");
             interaction.Show = model => new GitActionWindow(model).Close();

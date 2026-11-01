@@ -26,7 +26,7 @@ public sealed partial class ShellViewModel
                 BeginInspection(tab, force: true, actionReconcile: true); await WaitForIdleAsync();
                 if (tab.History.ValidatedAt == default) throw new System.IO.IOException();
             }, execute: (token, progress) => _actions!.ChangeRemoteAsync(context, reviewed, options, token, progress));
-            SetLastAction(operation); DetailsIndex = 3; operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
+            SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
             await operation.RunningTask; Status = operation.Status;
         }
         finally { SetActionOpen(false); if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); } }
