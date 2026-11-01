@@ -5,7 +5,7 @@ Updated 2026-11-01. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Current phase
 
 - [x] **P1 — Complete representative history measurement (0.39.1).** Corrected stale harness assumptions; merge-heavy/100k/million profiles and five-minute idle passed. Cached publication and full comparison drain are separate; no scope/page reduction. [Evidence](docs/roadmap.md#representative-history-validation-0391).
-- [ ] **P1 — Deliver 0.39.1 Beta and Stable.** Owner explicitly approved Stable for this delivery. Package the same source for both channels; later routine deliveries remain Beta-only.
+- [x] **P1 — Deliver 0.39.1 Beta and Stable.** Owner-approved Stable and Beta published from the same source; 26 smoke checks in 43.3 s and both signed anonymous downloads passed. Later routine deliveries remain Beta-only. [Evidence](docs/roadmap.md#representative-history-validation-0391).
 
 
 - [x] **P1 — Side-by-side diffs and update approval (0.39.0).** Aligned Old/New text in history and Local Changes with whole-hunk mapping; immediate discovery and one approval before download/restart.
