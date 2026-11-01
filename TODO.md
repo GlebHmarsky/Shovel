@@ -4,6 +4,11 @@ Updated 2026-11-01. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Side-by-side diffs and update approval (0.39.0).** Aligned Old/New text in history and Local Changes with whole-hunk mapping; immediate discovery and one approval before download/restart.
+- [ ] **P1 — Deliver 0.39.0 Beta.** Focused checks, smoke, signed publication and anonymous verification; keep Stable 0.35.0.
+- [ ] **P2 — Resume desktop/update acceptance.** Installed Shovel inspected; Computer Use stopped with physical Escape before input/update checks. No installation/restart or pin change performed.
+
+
 - [x] **P1 — Workspace refinements (0.38.0).** Combined Commit overview/files/diff, retained bottom tab, saved keyboard scale, title and drag feedback; explicit shortcut-matching process identity.
 - [x] **P1 — Deliver 0.38.0 Beta.** 7 QOL and 10 committed-file checks; 26 smoke checks in 42.4 s; signed Beta feed and anonymous full-package verification passed. Stable remains 0.35.0. [Evidence](docs/roadmap.md#workspace-refinements-0380-beta).
 - [ ] **P2 — Installed taskbar/physical input acceptance.** Verify a real update preserves the pinned grouping/launch behavior and exercise scale shortcuts and native tab drag; no installed app or pin was changed during this delivery.
@@ -132,7 +137,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 - [ ] **P2 — LFS locks (low priority).** Discuss a separately authorized server-capability/authentication test, then consider owner display and Lock/Unlock. Server support is unknown; no live test or fetch yet.
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
-- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, text side-by-side/image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
+- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Broader network authentication/input.** Credential Manager/browser sign-in, custom SSH commands and interactive signing/hooks remain. Clone and local remote add/edit/remove, upstream management, Pull rebase/merge/auto-stash and sequence recovery are delivered. Add explicit longer/shallow/bare/recursive clone options only with supported UI and failure coverage; current bounds are documented.
 - [ ] **P2 — Installed distribution acceptance.** 0.30.0 selects Velopack/public GitHub Releases; finish the explicit rollout task above and pass U1–U7/D1 on installed Windows, including key-rotation and uninstall-data-choice requirements.

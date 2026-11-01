@@ -1,5 +1,12 @@
 # Product
 
+## Side-by-side diffs and approved updates (0.39.0)
+
+**Side by side** switches text comparisons in Commit/Changes and Local Changes between unified and aligned Old/New columns. Change runs pair in order with blanks for unmatched lines; context, line numbers and newline markers remain visible. Long lines wrap, both sides share scrolling, columns resize, and Local Changes selection still stages/unstages whole hunks. Binary/LFS cards and the inline conflict editor retain their behavior. The toggle lasts for the current comparison model; it is not yet persisted.
+
+Opening **Help > Shovel updates** checks immediately, as does changing channel. Launch and periodic checks only discover releases. **Update and restart** approves the displayed version, then downloads, verifies and requests the existing guarded restart. Cancel/failure leaves the app usable; Check again retries discovery and a blocked verified update can retry restart without downloading again. This owner-confirmed flow supersedes 0.34.0 automatic download/restart. Stable remains 0.35.0.
+
+
 ## Workspace refinements (0.38.0)
 
 The bottom **Commit** tab combines author/date, refs, SHA and a single full commit message above clickable changed files and the existing text/binary diff. **Changes** keeps the comparison-only view; Operations remains available for actual operations. Repository/Diagnostics bottom tabs are removed. Selecting commits or locating them from the sidebar preserves the chosen bottom tab.
@@ -258,6 +265,6 @@ Reference: original attachment unavailable; 2026-10-25 screenshot confirmed head
 
 **0.35.0:** choose **Stable — tested releases** or **Beta — latest builds for testing** in Help → Shovel updates. Stable is the default; the saved choice controls both launch and manual checks. Changing it clears a staged update and requires a fresh check, with the selector disabled during checking/installing. Switching to Stable from a newer Beta waits for a newer Stable rather than downgrading. Each task produces Beta; Stable publication follows explicit owner approval. 0.35.0 starts both channels at the same version.
 
-**0.34.0, confirmed 2026-10-31:** every installed launch immediately checks for an update, downloads and verifies it, then automatically restarts into it. This launch check runs even when periodic checks are disabled. Git work, recovery, unknown repository state or unsavable settings block restart and retain the update under **Help → Shovel updates** for manual retry. Startup remains usable during network work or failure. Manual and optional four-hour checks still require **Restart and update**; closing never installs. Settings/tabs/drafts/recovery data and signature/package checks are preserved. Public MIT source and signed update feeds use GlebHmarsky/Shovel; [distribution](distribution.md) owns installation/recovery. Actual installed restart acceptance remains separate from headless checks.
+**Update behavior:** [0.39.0 approved updates](#side-by-side-diffs-and-approved-updates-0390) supersedes automatic launch download/restart. Public MIT source and signed feeds use GlebHmarsky/Shovel; [distribution](distribution.md) owns installation/recovery.
 
 States: checking, current, available, downloading, verifying, ready, postponed, blocked by work, installing, failed, recovered. [Update requirements](requirements.md#updates-and-distribution) owns install/authenticity/failure acceptance.

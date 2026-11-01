@@ -6,14 +6,15 @@ using Velopack.Logging;
 
 namespace GitGui.App.Services;
 
-public enum UpdatePhase { Unconfigured, Portable, Idle, Checking, Current, Downloading, Ready, Cancelled, Failed, Blocked, Installing }
+public enum UpdatePhase { Unconfigured, Portable, Idle, Checking, Offered, Current, Downloading, Ready, Cancelled, Failed, Blocked, Installing }
 public sealed record UpdateSnapshot(UpdatePhase Phase, string Version = "", int Percent = 0, string Notes = "");
 public interface IAppUpdater
 {
     UpdateConfiguration Configuration { get; }
     bool Available { get; }
     void SelectChannel(string channel) { }
-    Task CheckAndDownloadAsync(IProgress<UpdateSnapshot> progress, CancellationToken token);
+    Task CheckAsync(IProgress<UpdateSnapshot> progress, CancellationToken token);
+    Task DownloadApprovedAsync(IProgress<UpdateSnapshot> progress, CancellationToken token);
     Task VerifyReadyAsync(CancellationToken token);
     void Apply();
 }
@@ -24,6 +25,7 @@ public sealed class AppUpdater : IAppUpdater, IDisposable
     private UpdateManager? _manager;
     private SignedReleaseSource? _source;
     private VelopackAsset? _ready;
+    private UpdateInfo? _offered;
     public UpdateConfiguration Configuration { get; private set; }
     public bool Available => _manager is { IsInstalled: true, IsPortable: false };
     public AppUpdater(UpdateConfiguration configuration)
@@ -37,15 +39,15 @@ public sealed class AppUpdater : IAppUpdater, IDisposable
     public void SelectChannel(string channel)
     {
         if (channel is not ("win-stable" or "win-beta")) throw new ArgumentException(nameof(channel));
-        Configuration = Configuration with { Channel = channel }; _ready = null;
+        Configuration = Configuration with { Channel = channel }; _ready = null; _offered = null;
         if (!Configuration.IsConfigured) return;
         _source = new(Configuration, _http, VelopackLocator.Current.RootAppDir);
         _manager = new(_source, new UpdateOptions { ExplicitChannel = channel, AllowVersionDowngrade = false }, VelopackLocator.Current);
     }
-    public async Task CheckAndDownloadAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
+    public async Task CheckAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
     {
         if (!Available) { progress.Report(new(Configuration.IsConfigured ? UpdatePhase.Portable : UpdatePhase.Unconfigured)); return; }
-        _ready = null;
+        _ready = null; _offered = null;
         progress.Report(new(UpdatePhase.Checking));
         // Full packages only: signed SHA256 covers the exact package handed to the updater.
         var update = await _manager!.CheckForUpdatesAsync();
@@ -55,8 +57,16 @@ public sealed class AppUpdater : IAppUpdater, IDisposable
         // Channel changes must not reinstall equal versions or downgrade a newer Beta.
         if (!Version.TryParse(asset.Version.ToString(), out var offered) || offered <= Version.Parse(typeof(AppUpdater).Assembly.GetName().Version!.ToString(3)))
         { progress.Report(new(UpdatePhase.Current)); return; }
+        _offered = update;
+        progress.Report(new(UpdatePhase.Offered, asset.Version.ToString(), 0, asset.NotesMarkdown ?? ""));
+    }
+    public async Task DownloadApprovedAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
+    {
+        var update = _offered ?? throw new InvalidOperationException();
+        var asset = update.TargetFullRelease;
+        token.ThrowIfCancellationRequested();
         progress.Report(new(UpdatePhase.Downloading, asset.Version.ToString()));
-        await _manager.DownloadUpdatesAsync(update, percent => progress.Report(new(UpdatePhase.Downloading,
+        await _manager!.DownloadUpdatesAsync(update, percent => progress.Report(new(UpdatePhase.Downloading,
             asset.Version.ToString(), percent)), token);
         await SignedReleaseSource.VerifyPackageAsync(asset, Path.Combine(VelopackLocator.Current.PackagesDir!, asset.FileName), token);
         _ready = asset;

@@ -1,0 +1,20 @@
+<UserControl x:Class="GitGui.App.Views.SideBySideView" x:Name="Root" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="clr-namespace:GitGui.App.Localization" xmlns:git="clr-namespace:GitGui.Core.Git;assembly=GitGui.Core">
+ <UserControl.Resources>
+  <Style x:Key="SideCell" TargetType="TextBlock" BasedOn="{StaticResource DiffText}">
+   <Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Text" Value="{Binding Text}"/><Setter Property="ToolTip" Value="{Binding Text}"/>
+   <Style.Triggers>
+    <DataTrigger Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Added}"><Setter Property="Background" Value="{DynamicResource Theme.DiffAddedBackground}"/><Setter Property="Foreground" Value="{DynamicResource Theme.DiffAddedText}"/></DataTrigger>
+    <DataTrigger Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Removed}"><Setter Property="Background" Value="{DynamicResource Theme.DiffRemovedBackground}"/><Setter Property="Foreground" Value="{DynamicResource Theme.DiffRemovedText}"/></DataTrigger>
+    <DataTrigger Binding="{Binding Kind}" Value="{x:Static git:DiffLineKind.Hunk}"><Setter Property="Foreground" Value="{DynamicResource Theme.Focus}"/></DataTrigger>
+   </Style.Triggers>
+  </Style>
+ </UserControl.Resources>
+ <DataGrid x:Name="Table" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" CanUserReorderColumns="False" HeadersVisibility="Column" RowHeaderWidth="0" MinRowHeight="22" SelectionMode="Extended" SelectionUnit="FullRow" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" FontFamily="Consolas" FontSize="12" SelectionChanged="OnSelection" AutomationProperties.Name="{loc:Text Key=DiffSideBySide}">
+ <DataGrid.Columns>
+  <DataGridTextColumn Binding="{Binding Old.OldLine}" Width="45"/>
+  <DataGridTemplateColumn ClipboardContentBinding="{Binding Old.Text}" Header="{loc:Text Key=DiffOldSide}" Width="*" MinWidth="180"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock DataContext="{Binding Old}" Style="{StaticResource SideCell}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+  <DataGridTextColumn Binding="{Binding New.NewLine}" Width="45"/>
+  <DataGridTemplateColumn ClipboardContentBinding="{Binding New.Text}" Header="{loc:Text Key=DiffNewSide}" Width="*" MinWidth="180"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock DataContext="{Binding New}" Style="{StaticResource SideCell}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+ </DataGrid.Columns>
+ </DataGrid>
+</UserControl>

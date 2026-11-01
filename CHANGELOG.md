@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.39.0 — 2026-11-01 (Beta)
+
+- Add side-by-side text comparisons to history and Local Changes, preserving whole-hunk staging and binary cards.
+- Check immediately on opening updates or changing channel. One approval downloads the offered version and requests a verified, guarded restart; launch checks no longer download or restart automatically.
+- Stable remains 0.35.0.
+
+
 ## 0.38.0 — 2026-11-01 (Beta)
 
 - Combine author, commit message, refs, SHA and clickable files/diffs in the bottom Commit view. Keep Changes as the comparison-only view; remove Repository and Diagnostics tabs and preserve the selected tab across commit selections.

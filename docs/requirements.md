@@ -1,5 +1,12 @@
 # Requirements and acceptance
 
+## Comparison/update acceptance (0.39.0)
+
+Side-by-side preserves source row/hunk identity, unequal additions/deletions, context, newline markers and stale-generation rejection. Both comparison surfaces expose the toggle; whole-hunk staging remains guarded and binary content remains a card. Shared scrolling and wrapping keep Old/New rows aligned.
+
+Opening updates and changing channels start discovery immediately without downloading packages. One approval downloads the offered version and requests guarded restart after verification; no launch/periodic check grants approval. Cancellation, failure, channel changes and blocked restart preserve normal operation and signature/idle protections. Installed acceptance is separate from headless checks.
+
+
 ## Workspace refinement acceptance (0.38.0)
 
 Commit metadata must not duplicate its message; actual changed files must be selectable and load the existing comparison. Commit changes retain the chosen bottom tab. Saved scale must round-trip and clamp invalid/out-of-range values, with 10% keyboard increments and no new settings UI. Tab drag feedback must use the same target calculation as drop and clean up on cancellation. Installed taskbar grouping must use the shortcut AppUserModelID; physical pin/update acceptance remains distinct from source/build verification.
@@ -87,7 +94,7 @@ The established work environment is trusted. **Do not add extra safety measures,
 | --- | --- |
 | U1 | In-place updates for ~30 Windows 10/11 coworkers; mature stack-compatible updater/static HTTPS, preferably per-user/no admin. No custom backend/service without need. [Flow](product.md#update-experience-confirmed). |
 | U2 | Version/package/verification/notes in manifest; stable/test channels, small pilot, manual check, installed version/status/postpone. |
-| U3 | On every installed launch, immediately check/download/verify and automatically restart into an available update (confirmed 2026-10-31). Preserve checks for Git/hooks/auth/signing/tracked tools/conflicts; stop new admission before final validation, unknown/busy blocks. Manual/periodic checks retain explicit restart; no exit application or bypass of verification. |
+| U3 | On every installed launch and update-window opening, immediately check; download/verify/restart only after approval (confirmed 2026-11-01). Preserve checks for Git/hooks/auth/signing/tracked tools/conflicts; stop new admission before final validation, unknown/busy blocks. All checks retain explicit approval; no exit application or bypass of verification. |
 | U4 | Verify feed/package authenticity before execution; updater signatures differ from Windows signing. Protect keys; match package/metadata/channel/architecture/version; reject invalid signatures. HTTPS/hash alone is not publisher authentication. |
 | U5 | Recoverable offline/timeout/proxy/auth/interruption/space/install/crash status. Failed check/download leaves installed app usable; reject HTML/login responses, never disable verification. |
 | U6 | Preserve settings/tabs/drafts/recovery through schema migration/backups; document bad-release repair. Claim rollback only after updater and data-compatibility testing. |
@@ -162,8 +169,8 @@ Real signed N → N+1, agreed Windows 10/11 builds, standard user, both channels
 
 | Case | Required result |
 | --- | --- |
-| Success | Launch-time automatic restart or explicit restart installs verified N+1 in place, correct version/status, no routine uninstall/elevation where supported. |
-| Postpone | N remains usable after cancelled/blocked work; no idle/exit install. Each new launch checks again and may automatically update. |
+| Success | Approved download and guarded restart installs verified N+1 in place, correct version/status, no routine uninstall/elevation where supported. |
+| Postpone | N remains usable after cancelled/blocked work; no idle/exit install. Each new launch checks again and waits for approval. |
 | Hosting | Offline/DNS/timeout/5xx/proxy/401/403 leaves startup/Git usable; manual retry, no tight loop. |
 | Invalid content | Reject altered feed/package, wrong signer/architecture/channel, truncation/login HTML before execution. |
 | Interrupted download | Cancel/loss/crash leaves N usable; resumed/restarted bytes fully reverified. |

@@ -15,7 +15,7 @@ Confirmed 2026-10-31: **[GlebHmarsky/Shovel](https://github.com/GlebHmarsky/Shov
 
 ## Default delivery on master (2026-10-31)
 
-From **0.34.0**, installed launches immediately check, download, verify and automatically restart into a newer release when the existing idle/save gate permits it. Failed or blocked attempts leave Shovel usable and retain manual retry. Periodic-check preferences do not disable launch checks. Older clients need one manual **Help → Shovel updates → Check and download → Restart and update** (or the latest installer) to acquire this behavior. Portable previews do not update themselves.
+From **0.39.0**, installed launches and opening Help > Shovel updates immediately check for a newer release. **Update and restart** approves downloading/verifying the displayed release and requesting the existing idle/save gate. No check alone downloads or restarts. Cancel/failure/blocked restart retains a usable app and retry. Older clients retain their previous updater behavior until upgraded; portable previews do not self-update.
 
 Every routine delivered build is a new immutable Beta prerelease; Stable needs explicit owner approval. Increment `Directory.Build.props` above
 all previously published versions, write its changelog entry, then run:

@@ -118,20 +118,16 @@ internal static partial class Program
             File.WriteAllBytes(path, new byte[package.Length]);
             await ExpectAsyncThrows(() => SignedReleaseSource.VerifyPackageAsync(asset, path, default));
         });
-        await Check("Launch checks immediately download and request restart even with periodic checks disabled", async () =>
+        await Check("Launch checks require approval before download and restart", async () =>
         {
             var fake = new FixtureUpdater(config); var restarts = 0;
-            using var stop = new CancellationTokenSource();
-            var restarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var vm = new UpdateViewModel(fake, () => { restarts++; restarted.SetResult(); return Task.FromResult(true); }) { PeriodicChecks = false };
-            var loop = vm.RunAutomaticChecksAsync(stop.Token);
-            await restarted.Task.WaitAsync(TimeSpan.FromSeconds(3)); stop.Cancel(); await loop;
-            Expect(fake.Checks == 1 && restarts == 1, "Immediate startup check and verified-ready restart");
+            var vm = new UpdateViewModel(fake, () => { restarts++; return Task.FromResult(true); }) { PeriodicChecks = false };
             await vm.CheckOnLaunchAsync(default);
-            Expect(fake.Checks == 1 && restarts == 1, "Resume does not repeat the launch attempt");
-            var nextLaunch = new UpdateViewModel(fake, () => { restarts++; return Task.FromResult(true); });
-            await nextLaunch.CheckOnLaunchAsync(default);
-            Expect(fake.Checks == 2 && restarts == 2, "Every new launch checks again");
+            Expect(fake.Checks == 1 && fake.Downloads == 0 && restarts == 0 && vm.Offered, "Check only at launch");
+            await vm.CheckOnLaunchAsync(default);
+            Expect(fake.Checks == 1, "Once per launch");
+            vm.RestartCommand.Execute(null); await vm.ActiveTask;
+            Expect(fake.Downloads == 1 && restarts == 1, "Single approval downloads then restarts");
         });
         await Check("Launch failures, cancellation, current and portable builds never install; blocked restart is retained", async () =>
         {
@@ -151,6 +147,7 @@ internal static partial class Program
             Expect(restarts == 0 && portable.Checks == 0 && skipped.Checks == 0, "No inappropriate restart or cancelled network work");
             var blocked = new UpdateViewModel(new FixtureUpdater(config), () => { restarts++; return Task.FromResult(false); });
             await blocked.CheckOnLaunchAsync(default);
+            blocked.RestartCommand.Execute(null); await blocked.ActiveTask;
             Expect(restarts == 1 && blocked.Ready && blocked.Status.Contains("blocked", StringComparison.OrdinalIgnoreCase) && blocked.RestartCommand.CanExecute(null), "Blocked auto-restart keeps manual retry");
         });
         await Check("Manual download retains explicit restart and blocked state", async () =>
@@ -158,7 +155,7 @@ internal static partial class Program
             var fake = new FixtureUpdater(config); var restartCount = 0;
             var vm = new UpdateViewModel(fake, () => { restartCount++; return Task.FromResult(false); });
             await vm.CheckAsync();
-            Expect(vm.Ready && restartCount == 0, "Download never installs");
+            Expect(vm.Offered && fake.Downloads == 0 && restartCount == 0, "Check never downloads or installs");
             vm.RestartCommand.Execute(null); await vm.ActiveTask;
             Expect(vm.Ready && restartCount == 1 && vm.Status.Contains("blocked", StringComparison.OrdinalIgnoreCase), "Busy restart retained");
             vm.Stop(); Expect(!vm.CheckCommand.CanExecute(null) && !vm.RestartCommand.CanExecute(null), "Shutdown stops admission");
@@ -177,9 +174,10 @@ internal static partial class Program
         {
             var fake = new FixtureUpdater(config);
             var vm = new UpdateViewModel(fake, () => Task.FromResult(false));
-            await vm.CheckAsync(); Expect(vm.Ready, "Fixture ready");
-            vm.SelectedChannel = 1;
-            Expect(vm.Channel == "win-beta" && !vm.Ready && !vm.RestartCommand.CanExecute(null), "Switch invalidates pending install");
+            await vm.CheckOnOpenAsync();
+            await vm.CheckAsync(download: true); Expect(vm.Ready, "Fixture ready");
+            vm.SelectedChannel = 1; await vm.ActiveTask;
+            Expect(vm.Channel == "win-beta" && !vm.Ready && vm.Offered && fake.Downloads == 1, "Switch checks but invalidates pending install");
             var store = new GitGui.Core.Settings.SettingsStore(Path.Combine(_root, "channel-settings")); await store.LoadAsync(default);
             await store.SaveAsync(new() { UpdateChannel = vm.Channel }, default);
             Expect((await store.LoadAsync(default)).Settings.UpdateChannel == "win-beta", "Selection persists");
@@ -188,7 +186,7 @@ internal static partial class Program
             Expect(SignedReleaseSource.VerifyFeed(betaConfig, betaFeed, Sign(betaFeed)).Assets.Count() == 1, "Beta signed package accepted");
             ExpectThrows(() => SignedReleaseSource.VerifyFeed(config, betaFeed, Sign(betaFeed)));
             ExpectThrows(() => SignedReleaseSource.VerifyFeed(betaConfig, feed, signature));
-            vm.SelectedChannel = 0; Expect(vm.Channel == "win-stable" && !vm.Ready, "Stable switch also clears pending state");
+            vm.SelectedChannel = 0; await vm.ActiveTask; Expect(vm.Channel == "win-stable" && !vm.Ready, "Stable switch also clears pending state");
         });
         await Check("Update preferences survive settings round-trip", async () =>
         {
@@ -290,7 +288,7 @@ internal static partial class Program
                 var content = (System.Windows.FrameworkElement)window.Content; content.DataContext = vm;
                 Arrange(content, 584, 514); SaveRender(content, $"updates-{appearance}.png", 584, 514);
                 Arrange(content, 484, 444); SaveRender(content, $"updates-{appearance}-minimum.png", 484, 444);
-                Expect(VisualDescendants<System.Windows.Controls.Button>(content).Count() == 4, "All update controls present");
+                Expect(VisualDescendants<System.Windows.Controls.Button>(content).Count() == 3, "One primary update action plus Cancel and Close");
             }
             theme.Dispose();
         });
@@ -317,8 +315,11 @@ internal static partial class Program
         public bool Fail { get; set; }
         public UpdatePhase ResultPhase { get; set; } = UpdatePhase.Ready;
         public int Checks { get; private set; }
-        public Task CheckAndDownloadAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
-        { token.ThrowIfCancellationRequested(); Checks++; if (Fail) throw new IOException(); progress.Report(new(ResultPhase, "0.31.0")); return Task.CompletedTask; }
+        public int Downloads { get; private set; }
+        public Task CheckAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
+        { token.ThrowIfCancellationRequested(); Checks++; if (Fail) throw new IOException(); progress.Report(new(ResultPhase == UpdatePhase.Ready ? UpdatePhase.Offered : ResultPhase, "0.31.0")); return Task.CompletedTask; }
+        public Task DownloadApprovedAsync(IProgress<UpdateSnapshot> progress, CancellationToken token)
+        { token.ThrowIfCancellationRequested(); Downloads++; if (Fail) throw new IOException(); progress.Report(new(ResultPhase, "0.31.0")); return Task.CompletedTask; }
         public Task VerifyReadyAsync(CancellationToken token) => Task.CompletedTask;
         public void Apply() => throw new Exception("Must never apply during a check");
     }

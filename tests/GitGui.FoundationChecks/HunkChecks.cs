@@ -194,6 +194,14 @@ internal static partial class Program
             Arrange(content, 900, 580); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
             Expect(button.TranslatePoint(new Point(button.ActualWidth, button.ActualHeight), content).X <= 900, "Hunk action remains inside the minimum layout");
             SaveRender(content, "hunks-minimum.png", 900, 580);
+            model.SideBySide = true; await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+            var side = VisualDescendants<SideBySideView>(content).Single(); await side.Pending;
+            var sideTable = (DataGrid)side.FindName("Table");
+            sideTable.SelectedItems.Clear();
+            sideTable.SelectedItems.Add(sideTable.Items.Cast<SideBySideRow>().Single(row => ReferenceEquals(row.Old, blocks[0])));
+            sideTable.SelectedItems.Add(sideTable.Items.Cast<SideBySideRow>().Single(row => ReferenceEquals(row.Old, blocks[2])));
+            Expect(model.CanApplyHunks && model.HunkActionLabel == UiText.Format("HunkStageMany", 2), "Side-by-side selection maps both complete hunks");
+            Arrange(content, 1200, 760); SaveRender(content, "hunks-side-by-side.png", 1200, 760);
             model.ApplyHunksCommand.Execute(null); await model.OperationTask; await model.DiffTask;
             Expect(await Git("show", ":" + name) == Changed(5, 75) && model.Subject == "Draft remains" && model.Description == "Body remains" && model.DiffTitle == name && !model.CanApplyHunks, "Actual bound action preserves draft/path, clears stale selection");
             model.Select(true, [model.Staged.Single(row => row.Change.Path == name)]); await model.DiffTask;

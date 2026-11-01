@@ -132,6 +132,8 @@ public sealed partial class CommitViewModel : ObservableObject
     public string UnstageHelp => UiText.Get(!Ready ? "CommitWaitForRead" : "CommitUnstageHelp");
     public ChangeRow? SelectedUnstaged { get => _selectedUnstaged; set { if (Set(ref _selectedUnstaged, value) && !_publishing) Select(false, value is null ? [] : [value]); } }
     public ChangeRow? SelectedStaged { get => _selectedStaged; set { if (Set(ref _selectedStaged, value) && !_publishing) Select(true, value is null ? [] : [value]); } }
+    private bool _sideBySide;
+    public bool SideBySide { get => _sideBySide; set => Set(ref _sideBySide, value); }
     public IReadOnlyList<DiffRow> DiffRows { get => _diffRows; private set => Set(ref _diffRows, value); }
     public DiffRow? SelectedDiff
     {

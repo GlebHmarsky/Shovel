@@ -36,6 +36,26 @@ internal static partial class Program
         shell.CompleteStartup(new(new() { RepositoryPaths = [repo] }, SettingsLoadStatus.Loaded)); await shell.WaitForIdleAsync();
         var changed = shell.Commits.Single(r => r.Commit.Subject == "changed").Commit;
         var empty = shell.Commits.Single(r => r.Commit.Subject == "empty").Commit;
+        await Check("Side-by-side alignment preserves source rows and unequal changes", async () =>
+        {
+            DiffRow Row(DiffLineKind kind, string text, int? old = null, int? next = null) => new(new(kind, text, old, next), 0);
+            var rows = new[] { Row(DiffLineKind.Hunk, "@@ -1,2 +1,3 @@"), Row(DiffLineKind.Removed, "old", 1), Row(DiffLineKind.Added, "new", null, 1), Row(DiffLineKind.Added, "extra", null, 2), Row(DiffLineKind.Context, "same", 2, 3), Row(DiffLineKind.Metadata, "\\ No newline at end of file") };
+            var paired = SideBySideRow.Create(rows);
+            Expect(paired.Count == 5 && ReferenceEquals(paired[1].Old, rows[1]) && ReferenceEquals(paired[1].New, rows[2]), "Changed lines pair without losing hunk identity");
+            Expect(paired[2].Old is null && paired[2].New == rows[3] && paired[3].Old == paired[3].New && paired[4].Old == rows[5], "Unequal, context and newline markers retained");
+            var view = new SideBySideView { Rows = rows };
+            await view.Pending;
+            Expect(((DataGrid)view.FindName("Table")).Items.Count == paired.Count, "Async projection published");
+            foreach (var theme in new[] { AppAppearance.Dark, AppAppearance.Light })
+            {
+                AppTheme.Apply(Application.Current.Resources, false, theme);
+                Arrange(view, 900, 360); await Dispatcher.Yield(DispatcherPriority.ContextIdle); view.UpdateLayout(); SaveRender(view, $"side-by-side-{theme}.png", 900, 360);
+            }
+            view.Rows = rows.Take(1).ToArray(); view.Rows = [];
+            await view.Pending;
+            Expect(((DataGrid)view.FindName("Table")).Items.Count == 0, "Latest empty comparison replaces stale projection");
+            AppTheme.Apply(Application.Current.Resources, false);
+        });
         await Check("Committed selection retains old comparison until replacement and clears on a real empty commit", async () =>
         {
             var gate = new QolGate(runner); var model = new CommitFilesViewModel(new(gate), git, repo, changed);

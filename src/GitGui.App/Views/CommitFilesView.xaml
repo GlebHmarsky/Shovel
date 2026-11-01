@@ -18,12 +18,13 @@
    </DataGrid>
    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitFilesResize}"/>
    <DockPanel Grid.Column="2">
+    <CheckBox DockPanel.Dock="Top" Content="{loc:Text Key=DiffSideBySide}" IsChecked="{Binding SideBySide}" Margin="5,2"/>
     <TextBlock DockPanel.Dock="Top" Text="{Binding DisplayedPath}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayedPath}" Margin="5,2" FontWeight="SemiBold"/>
     <TextBlock DockPanel.Dock="Top" Text="{loc:Text Key=DiffRetainedLoading}" Visibility="{Binding Busy, Converter={StaticResource Visible}}" Foreground="{DynamicResource Theme.Muted}" TextTrimming="CharacterEllipsis" Margin="5,2"/>
     <TextBlock DockPanel.Dock="Top" Style="{StaticResource TextDiffOnly}" Text="{Binding Notice, TargetNullValue={loc:Text Key=SelectCommit}}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Notice}" Margin="5,2" Foreground="{DynamicResource Theme.Muted}" AutomationProperties.LiveSetting="Polite"/>
     <Grid>
     <DataGrid ItemsSource="{Binding Lines}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" HeadersVisibility="None" RowHeaderWidth="0" RowHeight="22" SelectionUnit="FullRow" SelectionMode="Extended" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" RowStyle="{StaticResource DiffRow}" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.AutomationId="CommitFileDiff">
-     <DataGrid.Style><Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}"><Style.Triggers><DataTrigger Binding="{Binding HasBinary}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DataGrid.Style>
+     <DataGrid.Style><Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}"><Style.Triggers><DataTrigger Binding="{Binding SideBySide}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding HasBinary}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DataGrid.Style>
      <DataGrid.Columns>
       <DataGridTextColumn Binding="{Binding OldLine}" Width="45" ElementStyle="{StaticResource DiffText}"/>
       <DataGridTextColumn Binding="{Binding NewLine}" Width="45" ElementStyle="{StaticResource DiffText}"/>
@@ -31,6 +32,7 @@
       <DataGridTextColumn Binding="{Binding Text}" Width="SizeToCells" MinWidth="300" ElementStyle="{StaticResource DiffText}"/>
      </DataGrid.Columns>
     </DataGrid>
+    <views:SideBySideView Rows="{Binding Lines}"><views:SideBySideView.Style><Style TargetType="views:SideBySideView"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SideBySide}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding HasBinary}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></views:SideBySideView.Style></views:SideBySideView>
     <Grid Visibility="{Binding HasBinary, Converter={StaticResource Visible}}"><views:BinaryComparisonView DataContext="{Binding Binary}"/></Grid>
     </Grid>
    </DockPanel>
