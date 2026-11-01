@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.37.0 — 2026-11-01 (Beta)
+
+- Edit BOM-marked UTF-16 little- and big-endian conflicts inside the existing Commit diff pane, alongside UTF-8. Show the result encoding and preserve it when saving and staging.
+- Reject malformed Unicode and enforce the 512 KiB limit in the saved encoding, including its BOM. Preserve a leading content U+FEFF instead of stripping it with the transport BOM.
+- Keep whole-file side controls, native filters/hooks, stale-file checks and retained edits after failed staging. Unsupported encodings and custom transformations retain side/tool resolution. Stable remains 0.35.0.
+
 ## 0.36.1 — 2026-11-01
 
 - Reduce standard LFS discard validation and refresh costs by checking selected index pointers and actual hydrated bytes directly; retain native status for unsupported or uncertain selections.

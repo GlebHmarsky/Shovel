@@ -37,6 +37,14 @@ public sealed class ConflictViewModel : ObservableObject
     public IReadOnlyList<DiffRow> IncomingLines { get; private set; } = [];
     public bool IsText => _preview?.CanEdit == true;
     public bool HasPreview => _preview is not null;
+    public string ResultLabel
+    {
+        get
+        {
+            var encoding = Current && Incoming ? _preview?.TextEncoding : Current ? _preview?.Current?.TextEncoding : Incoming ? _preview?.Incoming?.TextEncoding : null;
+            return encoding is { } value ? UiText.Format("ConflictResultEncoding", UiText.Get("ConflictEncoding" + value)) : UiText.Get("ConflictResult");
+        }
+    }
     private void ChooseSides()
     {
         _text = Current && Incoming ? _combinedText : Current ? _preview?.Current?.Text ?? "" : Incoming ? _preview?.Incoming?.Text ?? "" : "";
@@ -143,6 +151,7 @@ public sealed class ConflictViewModel : ObservableObject
         foreach (var command in new[] { ResolveCommand, ExternalCommand, ReloadCommand, CancelCommand, UseCurrentTextCommand, UseIncomingTextCommand }) command?.Refresh();
         Changed(nameof(CanChoose)); Changed(nameof(CanEdit)); Changed(nameof(ResolveHelp));
         Changed(nameof(HasPreview));
+        Changed(nameof(ResultLabel));
     }
     public async Task CloseAsync() { _closed = true; _cancel?.Cancel(); await Work; _timer.Stop(); }
 }

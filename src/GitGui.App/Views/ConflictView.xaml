@@ -47,8 +47,8 @@
   </Grid>
   <GridSplitter Grid.Row="3" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" DragCompleted="OnSplitCompleted" AutomationProperties.Name="{loc:Text Key=ConflictResizeResult}"/>
   <DockPanel Grid.Row="4" Visibility="{Binding IsText, Converter={StaticResource Visible}}">
-   <TextBlock DockPanel.Dock="Top" Text="{loc:Text Key=ConflictResult}" Margin="4" FontWeight="SemiBold"/>
-   <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" AcceptsReturn="True" AcceptsTab="True" FontFamily="Consolas" FontSize="12" MaxLength="524288" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=ConflictResult}"/>
+   <TextBlock DockPanel.Dock="Top" Text="{Binding ResultLabel}" Margin="4" FontWeight="SemiBold"/>
+   <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" AcceptsReturn="True" AcceptsTab="True" FontFamily="Consolas" FontSize="12" MaxLength="524288" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{Binding ResultLabel}"/>
   </DockPanel>
   <DockPanel Grid.Row="5" Margin="0,4,0,0"><TextBlock DockPanel.Dock="Right" Text="{Binding Duration}" Margin="8,0"/><TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Status}" AutomationProperties.LiveSetting="Polite"/></DockPanel>
  </Grid>

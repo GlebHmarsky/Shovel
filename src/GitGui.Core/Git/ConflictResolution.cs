@@ -5,9 +5,10 @@ using GitGui.Core.Processes;
 
 namespace GitGui.Core.Git;
 
-public sealed record ConflictSide(int Stage, string Hash, string Mode, string? Text);
+public sealed record ConflictSide(int Stage, string Hash, string Mode, string? Text)
+{ public ConflictTextEncoding? TextEncoding { get; init; } }
 public sealed record ConflictPreview(WorkingCopyContext Context, LocalChange Change, ConflictSide? Base, ConflictSide? Current,
-    ConflictSide? Incoming, string CurrentSource, string IncomingSource, string WorktreeStamp, string? WorkingText, bool Utf8Bom, bool CanEdit, string Attributes)
+    ConflictSide? Incoming, string CurrentSource, string IncomingSource, string WorktreeStamp, string? WorkingText, ConflictTextEncoding? TextEncoding, bool CanEdit, string Attributes)
 { public IReadOnlyList<string> Tools { get; init; } = []; }
 public enum ConflictChoice { Current, Incoming, Edited, External }
 public sealed record ConflictResolution(ConflictPreview Preview, ConflictChoice Choice, string Text = "", string ExternalTool = "");
@@ -34,15 +35,15 @@ public sealed partial class GitActions
                 !int.TryParse(fields[2], out var stage) || stage is < 1 or > 3 || sides.ContainsKey(stage)) throw new GitActionException("CommitStale");
             if (fields[0] is not ("100644" or "100755")) throw new GitActionException("ConflictUnsupported");
             var size = long.Parse(Decode(await Read(git, path, ["cat-file", "-s", fields[1]], token)), System.Globalization.CultureInfo.InvariantCulture);
-            string? text = null;
+            ConflictTextContent? content = null;
             if (size <= MaximumConflictTextBytes)
-                text = ConflictText((await Read(git, path, ["cat-file", "blob", fields[1]], token)).StandardOutput);
-            sides[stage] = new(stage, fields[1], fields[0], text);
+                content = ConflictTextCodec.Decode((await Read(git, path, ["cat-file", "blob", fields[1]], token)).StandardOutput);
+            sides[stage] = new(stage, fields[1], fields[0], content?.Text) { TextEncoding = content?.Encoding };
         }
         if (sides.Count == 0) throw new GitActionException("CommitStale");
         var file = RepositoryReader.WorkingCopyPath(path, change.Path);
         var bytes = File.Exists(file) && new FileInfo(file).Length <= MaximumConflictTextBytes ? await File.ReadAllBytesAsync(file, token) : null;
-        var working = bytes is null ? null : ConflictText(bytes);
+        var working = bytes is null ? null : ConflictTextCodec.Decode(bytes);
         // Filtered/encoded text is resolved through Git's side checkout or configured tool. Never write a pointer as an asset.
         var attributeStamp = Decode(await Read(git, path, ["--literal-pathspecs", "check-attr", "-z", "filter", "working-tree-encoding", "--", change.Path], token));
         var attributes = attributeStamp.Split('\0');
@@ -80,25 +81,12 @@ public sealed partial class GitActions
             if (name.StartsWith("mergetool.", StringComparison.Ordinal) && end > 10 && ValidMergeTool(name[10..end])) tools.Add(name[10..end]);
         }
         return new ConflictPreview(context, change, sides.GetValueOrDefault(1), sides.GetValueOrDefault(2), sides.GetValueOrDefault(3), current, incoming,
-            stamp, working, bytes is not null && bytes.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf }), editable, attributeStamp)
+            stamp, working?.Text, working?.Encoding, editable, attributeStamp)
             { Tools = tools.Order(StringComparer.Ordinal).Take(64).ToArray() };
     }, token);
 
     private static bool ValidMergeTool(string name) => name.Length is > 0 and <= 128 && !name.StartsWith('-') &&
         name.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
-
-    private static string? ConflictText(byte[] bytes)
-    {
-        if (bytes.Contains((byte)0)) return null;
-        try
-        {
-            var text = new UTF8Encoding(false, true).GetString(bytes).TrimStart('\ufeff');
-            if (text.StartsWith("version https://git-lfs.github.com/spec/v1", StringComparison.Ordinal) ||
-                text.Count(c => c == '\n') > 20000 || text.Split('\n').Any(line => line.Length > 16384)) return null;
-            return text;
-        }
-        catch (DecoderFallbackException) { return null; }
-    }
 
     private async Task<WorkingCopyResult> ResolveConflictLockedAsync(WorkingCopyContext context, RepositorySnapshot fresh,
         ConflictResolution resolution, Stopwatch timing, CancellationToken token, Action<ProcessOutput>? progress)
@@ -128,15 +116,16 @@ public sealed partial class GitActions
         {
             if (resolution.Choice == ConflictChoice.Edited)
             {
-                if (!preview.CanEdit || Encoding.UTF8.GetByteCount(resolution.Text) > MaximumConflictTextBytes || ConflictText(Encoding.UTF8.GetBytes(resolution.Text)) is null)
+                if (!preview.CanEdit || preview.TextEncoding is not { } encoding)
                     throw new GitActionException("ConflictTextLimit");
+                var encoded = ConflictTextCodec.Encode(resolution.Text, encoding);
                 if (resolution.Text.Split('\n').Any(line => line.StartsWith("<<<<<<<", StringComparison.Ordinal) || line.StartsWith("=======", StringComparison.Ordinal) || line.StartsWith(">>>>>>>", StringComparison.Ordinal)))
                     throw new GitActionException("ConflictMarkersRemain");
                 // Stage follows the durable worktree save. If Git fails, retain the user's edited result.
                 var temp = file + ".shovel-" + Guid.NewGuid().ToString("N") + ".tmp";
                 try
                 {
-                    await File.WriteAllTextAsync(temp, resolution.Text, new UTF8Encoding(preview.Utf8Bom), token);
+                    await File.WriteAllBytesAsync(temp, encoded, token);
                     token.ThrowIfCancellationRequested();
                     if (preview.WorktreeStamp != await RepositoryReader.WorktreeContentStampAsync(path, relative, token)) throw new GitActionException("ConflictEditedOutside");
                     File.Move(temp, file, overwrite: true);

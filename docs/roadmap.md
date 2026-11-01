@@ -4,6 +4,14 @@ Updated 2026-11-01. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### UTF-16 conflict editing (0.37.0 Beta)
+
+**2026-11-01:** advanced the conflict-editor TODO with BOM-marked UTF-16 LE/BE inside the existing Commit pane. Sources and working result carry explicit encoding metadata; the result label follows whole-side selection or the working-file encoding for edits. Strict decoding/encoding preserves BOM, byte order, leading content U+FEFF, Unicode and existing line endings. The 512-KiB saved-byte limit includes BOM; invalid Unicode and markers fail before writing. Native side selection, filters/hooks, stale-state checks, cancellation and failed-save retention remain in the existing flow. [Product](product.md#daily-use-interactions-0310) owns current UX and limits; [architecture](architecture.md#retained-comparisons-inline-conflicts-and-activity-0310) owns encoding details.
+
+Scope remains bounded: BOM-less UTF-16, UTF-32, legacy code pages and configured working-tree conversions require native side/external tools. Normal UTF-16 file comparisons still use binary cards. No physical desktop, installed input or third-party GUI acceptance is claimed.
+
+Release compilation passed with zero warnings/errors. **17 focused conflict checks passed**, including seven encoding checks and the ten existing inline/rebase/deletion/binary/stash/stale/tool/lock regressions. Exact worktree and staged blob bytes passed for UTF-16 LE/BE, mixed sources, UTF-8 BOM, leading U+FEFF, Unicode and CRLF. Invalid sequences, unsupported content, marker rejection, the exact 512-KiB encoded boundary and retained UTF-16 saves after failed staging passed. The fixture readback limit is 1 MiB so it can verify the existing 512-KiB editor boundary; production limits are unchanged. Evidence: `artifacts/conflicts-0.37.0.txt` and reviewed normal/minimum Dark/Light renders under `artifacts/check-conflicts/20261101-081217-b76019cf091e48f8a5b094f14db598ce`. Beta publication follows; Stable remains at 0.35.0.
+
 ### LFS discard refactor (0.36.1 Beta)
 
 **2026-11-01:** the code review identified duplicate raw-content status scans around native LFS checkout as the next TODO bottleneck. Added narrowly eligible selected-file verification and extracted the shared SHA-256 content verifier; no cached mutable-file hashes or optimistic clean results. Ordinary/mixed/unsupported selections retain native status. [Architecture](architecture.md#selected-lfs-discard-verification-0361) owns eligibility and fallback details.

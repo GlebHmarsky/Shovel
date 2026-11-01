@@ -850,6 +850,11 @@ Previous HEAD: {1}</value></data>
   <data name="ConflictReloadRequired" xml:space="preserve"><value>Reload the conflict before another attempt. The displayed edit and output are retained.</value></data>
   <data name="ConflictDuration" xml:space="preserve"><value>{0:F1} s</value></data>
   <data name="ConflictResult" xml:space="preserve"><value>Editable result</value></data>
+  <data name="ConflictResultEncoding" xml:space="preserve"><value>Result · {0}</value></data>
+  <data name="ConflictEncodingUtf8" xml:space="preserve"><value>UTF-8</value></data>
+  <data name="ConflictEncodingUtf8Bom" xml:space="preserve"><value>UTF-8 with BOM</value></data>
+  <data name="ConflictEncodingUtf16LittleEndianBom" xml:space="preserve"><value>UTF-16 LE with BOM</value></data>
+  <data name="ConflictEncodingUtf16BigEndianBom" xml:space="preserve"><value>UTF-16 BE with BOM</value></data>
   <data name="ConflictBase" xml:space="preserve"><value>Common base</value></data>
   <data name="ConflictUseCurrent" xml:space="preserve"><value>Start with current side</value></data>
   <data name="ConflictUseIncoming" xml:space="preserve"><value>Start with incoming side</value></data>
@@ -857,7 +862,7 @@ Previous HEAD: {1}</value></data>
   <data name="ConflictExternal" xml:space="preserve"><value>External merge tool</value></data>
   <data name="ConflictUnsupported" xml:space="preserve"><value>This conflict involves a symbolic link or submodule. Resolve it with Git or its owning tool, then refresh.</value></data>
   <data name="ConflictEditedOutside" xml:space="preserve"><value>The working file changed after this preview. Your editor text is retained; copy it if needed, then reload before resolving.</value></data>
-  <data name="ConflictTextLimit" xml:space="preserve"><value>The editor supports UTF-8 text up to 512 KiB, 20,000 lines and 16,384 characters per line. Use side selection or an external merge tool for this content.</value></data>
+  <data name="ConflictTextLimit" xml:space="preserve"><value>The editor supports UTF-8 and BOM-marked UTF-16 text up to 512 KiB in the saved encoding, 20,000 lines and 16,384 characters per line. Use side selection or an external merge tool for other content.</value></data>
   <data name="ConflictMarkersRemain" xml:space="preserve"><value>Conflict markers remain in the edited result. Remove them before resolving.</value></data>
   <data name="ConflictToolMissing" xml:space="preserve"><value>No external merge tool is configured. Set merge.guitool or merge.tool in Git, or use Shovel's side selection/text editor.</value></data>
   <data name="ConflictStillUnmerged" xml:space="preserve"><value>The tool returned, but this file is still unmerged. Its content and output are retained.</value></data>

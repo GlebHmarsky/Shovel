@@ -75,9 +75,11 @@ Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build
 
 ## Using the workspace
 
+**0.37.0 conflict text:** the inline editor supports UTF-8 and BOM-marked UTF-16 LE/BE, displays the result encoding and preserves it on save. `--check-conflicts` runs seventeen focused checks, including exact encoded staged bytes, malformed input, byte limits, retained failed saves and headless layouts. [Behavior and limits](docs/product.md#daily-use-interactions-0310).
+
 **0.30.1 discard:** optional `--check-discard` runs six isolated discard checks (partial staging, literal paths, filters/hooks, locks and stale state); `--check-lfs` runs eleven checks covering hydration, selected LFS verification/fallback, concurrent edits, missing objects and responsive cancellation. `--measure-discard-lfs` measures one and 64 selected assets; `--measure-discard-lfs-trace` additionally reports allowlisted child timings and adds profiling overhead. These commands use disposable repositories and do not touch your repositories. [Results](docs/roadmap.md#lfs-discard-0301).
 
-**0.30.0:** [conflict editor, operation banner, startup cache, stash history menus and tab dragging](docs/product.md#conflict-resolution-and-faster-reopening-0300). Optional focused checks: `--check-conflicts` (7), `--check-usability` (7), `--check-lfs` (11; requires already installed Git LFS). `--check-startup` runs only the two cache checks. Use the same `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- <flag>` command. All use disposable repositories; no visible app or live server.
+**0.30.0:** [conflict editor, operation banner, startup cache, stash history menus and tab dragging](docs/product.md#conflict-resolution-and-faster-reopening-0300). Optional focused checks: `--check-conflicts` (17), `--check-usability` (7), `--check-lfs` (11; requires already installed Git LFS). `--check-startup` runs only the two cache checks. Use the same `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- <flag>` command. All use disposable repositories; no visible app or live server.
 
 
 **History:** right-click a commit for detached Checkout, Reset → Soft/Mixed/Hard, Copy full SHA and Revert. Reset confirms its actual branch/tips and effects; merge Revert asks which numbered parent is the mainline. Results use existing progress, output and recovery. [Behavior and limits](docs/product.md#history-actions-and-network-split-buttons-0290).

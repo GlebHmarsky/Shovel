@@ -16,6 +16,7 @@ internal static partial class Program
     private static bool _conflictChecks, _usabilityChecks;
     private static async Task RunConflictChecksAsync()
     {
+        await RunConflictEncodingChecksAsync();
         var runner = new HistoryActionRunner(); var reader = new RepositoryReader(runner); var ids = new WindowsRepositoryIdentity();
         var actions = new GitActions(runner, reader, ids); var git = await reader.DiscoverAsync(null, default);
         async Task<string> Git(string repo, params string[] args)
