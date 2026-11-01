@@ -2,7 +2,7 @@
 
 ## Stable and Beta delivery (confirmed 2026-11-01)
 
-Every task still produces a build. **Routine delivery publishes Beta only**: `pwsh -NoProfile -File scripts/Build-Release.ps1` defaults to `win-beta`. Stable requires the owner's explicit approval after testing: use `-Channel win-stable` on the approved source/version with its matching verified preview. Do not silently promote newer source. 0.35.0 is the explicitly authorized common starting version on both channels; subsequent versions go only to Beta until approved.
+Every task still produces a build. **Routine delivery publishes Beta only**: `pwsh -NoProfile -File scripts/Build-Release.ps1` defaults to `win-beta`. Stable requires the owner's explicit approval after testing: use `-Channel win-stable` on the approved source/version with its matching verified preview. Do not silently promote newer source. 0.35.0 was the common starting version on both channels. On 2026-11-01 the owner explicitly approved Stable for the next TODO delivery, 0.39.1, alongside Beta. Later tasks remain Beta-only unless separately approved.
 
 Stable releases use immutable `vVERSION-win-stable` tags and GitHub latest. Beta releases use immutable `vVERSION-win-beta` tags, prerelease status and `make_latest=false`; their signed feed is copied to the fixed `beta` prerelease after the versioned package is published. Channel selection in **Help → Shovel updates** is persisted (default Stable), applies to launch/manual checks and clears any pending package. A newer Beta is never downgraded when switching to Stable. Both installers use the same app/profile identity; they are alternative channels, not side-by-side applications.
 

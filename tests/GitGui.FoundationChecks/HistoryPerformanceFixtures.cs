@@ -136,7 +136,7 @@ internal sealed class HistoryPerformanceRunner(HistoryPerformanceArea area) : IP
         if (request.Arguments.Contains("log"))
             lock (_sync) { _nextLog?.TrySetResult(); _nextLog = null; }
         var result = await _inner.RunAsync(request with { Arguments = Arguments(request.Arguments), Environment = environment }, token, output).ConfigureAwait(false);
-        var operation = request.Arguments.FirstOrDefault(arg => new[] { "--version", "init", "rev-parse", "for-each-ref", "symbolic-ref", "log", "remote", "status", "rev-list" }.Contains(arg)) ?? "fixture";
+        var operation = request.Arguments.FirstOrDefault(arg => new[] { "--version", "init", "rev-parse", "for-each-ref", "symbolic-ref", "log", "remote", "status", "rev-list", "config", "diff-tree", "ls-files", "ls-tree", "cat-file", "reflog" }.Contains(arg)) ?? "fixture";
         lock (_sync) _calls.Add(new(operation, result.Duration.TotalMilliseconds, result.Outcome.ToString(), result.ExitCode));
         return result;
     }

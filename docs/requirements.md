@@ -147,6 +147,10 @@ Historical phase gates below preserve regression coverage; old prototype/trust b
 | Dark theme | Verify shared resource loading, normal/secondary/selected/accent contrast, live system-color mapping and dark restoration; selected/disabled/editable controls keep real state and bindings. Review history/Local Changes/action dialogs at normal/minimum sizes offscreen. Desktop hover/keyboard, OS high contrast, native chrome and mixed DPI remain separately verified. |
 | Accessibility/localization | Windows 10/11 keyboard/screen reader; 100/150/200%/mixed DPI; +40% pseudo-localization/RTL without inaccessible/clipped actions. |
 
+### Representative headless measurement (0.39.1)
+
+The optional harness must preserve All Commits and 200-row pages, match CLI hashes/parents and true last-page boundaries, retain cached row identity, and distinguish synchronous publication from secondary comparison drain. Refresh must actually re-read history; cancellation outcomes distinguish drained cancellation from a read that won the race. Five-minute idle requires zero new Git calls. Report host/child sampling limits and do not equate this fixture host with visible or installed application performance. [Measured results](roadmap.md#representative-history-validation-0391).
+
 ### Proposed performance budgets (not measurements)
 
 Document 4-core/8-GB/SSD reference host, antivirus/cache conditions and child peaks; >=20 runs for p95. Cold after reboot, warm after prior launch; distinguish shell from Git load.

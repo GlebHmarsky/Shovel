@@ -4,7 +4,7 @@
 
 **Side by side** switches text comparisons in Commit/Changes and Local Changes between unified and aligned Old/New columns. Change runs pair in order with blanks for unmatched lines; context, line numbers and newline markers remain visible. Long lines wrap, both sides share scrolling, columns resize, and Local Changes selection still stages/unstages whole hunks. Binary/LFS cards and the inline conflict editor retain their behavior. The toggle lasts for the current comparison model; it is not yet persisted.
 
-Opening **Help > Shovel updates** checks immediately, as does changing channel. Launch and periodic checks only discover releases. **Update and restart** approves the displayed version, then downloads, verifies and requests the existing guarded restart. Cancel/failure leaves the app usable; Check again retries discovery and a blocked verified update can retry restart without downloading again. This owner-confirmed flow supersedes 0.34.0 automatic download/restart. Stable remains 0.35.0.
+Opening **Help > Shovel updates** checks immediately, as does changing channel. Launch and periodic checks only discover releases. **Update and restart** approves the displayed version, then downloads, verifies and requests the existing guarded restart. Cancel/failure leaves the app usable; Check again retries discovery and a blocked verified update can retry restart without downloading again. This owner-confirmed flow supersedes 0.34.0 automatic download/restart. Stable publication of 0.39.1 is owner-approved; subsequent routine deliveries remain Beta-only.
 
 
 ## Workspace refinements (0.38.0)

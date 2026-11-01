@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.39.1 — 2026-11-01 (Beta and owner-approved Stable)
+
+- Correct the optional history benchmark for retained rows and automatic Commit comparisons; report synchronous history publication separately from comparison drain.
+- Validate merge-heavy, large and million-commit histories plus headless idle behavior without reducing All Commits scope or the 200-row page size.
+- Publish the current application behavior to Stable with owner approval, including side-by-side diffs, saved UI scale and approval before update download/restart.
+
+
 ## 0.39.0 — 2026-11-01 (Beta)
 
 - Add side-by-side text comparisons to history and Local Changes, preserving whole-hunk staging and binary cards.

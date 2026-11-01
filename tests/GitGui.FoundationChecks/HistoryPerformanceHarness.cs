@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
 using GitGui.App.Services;
+using GitGui.App.Localization;
 using GitGui.App.ViewModels;
 using GitGui.Core.Diagnostics;
 using GitGui.Core.Git;
@@ -40,7 +41,7 @@ internal sealed record HistoryPerformanceOptions(string Profile, int Samples, in
 
 internal sealed class HistoryPerformanceReport
 {
-    public int Schema { get; } = 1;
+    public int Schema { get; } = 2;
     public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
     public string Status { get; set; } = "running";
     public string? Failure { get; set; }
@@ -53,6 +54,7 @@ internal sealed class HistoryPerformanceReport
     public List<string> Validations { get; } = [];
     public string[] Boundaries { get; } =
     [
+        "Shell stages keep the default Commit overview; warm switches report synchronous history publication separately from comparison and secondary-read drain. Empty-tree fixtures measure an empty file list, not asset/diff latency.",
         "Headless foundation host + production reader/view-model. No visible windows, input, paint, desktop startup or installed-app measurement.",
         "All Commits and 200-row pages are unchanged. Fixture generation/maintenance, CLI validation, discovery and companion-tab priming are separate from measured reads.",
         "Synthetic empty-tree commits, packed objects/refs, reachable commit graph; timestamps/parents/ref placement deterministic. No network or user repositories.",
@@ -189,7 +191,7 @@ internal static class HistoryPerformanceHarness
                     model.CompleteStartup(new(new() { RepositoryPaths = [repo, companion], SelectedRepositoryPath = repo }, SettingsLoadStatus.Loaded));
                     await WaitShellAsync(model, token);
                     Require(model.Commits.Count == 200, "Shell did not publish a full history page: " + model.Status);
-                    return new { rows = model.Commits.Count, includes = "identity/inspection/read/format/publication plus divergence/count drain; no window layout or paint" };
+                    return new { rows = model.Commits.Count, includes = "identity/inspection/read/format/publication plus divergence/count/sidebar/comparison drain; no window layout or paint" };
                 });
                 var primaryTab = model.Repositories[0]; var companionTab = model.Repositories[1];
                 model.SelectedRepository = companionTab; await WaitShellAsync(model, token);
@@ -208,17 +210,20 @@ internal static class HistoryPerformanceHarness
                         var synchronousPublicationMs = watch.Elapsed.TotalMilliseconds;
                         Require(ReferenceEquals(model.Commits, cachedRows), "Warm switch did not publish cached rows synchronously.");
                         await WaitShellAsync(model, token);
-                        Require(runner.Calls == calls, "Fresh cached switch unexpectedly launched Git.");
+                        Require(runner.Since(calls).All(call => call.Operation != "log"), "Fresh cached switch unexpectedly re-read history.");
+                        Require(ReferenceEquals(model.Commits, cachedRows), "Comparison loading replaced cached history rows.");
                         return new { synchronousPublicationMs, calls = runner.Calls - calls, rows = model.Commits.Count, validatedAndDrainedMs = watch.Elapsed.TotalMilliseconds };
                     });
                     await MeasureAsync("headless-shell-refresh", sample, async () =>
                     {
+                        var calls = runner.Calls;
                         var previousRows = model.Commits;
                         model.RefreshRepositoryCommand.Execute(null);
                         Require(ReferenceEquals(model.Commits, previousRows), "Refresh erased useful cached rows before completion.");
                         await WaitShellAsync(model, token);
-                        Require(model.Commits.Count == 200 && !ReferenceEquals(model.Commits, previousRows), "Shell refresh failed to publish fresh rows: " + model.Status);
-                        return new { rows = model.Commits.Count, includes = "history, divergence and local-count drain" };
+                        Require(model.Commits.Count == 200 && ReferenceEquals(model.Commits, previousRows), "Unchanged refresh failed to retain row identity: " + model.Status);
+                        Require(runner.Since(calls).Any(call => call.Operation == "log"), "Refresh did not re-read history.");
+                        return new { rows = model.Commits.Count, includes = "history, divergence, local-count, sidebar and comparison drain" };
                     });
                 }
                 if (options.IdleFiveMinutes)
@@ -230,7 +235,7 @@ internal static class HistoryPerformanceHarness
                         Require(runner.Calls == calls, "Idle view launched periodic Git work.");
                         return new { seconds = 300, gitCalls = runner.Calls - calls, repositories = 2, visibleWindows = 0 };
                     }, intervalMs: 1000);
-                report.Validations.Add("Production shell cached switch published the same rows synchronously with zero Git calls; unchanged refresh retained then replaced rows.");
+                report.Validations.Add("Cached switch published identical history rows synchronously without a history log; secondary comparison reads were drained and counted. Unchanged refresh re-read Git and retained row identity.");
             }
             finally
             {
@@ -338,7 +343,15 @@ internal static class HistoryPerformanceHarness
         deadline.CancelAfter(TimeSpan.FromSeconds(45));
         return await action(deadline.Token);
     }
-    private static Task WaitShellAsync(ShellViewModel model, CancellationToken token) => model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(65), token);
+    private static async Task WaitShellAsync(ShellViewModel model, CancellationToken token)
+    {
+        await model.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(65), token);
+        await Dispatcher.Yield(DispatcherPriority.Background);
+        if (model.CommitFiles is not { } files) return;
+        Task pending;
+        do { pending = files.Pending; await pending.WaitAsync(TimeSpan.FromSeconds(65), token); } while (pending != files.Pending);
+        Require(!files.Busy && files.Files.Count == 0 && files.Status == UiText.Format("CommitFilesCount", 0), "Empty-tree comparison failed to publish successfully.");
+    }
     internal static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static string Failure(Exception error) => error is GitReadException git ? "GitReadException: " + git.Failure :
         error is OperationCanceledException ? "Cancelled/deadline exceeded" : error.GetType().Name + ": " + error.Message.TruncateHistoryPerformance(2048);

@@ -4,14 +4,17 @@ Updated 2026-11-01. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Complete representative history measurement (0.39.1).** Corrected stale harness assumptions; merge-heavy/100k/million profiles and five-minute idle passed. Cached publication and full comparison drain are separate; no scope/page reduction. [Evidence](docs/roadmap.md#representative-history-validation-0391).
+- [ ] **P1 — Deliver 0.39.1 Beta and Stable.** Owner explicitly approved Stable for this delivery. Package the same source for both channels; later routine deliveries remain Beta-only.
+
+
 - [x] **P1 — Side-by-side diffs and update approval (0.39.0).** Aligned Old/New text in history and Local Changes with whole-hunk mapping; immediate discovery and one approval before download/restart.
 - [x] **P1 — Deliver 0.39.0 Beta.** 8 QOL, 11 hunk and 17 update checks; 26 smoke checks in 58.6 s; signed publication and anonymous full-package verification passed. Stable remains 0.35.0. [Evidence](docs/roadmap.md#side-by-side-comparisons-and-approved-updates-0390-beta).
-- [ ] **P2 — Resume desktop/update acceptance.** Installed Shovel inspected; Computer Use stopped with physical Escape before input/update checks. No installation/restart or pin change performed.
+- [ ] **P2 — Desktop acceptance (owner-only).** Owner confirmed the update flow works and forbids further computer control. Physical shortcut/drag and taskbar evidence remain unverified by the agent; do not resume desktop automation without a new explicit request.
 
 
 - [x] **P1 — Workspace refinements (0.38.0).** Combined Commit overview/files/diff, retained bottom tab, saved keyboard scale, title and drag feedback; explicit shortcut-matching process identity.
 - [x] **P1 — Deliver 0.38.0 Beta.** 7 QOL and 10 committed-file checks; 26 smoke checks in 42.4 s; signed Beta feed and anonymous full-package verification passed. Stable remains 0.35.0. [Evidence](docs/roadmap.md#workspace-refinements-0380-beta).
-- [ ] **P2 — Installed taskbar/physical input acceptance.** Verify a real update preserves the pinned grouping/launch behavior and exercise scale shortcuts and native tab drag; no installed app or pin was changed during this delivery.
 
 - [x] **P2 — UTF-16 conflict editing (0.37.0 Beta).** BOM-marked LE/BE sources and result encoding in the existing pane, exact encoded writes, strict Unicode/byte bounds and preserved native side/tool fallback. [Behavior and limits](docs/product.md#daily-use-interactions-0310).
 - [x] **P1 — Deliver 0.37.0 Beta.** 17 conflict checks and Dark/Light normal/minimum review; 26 smoke checks in 53.3 s; matching preview/installer, signed update feed and anonymous full-package verification. Stable remains 0.35.0. [Evidence and limits](docs/roadmap.md#utf-16-conflict-editing-0370-beta).
@@ -127,7 +130,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 - [ ] **P1 — Representative latency validation.** With authorization, measure the user's asset repository and desktop; 0.16 targets scan/read dependencies with disposable fixtures, not an absolute timing guarantee for all disks/filters/repos.
 - [ ] **P1 — Extend authentication when needed for network rollout.** Tracked GCM/browser, signing and interactive-hook interaction; preserve shared agents/browsers and hooks/host verification. Askpass exists. Prioritize working Git features; auth expansion is not a blanket prerequisite. Live provider/desktop tests require separate authorization.
 - [ ] **P1 — Measure representative startup.** With launch authorization: cold/warm visible rows, keyboard/tabs, Windows 10/11, custom Git, profile restart/replacement. No interactive launch currently authorized. This validation is not a blanket blocker for independent features.
-- [ ] **P1 — Run representative performance fixtures.** Use the integrated opt-in merge-heavy/large/million harness and five-minute idle sampling; retain F1e baseline and distinguish harness/child metrics from desktop behavior. Small fixture correctness checks do not establish large-scale latency budgets.
+- [x] **P1 — Run representative performance fixtures.** 0.39.1 completed merge-heavy, 100k, million and five-minute idle samples. F1e preserved; headless/child metrics and desktop limits documented in [roadmap](docs/roadmap.md#representative-history-validation-0391).
 - [ ] **P1 — Validate accessibility/layout.** Mixed DPI, OS high contrast/screen reader, keyboard/focus, +40%/RTL, themes. Offscreen colors do not certify OS accessibility.
 - [ ] **P2 — External reconciliation/tools.** Focus/resume/external-client races and tracked tool sessions.
 - [ ] **P2 — File-menu extensions.** Optional all-parent file history/extra diff-tool chooser, repository/global ignore editing and LFS migration; current implemented scopes remain visible.

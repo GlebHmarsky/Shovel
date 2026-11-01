@@ -4,6 +4,33 @@ Updated 2026-11-01. [Product](product.md): UX; [requirements](requirements.md): 
 
 ## Current status
 
+### Representative history validation (0.39.1)
+
+**2026-11-01; owner-approved Stable plus Beta.** Completed the representative-history TODO using disposable isolated repositories only. No desktop control, installed launch/update or user-repository mutation. The owner reports the update flow is good and requested no further computer control; physical scale/tab-drag/taskbar verification remains owner-side.
+
+The optional harness had two stale assumptions: a cached switch should execute no Git, and unchanged refresh should replace rows. Current Commit comparisons legitimately read Git after cached history appears, while focus preservation retains unchanged row objects. Report schema 2 now separates synchronous cached publication from the full comparison/secondary-read drain, checks that cached switches never rerun history log, and verifies that explicit refresh really rereads Git without replacing unchanged rows. Command categories now identify comparison/config/index reads. These are verification fixes; production workflows/algorithms are unchanged from 0.39.0, so no speedup is claimed.
+
+All three profiles completed three samples, CLI hashes/parents/merge counts and first/next/true-last page checks, cached row identity, real refresh, cancellation and owned-fixture cleanup. All Commits and 200-row pages stayed unchanged. Medians below are milliseconds; peak host private memory is MiB excluding fixture-generation stages, and includes harness/JIT/sampler allocation residue.
+
+| Visible commits / merges | Core first page | Next page | Last-offset probe | Cached publication | Warm switch incl. comparison | Shell refresh incl. secondary reads | Host private peak MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 20,000 / 6,665 merges | 1003 | 783 | 714 | 0.77 | 146 | 2117 | 54.0 |
+| 100,000 / 0 merges | 1247 | 914 | 986 | 0.80 | 130 | 2510 | 57.1 |
+| 1,000,000 / 333,332 merges | 1793 | 1614 | 1752 | 1.27 | 146 | 2772 | 59.6 |
+
+The five-minute merge-heavy idle sample passed with **zero Git calls**, zero observed children, **0.088% total-machine host CPU** (24 logical processors), and **54.0 MiB** peak private memory; 293 samples, no unavailable samples. CPU includes sampler overhead. All nine cancellation attempts reported cancelled-and-drained; exact cancellation-to-drain timings remain in the reports.
+
+Host: Windows 10.0.26200 x64, .NET 10.0.12, Git 2.51.1, 24 logical processors, fixed NTFS fixture volume. Packed refs/objects and reachable commit graph; warm caches after fixture generation, no reboot/cache flush. Empty trees and bounded diamond/linear topology do not represent large assets, wide/octopus merges, cold disk, real EOM, visible input/paint, or installed-app memory. Three samples are **not p95** and do not certify the proposed desktop budgets. The historical F1e baseline is retained and is not directly comparable to these changed fixtures/current secondary reads.
+
+Release compilation passed with zero warnings/errors; six focused harness checks passed (`artifacts/history-checks-0.39.1.txt`). Reports:
+
+- `artifacts/history-performance/20261101-125617-4135498b0be74038867ccd9bca0ca7cc/report.json`
+- `artifacts/history-performance/20261101-130156-37747b57a7f3476b81112ae74deb3b1b/report.json`
+- `artifacts/history-performance/20261101-130242-055a8745bdcd4e1abe4e9bc597b9d0aa/report.json`
+
+Logs: `artifacts/history-merge-0.39.1.txt`, `artifacts/history-large-0.39.1.txt`, `artifacts/history-million-0.39.1.txt`. Earlier rejected baseline reports remain as failure evidence; an initial sandbox fixture write was denied, then rerun with disposable-fixture write access. No global Git config or permissions were changed. Release evidence follows publication.
+
+
 ### Side-by-side comparisons and approved updates (0.39.0 Beta)
 
 2026-11-01: implemented aligned Old/New text in history and Local Changes, preserving source/hunk identity, wrapping, shared scrolling, binary cards and retained comparisons. Update-window opening and channel changes check immediately. Approval owns download of the offered version, verification and guarded restart; startup/periodic discovery never downloads or restarts. Product/architecture own current behavior.
