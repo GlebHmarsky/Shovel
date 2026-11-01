@@ -5,7 +5,7 @@ Updated 2026-11-01. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Current phase
 
 - [x] **P2 — UTF-16 conflict editing (0.37.0 Beta).** BOM-marked LE/BE sources and result encoding in the existing pane, exact encoded writes, strict Unicode/byte bounds and preserved native side/tool fallback. [Behavior and limits](docs/product.md#daily-use-interactions-0310).
-- [ ] **P1 — Deliver 0.37.0 Beta.** Finish focused conflicts/offscreen review, unchanged smoke, signed feed/installer publication and anonymous download verification. Keep Stable at 0.35.0.
+- [x] **P1 — Deliver 0.37.0 Beta.** 17 conflict checks and Dark/Light normal/minimum review; 26 smoke checks in 53.3 s; matching preview/installer, signed update feed and anonymous full-package verification. Stable remains 0.35.0. [Evidence and limits](docs/roadmap.md#utf-16-conflict-editing-0370-beta).
 
 - [x] **P2 — Refactor selected LFS discard verification (0.36.1).** Share exact-byte hashing, remove redundant raw status scans for supported selections, retain native fallback and concurrent edits. Same-host median: one asset 1.215 → 1.104 s; 64 assets 3.691 → 2.009 s. [Evidence and limits](docs/roadmap.md#lfs-discard-refactor-0361-beta).
 - [x] **P1 — Deliver 0.36.1 Beta.** 11 LFS and 6 discard checks; 26 smoke checks in 48.6 s, matching preview/installer, signed update feed and anonymous full-package verification. Stable latest remains 0.35.0. [Evidence and limits](docs/roadmap.md#lfs-discard-refactor-0361-beta).
