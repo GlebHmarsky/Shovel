@@ -5,7 +5,7 @@ Updated 2026-11-01. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Current phase
 
 - [x] **P1 — Side-by-side diffs and update approval (0.39.0).** Aligned Old/New text in history and Local Changes with whole-hunk mapping; immediate discovery and one approval before download/restart.
-- [ ] **P1 — Deliver 0.39.0 Beta.** Focused checks, smoke, signed publication and anonymous verification; keep Stable 0.35.0.
+- [x] **P1 — Deliver 0.39.0 Beta.** 8 QOL, 11 hunk and 17 update checks; 26 smoke checks in 58.6 s; signed publication and anonymous full-package verification passed. Stable remains 0.35.0. [Evidence](docs/roadmap.md#side-by-side-comparisons-and-approved-updates-0390-beta).
 - [ ] **P2 — Resume desktop/update acceptance.** Installed Shovel inspected; Computer Use stopped with physical Escape before input/update checks. No installation/restart or pin change performed.
 
 
