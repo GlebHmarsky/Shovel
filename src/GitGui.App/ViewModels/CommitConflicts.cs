@@ -24,7 +24,8 @@ public sealed partial class CommitViewModel
             prior.PropertyChanged -= OnConflictChanged; prior.Completed -= OnConflictCompleted;
             _conflictDrain = Task.WhenAll(_conflictDrain, prior.CloseAsync());
         }
-        var model = new ConflictViewModel(_state.Context, change, _actions) { Journal = Journal };
+        var model = new ConflictViewModel(_state.Context, change, _actions) { Journal = Journal,
+            ReportProblem = (status, output) => _interaction.ShowOperationProblem(Directory, UiText.Get("ConflictResolve"), status, output) };
         model.PropertyChanged += OnConflictChanged; model.Completed += OnConflictCompleted; Conflict = model;
         _diffCancel?.Cancel(); _diffCancel = null; _diffGeneration++; _diffLoading = false;
         await _conflictDrain;

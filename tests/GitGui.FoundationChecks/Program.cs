@@ -22,9 +22,10 @@ internal static partial class Program
     private static int Main(string[] args)
     {
         if (args is ["--check-updates"]) return RunUpdateChecks();
-        if (args is ["--check-network-workflows"])
+        if (args is ["--check-network-workflows"] or ["--check-repository-workflows"])
         {
-            _networkWorkflowChecks = true; _routine = true;
+            _repositoryWorkflowChecks = args[0] == "--check-repository-workflows";
+            _networkWorkflowChecks = !_repositoryWorkflowChecks; _routine = true;
             _root = Path.GetFullPath("artifacts/network-workflow-checks/" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
             using var deadline = RoutineDeadline(TimeSpan.FromMinutes(3), "Network workflow checks exceeded deadline");

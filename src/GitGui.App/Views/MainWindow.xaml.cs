@@ -21,6 +21,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         DataContext = ViewModel = viewModel;
+        Loaded += (_, _) =>
+        {
+            ProportionalPanes.Columns(SidebarColumn, ContentColumn);
+            ProportionalPanes.Rows(HistoryRow, DetailsRow);
+        };
         ActivityLog.PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) { ActivityPopup.IsOpen = false; e.Handled = true; } };
         PreviewMouseRightButtonUp += (_, _) => Dispatcher.BeginInvoke(() => { if (_historyMenu?.IsOpen != true) ViewModel.EndHistoryMenu(); }, DispatcherPriority.Background);
         CommandBindings.Add(new(SystemCommands.MinimizeWindowCommand, (_, _) => SystemCommands.MinimizeWindow(this)));
@@ -134,6 +139,13 @@ public partial class MainWindow : Window
         DetailsRow.Height = new(settings.DetailsHeight);
         HistoryFiles.FilesColumn.Width = new(settings.HistoryFilesWidth);
         if (settings.IsMaximized) WindowState = WindowState.Maximized;
+        if (IsLoaded)
+        {
+            UpdateLayout();
+            ProportionalPanes.Columns(SidebarColumn, ContentColumn);
+            ProportionalPanes.Rows(HistoryRow, DetailsRow);
+            ProportionalPanes.Columns(HistoryFiles.FilesColumn, HistoryFiles.DiffColumn);
+        }
     }
 
     public AppSettings CaptureLayout()
@@ -156,7 +168,7 @@ public partial class MainWindow : Window
     {
         if (e.OriginalSource != sender || HistoryRow is null || DetailsRow is null) return;
         var changes = ((TabControl)sender).SelectedIndex is 0 or 1;
-        if (changes && !_changesLayout) DetailsRow.Height = new(Math.Max(420, DetailsRow.Height.Value));
+        if (changes && !_changesLayout && DetailsRow.Height.IsAbsolute) DetailsRow.Height = new(Math.Max(420, DetailsRow.Height.Value));
         _changesLayout = changes;
         HistoryRow.MinHeight = changes ? 160 : 300;
         DetailsRow.MinHeight = ((TabControl)sender).SelectedIndex == 0 ? 320 : changes ? 200 : 80;
@@ -164,7 +176,7 @@ public partial class MainWindow : Window
     }
     private void OnWorkspaceSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (ShellLayout is not null && SidebarColumn is not null && ShellLayout.ActualWidth > 0 && SidebarColumn.Width.Value > ShellLayout.ActualWidth - 185)
+        if (ShellLayout is not null && SidebarColumn is not null && ShellLayout.ActualWidth > 0 && SidebarColumn.Width.IsAbsolute && SidebarColumn.Width.Value > ShellLayout.ActualWidth - 185)
             SidebarColumn.Width = new(Math.Max(160, ShellLayout.ActualWidth - 185));
         FitDetails();
     }

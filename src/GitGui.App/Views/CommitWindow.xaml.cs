@@ -18,7 +18,14 @@ public partial class CommitWindow : Window
         _model = model; DataContext = model; InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
         RestoreLayout();
         SizeChanged += (_, _) => FilesColumn.MaxWidth = Math.Max(250, ActualWidth - 445);
-        Loaded += async (_, _) => await _model.StartLoading();
+        Loaded += async (_, _) =>
+        {
+            ProportionalPanes.Columns(FilesColumn, DiffColumn);
+            ProportionalPanes.Rows(DiffRow, MessageRow);
+            await _model.StartLoading();
+        };
+        _model.CommitCompleted += OnCommitted;
+        Closed += (_, _) => _model.CommitCompleted -= OnCommitted;
         PreviewKeyDown += OnKeyState; PreviewKeyUp += OnKeyState;
         PreviewMouseRightButtonUp += (_, _) => Dispatcher.BeginInvoke(() => { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); }, DispatcherPriority.Background);
         PreviewMouseLeftButtonDown += (_, _) => { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); };
@@ -43,10 +50,19 @@ public partial class CommitWindow : Window
             FilesWidth = FilesColumn.ActualWidth, UnstagedFraction = UnstagedRow.ActualHeight / Math.Max(1, UnstagedRow.ActualHeight + StagedRow.ActualHeight),
             MessageHeight = MessageRow.ActualHeight }).Normalize();
     }
+    private void OnCommitted(object? sender, EventArgs e) => Dispatcher.BeginInvoke(Close);
     private void OnKeyState(object sender, KeyEventArgs e)
     {
         _model.ShiftHeld = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         if (e.RoutedEvent != Keyboard.PreviewKeyDownEvent) { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); return; }
+        if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            e.Handled = true;
+            if (!e.IsRepeat && _model.CommitCommand.CanExecute(null)) _model.CommitCommand.Execute(null);
+            return;
+        }
+        if (e.Key == Key.F5 && Keyboard.Modifiers == ModifierKeys.None)
+        { e.Handled = true; if (!_model.IsBusy) _model.RefreshCommand.Execute(null); return; }
         if (e.Key == Key.Escape)
         {
             e.Handled = true;

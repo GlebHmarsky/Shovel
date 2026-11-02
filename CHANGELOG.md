@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.40.0 — 2026-11-02 (Beta)
+
+- Keep Git operations/results with their repository while switching tabs and working in other repositories; retain common-directory serialization.
+- Add ten-second auto-fetch with bounded concurrency, noninteractive credentials, background activity and cancellation on close; F5 refreshes repository/local changes.
+- Close Commit after success and support Ctrl+Enter throughout the editor. Retain failed commits and notify separately when an optional push fails.
+- Show attention dialogs with latest logs for failures/conflicts/warnings and flash the inactive taskbar button; deduplicate repeated background failures.
+- Preserve pane ratios while resizing, keep stash connections from taking ordinary commit lanes, and put conflict-banner buttons on the left.
+- Stable remains 0.39.1.
+
 ## 0.39.1 — 2026-11-01 (Beta and owner-approved Stable)
 
 - Correct the optional history benchmark for retained rows and automatic Commit comparisons; report synchronous history publication separately from comparison drain.

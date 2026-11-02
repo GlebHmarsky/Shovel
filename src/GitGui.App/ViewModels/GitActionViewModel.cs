@@ -33,6 +33,8 @@ public sealed class GitActionViewModel : ObservableObject
     public bool IsFetch => Action == GitAction.Fetch;
     public bool IsPull => Action == GitAction.Pull;
     public bool IsPush => Action == GitAction.Push;
+    public bool IsBackground { get; set; }
+    public bool NeedsAttention => HasAttempt && !IsRunning && Services.OperationAttention.Required(Activity?.Outcome, RawOutput);
     public bool IsNetwork => IsFetch || IsPull || IsPush || Action is GitAction.SubmoduleUpdate or GitAction.Clone;
     public bool ChooseBranch => IsPush || IsSwitch;
     public bool ChooseRemoteBranch => IsPush || IsPull;

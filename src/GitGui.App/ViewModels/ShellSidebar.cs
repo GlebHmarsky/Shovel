@@ -80,7 +80,7 @@ public sealed partial class ShellViewModel
 
     private void BeginSidebarRead(RepositoryTab tab)
     {
-        if (_actions is null || _git is null || tab.Snapshot is null || !_knownIdentities.TryGetValue(tab.Directory, out var known)) return;
+        if (SelectedRepository != tab || _actions is null || _git is null || tab.Snapshot is null || !_knownIdentities.TryGetValue(tab.Directory, out var known)) return;
         if (tab.SidebarReadAt != default && DateTimeOffset.UtcNow - tab.SidebarReadAt < RefreshAge) return;
         _sidebarCancel?.Cancel(); var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20)); _sidebarCancel = cancel;
         var prior = _sidebarTask; var snapshot = tab.Snapshot; var git = _git;
@@ -179,15 +179,10 @@ public sealed partial class ShellViewModel
     {
         if (SelectedRepository != tab || !CanAct) return;
         var cached = SidebarContext(tab); ActionContext? prepared = null;
-        CancelCountRead(); _sidebarCancel?.Cancel(); SetActionOpen(true);
+        CancelCountRead(); _sidebarCancel?.Cancel(); SetActionOpen(true, tab);
         try
         {
-            var operation = new GitActionViewModel(cached, action, _actions!, async () =>
-            {
-                foreach (var item in Repositories) { item.History.ValidatedAt = default; item.SidebarReadAt = default; item.Changes.ReadAt = default; }
-                BeginInspection(tab, force: true, actionReconcile: true); await WaitForIdleAsync();
-                if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0) throw new System.IO.IOException();
-            }, branch, _interaction, async token =>
+            var operation = new GitActionViewModel(cached, action, _actions!, () => ReconcileActionAsync(tab), branch, _interaction, async token =>
             {
                 var fresh = await _actions!.PrepareAsync(cached.Git, tab.Directory, token);
                 if (fresh.Identity.Fingerprint != cached.Identity.Fingerprint || fresh.History.Fingerprint != cached.History.Fingerprint) throw new GitActionException("ActionChanged");
@@ -201,14 +196,14 @@ public sealed partial class ShellViewModel
             }, stash is null && historyStashAction is null ? null : (token, output) => _actions!.ExecuteStashAsync(prepared!, stash!, token, output));
             operation.Branch = branch; operation.StartRef = start;
             if (remote.Length > 0) operation.Remote = operation.Remotes.FirstOrDefault(r => r.Name == remote);
-            SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); await operation.RunningTask; Status = operation.Summary;
+            SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); await operation.RunningTask; if (SelectedRepository == tab) Status = operation.Summary;
         }
-        finally { SetActionOpen(false); BeginSidebarRead(tab); await _sidebarTask; }
+        finally { SetActionOpen(false, tab); BeginSidebarRead(tab); await _sidebarTask; }
     }
     private async Task OpenSubmoduleAsync(RepositoryTab parent, SubmoduleEntry module)
     {
         if (SelectedRepository != parent || !CanAct) return;
-        SetActionOpen(true);
+        SetActionOpen(true, parent);
         string? directory = null;
         try
         {
@@ -221,7 +216,7 @@ public sealed partial class ShellViewModel
             });
         }
         catch (Exception) { Status = UiText.Get("SidebarSubmoduleUnavailable"); }
-        finally { SetActionOpen(false); }
+        finally { SetActionOpen(false, parent); }
         if (directory is null || _stopping) return;
         var tab = Repositories.FirstOrDefault(t => string.Equals(t.Directory, directory, StringComparison.OrdinalIgnoreCase));
         if (tab is null) { if (Repositories.Count >= 20) { Status = UiText.Get("TooManyRepositories"); return; } tab = new(directory); Repositories.Add(tab); }

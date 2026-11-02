@@ -12,7 +12,7 @@ public sealed partial class ShellViewModel
     {
         var tab = SelectedRepository!; var snapshot = tab.Snapshot!;
         if (!_knownIdentities.TryGetValue(tab.Directory, out var known)) return;
-        CancelCountRead(); SetActionOpen(true); _preparingAction = false;
+        CancelCountRead(); SetActionOpen(true, tab); _preparingAction = false;
         var context = new ActionContext(_git!, new(snapshot.Worktree, snapshot.GitDirectory, snapshot.CommonDirectory, known.Fingerprint), snapshot,
             tab.History.Page?.Session ?? new(snapshot, HistoryScope.AllCommits, "", [], false), [], "");
         var model = new StashViewModel(context, _actions!, _reader!, _interaction!, tab.Stashes, SetLastAction);
@@ -24,7 +24,7 @@ public sealed partial class ShellViewModel
                 foreach (var related in Repositories.Where(item => item.Snapshot?.CommonDirectory == snapshot.CommonDirectory))
                 { related.History.NeedsRefresh = true; related.History.ValidatedAt = default; related.Changes.ReadAt = default; if (related != tab) related.Stashes.List = null; }
             foreach (var other in Repositories.Where(item => item != tab).OrderByDescending(item => item.History.LastUse).Skip(2)) other.Stashes.List = null;
-            SetActionOpen(false);
+            SetActionOpen(false, tab);
             if (model.HasMutation && !_stopping) BeginInspection(tab, force: true);
         }
     }

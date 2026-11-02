@@ -30,6 +30,7 @@ public interface IUserInteraction
     bool ConfirmAmend(string branch, string hash) => false;
     bool ConfirmRecovery(string message, string title) => false;
     void ShowActionError(string message) { }
+    void ShowOperationProblem(string repository, string title, string status, string output) { }
     IAuthenticationSession? CreateAuthenticationSession(string context,
         Func<AuthenticationPrompt, CancellationToken, Task<AuthenticationAnswer?>> prompt, CancellationToken token) => null;
     Task<AuthenticationAnswer?> ShowAuthenticationAsync(string context, AuthenticationPrompt prompt, CancellationToken token) => Task.FromResult<AuthenticationAnswer?>(null);
@@ -37,6 +38,33 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    private readonly List<OperationProblem> _problems = [];
+    private bool _showingProblems;
+    public void ShowOperationProblem(string repository, string title, string status, string output)
+    {
+        var safe = GitActions.Redact(output);
+        var problem = new OperationProblem(repository, title, status,
+            safe.Length > ActivityJournal.OutputLimit ? safe[..ActivityJournal.OutputLimit] + "\n" + UiText.Get("ActivityOutputLimit") : safe);
+        // One pending latest result per repository; full session history remains in Activity.
+        _problems.RemoveAll(item => item.Repository == repository);
+        _problems.Add(problem);
+        OperationAttention.Flash(Application.Current.MainWindow);
+        if (_showingProblems) return;
+        _showingProblems = true;
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                while (_problems.Count != 0)
+                {
+                    var next = _problems[0]; _problems.RemoveAt(0);
+                    new OperationProblemWindow(next) { Owner = Owner, ShowActivated = Application.Current.Windows.OfType<Window>().Any(w => w.IsActive) }.ShowDialog();
+                }
+            }
+            finally { _showingProblems = false; }
+        }, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
     public RepositoryCloneOptions? ChooseRepositoryClone()
     {
         var model = new RepositoryCloneViewModel(this);
@@ -112,7 +140,8 @@ public sealed class UserInteraction : IUserInteraction
             if (!token.IsCancellationRequested) return window.TakeAnswer();
             window.TakeAnswer()?.Dispose(); return null;
         });
-    public void ShowActionError(string message) => MessageBox.Show(Owner, message, UiText.Get("AppTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+    public void ShowActionError(string message)
+    { OperationAttention.Flash(Application.Current.MainWindow); MessageBox.Show(Owner, message, UiText.Get("AppTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); }
     public string? ChooseRepository()
     {
         var dialog = new OpenFolderDialog { Title = UiText.Get("ChooseRepositoryTitle"), Multiselect = false };

@@ -162,6 +162,7 @@ public sealed partial class CommitViewModel : ObservableObject
     private string _timingSummary = "";
     public string TimingSummary { get => _timingSummary; private set => Set(ref _timingSummary, value); }
     public event EventHandler? SnapshotChanged;
+    public event EventHandler? CommitCompleted;
 
     public CommitViewModel(string directory, GitInstallation? git, RepositoryReader reader, GitActions actions, IUserInteraction interaction,
         CommitWorkspaceState? state = null, string? identity = null, ICommitDraftStore? draftStore = null)
@@ -348,7 +349,7 @@ public sealed partial class CommitViewModel : ObservableObject
         _actionCancel = new CancellationTokenSource(); UpdateBusy(); OperationTask = RunAsync();
         async Task RunAsync()
         {
-            string? committed = null;
+            string? committed = null; var commitSucceeded = false;
             WorkingCopyResult? measured = null; var timing = Stopwatch.StartNew(); double waitMilliseconds = 0;
             TimingSummary = "";
             try
@@ -362,6 +363,7 @@ public sealed partial class CommitViewModel : ObservableObject
                 Status = UiText.Get(result.Result.MessageCode ?? (result.Result.Success ? "CommitSucceeded" + action : "ActionResult" + result.Result.Outcome));
                 if (result.Result.Success && action == WorkingCopyAction.Commit)
                 {
+                    commitSucceeded = true;
                     await CompleteSubmittedDraftAsync(submittedDraft); _amend = false; _automaticAmendMessage = null; Changed(nameof(Amend));
                     if (push && committed is not null) _activityOutcome = await PushAsync(context, committed, _actionCancel.Token);
                     else if (committed is not null) Status = UiText.Format("CommitCreated", committed);
@@ -390,6 +392,11 @@ public sealed partial class CommitViewModel : ObservableObject
                 if (_state.ReadAt == default) _activityOutcome = OperationOutcome.RefreshFailed;
                 RawOutput = output; _state.LastResult = _status; _state.LastOutput = output;
                 _actionCancel.Dispose(); _actionCancel = null; _mutating = false; UpdateBusy();
+                if (!_closed && Services.OperationAttention.Required(_activityOutcome, RawOutput))
+                    _interaction.ShowOperationProblem(Directory, _activityTitle, Status, RawOutput);
+                // A created commit is final even if its optional push failed. The separate
+                // attention dialog retains that failure and output after the editor closes.
+                if (!_closed && commitSucceeded) CommitCompleted?.Invoke(this, EventArgs.Empty);
                 if (!_closed) QueueDiff(_state.Selected);
                 if (!_closed && measured?.UpdatedContext is not null) LoadingTask = LoadAsync(background: true);
             }

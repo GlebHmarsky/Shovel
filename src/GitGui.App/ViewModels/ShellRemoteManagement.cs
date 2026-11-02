@@ -13,22 +13,16 @@ public sealed partial class ShellViewModel
         if (reviewed is null || !_knownIdentities.TryGetValue(tab.Directory, out var known)) return;
         var context = new ActionContext(_git!, new(snapshot.Worktree, snapshot.GitDirectory, snapshot.CommonDirectory, known.Fingerprint),
             snapshot, tab.History.Page!.Session, [], reviewed.ConfigStamp);
-        CancelCountRead(); SetActionOpen(true); var attempted = false;
+        CancelCountRead(); SetActionOpen(true, tab); var attempted = false;
         try
         {
             var options = _interaction!.ChooseRemoteManagement(new(reviewed.Remotes, selected));
             if (options is null || SelectedRepository != tab) return;
             if (options.Remove && !_interaction.ConfirmRecovery(UiText.Format("RemoteRemoveConfirm", options.Name, tab.Directory), UiText.Get("ActionTitleRemoveRemote"))) return;
-            var operation = new GitActionViewModel(context, options.Remove ? GitAction.RemoveRemote : GitAction.EditRemote, _actions!, async () =>
-            {
-                foreach (var related in Repositories.Where(item => item.Snapshot?.CommonDirectory == snapshot.CommonDirectory))
-                { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; related.SidebarReadAt = default; related.RemoteConfiguration = null; }
-                BeginInspection(tab, force: true, actionReconcile: true); await WaitForIdleAsync();
-                if (tab.History.ValidatedAt == default) throw new System.IO.IOException();
-            }, execute: (token, progress) => _actions!.ChangeRemoteAsync(context, reviewed, options, token, progress));
+            var operation = new GitActionViewModel(context, options.Remove ? GitAction.RemoveRemote : GitAction.EditRemote, _actions!, () => ReconcileActionAsync(tab), execute: (token, progress) => _actions!.ChangeRemoteAsync(context, reviewed, options, token, progress));
             SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
-            await operation.RunningTask; Status = operation.Status;
+            await operation.RunningTask; if (SelectedRepository == tab) Status = operation.Status;
         }
-        finally { SetActionOpen(false); if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); } }
+        finally { SetActionOpen(false, tab); if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); } }
     }
 }

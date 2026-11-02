@@ -12,6 +12,7 @@
         AutomationProperties.AutomationId="MainWindow">
   <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="32" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False" CornerRadius="0"/></shell:WindowChrome.WindowChrome>
   <Window.InputBindings>
+    <KeyBinding Key="F5" Command="{Binding RefreshRepositoryCommand}"/>
     <KeyBinding Key="PageDown" Modifiers="Control" Command="{Binding LoadMoreHistoryCommand}" />
     <KeyBinding Key="PageUp" Modifiers="Control" Command="{Binding NewerHistoryCommand}" />
     <KeyBinding Key="T" Modifiers="Control+Alt" Command="{Binding OpenToolCommand}" CommandParameter="Bash"/>
@@ -259,7 +260,7 @@
       <Grid.ColumnDefinitions>
         <ColumnDefinition x:Name="SidebarColumn" Width="210" MinWidth="160" />
         <ColumnDefinition Width="5" />
-        <ColumnDefinition Width="*" MinWidth="180" />
+        <ColumnDefinition x:Name="ContentColumn" Width="*" MinWidth="180" />
       </Grid.ColumnDefinitions>
       <DockPanel Margin="10,14" Background="{DynamicResource Theme.Sidebar}">
         <StackPanel DockPanel.Dock="Top" VerticalAlignment="Top">
@@ -288,12 +289,12 @@
           <TextBlock Grid.Row="2" Text="{Binding HistoryNotice}" Margin="8,4" Foreground="{DynamicResource Theme.Muted}" Visibility="{Binding ShowingStartupPreview, Converter={StaticResource BoolToVisibility}}" AutomationProperties.LiveSetting="Polite"/>
           <Border Background="{DynamicResource Theme.SequenceBackground}" BorderBrush="{DynamicResource Theme.SequenceBorder}" BorderThickness="0,0,0,1" Padding="10,6" Visibility="{Binding HasOperationBanner, Converter={StaticResource BoolToVisibility}}" AutomationProperties.AutomationId="OperationBanner">
             <DockPanel>
-              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+              <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                 <Button Content="{loc:Text Key=ConflictResolve}" Command="{Binding ShowChangesCommand}" Margin="8,0,0,0"/>
                 <Button Content="{loc:Text Key=ActionTitleContinue}" Command="{Binding ContinueCommand}" Margin="8,0,0,0"/>
                 <Button Content="{loc:Text Key=ActionTitleAbort}" Command="{Binding AbortCommand}" Margin="8,0,0,0"/>
               </StackPanel>
-              <TextBlock Text="{Binding OperationBanner}" Foreground="{DynamicResource Theme.Text}" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+              <TextBlock Margin="12,0,0,0" Text="{Binding OperationBanner}" Foreground="{DynamicResource Theme.Text}" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
             </DockPanel>
           </Border>
           <DataGrid Grid.Row="1" x:Name="HistoryTable" PreviewMouseWheel="OnHistoryWheel" ItemsSource="{Binding Commits}" SelectedItem="{Binding SelectedCommit}"

@@ -35,7 +35,7 @@ public sealed partial class ShellViewModel
         ShowHistoryCommand = new(() => { RevealDetails(DetailsIndex); if (!IsBusy && State?.Page?.Cursor.Offset > 0) BeginInspection(SelectedRepository!, force: true, firstPage: true); }, () => CanRead);
     }
     private void BeginCurrentRead(RepositoryTab tab, bool force = false, bool reopen = false)
-    { if (force) tab.Changes.ReadAt = default; BeginInspection(tab, force: force, reopen: reopen); }
+    { if (RepositoryBusy(tab)) return; if (force) tab.Changes.ReadAt = default; BeginInspection(tab, force: force, reopen: reopen); }
     private void CancelCountRead() { _countCancel?.Cancel(); _countCancel = null; _countGeneration++; }
     private void RevealDetails(int index) { DetailsIndex = index; PublishState(); }
     private void PublishChanges() => Changed(nameof(CommitButtonLabel));

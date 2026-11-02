@@ -94,6 +94,7 @@ public partial class App : Application
             if (_closing || _fatal) return;
             window.RestoreLayout(result.Settings);
             _shell!.CompleteStartup(result);
+            _shell.StartAutoFetch();
             _automaticUpdates = _updates!.RunAutomaticChecksAsync(_updateCancellation.Token);
             _log!.Record(result.CanSave ? DiagnosticEvent.SettingsLoaded : DiagnosticEvent.SettingsReadOnly);
         }
@@ -120,12 +121,13 @@ public partial class App : Application
         if (_allowClose) return;
         e.Cancel = true;
         if (_closing || sender is not MainWindow window) return;
-        if (_shell!.ActionOpen) { _shell.ShowActionDetailsCommand.Execute(null); return; } // Finish/cancel and reconcile before shutdown.
+        if (_shell!.HasUserOperation) { _shell.RevealRunningOperation(); return; } // Finish/cancel and reconcile before shutdown.
         _closing = true;
         _shell!.BeginShutdown();
         _startupCancellation.Cancel();
         try
         {
+            await _shell.StopAutoFetchAsync();
             _updateCancellation.Cancel();
             _updates?.Stop();
             if (_updates is not null) await _updates.ActiveTask;
@@ -178,7 +180,10 @@ public partial class App : Application
 
     private async Task<bool> RestartForUpdateAsync()
     {
-        if (_closing || _fatal || _shell?.CanPrepareUpdate != true || MainWindow is not MainWindow window) return false;
+        if (_closing || _fatal || _shell is null || _shell.HasUserOperation || MainWindow is not MainWindow window) return false;
+        // UpdateViewModel is busy, so new auto-fetch admission is paused during this drain.
+        await _shell.StopAutoFetchAsync(stopTimer: false);
+        if (!_shell.CanPrepareUpdate) return false;
         // A fast launch download can finish before the restored repository identities are known.
         // Drain startup reads before closing admission; BeginShutdown would otherwise cancel them.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));

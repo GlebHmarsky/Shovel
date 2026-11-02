@@ -10,7 +10,7 @@ public sealed partial class ShellViewModel
     public OperationActivity? Activity => _activity;
     public string OperationCaption => SettingsNotice.Length != 0 ? SettingsNotice : _showWorkspaceStatus ? Status : Activity?.Caption ?? (HasRecovery ? UiText.Get("RecoveryWaiting") :
         IsBusy ? UiText.Get(_readingDivergence ? "OperationReadingCounts" : "OperationReadingHistory") :
-        ActionOpen ? UiText.Get("ActionReviewing") : UiText.Get("NoActiveOperation"));
+        RepositoryBusy(SelectedRepository) ? UiText.Get("ActionReviewing") : UiText.Get("NoActiveOperation"));
     private object? _readAttempt;
     private void StartReadActivity(bool suppressed = false)
     {
@@ -34,7 +34,7 @@ public sealed partial class ShellViewModel
     private void PublishActivity(OperationActivity? activity)
     {
         if (activity is not null && SelectedRepository is { } tab)
-            Journal.Record(activity, tab.Directory, ReferenceEquals(activity.Attempt, _readAttempt),
+            Journal.Record(activity, tab.Directory, ReferenceEquals(activity.Attempt, _readAttempt) || CurrentAction?.IsBackground == true,
                 ReferenceEquals(activity.Attempt, _readAttempt) ? (activity.IsComplete ? RawOutput : null) : _commitModel?.RawOutput ?? CurrentAction?.RawOutput);
         if (activity is null || !ReferenceEquals(activity.Attempt, _activity?.Attempt)) _showWorkspaceStatus = false;
         if (Set(ref _activity, activity, nameof(Activity))) Changed(nameof(OperationCaption));

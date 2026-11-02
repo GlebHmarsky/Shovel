@@ -35,9 +35,9 @@ public sealed partial class ShellViewModel : ObservableObject
     public bool IsReady { get => _isReady; private set { if (Set(ref _isReady, value)) { RefreshCommands(); Changed(nameof(CanNavigate)); } } }
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(OperationStatus)); } } }
-    public bool CanNavigate => IsReady && !_stopping && !ActionOpen;
+    public bool CanNavigate => IsReady && !_stopping && !_commitOpen;
     public string OperationStatus => _commitModel is not null ? _commitModel.Summary : IsActionRunning ? CurrentAction!.Summary :
-        ActionOpen ? UiText.Get(_preparingAction ? "ActionPreparing" : "ActionReviewing") :
+        RepositoryBusy(SelectedRepository) ? UiText.Get(_preparingAction ? "ActionPreparing" : "ActionReviewing") :
         IsBusy ? UiText.Format(_readingDivergence ? "ComparingDuration" : "InspectingDuration", _elapsed.Elapsed.TotalSeconds) :
         HasRecovery ? UiText.Get("RecoveryWaiting") : HasAction ? CurrentAction!.Summary : UiText.Get("NoActiveOperation");
     private string _status = UiText.Get("LoadingSettings");
@@ -79,7 +79,7 @@ public sealed partial class ShellViewModel : ObservableObject
         get => _selectedRepository;
         set
         {
-            if (_selectedRepository == value || ActionOpen) return;
+            if (_selectedRepository == value || _commitOpen) return;
             SelectRepository(value);
         }
     }
@@ -89,12 +89,13 @@ public sealed partial class ShellViewModel : ObservableObject
         _sidebarCancel?.Cancel(); SidebarStatus = "";
         _operationCancellation?.Cancel(); _generation++; CancelCountRead();
         _selectedRepository = value;
-        PublishActivity(null);
+        PublishActivity(CurrentAction?.Activity);
         if (value is not null) value.History.LastUse = ++_useCounter;
         Status = value?.History.Error is { Length: > 0 } error ? error : UiText.Get(value?.History.Page is null ? "HistoryNotLoaded" : "HistoryCheckingCached");
         Changed(nameof(SelectedRepository)); Changed(nameof(RepositoryTitle)); PublishState();
-        if (CanNavigate && value is not null) BeginCurrentRead(value);
-        else if (value is null) { _timer.Stop(); _elapsed.Stop(); IsBusy = false; }
+        if (CanNavigate && value is not null && !RepositoryBusy(value)) BeginCurrentRead(value);
+        else { _timer.Stop(); _elapsed.Stop(); IsBusy = false; }
+
     }
     // View-only scroll offsets are captured/restored by code-behind; no filesystem/UI coupling.
     public event EventHandler? HistoryViewChanging;
@@ -149,21 +150,21 @@ public sealed partial class ShellViewModel : ObservableObject
         CancelCommand = new(() =>
         {
             if (_commitModel is not null) _commitModel.Cancel();
-            else if (ActionOpen) CurrentAction?.Cancel();
+            else if (IsActionRunning) CurrentAction?.Cancel();
             else _operationCancellation?.Cancel();
-        }, () => ActionOpen ? CurrentAction?.CanCancel == true : IsBusy);
+        }, () => IsActionRunning ? CurrentAction?.CanCancel == true : IsBusy);
         ChooseGitCommand = new(() =>
         {
             var path = _interaction!.ChooseGit(); if (path is null) return;
             _explicitGit = path; _git = null; Changed(nameof(GitStatus));
             foreach (var tab in Repositories) { tab.History.ValidatedAt = default; tab.Changes.ReadAt = default; }
             if (SelectedRepository is not null) BeginCurrentRead(SelectedRepository!, force: true);
-        }, () => CanNavigate && !IsBusy && _interaction is not null);
+        }, () => CanNavigate && !ActionOpen && !IsBusy && _interaction is not null);
         DiagnosticsCommand = new(() => { Changed(nameof(TimingDetails)); RevealDetails(2); }, () => CanNavigate);
-        CloseRepositoryCommand = new(() => CloseTab(SelectedRepository!), () => CanNavigate && SelectedRepository is not null);
+        CloseRepositoryCommand = new(() => CloseTab(SelectedRepository!), () => CanNavigate && SelectedRepository is not null && !RepositoryBusy(SelectedRepository));
         MoveLeftCommand = new(() => MoveTab(SelectedRepository!, -1), () => CanMove(SelectedRepository, -1));
         MoveRightCommand = new(() => MoveTab(SelectedRepository!, 1), () => CanMove(SelectedRepository, 1));
-        CloseTabCommand = new(CloseTab, tab => CanNavigate && Repositories.Contains(tab));
+        CloseTabCommand = new(CloseTab, tab => CanNavigate && !RepositoryBusy(tab) && Repositories.Contains(tab));
         CloseOtherTabsCommand = new(tab =>
         {
             SelectedRepository = tab;
@@ -177,7 +178,7 @@ public sealed partial class ShellViewModel : ObservableObject
         PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OperationStatus)) Changed(nameof(OperationCaption)); };
         InitializeActions(actions); InitializeChanges(); InitializeWorkspaceTools(tools);
     }
-    private bool CanRead => CanNavigate && SelectedRepository is not null && _reader is not null;
+    private bool CanRead => CanNavigate && !RepositoryBusy(SelectedRepository) && SelectedRepository is not null && _reader is not null;
 
     public void CompleteStartup(SettingsLoadResult result)
     {
@@ -211,7 +212,7 @@ public sealed partial class ShellViewModel : ObservableObject
             BeginInspection(SelectedRepository!);
     }
 
-    private void BeginInspection(RepositoryTab tab, bool reopen = false, bool force = false, int direction = 0, bool firstPage = false, bool actionReconcile = false)
+    private void BeginInspection(RepositoryTab tab, bool reopen = false, bool force = false, int direction = 0, bool firstPage = false, bool actionReconcile = false, bool checkChanges = true)
     {
         if (_reader is null || (!CanNavigate && !actionReconcile)) return;
         _operationCancellation?.Cancel();
@@ -368,8 +369,8 @@ public sealed partial class ShellViewModel : ObservableObject
                     FinishReadActivity(cancellation.IsCancellationRequested ? OperationOutcome.Cancelled :
                         !readSucceeded ? OperationOutcome.Failed : state.Divergence?.State == DivergenceState.Failed ? OperationOutcome.RefreshFailed : OperationOutcome.Success);
                     Changed(nameof(OperationStatus)); PublishState();
-                    if (historyPublished && !_stopping && !_commitOpen) { tab.SidebarReadAt = default; BeginCountRead(tab); }
-                    if (!_stopping && !_commitOpen && !ActionOpen && tab.Snapshot is not null) BeginSidebarRead(tab);
+                    if (historyPublished && !_stopping && !_commitOpen) { tab.SidebarReadAt = default; if (checkChanges) BeginCountRead(tab); }
+                    if (!_stopping && !_commitOpen && !RepositoryBusy(tab) && tab.Snapshot is not null) BeginSidebarRead(tab);
                 }
             }
             void RejectChangedIdentity()
@@ -417,10 +418,12 @@ public sealed partial class ShellViewModel : ObservableObject
     }
     public void CloseTab(RepositoryTab tab)
     {
-        if (!CanNavigate || !Repositories.Contains(tab)) return;
+        if (!CanNavigate || RepositoryBusy(tab) || !Repositories.Contains(tab)) return;
         var index = Repositories.IndexOf(tab);
         var selected = SelectedRepository == tab;
         Repositories.Remove(tab); _knownIdentities.Remove(tab.Directory);
+        if (_repositoryActions.Remove(tab.Directory, out var previous)) previous.PropertyChanged -= OnActionChanged;
+        _backgroundProblems.Remove(tab.Directory); _nextAutoFetch.Remove(tab);
         if (selected) SelectedRepository = Repositories.Count == 0 ? null : Repositories[Math.Min(index, Repositories.Count - 1)];
         RefreshCommands();
     }
@@ -469,7 +472,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
-    public void BeginShutdown() { _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
+    public void BeginShutdown() { _autoFetchTimer?.Stop(); _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
     public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _startupPreviewTask; await _countTask; await _oldCommitFiles; await _sidebarTask; }
-    public void ResumeAfterSaveFailure() { _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
+    public void ResumeAfterSaveFailure() { _autoFetchTimer?.Start(); _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }

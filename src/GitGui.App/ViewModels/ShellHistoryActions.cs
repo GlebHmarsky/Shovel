@@ -71,7 +71,7 @@ public sealed partial class ShellViewModel
         var snapshot = tab.Snapshot!; var page = tab.History.Page!;
         if (!_knownIdentities.TryGetValue(tab.Directory, out var identity)) return;
         var cached = new ActionContext(_git!, new(snapshot.Worktree, snapshot.GitDirectory, snapshot.CommonDirectory, identity.Fingerprint), snapshot, page.Session, [], "");
-        CancelCountRead(); SetActionOpen(true); _preparingAction = false; Changed(nameof(OperationStatus));
+        CancelCountRead(); SetActionOpen(true, tab); _preparingAction = false; Changed(nameof(OperationStatus));
         var attempted = false;
         try
         {
@@ -79,13 +79,7 @@ public sealed partial class ShellViewModel
                 snapshot.Commit!, row.Commit.Hash, UiText.Get("HistoryEffect" + action)), UiText.Get("HistoryMenu" + action))) return;
             if (SelectedRepository != tab) return;
             ActionContext? prepared = null;
-            var operation = new GitActionViewModel(cached, action, _actions!, async () =>
-            {
-                foreach (var related in Repositories.Where(item => string.Equals(item.Snapshot?.CommonDirectory, snapshot.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
-                { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; related.Changes.ReadAt = default; }
-                BeginInspection(tab, force: true, actionReconcile: true); await WaitForIdleAsync();
-                if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0) throw new System.IO.IOException();
-            }, prepareExecution: async token =>
+            var operation = new GitActionViewModel(cached, action, _actions!, () => ReconcileActionAsync(tab), prepareExecution: async token =>
             {
                 prepared = await _actions!.PrepareBranchManagementAsync(cached.Git, cached.Identity, cached.Repository, cached.History, token);
                 return prepared;
@@ -95,8 +89,8 @@ public sealed partial class ShellViewModel
                 return result with { Output = UiText.Format("HistoryActionTarget", row.Commit.Hash, snapshot.Commit ?? UiText.Get("NoBranch")) + Environment.NewLine + result.Output };
             });
             SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
-            await operation.RunningTask; Status = operation.Summary;
+            await operation.RunningTask; if (SelectedRepository == tab) Status = operation.Summary;
         }
-        finally { SetActionOpen(false); if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); } }
+        finally { SetActionOpen(false, tab); if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); } }
     }
 }

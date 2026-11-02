@@ -2,5 +2,5 @@ using System.Windows.Controls;
 namespace GitGui.App.Views;
 public partial class CommitFilesView : UserControl
 {
-    public CommitFilesView() => InitializeComponent();
+    public CommitFilesView() { InitializeComponent(); Loaded += (_, _) => ProportionalPanes.Columns(FilesColumn, DiffColumn); }
 }

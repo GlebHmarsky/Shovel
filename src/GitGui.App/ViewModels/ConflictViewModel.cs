@@ -71,6 +71,7 @@ public sealed class ConflictViewModel : ObservableObject
     public RelayCommand UseIncomingTextCommand { get; }
     public Task Work { get; private set; } = Task.CompletedTask;
     public event EventHandler? Completed;
+    public Action<string, string>? ReportProblem { get; init; }
     public ConflictViewModel(WorkingCopyContext context, LocalChange change, GitActions actions)
     {
         _context = context; _change = change; _actions = actions;
@@ -138,6 +139,7 @@ public sealed class ConflictViewModel : ObservableObject
         finally
         {
             _canSubmit = retryWithoutReload; End();
+            if (!_closed && GitGui.App.Services.OperationAttention.Required(outcome, Output)) ReportProblem?.Invoke(Status, Output);
             Journal?.Record(new(attempt, Title, Status, _watch.Elapsed.TotalSeconds, outcome), _context.Identity.Worktree, false, Output);
         }
         if (!_closed && !retryWithoutReload) Completed?.Invoke(this, EventArgs.Empty);

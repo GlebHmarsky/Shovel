@@ -1,8 +1,17 @@
 # Roadmap and decision register
 
-Updated 2026-11-01. [Product](product.md): UX; [requirements](requirements.md): acceptance; [architecture](architecture.md): implementation; [TODO](../TODO.md): only task checklist. This file holds milestone/evidence history and unresolved decisions.
+Updated 2026-11-02. [Product](product.md): UX; [requirements](requirements.md): acceptance; [architecture](architecture.md): implementation; [TODO](../TODO.md): only task checklist. This file holds milestone/evidence history and unresolved decisions.
 
 ## Current status
+
+### Repository workflows and attention (0.40.0 Beta)
+
+**2026-11-02.** Implemented the owner's repository/Commit/attention requests; [product](product.md#repository-workflows-0400-beta) owns behavior and limits, [architecture](architecture.md#repository-operation-ownership-and-attention-0400) owns mechanisms. Only disposable repositories and headless WPF checks were used. No desktop control, installed launch/update, or user repository mutation.
+
+Ten focused repository-workflow checks cover overlapping real local fetches in separate repositories, independent retained results, rejected native push and latest logs, explicit local-count refresh, ten-second auto-fetch/dedup/noninteractive environment, commit success/hook rejection, stash-only/shared base lanes across pages, proportional resize, themed attention content, and background cancellation/drain. Four existing graph checks, eight QOL checks and eleven clone/remote regression checks passed. Linked-worktree admission and absence of background local-status polling are asserted. Dark/Light attention content was reviewed at normal/minimum sizes. A clone regression check caught cancelled-clone results falling back to an older result; ownership was corrected before delivery. A headless F5 binding assertion needed dispatcher binding completion; the first alert render targeted the unshown Window and was blank, so renders now target actual content and assert bound log text.
+
+Release compilation passed with zero warnings/errors. Final focused logs: `artifacts/repository-workflows-0.40.0.txt` (10), `artifacts/network-workflows-0.40.0.txt` (11), `artifacts/update-checks-0.40.0.txt` (17). Existing QOL (8) and history-layout (4) checks passed; renders/fixtures are under `artifacts/check-qol/20261102-165813-2d58e14c6fb2459da3e459c27c3ab22e`, `artifacts/history-layout-checks/20261102-165719-0863d50a9297457e91dc911897fa9580` and the fixture directories recorded by the logs. No full regression or desktop automation was run. Publication evidence follows after the required smoke/package/upload workflow. Physical Ctrl+Enter/F5, taskbar flashing/native focus, real-server auth/cadence under many repositories, monitor/maximize behavior and installed acceptance remain unverified. Auto-fetch is due every ten seconds with two concurrent slots; busy or numerous repositories run later. Warnings are recognized by standard Git warning prefixes, not arbitrary successful hook prose. No settings control for auto-fetch yet.
+
 
 ### Representative history validation (0.39.1)
 

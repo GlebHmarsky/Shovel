@@ -34,7 +34,7 @@ public sealed partial class ShellViewModel
         if (known is null) return;
         var cached = new ActionContext(_git!, new RepositoryIdentity(snapshot.Worktree, snapshot.GitDirectory,
             snapshot.CommonDirectory, known.Fingerprint), snapshot, page.Session, [], "");
-        CancelCountRead(); SetActionOpen(true);
+        CancelCountRead(); SetActionOpen(true, tab);
         _preparingAction = false; Changed(nameof(OperationStatus));
         var attempted = false;
         try
@@ -50,14 +50,7 @@ public sealed partial class ShellViewModel
                 _ => GitAction.UnsetUpstream
             };
             ActionContext? prepared = null;
-            var operation = new GitActionViewModel(cached, kind, _actions!, async () =>
-            {
-                foreach (var related in Repositories.Where(item => string.Equals(item.Snapshot?.CommonDirectory, snapshot.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
-                { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; related.Changes.ReadAt = default; }
-                BeginInspection(tab, force: true, actionReconcile: true);
-                await WaitForIdleAsync();
-                if (tab.History.ValidatedAt == default || tab.History.Error.Length != 0) throw new System.IO.IOException();
-            }, prepareExecution: async token =>
+            var operation = new GitActionViewModel(cached, kind, _actions!, () => ReconcileActionAsync(tab), prepareExecution: async token =>
             {
                 var context = await _actions!.PrepareBranchManagementAsync(cached.Git, cached.Identity, cached.Repository, cached.History, token);
                 prepared = context; return context;
@@ -72,11 +65,11 @@ public sealed partial class ShellViewModel
             _preparingAction = false; SetLastAction(operation); DetailsIndex = 2;
             operation.RunCommand.Execute(null); attempted = operation.HasAttempt;
             await operation.RunningTask;
-            Status = operation.Summary;
+            if (SelectedRepository == tab) Status = operation.Summary;
         }
         finally
         {
-            SetActionOpen(false);
+            SetActionOpen(false, tab);
             if (attempted) { BeginCountRead(tab); BeginSidebarRead(tab); }
         }
     }

@@ -9,7 +9,7 @@ public sealed record GraphRow(int NodeLane, int NodeColor, int LaneCount, bool I
 
 // Empty hashes reserve vacant columns. Duplicate targets retain separate branch tracks
 // until that target's row, rather than joining unrelated branches early.
-public sealed record GraphLane(string Hash, int Color);
+public sealed record GraphLane(string Hash, int Color, bool IsStash = false);
 public sealed record GraphCursor(IReadOnlyList<GraphLane> Lanes, int NextColor)
 {
     public static GraphCursor Start { get; } = new([], 0);
@@ -22,7 +22,7 @@ public static class CommitGraph
     public static IReadOnlyList<GraphRow> Build(IReadOnlyList<CommitRecord> commits, CancellationToken token = default)
         => BuildPage(commits, GraphCursor.Start, token).Rows;
 
-    public static GraphPage BuildPage(IReadOnlyList<CommitRecord> commits, GraphCursor cursor, CancellationToken token = default)
+    public static GraphPage BuildPage(IReadOnlyList<CommitRecord> commits, GraphCursor cursor, CancellationToken token = default, IReadOnlySet<string>? stashTips = null)
     {
         var lanes = cursor.Lanes.ToList();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -33,9 +33,11 @@ public static class CommitGraph
             token.ThrowIfCancellationRequested();
             if (commit.Parents.Count > MaximumLanes) throw new GitReadException(GitFailure.HistoryTooWide);
             if (!seen.Add(commit.Hash) || commit.Parents.Any(seen.Contains)) throw new GitReadException(GitFailure.InvalidOutput);
-            var node = lanes.FindIndex(lane => lane.Hash == commit.Hash);
+            var isStash = stashTips?.Contains(commit.Hash) == true;
+            // Stash tracks end at their base; they never become an ordinary commit's lane.
+            var node = lanes.FindIndex(lane => lane.Hash == commit.Hash && lane.IsStash == isStash);
             var incoming = node >= 0;
-            if (!incoming) node = Allocate(new(commit.Hash, nextColor++));
+            if (!incoming) node = Allocate(new(commit.Hash, nextColor++, isStash));
             var before = lanes.ToArray(); var color = before[node].Color;
             for (var i = 0; i < lanes.Count; i++)
                 if (lanes[i].Hash == commit.Hash) lanes[i] = new("", lanes[i].Color);
@@ -43,7 +45,7 @@ public static class CommitGraph
             var outgoing = new List<int>();
             for (var p = 0; p < parents.Length; p++)
             {
-                if (p == 0) { lanes[node] = new(parents[p], color); outgoing.Add(node); }
+                if (p == 0) { lanes[node] = new(parents[p], color, isStash); outgoing.Add(node); }
                 else
                 {
                     var target = lanes.FindIndex(lane => lane.Hash == parents[p]);
@@ -60,7 +62,7 @@ public static class CommitGraph
                 else lines.Add(new(i, 0, i, 1, before[i].Color));
             }
             foreach (var lane in outgoing) lines.Add(new(node, .5, lane, 1, lanes[lane].Color));
-            rows.Add(new(node, color, width, parents.Length > 1, lines.ToArray()));
+            rows.Add(new(node, color, width, parents.Length > 1, lines.ToArray()) { IsStash = isStash });
             while (lanes.Count > 0 && lanes[^1].Hash.Length == 0) lanes.RemoveAt(lanes.Count - 1);
         }
         return new(rows, new(lanes.ToArray(), nextColor));

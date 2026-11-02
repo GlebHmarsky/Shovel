@@ -21,7 +21,9 @@ public sealed partial class ShellViewModel
                 { if (result?.Action.Success == true) throw new System.IO.IOException(); return; }
                 var tab = Repositories.FirstOrDefault(item => string.Equals(item.Directory, repository.Worktree, StringComparison.OrdinalIgnoreCase));
                 if (tab is null) { tab = new(repository.Worktree); Repositories.Add(tab); }
+                var openHere = SelectedRepository == _initializationOwner;
                 _initializationOwner = tab;
+                if (!openHere) { tab.Apply(repository); tab.History.NeedsRefresh = true; return; }
                 SelectRepository(tab);
                 BeginInspection(tab, reopen: true, force: true, actionReconcile: true);
                 await WaitForIdleAsync();
