@@ -5,7 +5,7 @@ Updated 2026-11-02. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Current phase
 
 - [x] **P1 — Repository workflow requests (0.40.0 Beta).** Per-repository operations/results, stash lanes, successful Commit close/Ctrl+Enter, proportional panes, ten-second auto-fetch, F5 local refresh, attention logs/taskbar API and left conflict actions. Focused evidence and limits in [roadmap](docs/roadmap.md#repository-workflows-and-attention-0400-beta).
-- [ ] **P1 — Deliver 0.40.0 Beta.** Run final smoke once, publish the matching signed installer/feed and verify the anonymous production download. Stable stays 0.39.1.
+- [x] **P1 — Deliver 0.40.0 Beta.** 26 smoke checks in 32.6 s; matching installer, signed update feed and anonymous full-package download verified. Stable stays 0.39.1. [Evidence](docs/roadmap.md#repository-workflows-and-attention-0400-beta).
 - [ ] **P2 — Auto-fetch settings.** Expose the interval/enable preference when settings are designed; current default and load/credential behavior are documented in product.
 
 
