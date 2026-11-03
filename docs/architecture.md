@@ -1,5 +1,15 @@
 # Architecture and distribution
 
+## Toolbar queue and static feedback (0.41.0)
+
+`ShellActionQueue` owns dispatcher-confined requests keyed by tab/action. A request captures its tab, known identity and branch, plus an action closure. Running requests retain their key through reconciliation; duplicate clicks return the same completion task. Admission uses operation owners/common directories and the selected view's read state. Deferred dispatch yields at Background priority rather than running inside property notifications. Other repository requests can start independently. Cancel removes not-yet-started requests; active cancellation remains with the existing model. Queue membership extends ActionOpen/HasUserOperation and tab-close guards, and excludes auto-fetch admission.
+
+Direct network execution can rebuild its context after an inactive tab's history page was evicted. It validates identity and current HEAD/branch, resolves default targets with native Git, and does not reject harmless remote-ref changes solely because a cached graph fingerprint is old. Explicit-target/options paths retain full fingerprint validation. Commit and main actions accept the captured tab rather than rereading current selection. Context menus and destructive actions retain their existing stale-target rules; this is not a general background command scripting system.
+
+Read/conflict elapsed notification timers and `OperationIndicator` are removed. Action/Commit output batching remains on its existing bounded dispatcher schedule; it no longer invalidates summaries to display a clock. Internal performance stopwatches remain available to tests. Activity summaries show title/phase only. Main-window preview drag/drop/mouse routing owns the native drag loop, full-slot adorner and neighbor transforms, with cleanup in finally.
+
+Inspection publishes the repository snapshot before reading the full history page. WPF recycling/viewport virtualization remains the rendering mechanism. Additional partial-page Git walks are intentionally avoided; immutable 200-row graph/cursor semantics are unchanged.
+
 ## Repository operation ownership and attention (0.40.0)
 
 `ShellActions` reserves operations per tab/common directory and retains per-repository `GitActionViewModel` results. Navigation admission is independent from mutation admission; update/shutdown admission still considers all active owners. Changing tabs cancels only selected-view reads. Shared `ReconcileActionAsync` refreshes the selected related view with its generation, or validates identity and inspects an inactive owner without publishing into another tab. Inactive caches are invalidated and read when selected. Clone/init only select their new tab if the user has stayed on the initiating tab. Closing a busy user operation reveals its owner; background fetch cancels/drains before shutdown saves settings. Update checks/download/restart pause auto-fetch admission; approved restart drains background fetch before the existing idle/settings/repository checks, without weakening user-operation guards.

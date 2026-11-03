@@ -17,11 +17,10 @@ public sealed class ConflictViewModel : ObservableObject
     private WorkingCopyContext _context;
     private LocalChange _change;
     private ConflictPreview? _preview;
+    private readonly Stopwatch _watch = new();
     private CancellationTokenSource? _cancel;
     private bool _busy, _current, _incoming, _closed, _canSubmit;
     private string _text = "", _combinedText = "", _status = UiText.Get("ConflictLoading"), _output = "";
-    private readonly Stopwatch _watch = new();
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     public string Path => _change.Path;
     public string Title => UiText.Get("ConflictTitle");
     public string Status { get => _status; private set => Set(ref _status, value); }
@@ -60,7 +59,6 @@ public sealed class ConflictViewModel : ObservableObject
     public string Help => UiText.Get(_preview is { CanEdit: false } ? "ConflictBinaryHelp" : "ConflictEditorHelp");
     public string ResolveHelp => UiText.Get(Busy ? "ConflictLoading" : !_canSubmit ? "ConflictReloadRequired" :
         !Current && !Incoming ? "ConflictChoose" : Current && Incoming && _preview?.CanEdit != true ? "ConflictBinaryHelp" : "ConflictResolveHelp");
-    public string Duration => UiText.Format("ConflictDuration", _watch.Elapsed.TotalSeconds);
     public bool HasMutation { get; private set; }
     public bool Resolved { get; private set; }
     public RelayCommand ResolveCommand { get; }
@@ -82,7 +80,6 @@ public sealed class ConflictViewModel : ObservableObject
         CancelCommand = new(() => _cancel?.Cancel(), () => Busy);
         UseCurrentTextCommand = new(() => Text = _preview?.Current?.Text ?? "", () => CanEdit);
         UseIncomingTextCommand = new(() => Text = _preview?.Incoming?.Text ?? "", () => CanEdit);
-        _timer.Tick += (_, _) => Changed(nameof(Duration));
     }
     public Task StartAsync() => Work = LoadAsync(false);
     private async Task LoadAsync(bool fresh)
@@ -144,8 +141,8 @@ public sealed class ConflictViewModel : ObservableObject
         }
         if (!_closed && !retryWithoutReload) Completed?.Invoke(this, EventArgs.Empty);
     }
-    private void Begin(bool mutation = false) { _cancel = new(mutation ? TimeSpan.FromMinutes(10) : TimeSpan.FromSeconds(45)); Busy = true; _watch.Restart(); _timer.Start(); }
-    private void End() { _watch.Stop(); _timer.Stop(); _cancel?.Dispose(); _cancel = null; Busy = false; Changed(nameof(Duration)); }
+    private void Begin(bool mutation = false) { _cancel = new(mutation ? TimeSpan.FromMinutes(10) : TimeSpan.FromSeconds(45)); Busy = true; _watch.Restart(); }
+    private void End() { _watch.Stop(); _cancel?.Dispose(); _cancel = null; Busy = false; }
     private static string Explain(Exception error) => UiText.Get(error is GitActionException action ? action.Code : error is GitReadException read ? "GitError" + read.Failure :
         error is OperationCanceledException ? "ActionResultCancelled" : "ActionReadFailed");
     private void Refresh()
@@ -155,5 +152,5 @@ public sealed class ConflictViewModel : ObservableObject
         Changed(nameof(HasPreview));
         Changed(nameof(ResultLabel));
     }
-    public async Task CloseAsync() { _closed = true; _cancel?.Cancel(); await Work; _timer.Stop(); }
+    public async Task CloseAsync() { _closed = true; _cancel?.Cancel(); await Work;  }
 }

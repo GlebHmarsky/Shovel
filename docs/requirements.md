@@ -1,5 +1,11 @@
 # Requirements and acceptance
 
+## Queued interaction acceptance (0.41.0)
+
+Toolbar actions must accept clicks during reads/operations without concurrent same-repository mutations. Repeated requests share one task, distinct actions retain order, and tab switching cannot redirect the target. Queued requests guard close/update, are cancellable before execution, and do not persist. Validate identity/branch again; native Git protections, filters and hooks stay in force. Auto-fetch must not jump ahead of queued user work.
+
+No elapsed-time UI, animation clocks or indeterminate operation strip remain. Phase/outcome, cancel and error logs remain usable. Drag feedback must update below the tab strip, reserve an entire tab slot, shift neighbors and reset on cancellation. Verify that a 200-row history page realizes only viewport containers without reducing page size/scope. Physical drag behavior remains owner desktop acceptance.
+
 ## Repository workflow acceptance (0.40.0)
 
 Hold a real fetch in repository A, switch to B and start another fetch; neither tab switch cancels Git, neither completion changes the selected repository, and each result remains available. Block competing same/common-directory mutations, retain active owners through reconciliation, and guard update/shutdown against all user operations. Background fetch shutdown must cancel/drain without an error alert. Auto-fetch uses a 10-second due interval with bounded concurrency, skips busy/sequence/uninspected repositories and never prompts for credentials; repeated identical failures do not open repeated dialogs. F5 must refresh actual local changes as well as repository metadata.

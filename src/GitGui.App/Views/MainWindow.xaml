@@ -9,7 +9,7 @@
         Background="{DynamicResource Theme.Chrome}"
         Foreground="{DynamicResource Theme.Text}"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True"
-        AutomationProperties.AutomationId="MainWindow">
+        AutomationProperties.AutomationId="MainWindow" AllowDrop="True" PreviewDragOver="OnTabDragOver" PreviewDrop="OnTabDrop" PreviewMouseMove="OnTabMouseMove" PreviewMouseLeftButtonUp="OnTabMouseUp">
   <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="32" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False" CornerRadius="0"/></shell:WindowChrome.WindowChrome>
   <Window.InputBindings>
     <KeyBinding Key="F5" Command="{Binding RefreshRepositoryCommand}"/>
@@ -117,14 +117,14 @@
       </MenuItem>
       <MenuItem Header="{loc:Text Key=HelpMenu}">
         <MenuItem Header="{loc:Text Key=UpdateTitle}" Click="OnUpdates" />
-        <MenuItem Header="{loc:Text Key=UpdateReadyMenu}" Click="OnUpdates" Visibility="{Binding Updates.Ready, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="{loc:Text Key=UpdateReadyMenu}" Click="OnUpdates" Visibility="{Binding Updates.Ready, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}" />
         <MenuItem Header="{Binding Version}" IsEnabled="False" />
 
       </MenuItem>
     </Menu>
     </Grid>
     <ListBox x:Name="RepositoryTabs" Grid.Row="2" ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}" IsEnabled="{Binding CanNavigate}"
-             AllowDrop="True" PreviewMouseMove="OnTabMouseMove" PreviewMouseLeftButtonUp="OnTabMouseUp" DragOver="OnTabDragOver" Drop="OnTabDrop"
+             AllowDrop="True"
              BorderThickness="0,0,0,1" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
              AutomationProperties.Name="{loc:Text Key=RepositoryTabs}" AutomationProperties.AutomationId="RepositoryTabs">
       <ListBox.Template><ControlTemplate TargetType="ListBox"><Border Background="{DynamicResource Theme.TabStrip}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer Focusable="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"><ItemsPresenter/></ScrollViewer></Border></ControlTemplate></ListBox.Template>
@@ -194,7 +194,7 @@
       <Grid Grid.Column="1" MaxWidth="530"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <Border x:Name="ActivityAnchor" Margin="12,0" Padding="9,5" MaxWidth="430" Background="{DynamicResource Theme.Raised}" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="6">
         <Grid>
-          <Grid.RowDefinitions><RowDefinition Height="17"/><RowDefinition Height="17"/><RowDefinition Height="Auto"/><RowDefinition Height="2"/></Grid.RowDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="17"/><RowDefinition Height="17"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <Button Grid.RowSpan="2" Click="OnActivityLog" HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,38,0" BorderThickness="0" Background="Transparent" ToolTip="{loc:Text Key=ActivityTitle}" AutomationProperties.Name="{loc:Text Key=ActivityTitle}" AutomationProperties.AutomationId="ActivityLog">
            <Grid><TextBlock Text="☰" VerticalAlignment="Center"/><StackPanel Margin="30,0,0,0">
             <TextBlock Text="{Binding RepositoryTitle}" TextAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -203,10 +203,14 @@
           </Button>
           <StackPanel Grid.RowSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button Content="⋯" Command="{Binding ShowActionDetailsCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionDetails}" AutomationProperties.Name="{loc:Text Key=ActionDetails}" />
-            <Button Content="×" Command="{Binding CancelCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionCancelHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{loc:Text Key=ActionCancel}" AutomationProperties.HelpText="{loc:Text Key=ActionCancelHelp}" />
+            <Button Content="×" Command="{Binding CancelCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" ToolTip="{loc:Text Key=ActionCancelHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{loc:Text Key=ActionCancel}" AutomationProperties.HelpText="{loc:Text Key=ActionCancelHelp}" />
           </StackPanel>
-          <views:OperationIndicator Grid.Row="2" Activity="{Binding Activity}" Caption="{Binding OperationCaption}"/>
-          <ProgressBar Grid.Row="3" Height="2" IsIndeterminate="{Binding IsActionRunning}" Visibility="{Binding IsActionRunning, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="{Binding OperationCaption}" AutomationProperties.AutomationId="ActionProgress" />
+          <StackPanel Grid.Row="2">
+            <TextBlock Text="{Binding QueueStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding QueueStatus}">
+              <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style>
+            </TextBlock>
+            <TextBlock Text="{Binding OperationCaption}" TextTrimming="CharacterEllipsis" ToolTip="{Binding OperationCaption}"/>
+          </StackPanel>
         </Grid>
       </Border>
       <Popup x:Name="ActivityPopup" PlacementTarget="{Binding ElementName=ActivityAnchor}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="None">
@@ -233,7 +237,7 @@
        </Button>
       </StackPanel></Grid>
       <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-        <Button Content="{loc:Text Key=UpdateReadyShort}" Click="OnUpdates" Visibility="{Binding Updates.Ready, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding Updates.Status}"/>
+        <Button Content="{loc:Text Key=UpdateReadyShort}" Click="OnUpdates" Visibility="{Binding Updates.Ready, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}" ToolTip="{Binding Updates.Status}"/>
         <Button Style="{StaticResource ToolbarButton}" Click="OnToolbarMenu" IsEnabled="{Binding CanOpenTools}" ToolTip="{Binding WorkspaceToolsHelp}" AutomationProperties.Name="{loc:Text Key=WorkspaceOpenIn}">
           <StackPanel><Path Style="{StaticResource ToolbarIcon}" Data="M3,16 L3,10 C3,5 12,5 16,5 M12,1 L17,5 12,10"/><TextBlock Text="{loc:Text Key=WorkspaceOpenIn}"/></StackPanel>
           <Button.ContextMenu><ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">

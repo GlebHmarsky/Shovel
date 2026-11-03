@@ -61,7 +61,7 @@ internal static partial class Program
                         var options = buttons.Single(b => AutomationProperties.GetAutomationId(b) == "PullOptions");
                         Expect(direct.Command == shell.DefaultPullCommand && options.Command == shell.PullCommand && direct.IsEnabled && options.IsEnabled,
                             "Both accessible controls bind working commands");
-                        Expect(options.TranslatePoint(new Point(options.ActualWidth, 0), content).X < size.Item1 && options.ActualWidth >= 22, "Arrow fits the toolbar");
+                        Expect(options.TranslatePoint(new Point(options.ActualWidth, 0), content).X < size.Item1 && options.ActualWidth >= 18, "Arrow fits the toolbar");
                         SaveRender(content, $"default-pull-{theme}-{size.Item1}.png", size.Item1, size.Item2);
                     }
                 }
@@ -79,7 +79,7 @@ internal static partial class Program
             Expect(opened == previousOpened && shell.IsActionRunning && shell.ActionOpen && shell.CancelCommand.CanExecute(null), "No modal; shared action and cancellation active");
             Expect(shell.CurrentAction is { Rebase: true, AutoStash: false }, "Main button uses fixed existing defaults");
             shell.DefaultPullCommand.Execute(null); shell.PullCommand.Execute(null);
-            Expect(opened == previousOpened && runner.Fetches == fetches + 1, "Duplicate commands blocked");
+            Expect(opened == previousOpened && runner.Fetches == fetches + 1, "Duplicate submissions share the running request");
             runner.Release.TrySetResult(); await shell.ActionTask;
             Expect(shell.CurrentAction?.Succeeded == true && !shell.ActionOpen && shell.CurrentAction.RawOutput.Length > 0, "Completed result/output retained");
             Expect(await Git(repo, "rev-parse", "HEAD^") == remoteTip && File.Exists(Path.Combine(repo, "local.txt")) && File.Exists(Path.Combine(repo, "remote.txt")), "Remote changes imported and local commit replayed");

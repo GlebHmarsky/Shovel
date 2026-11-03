@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.41.0 — 2026-11-03 (Beta)
+
+- Accept unique queued toolbar actions during repository reads/operations, retaining the original repository and validating targets when execution starts. Keep other repositories usable.
+- Remove elapsed counters, timing badges, fading animations and the indeterminate operation strip; retain static status, cancellation and activity logs.
+- Continue tab drag feedback across history, preview a full tab slot and move neighbors to their prospective positions.
+- Show inspected branch context before history completes; verify viewport virtualization without reducing the 200-row page.
+- Stable remains 0.39.1.
+
 ## 0.40.0 — 2026-11-02 (Beta)
 
 - Keep Git operations/results with their repository while switching tabs and working in other repositories; retain common-directory serialization.

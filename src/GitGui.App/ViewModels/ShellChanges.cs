@@ -31,7 +31,11 @@ public sealed partial class ShellViewModel
     public RelayCommand ShowHistoryCommand { get; private set; } = null!;
     private void InitializeChanges()
     {
-        ShowChangesCommand = new(() => CommitDialogTask = OpenCommitAsync(), () => CanRead && _actions is not null && _interaction is not null);
+        ShowChangesCommand = new(() =>
+        {
+            var tab = SelectedRepository!;
+            CommitDialogTask = QueueAction(tab, "Commit", UiText.Get("CommitWorkspace"), () => OpenCommitAsync(tab));
+        }, () => CanRequestAction);
         ShowHistoryCommand = new(() => { RevealDetails(DetailsIndex); if (!IsBusy && State?.Page?.Cursor.Offset > 0) BeginInspection(SelectedRepository!, force: true, firstPage: true); }, () => CanRead);
     }
     private void BeginCurrentRead(RepositoryTab tab, bool force = false, bool reopen = false)
@@ -40,9 +44,8 @@ public sealed partial class ShellViewModel
     private void RevealDetails(int index) { DetailsIndex = index; PublishState(); }
     private void PublishChanges() => Changed(nameof(CommitButtonLabel));
 
-    private async Task OpenCommitAsync()
+    private async Task OpenCommitAsync(RepositoryTab tab)
     {
-        var tab = SelectedRepository!;
         CancelCountRead(); _sidebarCancel?.Cancel(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
         var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
             _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities));
@@ -70,7 +73,8 @@ public sealed partial class ShellViewModel
                 { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; related.Changes.ReadAt = default; }
             model.PropertyChanged -= OnChanged; model.SnapshotChanged -= OnSnapshot;
             _commitModel = null; _commitOpen = false; Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate)); Changed(nameof(OperationStatus)); PublishChanges(); RefreshCommands();
-            if (model.HasMutation && !_stopping) BeginInspection(tab, force: true);
+            if (model.HasMutation && !_stopping && SelectedRepository == tab) BeginInspection(tab, force: true);
+            DrainActionQueue();
         }
     }
     private void BeginCountRead(RepositoryTab tab)

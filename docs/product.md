@@ -1,5 +1,17 @@
 # Product
 
+## Queued toolbar actions and quiet feedback (0.41.0 Beta)
+
+**Confirmed 2026-11-03:** Fetch/Pull/Push, their options, New/Switch Branch, Commit and explicit Refresh accept requests while a repository read or operation is running. One request per action/repository waits in order; repeated clicks share the pending/running request. The queue stays with the original repository when tabs change. A queued options/editor window opens when that repository becomes available. Cancel removes pending requests for the selected tab and cancels its cancellable active work. Different repositories can still run concurrently; linked worktrees serialize. Missing targets (for example, no upstream) remain unavailable, and stale contextual/destructive actions retain their existing validation and availability rules.
+
+Queued work participates in close/update guards and takes precedence over auto-fetch. Execution validates the repository and requested branch again; it reports changed targets instead of silently switching branches. Queues are session-only and never replay after restart.
+
+Elapsed counters, badges, entrance/completion animations and the indeterminate operation strip are removed. Plain phase/outcome text, errors, cancellation and the activity log remain. Log timestamps identify when an operation started; they do not count elapsed time. This supersedes the historical timed-feedback descriptions below.
+
+Tab dragging continues across the whole main window. A translucent full-width tab slot previews the destination, neighboring tabs move into their prospective positions, and a label follows the pointer. Escape restores the original order and visuals.
+
+Initial inspection publishes repository/branch context before the history walk completes. History already draws only viewport rows; the full 200-row page and stable graph/paging remain intact. No extra 25-row Git query is added: measured formatting was under 4 ms, while Git discovery/inspection/history dominated. [Evidence and limitations](roadmap.md#queued-actions-and-quiet-feedback-0410-beta).
+
 ## Repository workflows (0.40.0 Beta)
 
 **Confirmed 2026-11-02:** operations stay with their repository while you switch tabs and start work in another repository. Same-repository and linked-worktree mutations remain serialized; a busy repository cannot be closed until its operation finishes. Options/Commit/Stashes remain ordinary owned modals. Completed results and logs remain associated with their repository; opening another tab never cancels its Git operation.

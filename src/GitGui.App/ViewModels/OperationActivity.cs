@@ -10,7 +10,7 @@ public sealed record OperationActivity(object Attempt, string Title, string Phas
     public bool IsComplete => Outcome != OperationOutcome.Running;
     public string Caption => UiText.Format("OperationCaption", Title, Phase);
     public string Duration => UiText.Format("OperationSeconds", Seconds);
-    public string Help => UiText.Format("OperationTimingHelp", Title, Phase, Seconds);
+    public string Help => Caption;
     public string Mark => Outcome switch
     {
         OperationOutcome.Success => "✓",

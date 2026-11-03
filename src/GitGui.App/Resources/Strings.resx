@@ -954,4 +954,5 @@ Previous HEAD: {1}</value></data>
   <data name="OperationAttentionTitle" xml:space="preserve"><value>Shovel needs attention</value></data>
   <data name="OperationAttentionLogs" xml:space="preserve"><value>Latest operation output</value></data>
   <data name="OperationAttentionDismiss" xml:space="preserve"><value>Dismiss</value></data>
+  <data name="ActionQueued" xml:space="preserve"><value>Queued: {0}</value></data>
 </root>

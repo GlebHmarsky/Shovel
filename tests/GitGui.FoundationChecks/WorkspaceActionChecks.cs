@@ -77,10 +77,11 @@ internal static partial class Program
             await Dispatcher.Yield(DispatcherPriority.ContextIdle);
             Expect(optionsClosed && shell.ActionOpen && shell.IsActionRunning && shell.HasAction, "Main shell owns submitted operation");
             Expect(shell.OperationStatus.Contains(UiText.Get("ActionStageFetching")) && shell.CancelCommand.CanExecute(null), "Visible fetch phase and cancellation");
-            Expect(ReferenceEquals(oldRows, shell.Commits) && !shell.PullCommand.CanExecute(null), "Rows retained and duplicate action blocked");
+            Expect(ReferenceEquals(oldRows, shell.Commits) && shell.PullCommand.CanExecute(null), "Rows retained and toolbar accepts deduplicated requests");
             var original = shell.SelectedRepository;
             shell.SelectedRepository = shell.Repositories[1]; shell.CloseTab(original!);
-            Expect(shell.SelectedRepository == original && shell.Repositories.Contains(original!), "Repository admission stays closed until reconciliation");
+            Expect(shell.SelectedRepository != original && shell.Repositories.Contains(original!), "Switching is available while the running repository remains owned");
+            shell.SelectedRepository = original;
             var window = new MainWindow(shell);
             try
             {
@@ -89,8 +90,7 @@ internal static partial class Program
                 SaveRender(content, "pull-running.png", 1200, 760);
                 Arrange(content, 900, 580); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 SaveRender(content, "pull-running-minimum.png", 900, 580);
-                Expect(VisualDescendants<ProgressBar>(content).Single(item => AutomationProperties.GetAutomationId(item) == "ActionProgress").IsIndeterminate,
-                    "Real running state drives progress, without a fabricated percentage");
+                Expect(!VisualDescendants<ProgressBar>(content).Any(), "Static status replaces animated progress");
                 gate.Release.TrySetResult();
                 await shell.ActionTask.WaitAsync(TimeSpan.FromSeconds(30));
                 Expect(shell.CurrentAction is { Succeeded: true, IsRunning: false } && !shell.ActionOpen && shell.CanNavigate, "Success retained after reinspection");

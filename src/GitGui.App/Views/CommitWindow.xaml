@@ -132,7 +132,7 @@
   </Grid>
   <StackPanel Grid.Row="2" Background="{DynamicResource Theme.Chrome}">
    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="10,6" AutomationProperties.LiveSetting="Polite"/>
-   <Expander Header="{loc:Text Key=ActionOutput}" Margin="10,0,10,5"><StackPanel><TextBlock Text="{Binding TimingSummary}" TextWrapping="Wrap" Margin="0,3"/><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" MaxHeight="120" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/></StackPanel></Expander>
+   <Expander Header="{loc:Text Key=ActionOutput}" Margin="10,0,10,5"><StackPanel><TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" MaxHeight="120" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/></StackPanel></Expander>
   </StackPanel>
  </Grid>
 </Window>

@@ -131,14 +131,7 @@ internal static partial class Program
                     var remote = new RemoteSetupWindow(new RemoteSetupViewModel(["origin"]));
                     try { Arrange((FrameworkElement)remote.Content, 540, 340); SaveRender((FrameworkElement)remote.Content, "add-remote.png", 540, 340); }
                     finally { remote.Close(); }
-                    var view = new OperationIndicator(); var attempt = new object(); view.Activity = new(attempt, "History", "Reading", 0, OperationOutcome.Running);
-                    AnimationClock? Clock(string name) => (AnimationClock?)typeof(OperationIndicator).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(view);
-                    var entrance = Clock("_entranceClock"); view.Activity = view.Activity with { Seconds = .2 };
-                    Expect(ReferenceEquals(entrance, Clock("_entranceClock")), "Ticks do not restart fade-in");
-                    view.Activity = view.Activity with { Outcome = OperationOutcome.Success };
-                    Expect(Clock("_entranceClock") is null && Clock("_completionClock") is not null, "Completion replaces entrance with hold/fade-out");
-                    Clock("_completionClock")!.Controller!.SeekAlignedToLastTick(TimeSpan.FromSeconds(2.1), TimeSeekOrigin.BeginTime);
-                    Expect(((Border)view.FindName("DurationBadge")).Opacity < .01, "Timer fades away");
+                    Expect(!VisualDescendants<ProgressBar>(content).Any(), "No animated operation indicator");
                 }
                 finally { window.Close(); AppTheme.Apply(Application.Current.Resources, false); }
             });

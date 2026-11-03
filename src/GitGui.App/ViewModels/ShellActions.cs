@@ -11,7 +11,7 @@ public sealed partial class ShellViewModel
     private bool _actionOpen, _preparingAction;
     private readonly HashSet<RepositoryTab> _operationOwners = [];
     private readonly Dictionary<string, GitActionViewModel> _repositoryActions = new(StringComparer.OrdinalIgnoreCase);
-    public bool ActionOpen => _actionOpen || _operationOwners.Count != 0 || _commitOpen;
+    public bool ActionOpen => _actionOpen || _operationOwners.Count != 0 || _queuedActions.Count != 0 || _commitOpen;
     private bool RepositoryBusy(RepositoryTab? tab) => tab is not null && (_actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => owner == tab ||
         owner.Snapshot?.CommonDirectory is { } common && string.Equals(common, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)));
     private GitActionViewModel? _lastAction;
@@ -41,28 +41,26 @@ public sealed partial class ShellViewModel
     public RelayCommand<string> SwitchBranchCommand { get; private set; } = null!;
     public IReadOnlyList<string> LocalBranches => State?.Page?.Session.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray() ?? [];
     public IReadOnlyList<BranchMenuItem> BranchMenuItems => LocalBranches.Select(name => new BranchMenuItem(name, SwitchBranchCommand)).ToArray();
-    private bool CanAct => CanNavigate && !RepositoryBusy(SelectedRepository) && !IsBusy && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
-    public bool CanOpenBranchMenu => CanAct;
+    private bool CanAct => CanNavigate && !HasQueuedAction(SelectedRepository) && !RepositoryBusy(SelectedRepository) && !IsBusy && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
+    public bool CanOpenBranchMenu => CanRequestAction;
     private string? ActionUnavailableKey => !IsReady || _stopping ? "ActionWorkspaceStarting" :
-        RepositoryBusy(SelectedRepository) ? "ActionWorkspaceBusy" : SelectedRepository is null ? "ActionOpenRepository" :
-        IsBusy || ShowingStartupPreview ? "ActionWaitForRead" : _git is null ? "ActionSelectGit" :
+        SelectedRepository is null ? "ActionOpenRepository" :
+        _git is null ? "ActionSelectGit" :
         _interaction is null || _actions is null || SelectedRepository.Snapshot is null || State?.Page is null ? "ActionInspectionNeeded" :
         SelectedRepository.Snapshot.Operation != RepositoryOperation.None ? "ActionSequence" : null;
     public string BranchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleNewBranch");
     public string FetchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleFetch");
     public string PullActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? UiText.Get("ActionPullNeedsBranch") : DivergenceHelp;
-    private (string Remote, string Branch)? DefaultPullTarget
+    private (string Remote, string Branch)? DefaultPullTarget => PullTarget(SelectedRepository);
+    private static (string Remote, string Branch)? PullTarget(RepositoryTab? tab)
     {
-        get
-        {
-            var snapshot = SelectedRepository?.Snapshot;
-            if (snapshot?.HeadKind != HeadKind.Branch || snapshot.UpstreamRef is not { } upstream) return null;
-            var remotes = snapshot.RemoteNames.Where(name => upstream.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)).ToArray();
-            if (remotes.Length != 1) return null;
-            var branch = upstream[(14 + remotes[0].Length)..];
-            return branch.Length > 0 ? (remotes[0], branch) : null;
-        }
+        var snapshot = tab?.Snapshot;
+        if (snapshot?.HeadKind != HeadKind.Branch || snapshot.UpstreamRef is not { } upstream) return null;
+        var remotes = snapshot.RemoteNames.Where(name => upstream.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)).ToArray();
+        if (remotes.Length != 1) return null;
+        var branch = upstream[(14 + remotes[0].Length)..];
+        return branch.Length > 0 ? (remotes[0], branch) : null;
     }
     public string DefaultPullHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? UiText.Get("ActionPullNeedsBranch") :
@@ -73,7 +71,7 @@ public sealed partial class ShellViewModel
     public string PushActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         LocalBranches.Count == 0 ? UiText.Get("ActionNeedsBranch") : DivergenceHelp;
     public string SwitchActionHelp => UiText.Get(ActionUnavailableKey ?? (LocalBranches.Count == 0 ? "ActionNeedsBranch" : "ActionTitleSwitchBranch"));
-    public bool CanSwitchBranch => CanAct && LocalBranches.Count != 0;
+    public bool CanSwitchBranch => CanRequestAction && LocalBranches.Count != 0;
     private void InitializeActions(GitActions? actions)
     {
         _actions = actions;
@@ -86,21 +84,27 @@ public sealed partial class ShellViewModel
         SkipCommand = new(() => OpenAction(GitAction.Skip), () => CanRecover && CanSkipRecovery);
         AbortCommand = new(() => OpenAction(GitAction.Abort), () => CanRecover);
         ShowActionDetailsCommand = new(() => RevealDetails(2), () => HasAction);
-        NewBranchCommand = new(() => OpenAction(GitAction.NewBranch), () => CanAct);
-        FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanAct);
-        PullCommand = new(() => OpenAction(GitAction.Pull), () => CanAct && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
-        DefaultPullCommand = new(() => ActionTask = OpenActionAsync(GitAction.Pull, null, defaultPull: true), () => CanAct && DefaultPullTarget is not null);
-        DefaultFetchCommand = new(() => ActionTask = OpenActionAsync(GitAction.Fetch, null, directNetwork: true), () => CanAct && SelectedRepository?.Snapshot?.RemoteNames.Count > 0);
-        DefaultPushCommand = new(() => ActionTask = OpenActionAsync(GitAction.Push, null, directNetwork: true), () => CanAct && SelectedRepository?.Snapshot is { HeadKind: HeadKind.Branch, RemoteNames.Count: > 0 });
-        PushCommand = new(() => OpenAction(GitAction.Push), () => CanAct && LocalBranches.Count != 0);
-        SwitchBranchCommand = new(branch => OpenAction(GitAction.SwitchBranch, branch), branch => CanAct && LocalBranches.Contains(branch));
+        NewBranchCommand = new(() => OpenAction(GitAction.NewBranch), () => CanRequestAction);
+        FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanRequestAction);
+        PullCommand = new(() => OpenAction(GitAction.Pull), () => CanRequestAction && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
+        DefaultPullCommand = new(() => OpenAction(GitAction.Pull, defaultPull: true), () => CanRequestAction && DefaultPullTarget is not null);
+        DefaultFetchCommand = new(() => OpenAction(GitAction.Fetch, directNetwork: true), () => CanRequestAction && SelectedRepository?.Snapshot?.RemoteNames.Count > 0);
+        DefaultPushCommand = new(() => OpenAction(GitAction.Push, directNetwork: true), () => CanRequestAction && SelectedRepository?.Snapshot is { HeadKind: HeadKind.Branch, RemoteNames.Count: > 0 });
+        PushCommand = new(() => OpenAction(GitAction.Push), () => CanRequestAction && LocalBranches.Count != 0);
+        SwitchBranchCommand = new(branch => OpenAction(GitAction.SwitchBranch, branch), branch => CanRequestAction && LocalBranches.Contains(branch));
     }
-    private void OpenAction(GitAction action, string? branch = null) => ActionTask = OpenActionAsync(action, branch);
+    private void OpenAction(GitAction action, string? branch = null, bool defaultPull = false, bool directNetwork = false)
+    {
+        var tab = SelectedRepository!;
+        ActionTask = QueueAction(tab, action.ToString(), UiText.Get("ActionTitle" + action),
+            () => OpenActionAsync(action, branch, defaultPull, directNetwork, tab));
+    }
     private async Task OpenActionAsync(GitAction action, string? branch, bool defaultPull = false, bool directNetwork = false, RepositoryTab? targetTab = null, bool background = false)
     {
         var tab = targetTab ?? SelectedRepository!;
-        var pullTarget = defaultPull ? DefaultPullTarget : null;
-        if (defaultPull && pullTarget is null) return;
+        var pullTarget = defaultPull ? PullTarget(tab) : null;
+        if (defaultPull && pullTarget is null) throw new GitActionException("PullDefaultNeedsUpstream");
+        if (tab.Snapshot is not { Operation: RepositoryOperation.None } && action is not (GitAction.Continue or GitAction.Skip or GitAction.Abort)) throw new GitActionException("ActionSequence");
         // A modal confirmation pumps the dispatcher. Freeze its target before it opens;
         // activation/refresh must not silently replace the operation the user reviewed.
         var reviewedSnapshot = tab.Snapshot!;
@@ -110,14 +114,13 @@ public sealed partial class ShellViewModel
             !_interaction!.ConfirmRecovery(UiText.Format("RecoveryConfirm" + action, tab.Directory,
                 UiText.Get("Operation" + recovery.Kind), recovery.Branch.Length > 0 ? recovery.Branch : reviewedSnapshot.Branch ?? UiText.Get("NoBranch"),
                 recovery.Target.Length > 0 ? recovery.Target : reviewedSnapshot.Commit ?? UiText.Get("NoBranch"), recovery.CurrentCommit), UiText.Get("ActionTitle" + action))) return;
-        if (!background && SelectedRepository != tab) return;
         if (SelectedRepository == tab) CancelCountRead();
         var attempted = false;
         SetActionOpen(true, tab); if (!background) Status = UiText.Get("ActionPreparing");
         try
         {
             var identity = recoveryAction ? reviewedIdentity : _knownIdentities.GetValueOrDefault(tab.Directory);
-            var history = tab.History.Page?.Session ?? (background ? new HistorySession(tab.Snapshot!, HistoryScope.AllCommits, "", [], false) : null);
+            var history = tab.History.Page?.Session ?? (background || directNetwork || defaultPull ? new HistorySession(tab.Snapshot!, HistoryScope.AllCommits, "", [], false) : null);
             if (history is null || identity is null)
                 throw new GitActionException("ActionInspectionNeeded");
             var snapshot = recoveryAction ? reviewedSnapshot : tab.Snapshot!;
@@ -130,7 +133,7 @@ public sealed partial class ShellViewModel
                 if (!_knownIdentities.TryGetValue(tab.Directory, out var known) || known.Fingerprint != context.Identity.Fingerprint)
                     throw new GitActionException("ActionIdentityChanged");
                 if (!background && (context.Repository.Commit != cached.Repository.Commit || context.Repository.Branch != cached.Repository.Branch ||
-                    context.History.Fingerprint != cached.History.Fingerprint))
+                    (!directNetwork && !defaultPull && context.History.Fingerprint != cached.History.Fingerprint)))
                     throw new GitActionException("ActionChanged");
                 if (pullTarget is { } target)
                     await _actions.ValidateDefaultPullTargetAsync(context, target.Remote, target.Branch, token);
@@ -142,16 +145,16 @@ public sealed partial class ShellViewModel
                 model.Remote = cached.Remotes.Single(remote => remote.Name == selectedTarget.Remote);
                 model.RemoteBranch = selectedTarget.Branch;
             }
-            var previous = CurrentAction;
+            var previous = _repositoryActions.GetValueOrDefault(tab.Directory);
             _preparingAction = false;
             SetLastAction(model);
             if (recoveryAction || defaultPull || directNetwork) model.RunCommand.Execute(null);
             else _interaction!.ShowGitAction(model);
             model.DismissOptions(); attempted = model.HasAttempt;
-            if (!model.HasAttempt) SetLastAction(previous);
+            if (!model.HasAttempt && previous is not null) SetLastAction(previous);
             else
             {
-                if (!background) { DetailsIndex = 2; Status = UiText.Get("ActionRunning"); }
+                if (!background && SelectedRepository == tab) { DetailsIndex = 2; Status = UiText.Get("ActionRunning"); }
                 // The options window is gone; keep owning the operation through fresh inspection.
                 await model.RunningTask;
                 if (!background && SelectedRepository == tab) Status = model.Summary;
@@ -170,6 +173,7 @@ public sealed partial class ShellViewModel
         {
             if (Status == UiText.Get("ActionPreparing")) Status = UiText.Get("NoActiveOperation");
             SetActionOpen(false, tab);
+            DrainActionQueue();
             if (attempted) { if (!background) BeginCountRead(tab); BeginSidebarRead(tab); }
         }
     }
@@ -178,7 +182,7 @@ public sealed partial class ShellViewModel
         if (value && (owner is null || SelectedRepository == owner)) _sidebarCancel?.Cancel();
         if (owner is null) _actionOpen = value;
         else if (value) _operationOwners.Add(owner); else _operationOwners.Remove(owner);
-        _preparingAction = value; Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate)); Changed(nameof(OperationStatus)); RefreshCommands();
+        _preparingAction = value; if (!value) DrainActionQueue(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate)); Changed(nameof(OperationStatus)); RefreshCommands();
     }
     private void SetLastAction(GitActionViewModel? model)
     {
@@ -194,7 +198,7 @@ public sealed partial class ShellViewModel
     }
     private void OnActionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (sender is GitActionViewModel operation && e.PropertyName is nameof(GitActionViewModel.Summary) or nameof(GitActionViewModel.IsRunning))
+        if (sender is GitActionViewModel operation && e.PropertyName is nameof(GitActionViewModel.Summary) or nameof(GitActionViewModel.IsRunning) or nameof(GitActionViewModel.RawOutput))
         {
             if (operation.Activity is { } activity) Journal.Record(activity, operation.CurrentRepository, operation.IsBackground, operation.RawOutput);
             if (operation.HasAttempt && !operation.IsRunning) ReportOperationProblem(operation);

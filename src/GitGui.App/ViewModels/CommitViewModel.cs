@@ -75,7 +75,7 @@ public sealed partial class CommitViewModel : ObservableObject
     public string RepositoryLabel => Directory;
     public string Status { get => WithDraftProblem(_status); private set => Set(ref _status, value); }
     public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
-    public string Summary => _mutating ? UiText.Format("ActionSummary", UiText.Get("CommitWorkspace"), _phase, _elapsed.Elapsed.TotalSeconds) : Status;
+    public string Summary => _mutating ? UiText.Format("OperationCaption", UiText.Get("CommitWorkspace"), _phase) : Status;
     private object? _activityAttempt;
     private string _activityTitle = "";
     private OperationOutcome _activityOutcome;
@@ -179,7 +179,7 @@ public sealed partial class CommitViewModel : ObservableObject
             if (CanApplyHunks) StartAction(_diffChange!.Change.Group == ChangeGroup.Staged ? WorkingCopyAction.UnstageHunks : WorkingCopyAction.StageHunks,
                 new(_fileDiff!.HunkPreview!, _selectedHunks.ToArray()));
         }, () => CanApplyHunks);
-        _timer.Tick += (_, _) => { Changed(nameof(Summary)); if (_mutating && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
+        _timer.Tick += (_, _) => { if (_mutating && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
         PublishRows(); RawOutput = _state.LastOutput;
         InitializeConflicts();
         if (_state.LastResult.Length != 0) Status = _state.LastResult;

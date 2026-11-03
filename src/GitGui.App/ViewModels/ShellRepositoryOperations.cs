@@ -62,11 +62,11 @@ public sealed partial class ShellViewModel
         _interaction?.ShowOperationProblem(operation.CurrentRepository, operation.Title, operation.Status, operation.RawOutput);
     }
 
-    public bool HasUserOperation => _actionOpen || _commitOpen || _operationOwners.Any(tab =>
+    public bool HasUserOperation => _queuedActions.Count != 0 || _actionOpen || _commitOpen || _operationOwners.Any(tab =>
         _repositoryActions.GetValueOrDefault(tab.Directory)?.IsBackground != true);
     public void RevealRunningOperation()
     {
-        var owner = _operationOwners.FirstOrDefault(tab => _repositoryActions.GetValueOrDefault(tab.Directory)?.IsBackground != true) ?? _initializationOwner;
+        var owner = _operationOwners.FirstOrDefault(tab => _repositoryActions.GetValueOrDefault(tab.Directory)?.IsBackground != true) ?? _initializationOwner ?? _queuedActions.FirstOrDefault()?.Tab;
         if (owner is not null && Repositories.Contains(owner)) SelectedRepository = owner;
         ShowActionDetailsCommand.Execute(null);
     }
@@ -97,7 +97,7 @@ public sealed partial class ShellViewModel
         foreach (var tab in Repositories.OrderBy(tab => _nextAutoFetch.GetValueOrDefault(tab)).ToArray())
         {
             if (slots <= 0) break;
-            if (RepositoryBusy(tab) || tab.History.StartupPreview ||
+            if (RepositoryBusy(tab) || _queuedActions.Any(item => SameRepository(item.Tab, tab)) || tab.History.StartupPreview ||
                 tab.Snapshot is not { RemoteNames.Count: > 0, Operation: RepositoryOperation.None } ||
                 !_knownIdentities.ContainsKey(tab.Directory) || now < _nextAutoFetch.GetValueOrDefault(tab) ||
                 SelectedRepository == tab && IsBusy) continue;

@@ -1,5 +1,17 @@
 # Roadmap and decision register
 
+## Queued actions and quiet feedback (0.41.0 Beta)
+
+2026-11-03: toolbar queue, static operation feedback, full-window/full-slot tab dragging and earlier repository context are implemented. Stable remains 0.39.1. Signed Beta publication evidence is recorded below after packaging.
+
+Focused repository workflow checks: 13 passed, including real queued Pull after held Fetch, duplicate suppression, read-time admission/cancellation, captured inactive target, independent repositories/common-directory admission, drag destination/neighbor cleanup, and 200 retained history rows with only **15 realized containers** at 1200×800. Evidence: `artifacts/network-workflow-checks/20261103-042033-38a60a809e504fe98634a10368f6b6d5`.
+
+Static-operation checks: 4 passed after fixing a null-updater binding that exposed an unavailable Update button and compressed the center at minimum width. Default Pull checks: 4 passed (real rebase, changed-upstream rejection, cancellation and Merge/auto-stash options); their old 22-pixel arrow assertion was updated to the established 18-pixel split-arrow design. Evidence: `artifacts/operation-style-checks/20261103-042430-ad977401c9f04cbe8a5535718fa1acf5` and `artifacts/default-pull-checks/20261103-042523-3f4a9ea9b7bc42bbb28e840250863dba`. Raw Release compilation passed with zero warnings/errors.
+
+The isolated 2,500-commit benchmark (three samples) measured discovery 119–155 ms, inspection 279–286 ms, post-log ref validation 117–154 ms, history/page work 312–328 ms, graph 0.12–0.20 ms and formatting all 200 rows 0.60–3.50 ms. No history scope/page reduction or speculative partial graph is justified by these results. Repository metadata now publishes before history; no cold-desktop speedup is claimed. Evidence: `artifacts/history-benchmarks/20261103-041427-7e02e2d435cf4b5b8a56d075e7270e49`.
+
+Limits: no visible app launch, desktop interaction, native drag-loop, physical shortcuts, authentication or installed-update test was performed. Options/editor requests wait for their repository before opening. Existing contextual/destructive-action availability still requires a current validated target; there is no persisted/general-purpose queue. Native filters/hooks remain unchanged.
+
 Updated 2026-11-02. [Product](product.md): UX; [requirements](requirements.md): acceptance; [architecture](architecture.md): implementation; [TODO](../TODO.md): only task checklist. This file holds milestone/evidence history and unresolved decisions.
 
 ## Current status

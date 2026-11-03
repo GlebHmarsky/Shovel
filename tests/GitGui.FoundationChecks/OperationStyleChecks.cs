@@ -72,31 +72,11 @@ internal static partial class Program
                 shell.SelectedRepository = other; Expect(shell.Activity is { IsComplete: false }, "Other tab starts its own read feedback"); await shell.WaitForIdleAsync();
                 shell.SelectedRepository = original; await shell.WaitForIdleAsync(); Expect(shell.Activity is { Outcome: OperationOutcome.Success }, "Returning tab reports its own read feedback");
             });
-            await Check("Capsule holds then fades without moving text or allowing old completion to hide a new attempt", async () =>
+            await Check("Operation summaries retain phase and outcome without elapsed counters", () =>
             {
-                var view = new OperationIndicator { Caption = "Pull · Completed" };
-                var attempt = new object(); var activity = new OperationActivity(attempt, "Pull", "Completed", 5.3, OperationOutcome.Success);
-                view.Activity = activity; Arrange(view, 240, 28); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                var badge = (Border)view.FindName("DurationBadge"); var caption = (TextBlock)view.FindName("CaptionText");
-                var width = caption.ActualWidth; var left = caption.TransformToAncestor(view).Transform(new Point());
-                Expect(badge.Opacity > .99, "Completion holds at full opacity");
-                // No HWND/render loop exists here. Seek the WPF clock deterministically;
-                // desktop scheduling/paint cadence requires separately authorized runtime QA.
-                AnimationClock? Clock() => (AnimationClock?)typeof(OperationIndicator).GetField("_completionClock", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(view);
-                var clock = Clock()!;
-                Expect(clock.Timeline.BeginTime == TimeSpan.FromSeconds(3) && clock.Timeline.Duration.TimeSpan == (SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast ? TimeSpan.FromSeconds(2) : TimeSpan.Zero), "Specified hold and motion preference");
-                clock.Controller!.SeekAlignedToLastTick(TimeSpan.FromSeconds(.6), TimeSeekOrigin.BeginTime); var fading = badge.Opacity;
-                Expect(fading < .99, "Completion fades after three seconds (or hides with disabled animation)");
-                view.Activity = activity with { Seconds = 5.3 }; Expect(ReferenceEquals(clock, Clock()), "Same-attempt snapshot preserves the current clock");
-                clock.Controller.SeekAlignedToLastTick(TimeSpan.FromSeconds(2.1), TimeSeekOrigin.BeginTime);
-                Expect(badge.Opacity < .01, "Repeated final snapshot cannot restart fade");
-                view.Activity = new(new object(), "Fetch", "Running", 9.9, OperationOutcome.Running);
-                Expect(Clock() is null, "New attempt detaches old animation");
-                view.Activity = view.Activity with { Seconds = 1000.0 };
-                ((AnimationClock?)typeof(OperationIndicator).GetField("_entranceClock", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(view))?.Controller?.SeekAlignedToLastTick(TimeSpan.FromSeconds(1), TimeSeekOrigin.BeginTime);
-                Arrange(view, 240, 28); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                Expect(badge.Opacity > .99 && caption.ActualWidth == width && caption.TransformToAncestor(view).Transform(new Point()) == left, "New attempt replaces old clock; timing never shifts caption");
-                view.Activity = null; Expect(badge.Opacity == 0 && caption.ActualWidth == width, "Clearing feedback preserves layout");
+                var a = new OperationActivity(new object(), "Pull", "Completed", 5.3, OperationOutcome.Success);
+                Expect(a.Help == (a with { Seconds = 999 }).Help && a.Help.Contains("Completed"), "No time in visible summaries");
+                return Task.CompletedTask;
             });
             await Check("Rounded operation panel renders at normal/minimum sizes with readable dark/light/high-contrast states", async () =>
             {
@@ -114,11 +94,10 @@ internal static partial class Program
                         foreach (var size in new[] { new Size(1200, 800), new Size(900, 580) })
                         {
                             Arrange(content, (int)size.Width, (int)size.Height);
-                            var view = VisualDescendants<OperationIndicator>(content).Single();
-                            view.Caption = "Pull · Completed"; view.Activity = new(new object(), "Pull", "Completed", 5.3, OperationOutcome.Success);
+                            var view = (Border)window.FindName("ActivityAnchor");
                             await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                             SaveRender(content, $"operation-{theme}-{size.Width}.png", (int)size.Width, (int)size.Height);
-                            Expect(view.ActualWidth >= 180 && ((TextBlock)view.FindName("CaptionText")).ActualWidth >= 90, "Minimum width retains readable operation caption");
+                            Expect(view.ActualWidth >= 180 && !VisualDescendants<ProgressBar>(content).Any(), "Readable static status; no animated progress or timer");
                         }
                     }
                     AppTheme.Apply(Application.Current.Resources, true);

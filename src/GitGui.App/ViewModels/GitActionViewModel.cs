@@ -89,7 +89,7 @@ public sealed class GitActionViewModel : ObservableObject
     private string _phase = UiText.Get("ActionPreparing");
     private GitActionStage _gitStage = GitActionStage.Validating;
     public string Phase { get => _phase; private set { if (Set(ref _phase, value)) Changed(nameof(Summary)); } }
-    public string Summary => UiText.Format("ActionSummary", Title, Phase, _elapsed.Elapsed.TotalSeconds);
+    public string Summary => UiText.Format("OperationCaption", Title, Phase);
     private string _status = UiText.Get("ActionReady"), _rawOutput = "";
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
@@ -121,7 +121,7 @@ public sealed class GitActionViewModel : ObservableObject
         InitializeTimer();
     }
     private void InitializeTimer() => _timer.Tick += (_, _) =>
-    { Changed(nameof(Duration)); Changed(nameof(Summary)); if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
+    { if (!_gitFinished && _outputTask.IsCompleted) _outputTask = PublishOutputAsync(); };
     public GitActionViewModel(string repository, GitActions actions, Func<Task> reconcile, IUserInteraction interaction,
         Func<CancellationToken, Action<GitGui.Core.Processes.ProcessOutput>, IAuthenticationSession?, Task<ActionResult>> execute)
     {

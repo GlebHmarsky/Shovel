@@ -44,6 +44,47 @@ internal static partial class Program
             Expect(Math.Abs(grid.ColumnDefinitions[0].ActualWidth - 200) < 1 && Math.Abs(grid.RowDefinitions[1].ActualHeight - 150) < 1, "50/50 survives shrinking");
             return Task.CompletedTask;
         });
+        await Check("Tab drag feedback crosses history, reserves a full slot, and restores containers on cancellation", async () =>
+        {
+            var model = new ShellViewModel();
+            model.CompleteStartup(new(new() { RepositoryPaths = [@"C:\one", @"C:\two", @"C:\three"] }, SettingsLoadStatus.Loaded));
+            var window = new MainWindow(model); var content = (FrameworkElement)window.Content;
+            try
+            {
+                Arrange(content, 1200, 800); await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+                var tabs = (ListBox)window.FindName("RepositoryTabs"); var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                Expect(window.AllowDrop && tabs.ActualWidth > 0, "Entire window accepts native drag routing");
+                typeof(MainWindow).GetField("_dragTab", flags)!.SetValue(window, model.Repositories[0]);
+                typeof(MainWindow).GetMethod("UpdateTabDrag", flags)!.Invoke(window, [new Point(tabs.ActualWidth - 1, 400)]);
+                var destination = (int)typeof(MainWindow).GetField("_dropIndex", flags)!.GetValue(window)!;
+                var width = tabs.ActualWidth / 3;
+                Expect(destination == 2, "Pointer over history retains horizontal destination");
+                var source = (ListBoxItem)tabs.ItemContainerGenerator.ContainerFromIndex(0);
+                var neighbor = (ListBoxItem)tabs.ItemContainerGenerator.ContainerFromIndex(1);
+                Expect(source.Opacity == 0 && Math.Abs(((System.Windows.Media.TranslateTransform)neighbor.RenderTransform).X + width) < 1, "Neighbors open a full tab slot");
+                typeof(MainWindow).GetMethod("ClearTabDrag", flags)!.Invoke(window, null);
+                Expect(source.Opacity == 1 && neighbor.RenderTransform.Value.IsIdentity && model.Repositories[0].Label == "one", "Cancel restores visuals without changing order");
+                model.ReorderTab(model.Repositories[0], destination);
+                Expect(model.Repositories[2].Label == "one", "Release destination produces matching order");
+            }
+            finally { window.Close(); model.BeginShutdown(); }
+        });
+        await Check("A full 200-row history page realizes only its viewport", async () =>
+        {
+            var model = new ShellViewModel(); var window = new MainWindow(model); var content = (FrameworkElement)window.Content;
+            try
+            {
+                var table = (DataGrid)window.FindName("HistoryTable");
+                var records = Enumerable.Range(0, 200).Select(i => new CommitRecord(i.ToString("x40"), [], "A", "a@example.invalid", DateTimeOffset.UnixEpoch, "A", "a@example.invalid", DateTimeOffset.UnixEpoch, "Commit " + i)).ToArray();
+                var graph = CommitGraph.Build(records);
+                table.ItemsSource = records.Select((record, i) => new CommitRow(new(record, graph[i]))).ToArray();
+                Arrange(content, 1200, 800); await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+                var realized = VisualDescendants<DataGridRow>(table).Count();
+                Console.WriteLine($"History: {table.Items.Count} retained rows; {realized} realized rows");
+                Expect(table.Items.Count == 200 && realized > 0 && realized < 50, "Offscreen rows are not drawn; full page remains available");
+            }
+            finally { window.Close(); }
+        });
         var runner = new RepositoryWorkflowRunner(); var reader = new RepositoryReader(runner); var ids = new WindowsRepositoryIdentity();
         var git = await reader.DiscoverAsync(null, default); var actions = new GitActions(runner, reader, ids); var ui = new RepositoryWorkflowInteraction();
         async Task<string> Git(string path, params string[] args)
@@ -70,19 +111,47 @@ internal static partial class Program
                 await runner.FirstStarted.Task.WaitAsync(TimeSpan.FromSeconds(8));
                 Expect(shell.CanNavigate && shell.ActionOpen && !shell.CanPrepareUpdate, "Navigation allowed, update/shutdown remains guarded");
                 var linkedTab = shell.Repositories[2]; shell.SelectedRepository = linkedTab; await shell.WaitForIdleAsync();
-                Expect(!shell.DefaultFetchCommand.CanExecute(null) && !shell.ShowChangesCommand.CanExecute(null), "Linked worktree shares mutation admission");
+                Expect(shell.DefaultFetchCommand.CanExecute(null) && shell.ShowChangesCommand.CanExecute(null), "Linked worktree accepts queued requests");
                 shell.SelectedRepository = secondTab; await shell.WaitForIdleAsync();
                 Expect(shell.SelectedRepository == secondTab && shell.DefaultFetchCommand.CanExecute(null), "Other repo admits work");
                 shell.DefaultFetchCommand.Execute(null); var secondTask = shell.ActionTask; var secondAction = shell.CurrentAction;
                 await runner.SecondStarted.Task.WaitAsync(TimeSpan.FromSeconds(8));
                 shell.SelectedRepository = firstTab;
-                Expect(shell.CurrentAction == firstAction && !shell.DefaultPushCommand.CanExecute(null), "In-flight result follows tab and blocks only conflicting mutations");
+                Expect(shell.CurrentAction == firstAction && shell.DefaultPushCommand.CanExecute(null), "In-flight result follows tab and toolbar remains available");
+                var calls = runner.FetchCalls;
+                shell.DefaultFetchCommand.Execute(null); var duplicate = shell.ActionTask;
+                Expect(ReferenceEquals(duplicate, firstTask), "Repeated running button shares one attempt");
+                shell.DefaultPullCommand.Execute(null); var queuedPull = shell.ActionTask;
+                shell.DefaultPullCommand.Execute(null);
+                Expect(ReferenceEquals(queuedPull, shell.ActionTask) && runner.FetchCalls == calls && shell.QueueStatus.Contains("Pull"), "One distinct Pull waits behind Fetch");
                 shell.CloseTab(firstTab); Expect(shell.Repositories.Contains(firstTab), "Running tab remains owned until completion");
-                runner.Release.TrySetResult(); await Task.WhenAll(firstTask, secondTask); await shell.WaitForIdleAsync(); runner.HoldFetch = false;
+                runner.Release.TrySetResult(); await Task.WhenAll(firstTask, secondTask, queuedPull); await shell.WaitForIdleAsync(); runner.HoldFetch = false;
                 Expect(firstAction?.Succeeded == true && secondAction?.Succeeded == true && !shell.ActionOpen && shell.SelectedRepository == firstTab, "Both real fetches finish without switching selection");
                 Expect(firstAction?.Activity?.Outcome == OperationOutcome.Success && secondAction?.Activity?.Outcome == OperationOutcome.Success, "Inactive refresh is not a spurious failure");
+                Expect(runner.FetchCalls == calls + 1 && shell.CurrentAction?.Action == GitAction.Pull && shell.CurrentAction.Succeeded, "Queued Pull executes once after Fetch with fresh validation");
                 shell.SelectedRepository = secondTab; await shell.WaitForIdleAsync(); Expect(shell.CurrentAction == secondAction, "Other result survives completion");
                 shell.CloseTab(linkedTab);
+            });
+            await Check("Toolbar accepts one queued action during a read, cancellation removes it, and inactive targets stay captured", async () =>
+            {
+                shell.SelectedRepository = firstTab; await shell.WaitForIdleAsync();
+                runner.HoldLogs = true; shell.RefreshRepositoryCommand.Execute(null);
+                await runner.LogStarted.Task.WaitAsync(TimeSpan.FromSeconds(8));
+                var before = runner.FetchCalls;
+                Expect(shell.SelectedRepository?.Snapshot?.Branch == "main" && shell.Commits.Count > 0, "Branch context and retained rows are available while Git log waits");
+                Expect(shell.DefaultFetchCommand.CanExecute(null) && shell.ShowChangesCommand.CanExecute(null), "Read does not disable toolbar");
+                shell.DefaultFetchCommand.Execute(null); var cancelled = shell.ActionTask;
+                shell.CancelCommand.Execute(null); await cancelled; await shell.WaitForIdleAsync();
+                Expect(runner.FetchCalls == before, "Cancel removes waiting intent without running Git");
+                runner.HoldLogs = false; runner.LogRelease.TrySetResult();
+                shell.RefreshRepositoryCommand.Execute(null); await shell.ActionTask;
+                runner.HoldFetch = true; runner.Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                shell.DefaultFetchCommand.Execute(null); var running = shell.ActionTask;
+                while (runner.FetchCalls == before) await Task.Delay(10);
+                shell.DefaultPullCommand.Execute(null); var queued = shell.ActionTask;
+                shell.SelectedRepository = secondTab; await shell.WaitForIdleAsync();
+                runner.Release.TrySetResult(); await Task.WhenAll(running, queued); runner.HoldFetch = false;
+                Expect(shell.SelectedRepository == secondTab && runner.LastFetch?.WorkingDirectory == a, "Queued Pull executes on its captured inactive repository without selecting it");
             });
             await Check("Rejected push raises one attention result with latest logs, without closing other work", async () =>
             {
@@ -184,15 +253,18 @@ internal static partial class Program
     private sealed class RepositoryWorkflowRunner : IProcessRunner
     {
         public WindowsProcessRunner Inner { get; } = new();
-        public bool HoldFetch, FailFetch, BlockBackground;
+        public bool HoldFetch, FailFetch, BlockBackground, HoldLogs;
+        public TaskCompletionSource LogStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource LogRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource BackgroundStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int FetchCalls, StatusCalls;
         public ProcessRequest? LastFetch;
         public TaskCompletionSource FirstStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource SecondStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
+            if (HoldLogs && request.Arguments.Contains("log")) { LogStarted.TrySetResult(); await LogRelease.Task.WaitAsync(token); }
             if (request.Arguments.Contains("status")) Interlocked.Increment(ref StatusCalls);
             if (request.Arguments.Contains("fetch"))
             {

@@ -125,7 +125,7 @@ public sealed partial class ShellViewModel
         _operationCancellation?.Cancel(); CancelCountRead();
         var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30)); _operationCancellation = cancel;
         var generation = ++_generation; var session = tab.History.Page.Session;
-        _elapsed.Restart(); _timer.Start(); IsBusy = true; Status = UiText.Get("SidebarLocating"); StartReadActivity();
+        _elapsed.Restart();  IsBusy = true; Status = UiText.Get("SidebarLocating"); StartReadActivity();
         var located = false;
         _activeOperation = Locate();
         async Task Locate()
@@ -148,7 +148,7 @@ public sealed partial class ShellViewModel
             }
             catch (OperationCanceledException) { if (generation == _generation) Status = UiText.Get("GitErrorCancelled"); }
             catch (Exception) { if (generation == _generation) Status = UiText.Get("SidebarLocateFailed"); }
-            finally { if (generation == _generation) { _operationCancellation = null; _timer.Stop(); _elapsed.Stop(); IsBusy = false; FinishReadActivity(cancel.IsCancellationRequested ? OperationOutcome.Cancelled : located ? OperationOutcome.Success : OperationOutcome.Failed); } cancel.Dispose(); }
+            finally { if (generation == _generation) { _operationCancellation = null;  _elapsed.Stop(); IsBusy = false; FinishReadActivity(cancel.IsCancellationRequested ? OperationOutcome.Cancelled : located ? OperationOutcome.Success : OperationOutcome.Failed); } cancel.Dispose(); }
         }
     }
     public event EventHandler? SidebarCommitLocated;
