@@ -2,7 +2,9 @@
 
 ## Queued actions and quiet feedback (0.41.0 Beta)
 
-2026-11-03: toolbar queue, static operation feedback, full-window/full-slot tab dragging and earlier repository context are implemented. Stable remains 0.39.1. Signed Beta publication evidence is recorded below after packaging.
+2026-11-03: toolbar queue, static operation feedback, full-window/full-slot tab dragging and earlier repository context are implemented. Stable remains 0.39.1. [0.41.0 Beta](https://github.com/GlebHmarsky/Shovel/releases/tag/v0.41.0-win-beta) was published from `4cdd5008cdef84f9320e8af5c8cab7ed2f4a94a6` after all **26 smoke checks passed in 36.8 s**. Preview/installer fingerprint: `4B04C1F401634909D58ECD80BA4594B4D9E69D79005BF39F62C6B3B746A8CA0B`. The initial GitHub upload ended prematurely; recovery verified existing assets in the exact unpublished draft, uploaded missing files and then published it without replacing any published version. The public release has all ten assets and is marked prerelease. Latest Stable was independently rechecked as `v0.39.1-win-stable`.
+
+The production updater anonymously verified the signed Beta feed and full **68,774,230-byte** package, SHA-256 `B3FDA0597D4EAF32AE9ACD3201D00E1ED35565888C880D1259693B0CE9958319`, with no installation. Evidence: `artifacts/release-0.41.0-beta.txt`, `artifacts/release-0.41.0-beta-recovery.txt`, `artifacts/published-update-probe-5dc5f8097fe540589a968441732bb8b8/download/RESULT.json`. Windows publisher signing remains unset; the update feed/package verification is separate from Authenticode.
 
 Focused repository workflow checks: 13 passed, including real queued Pull after held Fetch, duplicate suppression, read-time admission/cancellation, captured inactive target, independent repositories/common-directory admission, drag destination/neighbor cleanup, and 200 retained history rows with only **15 realized containers** at 1200×800. Evidence: `artifacts/network-workflow-checks/20261103-042033-38a60a809e504fe98634a10368f6b6d5`.
 
