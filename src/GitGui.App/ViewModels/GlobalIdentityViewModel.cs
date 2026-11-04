@@ -31,7 +31,7 @@ public sealed class GlobalIdentityViewModel : ObservableObject
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30)); _cancel = cancel;
         try
         {
-            if (save) await _write!(_reviewed!, name, email, cancel.Token);
+            if (save) { using var lifetime = GitGui.Core.Processes.ProcessLifetime.CompleteStartedCommands(); await _write!(_reviewed!, name, email, cancel.Token); }
             _reviewed = await _read!(cancel.Token); Name = _reviewed.Name; Email = _reviewed.Email;
             Status = UiText.Get(save ? "SettingsIdentitySaved" : "SettingsIdentityLoaded");
         }

@@ -7,6 +7,7 @@
    <TabControl DockPanel.Dock="Top" SelectedIndex="{Binding Filter}" Height="35" AutomationProperties.Name="{loc:Text Key=ActivityCategories}">
     <TabItem Header="{loc:Text Key=ActivityAll}"/><TabItem Header="{loc:Text Key=ActivityUser}"/><TabItem Header="{loc:Text Key=ActivityBackground}"/>
    </TabControl>
+   <CheckBox DockPanel.Dock="Top" Content="{loc:Text Key=ActivityAllRepositories}" IsChecked="{Binding AllRepositories}" Margin="10,6"/>
    <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.VirtualizationMode="Recycling" AutomationProperties.Name="{loc:Text Key=ActivityTitle}">
     <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="6"/></Style></ListBox.ItemContainerStyle>
     <ListBox.ItemTemplate><DataTemplate><Grid Margin="7,5"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
@@ -18,8 +19,13 @@
   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=ActivityResize}"/>
   <DockPanel Grid.Column="2" Margin="10,7">
    <TextBlock DockPanel.Dock="Top" Text="{Binding Selected.Title}" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,6"/>
+   <TextBlock DockPanel.Dock="Top" Text="{Binding Selected.Repository}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Selected.Repository}" Margin="0,0,0,6"/>
    <TextBlock DockPanel.Dock="Top" Text="{Binding Selected.Summary}" TextWrapping="Wrap" Margin="0,0,0,7"/>
    <TextBlock DockPanel.Dock="Bottom" Text="{loc:Text Key=ActivityRetention}" FontSize="11" Foreground="{DynamicResource Theme.Muted}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+   <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,7">
+    <Button Content="{loc:Text Key=CancelWaitingRequest}" Command="{Binding Selected.CancelWaiting}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Selected.CanRemoveWaiting}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+    <Button Content="{loc:Text Key=ReopenCommit}" Command="{Binding Selected.ReopenCommit}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding Selected.ReopenCommit}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+   </StackPanel>
    <TextBox Text="{Binding Selected.Output, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="{loc:Text Key=ActionOutput}"/>
   </DockPanel>
  </Grid>

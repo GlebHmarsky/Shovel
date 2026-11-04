@@ -83,10 +83,10 @@ public sealed partial class CommitViewModel : ObservableObject
     public OperationActivity? Activity => _activityAttempt is null ? null : new(_activityAttempt, _activityTitle,
         _mutating ? _phase : OperationActivity.CompletedPhase(_activityOutcome), _elapsed.Elapsed.TotalSeconds,
         _mutating ? OperationOutcome.Running : _activityOutcome);
-    public bool IsBusy => _loading || _mutating || _diffLoading || _fileBusy;
+    public bool IsBusy => _loading || _mutating || _pendingActions.Count != 0 || _diffLoading || _fileBusy;
     public bool IsMutating => _mutating;
-    public bool CanEditMessage => !_closed && !_mutating;
-    public bool Ready => !_closed && !_mutating && !_fileBusy && (!_loading || _backgroundLoading) && _state.ReadAt != default && _state.Context is not null;
+    public bool CanEditMessage => !_closed;
+    public bool Ready => !_closed && !_fileBusy && _state.Context is not null && (_state.ReadAt != default || _pendingActions.Count != 0);
     public bool CanAmend => Ready && _state.Context?.Repository is { Commit: not null, Operation: RepositoryOperation.None };
     public bool HasMutation { get; private set; }
     public bool ShiftHeld { get => _shift; set { if (Set(ref _shift, value)) RefreshCommands(); } }
@@ -115,7 +115,7 @@ public sealed partial class CommitViewModel : ObservableObject
     public string StageLabel => UiText.Get(ShiftHeld ? "CommitStageAll" : "CommitStage");
     public string UnstageLabel => UiText.Get(ShiftHeld ? "CommitUnstageAll" : "CommitUnstage");
     public string CommitLabel => UiText.Get(ShiftHeld ? "CommitAndPush" : "Commit");
-    public string RefreshLabel => UiText.Get(IsBusy ? "ActionCancel" : "CommitRefresh");
+    public string RefreshLabel => UiText.Get("CommitRefresh");
     public string PushTarget
     {
         get
@@ -127,7 +127,7 @@ public sealed partial class CommitViewModel : ObservableObject
     public string CommitUnavailable => UiText.Get(!Ready ? "CommitWaitForRead" : Subject.Trim().Length == 0 ? "CommitMessageRequired" :
         Encoding.UTF8.GetByteCount(Message) > 65536 ? "CommitMessageLimit" : Unstaged.Any(row => row.Change.Group == ChangeGroup.Conflicted) ? "CommitUnresolved" :
         _state.Context!.Repository.Operation is not (RepositoryOperation.None or RepositoryOperation.Merge) ? "ActionSequence" :
-        Staged.Count == 0 && !Amend && _state.Context.Repository.Operation != RepositoryOperation.Merge ? "CommitNothingStaged" :
+        Staged.Count == 0 && !_pendingActions.Keys.Any(key => key.StartsWith("Stage|", StringComparison.Ordinal)) && !Amend && _state.Context.Repository.Operation != RepositoryOperation.Merge ? "CommitNothingStaged" :
         ShiftHeld && ResolvePushTarget(_state.Context) is null ? "CommitNoUpstream" : "CommitReady");
     public string StageHelp => UiText.Get(!Ready ? "CommitWaitForRead" : "CommitStageHelp");
     public string UnstageHelp => UiText.Get(!Ready ? "CommitWaitForRead" : "CommitUnstageHelp");
@@ -164,6 +164,19 @@ public sealed partial class CommitViewModel : ObservableObject
     public string TimingSummary { get => _timingSummary; private set => Set(ref _timingSummary, value); }
     public event EventHandler? SnapshotChanged;
     public event EventHandler? CommitCompleted;
+    public event EventHandler? CommitSubmitted;
+    public event EventHandler? WorkSettled;
+    public Func<string, string, Func<Task>, Task>? ScheduleOperation { get; set; }
+    public Action? ReopenRequested { get; set; }
+    public Action? OperationFailed { get; set; }
+    private readonly Dictionary<string, Task> _pendingActions = [];
+    private WorkingCopyContext? _lastOwnedContext;
+    public bool ViewAttached { get; private set; } = true;
+    public bool CommandExecuting { get; private set; }
+    public bool HasPendingWork => _pendingActions.Count != 0 || !OperationTask.IsCompleted || !FileTask.IsCompleted || Conflict?.Busy == true;
+    public void AttachView() { ViewAttached = true; }
+    public void DetachView() { ViewAttached = false; ShiftHeld = false; _readCancel?.Cancel(); _diffCancel?.Cancel(); _ = _draft?.FlushAsync(); }
+
 
     public CommitViewModel(string directory, GitInstallation? git, RepositoryReader reader, GitActions actions, IUserInteraction interaction,
         CommitWorkspaceState? state = null, string? identity = null, ICommitDraftStore? draftStore = null)
@@ -172,7 +185,7 @@ public sealed partial class CommitViewModel : ObservableObject
         StageCommand = new(() => StartAction(WorkingCopyAction.Stage), () => Ready && (ShiftHeld ? Unstaged.Count : _unstagedSelection.Count) > 0);
         UnstageCommand = new(() => StartAction(WorkingCopyAction.Unstage), () => Ready && (ShiftHeld ? Staged.Count : _stagedSelection.Count) > 0);
         CommitCommand = new(() => StartAction(WorkingCopyAction.Commit), () => CommitUnavailable == UiText.Get("CommitReady"));
-        RefreshCommand = new(() => { if (IsBusy) Cancel(); else StartLoading(); }, () => !_closed);
+        RefreshCommand = new(() => StartLoading(), () => !_closed);
         NextHunkCommand = new(() => MoveHunk(1), () => !_diffLoading && DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
         PreviousHunkCommand = new(() => MoveHunk(-1), () => !_diffLoading && DiffRows.Any(row => row.Kind == DiffLineKind.Hunk));
         ApplyHunksCommand = new(() =>
@@ -339,18 +352,39 @@ public sealed partial class CommitViewModel : ObservableObject
         var entries = explicitEntries ?? (hunks is not null ? new[] { _diffChange! } : action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : []);
         var submittedDraft = CaptureDraft();
         var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), actionMessage ?? Message, Amend, hunks);
-        _mutating = true; HasMutation = true; _diffCancel?.Cancel(); _readCancel?.Cancel(); _state.ReadAt = default;
-        // Cancel obsolete read generations, but do not put their drain on the write's critical
-        // path. They never write the index; close still drains them and late results cannot bind.
-        _readGeneration++; _diffGeneration++; _readCancel = _diffCancel = null;
-        _loading = _backgroundLoading = _diffLoading = false; _fileDiff = null; _selectedHunks = [];
-        _elapsed.Restart(); _phase = UiText.Get("CommitPhase" + action); Status = _phase; RawOutput = "";
-        _activityAttempt = new object(); _activityTitle = push ? UiText.Get("CommitAndPush") : _phase; _activityOutcome = OperationOutcome.Failed;
-        lock (_output) { _output.Clear(); _publishedBytes = 0; }
-        _commands.Clear();
-        _actionCancel = new CancellationTokenSource(); UpdateBusy(); OperationTask = RunAsync();
+        var title = push ? UiText.Get("CommitAndPush") : UiText.Get("CommitPhase" + action);
+        var key = action + "|" + string.Join("|", entries.Select(entry => entry.Change.Path)) + "|" + options.Message + "|" + options.Amend;
+        if (_pendingActions.ContainsKey(key)) return;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingActions.Add(key, completion.Task); OperationTask = Task.WhenAll(_pendingActions.Values); UpdateBusy();
+        _ = ScheduledAsync();
+        if (action == WorkingCopyAction.Commit) CommitSubmitted?.Invoke(this, EventArgs.Empty);
+        async Task ScheduledAsync()
+        {
+            var started = false;
+            Task Start() { started = true; return RunAsync(); }
+            try
+            {
+                if (ScheduleOperation is null) { await Task.WhenAll(_pendingActions.Where(item => item.Key != key).Select(item => item.Value)); await Start(); }
+                else await ScheduleOperation(key, title, Start);
+                if (!started) Status = UiText.Get("QueuedRequestCancelled");
+            }
+            finally { _pendingActions.Remove(key); completion.TrySetResult(); UpdateBusy(); if (_pendingActions.Count == 0) WorkSettled?.Invoke(this, EventArgs.Empty); }
+        }
         async Task RunAsync()
         {
+            using var lifetime = ProcessLifetime.CompleteStartedCommands();
+            CommandExecuting = true;
+            _mutating = true; HasMutation = true; _diffCancel?.Cancel(); _readCancel?.Cancel(); _state.ReadAt = default;
+            // Cancel obsolete read generations, but do not put their drain on the write's critical
+            // path. They never write the index; close still drains them and late results cannot bind.
+            _readGeneration++; _diffGeneration++; _readCancel = _diffCancel = null;
+            _loading = _backgroundLoading = _diffLoading = false; _fileDiff = null; _selectedHunks = [];
+            _elapsed.Restart(); _phase = UiText.Get("CommitPhase" + action); Status = _phase; RawOutput = "";
+            _activityAttempt = new object(); _activityTitle = push ? UiText.Get("CommitAndPush") : _phase; _activityOutcome = OperationOutcome.Failed;
+            lock (_output) { _output.Clear(); _publishedBytes = 0; }
+            _commands.Clear();
+            _actionCancel = new CancellationTokenSource(); UpdateBusy();
             string? committed = null; var commitSucceeded = false;
             WorkingCopyResult? measured = null; var timing = Stopwatch.StartNew(); double waitMilliseconds = 0;
             TimingSummary = "";
@@ -358,7 +392,14 @@ public sealed partial class CommitViewModel : ObservableObject
             {
                 await Dispatcher.Yield(DispatcherPriority.Background);
                 waitMilliseconds = timing.Elapsed.TotalMilliseconds;
-                var result = await _actions.ExecuteWorkingCopyAsync(context, options, _actionCancel.Token, CollectOutput);
+                // Only adopt index changes produced and reconciled by an earlier command from
+                // this editor. External changes still fail the native execution checks.
+                if (_lastOwnedContext is { } owned && context.IndexStamp != owned.IndexStamp &&
+                    action is WorkingCopyAction.Stage or WorkingCopyAction.Unstage or WorkingCopyAction.Commit &&
+                    owned.Identity == context.Identity && owned.Repository.Branch == context.Repository.Branch &&
+                    owned.Repository.Commit == context.Repository.Commit && owned.ConfigStamp == context.ConfigStamp &&
+                    options.Entries.All(owned.Changes.Entries.Contains)) context = owned;
+                var result = await _actions.ExecuteWorkingCopyAsync(context, options, _actionCancel!.Token, CollectOutput);
                 measured = result;
                 _activityOutcome = ActivityOutcome(result.Result);
                 await _outputTask; RawOutput = _commands.Complete(result.Result.Output); committed = result.CommitHash;
@@ -381,26 +422,35 @@ public sealed partial class CommitViewModel : ObservableObject
             finally
             {
                 var outcome = _status; var output = RawOutput;
-                timing.Restart();
-                if (!_closed && measured?.UpdatedContext is { } updated)
+                try
                 {
-                    var rows = await Task.Run(() => updated.Changes.Entries.Select(entry => new ChangeRow(entry)).ToArray());
-                    _state.Context = updated; _state.Rows = rows; _state.ReadAt = updated.Changes.ReadAt; PublishRows();
-                    SnapshotChanged?.Invoke(this, EventArgs.Empty);
+                    timing.Restart();
+                    if (!_closed && measured?.UpdatedContext is { } updated)
+                    {
+                        var rows = await Task.Run(() => updated.Changes.Entries.Select(entry => new ChangeRow(entry)).ToArray());
+                        if (measured.Result.Success) _lastOwnedContext = updated;
+                        _state.Context = updated; _state.Rows = rows; _state.ReadAt = updated.Changes.ReadAt; PublishRows();
+                        SnapshotChanged?.Invoke(this, EventArgs.Empty);
+                    }
+                    else await LoadAsync(reconcile: true);
+                    if (measured is not null) TimingSummary = UiText.Format("CommitTimings", waitMilliseconds, measured.ValidationMilliseconds, measured.CommandMilliseconds, measured.RefreshMilliseconds + timing.Elapsed.TotalMilliseconds);
+                    Status = _state.ReadAt == default ? UiText.Format("ActionReinspectionFailed", outcome) : outcome;
+                    if (_state.ReadAt == default) _activityOutcome = OperationOutcome.RefreshFailed;
+                    RawOutput = output; _state.LastResult = _status; _state.LastOutput = output;
                 }
-                else await LoadAsync(reconcile: true);
-                if (measured is not null) TimingSummary = UiText.Format("CommitTimings", waitMilliseconds, measured.ValidationMilliseconds, measured.CommandMilliseconds, measured.RefreshMilliseconds + timing.Elapsed.TotalMilliseconds);
-                Status = _state.ReadAt == default ? UiText.Format("ActionReinspectionFailed", outcome) : outcome;
-                if (_state.ReadAt == default) _activityOutcome = OperationOutcome.RefreshFailed;
-                RawOutput = output; _state.LastResult = _status; _state.LastOutput = output;
-                _actionCancel.Dispose(); _actionCancel = null; _mutating = false; UpdateBusy();
-                if (!_closed && Services.OperationAttention.Required(_activityOutcome, RawOutput))
-                    _interaction.ShowOperationProblem(Directory, _activityTitle, Status, RawOutput);
+                catch (Exception)
+                {
+                    _state.ReadAt = default; _activityOutcome = OperationOutcome.RefreshFailed;
+                    Status = UiText.Format("ActionReinspectionFailed", outcome); RawOutput = output;
+                }
+                finally { _actionCancel?.Dispose(); _actionCancel = null; _mutating = false; CommandExecuting = false; UpdateBusy(); }
+                if (Services.OperationAttention.Required(_activityOutcome, RawOutput))
+                    _interaction.ShowCommitProblem(Directory, _activityTitle, Status, RawOutput, !ViewAttached && action == WorkingCopyAction.Commit ? ReopenRequested : null);
                 // A created commit is final even if its optional push failed. The separate
                 // attention dialog retains that failure and output after the editor closes.
                 if (!_closed && commitSucceeded) CommitCompleted?.Invoke(this, EventArgs.Empty);
-                if (!_closed) QueueDiff(_state.Selected);
-                if (!_closed && measured?.UpdatedContext is not null) LoadingTask = LoadAsync(background: true);
+                if (!_closed && ViewAttached) QueueDiff(_state.Selected);
+                if (!_closed && ViewAttached && measured?.UpdatedContext is not null) LoadingTask = LoadAsync(background: true);
             }
         }
     }
@@ -465,10 +515,12 @@ public sealed partial class CommitViewModel : ObservableObject
         Changed(nameof(CanApplyHunks)); Changed(nameof(HunkActionLabel)); Changed(nameof(HunkHelp));
         foreach (var name in new[] { nameof(StageLabel), nameof(UnstageLabel), nameof(CommitLabel), nameof(CommitUnavailable), nameof(StageHelp), nameof(UnstageHelp) }) Changed(name);
     }
-    public void Cancel() { _readCancel?.Cancel(); _diffCancel?.Cancel(); _actionCancel?.Cancel(); _fileCancel?.Cancel(); }
+    public void Cancel() { _readCancel?.Cancel(); _diffCancel?.Cancel(); }
     public async Task CloseAsync()
     {
-        _closed = true; ShiftHeld = false; _fileCancel?.Cancel(); Cancel();
+        DetachView();
+        await OperationTask; await FileTask;
+        _closed = true; ShiftHeld = false; Cancel();
         if (Conflict is { } conflict) { conflict.PropertyChanged -= OnConflictChanged; conflict.Completed -= OnConflictCompleted; await conflict.CloseAsync(); }
         await _conflictDrain;
         await FileTask;

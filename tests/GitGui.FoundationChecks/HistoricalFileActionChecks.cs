@@ -135,12 +135,14 @@ internal static partial class Program
             await reconciling.Task.WaitAsync(TimeSpan.FromSeconds(15)); Expect(owned && !restored.FileActionTask.IsCompleted, "Ownership includes reconciliation");
             reconcile.TrySetResult(); await restored.FileActionTask; Expect(!owned, "Reconciliation releases owner"); restored.Stop();
         });
-        await Check("Explicit cancellation drains a pending history tool without affecting other reads", async () =>
+        await Check("Cancelling comparison reads leaves an accepted history tool running", async () =>
         {
             var gate = new HistoricalToolGate(runner); var model = new CommitFilesViewModel(reader, git, repo, record) { Actions = new(gate, new(gate), identity), Interaction = new HistoricalFileInteraction() };
             model.Start(); await Drain(model); model.RunHistoryAction("diff", second, first, model.Files.Single(item => item.Change.Path == relative).Change);
-            await gate.Started.Task.WaitAsync(TimeSpan.FromSeconds(10)); model.CancelFileAction(); await model.FileActionTask.WaitAsync(TimeSpan.FromSeconds(5));
-            Expect(gate.Cancelled && !model.FileActionBusy, "Explicit cancellation owns and drains this tool"); model.Stop();
+            await gate.Started.Task.WaitAsync(TimeSpan.FromSeconds(10)); model.CancelCommand.Execute(null);
+            Expect(!gate.Cancelled && model.FileActionBusy, "View cancellation cannot kill the accepted tool");
+            gate.Release.TrySetResult(); await model.FileActionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Expect(!model.FileActionBusy && !gate.Cancelled, "Tool finishes normally"); model.Stop();
         });
     }
     private sealed class HistoricalFileInteraction : IUserInteraction

@@ -40,9 +40,9 @@ public sealed partial class CommitFilesViewModel(RepositoryReader reader, GitIns
     public string Output { get => _output; private set => Set(ref _output, value); }
     public string Notice { get => _notice; private set => Set(ref _notice, value); }
     public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) { Changed(nameof(CanUseHistoryMenu)); Changed(nameof(CanCancel)); } } }
-    public bool CanCancel => Busy || FileActionBusy;
+    public bool CanCancel => Busy;
     public RelayCommand RefreshCommand => new(Refresh);
-    public RelayCommand CancelCommand => new(() => { _cancel?.Cancel(); CancelFileAction(); }, () => !_closed);
+    public RelayCommand CancelCommand => new(() => _cancel?.Cancel(), () => !_closed && Busy);
     public Task Pending { get; private set; } = Task.CompletedTask;
     public void Start() { if (_parent is null) Parent = Parents[0]; }
     public void SelectCommit(CommitRecord value)

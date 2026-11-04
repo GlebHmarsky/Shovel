@@ -876,7 +876,7 @@ Previous HEAD: {1}</value></data>
   <data name="ActivityUser" xml:space="preserve"><value>User</value></data>
   <data name="ActivityBackground" xml:space="preserve"><value>Background</value></data>
   <data name="ActivityResize" xml:space="preserve"><value>Resize activity list</value></data>
-  <data name="ActivityRetention" xml:space="preserve"><value>Session only · latest 128 entries · output limited to 32 Ki characters per entry. URL credentials are redacted.</value></data>
+  <data name="ActivityRetention" xml:space="preserve"><value>Session only · latest 128 entries, plus active work · output limited to 32 Ki characters per entry. URL credentials are redacted.</value></data>
   <data name="ActivityOutputLimit" xml:space="preserve"><value>Further output omitted from this activity entry.</value></data>
   <data name="CommitMetadata" xml:space="preserve"><value>Details</value></data>
   <data name="ConflictResizeResult" xml:space="preserve"><value>Resize conflict sources and result</value></data>
@@ -1052,4 +1052,12 @@ Previous HEAD: {1}</value></data>
   <data name="SettingsIdentityLoadFailed" xml:space="preserve"><value>Git could not read the global identity. You can retry Load.</value></data>
   <data name="SettingsIdentityInvalid" xml:space="preserve"><value>Enter a name and email without control characters (maximum 512 characters each).</value></data>
   <data name="SettingsIdentityChanged" xml:space="preserve"><value>Global Git identity changed since it was loaded. Load it again before applying edits.</value></data>
+  <data name="QueuedRequestCancelled" xml:space="preserve"><value>Waiting request removed. No command was started.</value></data>
+  <data name="QueueStoppedAfterFailure" xml:space="preserve"><value>Not started: an earlier operation in this repository failed or needs resolution. Submit again after reviewing the result.</value></data>
+  <data name="OperationWaiting" xml:space="preserve"><value>Waiting for repository initialization or a conflicting operation</value></data>
+  <data name="AppCommandRunningClose" xml:space="preserve"><value>Cannot close Shovel while a command or accepted request is running. It will finish in the background; you can keep using other repositories. See Activity for details.</value></data>
+  <data name="CancelWaitingRequest" xml:space="preserve"><value>Remove waiting request</value></data>
+  <data name="ReopenCommit" xml:space="preserve"><value>Reopen Commit for this repository</value></data>
+  <data name="ActivityAllRepositories" xml:space="preserve"><value>All repositories</value></data>
+  <data name="CommitCloseBeforeReopen" xml:space="preserve"><value>Close the current Commit window first, then use Reopen Commit in Activity for the failed repository.</value></data>
 </root>

@@ -35,7 +35,6 @@
   </Grid>
   <StackPanel Grid.Row="2" Margin="0,8,0,0">
    <DockPanel>
-    <Button DockPanel.Dock="Right" Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Margin="6,0,0,0"/>
     <Button DockPanel.Dock="Right" Content="{loc:Text Key=CommitRefresh}" Command="{Binding RefreshCommand}"/>
     <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
    </DockPanel>

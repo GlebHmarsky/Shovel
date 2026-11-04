@@ -17,6 +17,6 @@ public partial class StashWindow : Window
     {
         if (_allowClose) return;
         args.Cancel = true; if (_closing) return; _closing = true;
-        await System.Windows.Threading.Dispatcher.Yield(); await _model.CloseAsync(); _allowClose = true; Close();
+        await System.Windows.Threading.Dispatcher.Yield(); _allowClose = true; Close();
     }
 }

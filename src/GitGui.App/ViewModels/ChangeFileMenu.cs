@@ -80,7 +80,7 @@ public sealed partial class CommitViewModel
     private bool _fileMenuOpen, _fileMenuDiffPending, _fileBusy;
     private CancellationTokenSource? _fileCancel;
     internal WorkingCopyContext? FileMenuContext => _state.Context;
-    internal bool CanUseFileMenu => !_closed && !_mutating && !_fileBusy;
+    internal bool CanUseFileMenu => !_closed && !_fileBusy;
     public Task FileTask { get; private set; } = Task.CompletedTask;
     public void BeginFileMenu() => _fileMenuOpen = true;
     public void EndFileMenu()

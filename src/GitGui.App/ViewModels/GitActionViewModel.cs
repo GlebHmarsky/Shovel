@@ -85,7 +85,7 @@ public sealed class GitActionViewModel : ObservableObject
         IsRunning ? OperationOutcome.Running : _refreshFailed ? OperationOutcome.RefreshFailed : _needsResolution ? OperationOutcome.Conflict :
         Succeeded ? OperationOutcome.Success : _cancelled ? OperationOutcome.Cancelled : OperationOutcome.Failed);
     public bool IsReconciling { get => _reconciling; private set { if (Set(ref _reconciling, value)) Changed(nameof(CanCancel)); } }
-    public bool CanCancel => IsRunning && !IsReconciling && !_cancel.IsCancellationRequested;
+    public bool CanCancel => IsBackground && IsRunning && !IsReconciling && !_cancel.IsCancellationRequested;
     public bool Succeeded { get; private set; }
     private string _phase = UiText.Get("ActionPreparing");
     private GitActionStage _gitStage = GitActionStage.Validating;
@@ -166,6 +166,7 @@ public sealed class GitActionViewModel : ObservableObject
     }
     private async Task RunAsync()
     {
+        using var lifetime = GitGui.Core.Processes.ProcessLifetime.CompleteStartedCommands(!IsBackground);
         // Freeze the reviewed options before the view closes or any asynchronous work starts.
         var options = new ActionOptions(Action, IsNew ? NewName : Branch, StartRef,
             Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream, Strategy, AutoStash);

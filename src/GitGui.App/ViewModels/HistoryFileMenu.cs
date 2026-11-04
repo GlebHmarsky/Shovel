@@ -55,16 +55,18 @@ public sealed partial class CommitFilesViewModel
     public IUserInteraction? Interaction { get; init; }
     public Func<Task>? AfterFileMutation { get; init; }
     public Action<CommitFilesViewModel, bool>? FileActionStateChanged { get; init; }
+    public Func<string, string, bool, Func<Task>, Task>? ScheduleFileAction { get; init; }
+    public Action? FileActionFailed { get; init; }
     public bool FileActionBusy => _fileActionBusy;
-    public void CancelFileAction() => _fileActionCancel?.Cancel();
-    private CancellationTokenSource? _fileActionCancel;
+    public bool FileActionMutating { get; private set; }
+    private readonly Dictionary<string, Task> _pendingFileActions = [];
     private bool _historyMenuOpen, _historyMenuDiffPending;
     public void BeginHistoryMenu() => _historyMenuOpen = true;
     public void EndHistoryMenu() { _historyMenuOpen = false; if (_historyMenuDiffPending) { _historyMenuDiffPending = false; if (!_closed) LoadDiff(); } }
     private bool _fileActionBusy, _treeMode;
     private string _treeDirectory = "", _treeRevision = "";
     public Task FileActionTask { get; private set; } = Task.CompletedTask;
-    public bool CanUseHistoryMenu => !_closed && !_fileActionBusy && Actions is not null && Interaction is not null;
+    public bool CanUseHistoryMenu => !_closed && Actions is not null && Interaction is not null;
     public bool TreeMode { get => _treeMode; private set => Set(ref _treeMode, value); }
     public string TreeDirectory { get => _treeDirectory; private set => Set(ref _treeDirectory, value); }
     public RelayCommand TreeUpCommand => new(() => BrowseTree(_treeRevision, TreeDirectory.Contains('/') ? TreeDirectory[..TreeDirectory.LastIndexOf('/')] : ""), () => CanUseHistoryMenu && TreeDirectory.Length > 0);
@@ -96,11 +98,28 @@ public sealed partial class CommitFilesViewModel
         if (!CanUseHistoryMenu) return;
         var saveTo = action == "save" ? Interaction!.ChooseHistorySaveFile(System.IO.Path.GetFileName(file.Path)) : null;
         if (action == "save" && saveTo is null) return;
-        _fileActionBusy = true; Changed(nameof(CanUseHistoryMenu)); Changed(nameof(FileActionBusy)); Changed(nameof(CanCancel)); _fileActionCancel = new(TimeSpan.FromMinutes(10));
-        FileActionStateChanged?.Invoke(this, true);
-        FileActionTask = Run();
+        var key = "HistoryFile|" + action + "|" + revision + "|" + file.Path;
+        if (_pendingFileActions.ContainsKey(key)) return;
+        var previous = Task.WhenAll(_pendingFileActions.Values);
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingFileActions.Add(key, completion.Task); FileActionTask = Task.WhenAll(_pendingFileActions.Values);
+        _ = Schedule();
+        async Task Schedule()
+        {
+            try
+            {
+                if (ScheduleFileAction is not null) await ScheduleFileAction(key, UiText.Format("HistoryFileAction", UiText.Get("HistoryFileWorking"), file.Path), action is "restore" or "lfs-track" or "lfs-untrack", async () => { await previous; await Run(); });
+                else { await previous; await Run(); }
+            }
+            finally { _pendingFileActions.Remove(key); completion.TrySetResult(); }
+        }
         async Task Run()
         {
+            using var cancellation = new CancellationTokenSource();
+            _fileActionBusy = true; Changed(nameof(FileActionBusy));
+            FileActionMutating = action is "restore" or "lfs-track" or "lfs-untrack";
+            FileActionStateChanged?.Invoke(this, true);
+            using var lifetime = GitGui.Core.Processes.ProcessLifetime.CompleteStartedCommands();
             var label = UiText.Get(action switch { "restore" => "HistoryFileReset", "diff" => "FileExternalDiff", "history" => "HistoryFileHistory", "blame" => "HistoryFileBlame",
                 "explorer" => "FileMenuExplorer", "save" => "HistoryFileSave", "lfs-track" => "FileLfsTrack", "lfs-untrack" => "FileLfsUntrack", _ => "FileMenuOpen" });
             var title = UiText.Format("HistoryFileAction", label, file.Path); var attempt = new object(); var outcome = OperationOutcome.Failed;
@@ -148,7 +167,7 @@ public sealed partial class CommitFilesViewModel
             Journal?.Record(new(attempt, title, Status, 0, OperationOutcome.Running), path, false);
             try
             {
-                await Dispatcher.Yield(DispatcherPriority.Background); var token = _fileActionCancel.Token;
+                await Dispatcher.Yield(DispatcherPriority.Background); var token = cancellation.Token;
                 if (ExpectedIdentity is not null) await Actions!.ValidateHistoricalIdentityAsync(path, ExpectedIdentity, token);
                 if (action is "restore" or "lfs-track" or "lfs-untrack")
                 {
@@ -191,7 +210,8 @@ public sealed partial class CommitFilesViewModel
                 Output = finalOutput;
                 Status = finalMessage ?? UiText.Get(outcome == OperationOutcome.Success ? "HistoryFileDone" : outcome == OperationOutcome.Cancelled ? "ActionResultCancelled" : "ActionResultExited");
                 Journal?.Record(new(attempt, title, Status, 0, outcome), path, false, finalOutput);
-                _fileActionCancel.Dispose(); _fileActionCancel = null; _fileActionBusy = false; Changed(nameof(CanUseHistoryMenu)); Changed(nameof(FileActionBusy)); Changed(nameof(CanCancel));
+                if (outcome is OperationOutcome.Failed or OperationOutcome.Conflict or OperationOutcome.RefreshFailed) FileActionFailed?.Invoke();
+                _fileActionBusy = false; Changed(nameof(FileActionBusy));
                 FileActionStateChanged?.Invoke(this, false);
                 if (OperationAttention.Required(outcome, finalOutput)) Interaction?.ShowOperationProblem(path, title, Status, finalOutput);
             }

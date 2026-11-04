@@ -72,6 +72,7 @@ public sealed class ConflictViewModel : ObservableObject
     public Task Work { get; private set; } = Task.CompletedTask;
     public event EventHandler? Completed;
     public Action<string, string>? ReportProblem { get; init; }
+    public Func<Func<Task>, Task>? ScheduleOperation { get; init; }
     public ConflictViewModel(WorkingCopyContext context, LocalChange change, GitActions actions, ExternalMergeToolSettings? toolSettings = null)
     {
         _toolSettings = (toolSettings ?? new()).Normalize();
@@ -85,7 +86,7 @@ public sealed class ConflictViewModel : ObservableObject
             () => CanChoose && _canSubmit && (Current || Incoming) && (!(Current && Incoming) || CanEdit));
         ExternalCommand = new(() => Work = ResolveAsync(ConflictChoice.External), () => CanChoose && _canSubmit);
         ReloadCommand = new(() => Work = LoadAsync(true), () => !Busy && !_closed);
-        CancelCommand = new(() => _cancel?.Cancel(), () => Busy);
+        CancelCommand = new(() => { if (!HasMutation) _cancel?.Cancel(); }, () => Busy && !HasMutation);
         UseCurrentTextCommand = new(() => Text = _preview?.Current?.Text ?? "", () => CanEdit);
         UseIncomingTextCommand = new(() => Text = _preview?.Incoming?.Text ?? "", () => CanEdit);
     }
@@ -126,36 +127,46 @@ public sealed class ConflictViewModel : ObservableObject
     private async Task ResolveAsync(ConflictChoice choice)
     {
         var resolution = new ConflictResolution(_preview!, choice, Text, ExternalTool == SavedToolOption ? "" : ExternalTool,
-            ExternalTool == SavedToolOption ? _toolSettings : null); HasMutation = true; Begin(mutation: true);
-        var transcript = new CommandTranscript();
-        var outcome = OperationOutcome.Failed;
-        var attempt = new object(); Journal?.Record(new(attempt, Title, UiText.Get("ConflictResolving"), 0, OperationOutcome.Running), _context.Identity.Worktree, false);
-        var retryWithoutReload = false;
-        Status = UiText.Get("ConflictResolving");
-        try
+            ExternalTool == SavedToolOption ? _toolSettings : null);
+        HasMutation = true; Busy = true;
+        var started = false;
+        try { if (ScheduleOperation is not null) await ScheduleOperation(Execute); else await Execute(); }
+        finally { if (!started) { Busy = false; Status = UiText.Get("QueuedRequestCancelled"); } }
+        async Task Execute()
         {
-            await Dispatcher.Yield(DispatcherPriority.Background);
-            var result = await _actions.ExecuteWorkingCopyAsync(_context, new(WorkingCopyAction.ResolveConflict, [_change], Resolution: resolution), _cancel!.Token, transcript.Collect);
-            Output = transcript.Complete(result.Result.Output);
-            Resolved = result.Result.Success && !result.Result.HasConflicts;
-            outcome = Resolved ? OperationOutcome.Success : result.Result.Outcome == ProcessOutcome.Cancelled ? OperationOutcome.Cancelled : OperationOutcome.Failed;
-            Status = UiText.Get(result.Result.MessageCode ?? (Resolved ? "ConflictResolved" : "ActionResult" + result.Result.Outcome));
+            started = true;
+            using var lifetime = ProcessLifetime.CompleteStartedCommands();
+            Begin(mutation: true);
+            var transcript = new CommandTranscript();
+            var outcome = OperationOutcome.Failed;
+            var attempt = new object(); Journal?.Record(new(attempt, Title, UiText.Get("ConflictResolving"), 0, OperationOutcome.Running), _context.Identity.Worktree, false);
+            var retryWithoutReload = false;
+            Status = UiText.Get("ConflictResolving");
+            try
+            {
+                await Dispatcher.Yield(DispatcherPriority.Background);
+                var result = await _actions.ExecuteWorkingCopyAsync(_context, new(WorkingCopyAction.ResolveConflict, [_change], Resolution: resolution), _cancel!.Token, transcript.Collect);
+                Output = transcript.Complete(result.Result.Output);
+                Resolved = result.Result.Success && !result.Result.HasConflicts;
+                outcome = Resolved ? OperationOutcome.Success : result.Result.Outcome == ProcessOutcome.Cancelled ? OperationOutcome.Cancelled : OperationOutcome.Failed;
+                Status = UiText.Get(result.Result.MessageCode ?? (Resolved ? "ConflictResolved" : "ActionResult" + result.Result.Outcome));
+            }
+            catch (Exception error)
+            {
+                if (error is OperationCanceledException) outcome = OperationOutcome.Cancelled;
+                retryWithoutReload = error is GitActionException { Code: "ConflictMarkersRemain" or "ConflictTextLimit" or "ConflictToolMissing" };
+                Status = Explain(error);
+            }
+            finally
+            {
+                _canSubmit = retryWithoutReload; End();
+                if (!_closed && GitGui.App.Services.OperationAttention.Required(outcome, Output)) ReportProblem?.Invoke(Status, Output);
+                Journal?.Record(new(attempt, Title, Status, _watch.Elapsed.TotalSeconds, outcome), _context.Identity.Worktree, false, Output);
+            }
+            if (!_closed && !retryWithoutReload) Completed?.Invoke(this, EventArgs.Empty);
         }
-        catch (Exception error)
-        {
-            if (error is OperationCanceledException) outcome = OperationOutcome.Cancelled;
-            retryWithoutReload = error is GitActionException { Code: "ConflictMarkersRemain" or "ConflictTextLimit" or "ConflictToolMissing" };
-            Status = Explain(error);
-        }
-        finally
-        {
-            _canSubmit = retryWithoutReload; End();
-            if (!_closed && GitGui.App.Services.OperationAttention.Required(outcome, Output)) ReportProblem?.Invoke(Status, Output);
-            Journal?.Record(new(attempt, Title, Status, _watch.Elapsed.TotalSeconds, outcome), _context.Identity.Worktree, false, Output);
-        }
-        if (!_closed && !retryWithoutReload) Completed?.Invoke(this, EventArgs.Empty);
     }
-    private void Begin(bool mutation = false) { _cancel = new(mutation ? TimeSpan.FromMinutes(10) : TimeSpan.FromSeconds(45)); Busy = true; _watch.Restart(); }
+    private void Begin(bool mutation = false) { _cancel = mutation ? new() : new(TimeSpan.FromSeconds(45)); Busy = true; _watch.Restart(); }
     private void End() { _watch.Stop(); _cancel?.Dispose(); _cancel = null; Busy = false; }
     private static string Explain(Exception error) => UiText.Get(error is GitActionException action ? action.Code : error is GitReadException read ? "GitError" + read.Failure :
         error is OperationCanceledException ? "ActionResultCancelled" : "ActionReadFailed");
@@ -166,5 +177,5 @@ public sealed class ConflictViewModel : ObservableObject
         Changed(nameof(HasPreview));
         Changed(nameof(ResultLabel));
     }
-    public async Task CloseAsync() { _closed = true; _cancel?.Cancel(); await Work;  }
+    public async Task CloseAsync() { if (!HasMutation) _cancel?.Cancel(); await Work; _closed = true; }
 }

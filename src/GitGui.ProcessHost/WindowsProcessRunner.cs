@@ -7,6 +7,7 @@ namespace GitGui.ProcessHost;
 public sealed class WindowsProcessRunner : IProcessRunner
 {
     private readonly SemaphoreSlim _slots = new(2, 2);
+    private readonly SemaphoreSlim _commandSlots = new(4, 4);
 
     public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken,
         Action<ProcessOutput>? output = null) => Task.Run(() => RunWorkerAsync(request, cancellationToken, output));
@@ -17,7 +18,9 @@ public sealed class WindowsProcessRunner : IProcessRunner
         if (request.MaximumOutputBytes is < 1 or > ProcessRequest.MaximumCaptureBytes || request.Timeout <= TimeSpan.Zero ||
             request.Timeout > TimeSpan.FromMinutes(10)) throw new ArgumentOutOfRangeException(nameof(request));
         var watch = Stopwatch.StartNew();
-        try { await _slots.WaitAsync(cancellationToken).ConfigureAwait(false); }
+        var finishStarted = ProcessLifetime.FinishStarted;
+        var slots = finishStarted ? _commandSlots : _slots;
+        try { await slots.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) { return new(ProcessOutcome.Cancelled, null, [], [], watch.Elapsed); }
         using var timeout = new CancellationTokenSource(request.Timeout);
         using var limit = new CancellationTokenSource();
@@ -35,10 +38,10 @@ public sealed class WindowsProcessRunner : IProcessRunner
             child = NativeChildProcess.Start(request, job);
             drains = Task.WhenAll(DrainAsync(child.StandardOutput, stdout, false),
                 DrainAsync(child.StandardError, stderr, true));
-            await child.Completion.WaitAsync(stop.Token).ConfigureAwait(false);
+            await child.Completion.WaitAsync(finishStarted ? CancellationToken.None : stop.Token).ConfigureAwait(false);
             // Close the job after exit, including any descendant that retained a pipe.
             job.Dispose();
-            await drains.WaitAsync(stop.Token).ConfigureAwait(false);
+            await drains.WaitAsync(finishStarted ? CancellationToken.None : stop.Token).ConfigureAwait(false);
             if (limit.IsCancellationRequested) return Result(drainFailed != 0 ? ProcessOutcome.StartFailed : ProcessOutcome.OutputLimit, null);
             return Result(ProcessOutcome.Exited, child.ExitCode);
         }
@@ -58,7 +61,7 @@ public sealed class WindowsProcessRunner : IProcessRunner
         finally
         {
             try { job?.Dispose(); await FinishAsync().ConfigureAwait(false); }
-            finally { child?.Dispose(); _slots.Release(); }
+            finally { child?.Dispose(); slots.Release(); }
         }
 
         ProcessResult Result(ProcessOutcome outcome, int? code) => new(outcome, code, stdout.ToArray(), stderr.ToArray(), watch.Elapsed);

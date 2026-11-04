@@ -123,7 +123,7 @@ public partial class App : Application
         if (_allowClose) return;
         e.Cancel = true;
         if (_closing || sender is not MainWindow window) return;
-        if (_shell!.HasUserOperation) { _shell.RevealRunningOperation(); return; } // Finish/cancel and reconcile before shutdown.
+        if (_shell!.HasUserOperation) { MessageBox.Show(window, UiText.Get("AppCommandRunningClose"), UiText.Get("AppTitle"), MessageBoxButton.OK, MessageBoxImage.Information); return; }
         _closing = true;
         _shell!.BeginShutdown();
         _startupCancellation.Cancel();

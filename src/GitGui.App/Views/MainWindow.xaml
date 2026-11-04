@@ -97,7 +97,7 @@
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=RefreshRepository}" Command="{Binding RefreshRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=Stashes}" Command="{Binding StashesCommand}" />
-        <MenuItem Header="{loc:Text Key=CancelOperation}" Command="{Binding CancelCommand}" />
+        <MenuItem Header="{loc:Text Key=CancelWaitingRequest}" Command="{Binding CancelCommand}" />
         <MenuItem Header="{loc:Text Key=RecoveryMenu}" Visibility="{Binding HasRecovery, Converter={StaticResource BoolToVisibility}}">
           <MenuItem Header="{loc:Text Key=ActionTitleContinue}" Command="{Binding ContinueCommand}" />
           <MenuItem Header="{loc:Text Key=ActionTitleSkip}" Command="{Binding SkipCommand}" Visibility="{Binding CanSkipRecovery, Converter={StaticResource BoolToVisibility}}" />
@@ -205,7 +205,7 @@
           </Button>
           <StackPanel Grid.RowSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button Content="⋯" Command="{Binding ShowActionDetailsCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}" ToolTip="{loc:Text Key=ActionDetails}" AutomationProperties.Name="{loc:Text Key=ActionDetails}" />
-            <Button Content="×" Command="{Binding CancelCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" ToolTip="{loc:Text Key=ActionCancelHelp}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{loc:Text Key=ActionCancel}" AutomationProperties.HelpText="{loc:Text Key=ActionCancelHelp}" />
+            <Button Content="×" Command="{Binding CancelCommand}" Width="19" Padding="0" Margin="0" FontSize="14" BorderThickness="0" Background="Transparent" ToolTip="{loc:Text Key=CancelWaitingRequest}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="{loc:Text Key=CancelWaitingRequest}" AutomationProperties.HelpText="{loc:Text Key=CancelWaitingRequest}" />
           </StackPanel>
           <StackPanel Grid.Row="2">
             <TextBlock Text="{Binding QueueStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding QueueStatus}">

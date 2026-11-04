@@ -1,5 +1,15 @@
 # Product
 
+## Repository-owned work (0.46.0 Beta)
+
+Opening Commit shows cached content immediately and starts its own local scan without cancelling repository initialization. Commit remains one modal editor. Submitting Commit closes it immediately; the command, hooks and reconciliation continue in the background. Closing a repository tab or Stashes view also leaves accepted work running. Reopening a repository reconnects to its retained owner and result.
+
+Independent repository work, history reads and working-copy actions during Fetch can proceed concurrently. Conflicting index/worktree/ref mutations wait in repository order; duplicate requests share one attempt. Controls require actual data/targets, not general application idleness. Requests made before initialization wait for valid repository context. Views retain useful rows and drafts while fresh data loads.
+
+Activity includes All repositories and individual Remove waiting request actions. Failure, stale targets or conflicts stop the remaining waiting requests for that repository with an explanation; already running commands and other repositories continue. A failed background Commit preserves its message and actual staged state and offers Reopen Commit from its notification and Activity. It never silently reopens the editor.
+
+Started user commands, including manual Fetch and configured hooks/tools, cannot be cancelled by navigation, window closure or a process deadline. Only automatic fetch may be preempted for user work. App exit/update restart is refused with an explanation while accepted work remains. A settled merge/rebase conflict may be left for later and does not itself block exit. Running-command cancellation is deferred until the owner revisits it; a hung external command can therefore keep exit blocked. Obsolete comparison reads remain cancellable. Queue/history are session-only.
+
 ## Categorized settings and author pictures (0.45.0 Beta)
 
 **File → Settings** has categories on the left and a scrolling form on the right. Save persists application preferences together and applies them immediately; Cancel leaves them unchanged. Opening or switching categories does no Git, network or executable discovery. Errors retain edits. The categories expose working preferences discussed during daily use:

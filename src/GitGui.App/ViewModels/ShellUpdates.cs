@@ -15,7 +15,7 @@ public sealed partial class ShellViewModel
         Changed(nameof(Updates));
     }
     public bool ToolsNeedUpdateAcknowledgment => _unverifiedToolHandoff;
-    public bool CanPrepareUpdate => IsReady && !_stopping && !ActionOpen && !_launchingTool;
+    public bool CanPrepareUpdate => IsReady && !_stopping && !HasUserOperation && !_launchingTool;
     public async Task<bool> VerifyUpdateIdleAsync(CancellationToken token)
     {
         // Called only after BeginShutdown closes admission to commands/tools/tab changes.

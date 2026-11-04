@@ -129,7 +129,9 @@ internal static partial class Program
                 shell.DefaultPullCommand.Execute(null); var queuedPull = shell.ActionTask;
                 shell.DefaultPullCommand.Execute(null);
                 Expect(ReferenceEquals(queuedPull, shell.ActionTask) && runner.FetchCalls == calls && shell.QueueStatus.Contains("Pull"), "One distinct Pull waits behind Fetch");
-                shell.CloseTab(firstTab); Expect(shell.Repositories.Contains(firstTab), "Running tab remains owned until completion");
+                shell.CloseTab(firstTab); Expect(!shell.Repositories.Contains(firstTab) && !firstTask.IsCompleted, "Tab closes while accepted work remains owned");
+                ui.RepositoryChoice = a; shell.OpenRepositoryCommand.Execute(null);
+                Expect(ReferenceEquals(shell.SelectedRepository, firstTab), "Reopened tab reconnects to the running owner");
                 runner.Release.TrySetResult(); await Task.WhenAll(firstTask, secondTask, queuedPull); await shell.WaitForIdleAsync(); runner.HoldFetch = false;
                 Expect(firstAction?.Succeeded == true && secondAction?.Succeeded == true && !shell.ActionOpen && shell.SelectedRepository == firstTab, "Both real fetches finish without switching selection");
                 Expect(firstAction?.Activity?.Outcome == OperationOutcome.Success && secondAction?.Activity?.Outcome == OperationOutcome.Success, "Inactive refresh is not a spurious failure");
@@ -179,7 +181,7 @@ internal static partial class Program
                 finally { runner.Release.TrySetResult(); runner.HoldFetch = false; close.TrySetResult(); ui.CommitHandler = null; await shell.CommitDialogTask; await fetch; }
                 await shell.WaitForIdleAsync();
             });
-            await Check("Toolbar accepts one queued action during a read, cancellation removes it, and inactive targets stay captured", async () =>
+            await Check("Toolbar Fetch starts during a history read and queued inactive targets stay captured", async () =>
             {
                 shell.SelectedRepository = firstTab; await shell.WaitForIdleAsync();
                 runner.HoldLogs = true; shell.RefreshRepositoryCommand.Execute(null);
@@ -187,11 +189,14 @@ internal static partial class Program
                 var before = runner.FetchCalls;
                 Expect(shell.SelectedRepository?.Snapshot?.Branch == "main" && shell.Commits.Count > 0, "Branch context and retained rows are available while Git log waits");
                 Expect(shell.DefaultFetchCommand.CanExecute(null) && shell.ShowChangesCommand.CanExecute(null), "Read does not disable toolbar");
-                shell.DefaultFetchCommand.Execute(null); var cancelled = shell.ActionTask;
-                shell.CancelCommand.Execute(null); await cancelled; await shell.WaitForIdleAsync();
-                Expect(runner.FetchCalls == before, "Cancel removes waiting intent without running Git");
+                shell.DefaultFetchCommand.Execute(null); var concurrentFetch = shell.ActionTask;
+                using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(8)))
+                    while (runner.FetchCalls == before) { deadline.Token.ThrowIfCancellationRequested(); await Task.Delay(10); }
+                Expect(runner.FetchCalls > before, "A history refresh does not serialize independent Fetch");
                 runner.HoldLogs = false; runner.LogRelease.TrySetResult();
+                await concurrentFetch;
                 shell.RefreshRepositoryCommand.Execute(null); await shell.ActionTask;
+                before = runner.FetchCalls;
                 runner.HoldFetch = true; runner.Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 shell.DefaultFetchCommand.Execute(null); var running = shell.ActionTask;
                 while (runner.FetchCalls == before) await Task.Delay(10);
@@ -252,20 +257,20 @@ internal static partial class Program
                 Expect(ui.Problems.Count == before, "Preempted automatic work stays quiet");
                 runner.BlockBackground = false;
             });
-            await Check("Successful commit signals close after reconciliation; rejected commit retains message and logs", async () =>
+            await Check("Successful commit signals completion after reconciliation; rejected commit retains message and logs", async () =>
             {
                 await File.AppendAllTextAsync(Path.Combine(b, "file.txt"), "edit\n"); await Git(b, "add", ".");
                 var model = new CommitViewModel(b, git, reader, actions, ui); await model.StartLoading(); var closed = 0;
                 model.CommitCompleted += (_, _) => closed++;
                 model.Subject = "keyboard commit"; Expect(model.CommitCommand.CanExecute(null), "Valid staged commit");
                 model.CommitCommand.Execute(null); await model.OperationTask;
-                Expect(closed == 1 && model.Subject == "" && !model.IsBusy && await Git(b, "log", "-1", "--format=%s") == "keyboard commit", "Only completed commit signals close");
+                Expect(closed == 1 && model.Subject == "" && !model.IsBusy && await Git(b, "log", "-1", "--format=%s") == "keyboard commit", "Only completed commit signals success");
                 await model.CloseAsync();
                 await File.AppendAllTextAsync(Path.Combine(b, "file.txt"), "blocked\n"); await Git(b, "add", ".");
                 await File.WriteAllTextAsync(Path.Combine(b, ".git", "hooks", "pre-commit"), "#!/bin/sh\necho blocked-by-fixture >&2\nexit 1\n", new UTF8Encoding(false));
                 model = new(b, git, reader, actions, ui); await model.StartLoading(); closed = 0; model.CommitCompleted += (_, _) => closed++;
                 model.Subject = "keep this message"; var problems = ui.Problems.Count; model.CommitCommand.Execute(null); await model.OperationTask;
-                Expect(closed == 0 && model.Subject == "keep this message" && ui.Problems.Count == problems + 1 && ui.Problems[^1].Output.Contains("blocked-by-fixture"), "Hook rejection stays open with draft and attention output");
+                Expect(closed == 0 && model.Subject == "keep this message" && ui.Problems.Count == problems + 1 && ui.Problems[^1].Output.Contains("blocked-by-fixture"), "Hook rejection retains draft and attention output");
                 await model.CloseAsync();
             });
             await Check("Attention dialog renders themed, selectable latest output at normal and minimum sizes", async () =>
@@ -273,12 +278,14 @@ internal static partial class Program
                 foreach (var theme in new[] { AppAppearance.Dark, AppAppearance.Light })
                 {
                     AppTheme.Apply(Application.Current.Resources, false, theme);
-                    var window = new OperationProblemWindow(new(a, "Push", "Push rejected. Pull the remote changes before pushing again.", "git push origin main\n! [rejected] main -> main (fetch first)"));
+                    var window = new OperationProblemWindow(new(a, "Commit", "Commit rejected by hook. The message and staged files are preserved.", "git commit\nrejected by fixture", () => { }));
                     var content = (FrameworkElement)window.Content;
                     foreach (var size in new[] { (840, 520), (560, 320) })
                     {
                         Arrange(content, size.Item1, size.Item2); await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
                         Expect(((Grid)content).Children.OfType<TextBox>().Single().Text.Contains("rejected"), "Visible bound logs are present");
+                        // The native window is deliberately never shown; inherited IsVisible is false.
+                        Expect(VisualDescendants<Button>(content).Any(button => button.Visibility == Visibility.Visible && Equals(button.Content, GitGui.App.Localization.UiText.Get("ReopenCommit"))), "Failure offers an explicit repository-specific reopen action");
                         SaveRender(content, $"operation-attention-{theme}-{size.Item1}.png", size.Item1, size.Item2);
                     }
                     window.Close();
@@ -311,6 +318,8 @@ internal static partial class Program
         public int AuthPrompts { get; private set; }
         public string? RepositoryChoice { get; set; }
         public Func<CommitViewModel, Task>? CommitHandler { get; set; }
+        public Func<StashViewModel, Task>? StashHandler { get; set; }
+        public Task ShowStashesAsync(StashViewModel model) => StashHandler?.Invoke(model) ?? Task.CompletedTask;
         public Task ShowCommitAsync(CommitViewModel model) => CommitHandler?.Invoke(model) ?? Task.CompletedTask;
         public string? ChooseRepository() => RepositoryChoice;
         public string? ChooseGit() => null;

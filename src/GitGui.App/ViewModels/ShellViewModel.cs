@@ -35,7 +35,7 @@ public sealed partial class ShellViewModel : ObservableObject
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) { RefreshCommands(); Changed(nameof(OperationStatus)); if (!value) DrainActionQueue(); } } }
     public bool CanNavigate => IsReady && !_stopping && !_commitOpen;
-    public string OperationStatus => _commitModel is not null ? _commitModel.Summary : IsActionRunning ? CurrentAction!.Summary :
+    public string OperationStatus => _commitModel is not null ? _commitModel.Summary : SelectedRepository is { } commitTab && _commitSessions.GetValueOrDefault(commitTab) is { HasPendingWork: true } pendingCommit ? pendingCommit.Summary : IsActionRunning ? CurrentAction!.Summary :
         RepositoryBusy(SelectedRepository) ? UiText.Get(_preparingAction ? "ActionPreparing" : "ActionReviewing") :
         IsBusy ? UiText.Get(_readingDivergence ? "OperationReadingCounts" : "OperationReadingHistory") :
         HasRecovery ? UiText.Get("RecoveryWaiting") : HasAction ? CurrentAction!.Summary : UiText.Get("NoActiveOperation");
@@ -86,13 +86,15 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         HistoryViewChanging?.Invoke(this, EventArgs.Empty);
         _sidebarCancel?.Cancel(); SidebarStatus = "";
-        _operationCancellation?.Cancel(); _generation++; CancelCountRead();
+        _generation++; CancelCountRead();
+        _operationCancellation = value?.InspectionCancellation; _activeOperation = value?.InspectionTask ?? Task.CompletedTask;
+        _readAttempt = value?.InspectionAttempt;
         _selectedRepository = value;
         PublishActivity(CurrentAction?.Activity);
         if (value is not null) value.History.LastUse = ++_useCounter;
         Status = value?.History.Error is { Length: > 0 } error ? error : UiText.Get(value?.History.Page is null ? "HistoryNotLoaded" : "HistoryCheckingCached");
         Changed(nameof(SelectedRepository)); Changed(nameof(QueueStatus)); Changed(nameof(RepositoryTitle)); PublishState();
-        if (CanNavigate && value is not null && !RepositoryBusy(value)) BeginCurrentRead(value);
+        if (CanNavigate && value is not null) BeginCurrentRead(value);
         else { _elapsed.Stop(); IsBusy = false; }
 
     }
@@ -137,7 +139,7 @@ public sealed partial class ShellViewModel : ObservableObject
             if (tab is null)
             {
                 if (Repositories.Count >= 20) { Status = UiText.Get("TooManyRepositories"); return; }
-                tab = new(path); Repositories.Add(tab);
+                tab = RetainedRepository(path); Repositories.Add(tab);
             }
             SelectedRepository = tab;
             BeginCurrentRead(tab, reopen: true);
@@ -146,14 +148,8 @@ public sealed partial class ShellViewModel : ObservableObject
         LoadMoreHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: 1), () => CanRead && IsHistory && !IsBusy && State?.Page?.HasMore == true && State.NeedsRefresh == false);
         NewerHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: -1), () => CanRead && IsHistory && !IsBusy && State?.PageIndex > 0 && State.NeedsRefresh == false);
         FirstHistoryCommand = new(() => BeginInspection(SelectedRepository!, force: true, firstPage: true), () => CanRead && IsHistory && !IsBusy && State?.Page?.Cursor.Offset > 0);
-        CancelCommand = new(() =>
-        {
-            CancelQueuedActions(SelectedRepository);
-            CancelSelectedHistoryFileActions();
-            if (_commitModel is not null) _commitModel.Cancel();
-            else if (IsActionRunning) CurrentAction?.Cancel();
-            else _operationCancellation?.Cancel();
-        }, () => SelectedRepository is { } cancelTab && HistoryFileBusy(cancelTab) || HasQueuedAction(SelectedRepository) || (IsActionRunning ? CurrentAction?.CanCancel == true : IsBusy));
+        CancelCommand = new(() => CancelNextQueuedAction(SelectedRepository),
+            () => _queuedActions.Any(item => item.Tab == SelectedRepository && !item.Started));
         ChooseGitCommand = new(() =>
         {
             var path = _interaction!.ChooseGit(); if (path is null) return;
@@ -162,10 +158,10 @@ public sealed partial class ShellViewModel : ObservableObject
             if (SelectedRepository is not null) BeginCurrentRead(SelectedRepository!, force: true);
         }, () => CanNavigate && !ActionOpen && !IsBusy && _interaction is not null);
         DiagnosticsCommand = new(() => { Changed(nameof(TimingDetails)); RevealDetails(2); }, () => CanNavigate);
-        CloseRepositoryCommand = new(() => CloseTab(SelectedRepository!), () => CanNavigate && SelectedRepository is not null && !RepositoryOperationBusy(SelectedRepository) && !HasQueuedAction(SelectedRepository));
+        CloseRepositoryCommand = new(() => CloseTab(SelectedRepository!), () => CanNavigate && SelectedRepository is not null);
         MoveLeftCommand = new(() => MoveTab(SelectedRepository!, -1), () => CanMove(SelectedRepository, -1));
         MoveRightCommand = new(() => MoveTab(SelectedRepository!, 1), () => CanMove(SelectedRepository, 1));
-        CloseTabCommand = new(CloseTab, tab => CanNavigate && !RepositoryOperationBusy(tab) && !HasQueuedAction(tab) && Repositories.Contains(tab));
+        CloseTabCommand = new(CloseTab, tab => CanNavigate && Repositories.Contains(tab));
         CloseOtherTabsCommand = new(tab =>
         {
             SelectedRepository = tab;
@@ -178,7 +174,7 @@ public sealed partial class ShellViewModel : ObservableObject
         PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OperationStatus)) Changed(nameof(OperationCaption)); };
         InitializeActions(actions); InitializeChanges(); InitializeWorkspaceTools(tools);
     }
-    private bool CanRead => CanNavigate && !RepositoryBusy(SelectedRepository) && SelectedRepository is not null && _reader is not null;
+    private bool CanRead => CanNavigate && SelectedRepository is not null && _reader is not null;
 
     public void CompleteStartup(SettingsLoadResult result)
     {
@@ -214,15 +210,20 @@ public sealed partial class ShellViewModel : ObservableObject
 
     private void BeginInspection(RepositoryTab tab, bool reopen = false, bool force = false, int direction = 0, bool firstPage = false, bool actionReconcile = false, bool checkChanges = true)
     {
-        if (_reader is null || (!CanNavigate && !actionReconcile)) return;
-        _operationCancellation?.Cancel();
-        var prior = _activeOperation;
-        var generation = ++_generation;
+        if (_reader is null || _stopping) return;
+        if (!force && direction == 0 && !firstPage && !tab.InspectionTask.IsCompleted)
+        { if (SelectedRepository == tab) { _activeOperation = tab.InspectionTask; _operationCancellation = tab.InspectionCancellation; _readAttempt = tab.InspectionAttempt; IsBusy = true; UpdateReadActivity(); } return; }
+        tab.InspectionCancellation?.Cancel();
+        var prior = tab.InspectionTask;
+        var generation = ++tab.InspectionGeneration;
         var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        _operationCancellation = cancellation;
-        _readingDivergence = false; _elapsed.Restart(); IsBusy = true;
-        StartReadActivity(actionReconcile);
-        _activeOperation = InspectAsync();
+        tab.InspectionCancellation = cancellation;
+        var readAttempt = actionReconcile ? null : new object(); var readWatch = Stopwatch.StartNew();
+        tab.InspectionAttempt = readAttempt;
+        if (readAttempt is not null) Journal.Record(new(readAttempt, UiText.Get("OperationHistoryTitle"), UiText.Get("OperationReadingHistory"), 0, OperationOutcome.Running), tab.Directory, true);
+        if (SelectedRepository == tab) { _operationCancellation = cancellation; _readingDivergence = false; _elapsed.Restart(); IsBusy = true; _readAttempt = readAttempt; UpdateReadActivity(); }
+        tab.InspectionTask = InspectAsync();
+        if (SelectedRepository == tab) _activeOperation = tab.InspectionTask;
 
         async Task InspectAsync()
         {
@@ -242,7 +243,7 @@ public sealed partial class ShellViewModel : ObservableObject
                 {
                     if (Obsolete()) return;
                     state.Clear(); tab.Invalidate();
-                    state.Notice = UiText.Get("IdentityUnavailable"); Status = state.Notice;
+                    state.Notice = UiText.Get("IdentityUnavailable"); SetStatus(state.Notice);
                     return;
                 }
                 if (Obsolete()) return;
@@ -250,16 +251,16 @@ public sealed partial class ShellViewModel : ObservableObject
                 if (known is not null && identityChanged)
                 {
                     state.Clear(); tab.Invalidate();
-                    if (!reopen) { state.Notice = UiText.Get("IdentityChanged"); Status = state.Notice; return; }
+                    if (!reopen) { state.Notice = UiText.Get("IdentityChanged"); SetStatus(state.Notice); return; }
                 }
                 // Local history is the default product behavior, not a trust permission.
                 // Remember identity only after a successful read; future execution features need separate gates.
                 if (!force && direction == 0 && state.Page is not null && !state.NeedsRefresh && DateTimeOffset.UtcNow - state.ValidatedAt < RefreshAge)
-                { readSucceeded = true; state.Notice = LoadedNotice(state.Page); Status = UiText.Get("HistoryCached"); return; }
+                { readSucceeded = true; state.Notice = LoadedNotice(state.Page); SetStatus(UiText.Get("HistoryCached")); return; }
                 state.Notice = UiText.Get(state.Page is null ? "HistoryLoading" : "HistoryRefreshing"); Changed(nameof(HistoryNotice));
                 state.ValidatedAt = default; // A failed/cancelled refresh cannot later masquerade as fresh cached data.
                 Changed(nameof(DivergenceHelp));
-                Status = UiText.Get("InspectingRepository");
+                SetStatus(UiText.Get("InspectingRepository"));
                 _git ??= await _reader.DiscoverAsync(_explicitGit, cancellation.Token); Changed(nameof(GitStatus));
                 var previous = state.StartupPreview ? null : state.Page;
                 var snapshot = direction == 0 ? await _reader.InspectAsync(_git, tab.Directory, cancellation.Token) : tab.Snapshot!;
@@ -270,7 +271,8 @@ public sealed partial class ShellViewModel : ObservableObject
                 { RejectChangedIdentity(); return; }
                 // Publish inspected repository/branch context before the slower graph walk.
                 // Rows retain their existing loading/last-known label until the full page validates.
-                tab.Apply(snapshot); RefreshCommands();
+                _knownIdentities[tab.Directory] = new(tab.Directory, identity.Fingerprint);
+                tab.Apply(snapshot); RefreshCommands(); DrainActionQueue();
                 CommitHistory history;
                 var keepPage = false;
                 if (direction != 0)
@@ -298,7 +300,7 @@ public sealed partial class ShellViewModel : ObservableObject
                 IReadOnlyList<CommitRow> rows = keepPage && state.Rows.Select(r => r.Commit.Hash).SequenceEqual(prepared.Rows.Select(r => r.Commit.Hash))
                     ? state.Rows : prepared.Rows;
                 if (Obsolete()) return;
-                HistoryViewChanging?.Invoke(this, EventArgs.Empty);
+                if (SelectedRepository == tab) HistoryViewChanging?.Invoke(this, EventArgs.Empty);
                 var selectedHash = state.Selected?.Commit.Hash;
                 if (previous is not null)
                 {
@@ -323,17 +325,17 @@ public sealed partial class ShellViewModel : ObservableObject
                 state.Selected = rows.FirstOrDefault(row => row.Commit.Hash == selectedHash) ?? rows.FirstOrDefault();
                 state.ValidatedAt = DateTimeOffset.UtcNow; state.NeedsRefresh = false;
                 state.Notice = LoadedNotice(history); state.Error = state.RawOutput = "";
-                tab.Apply(history.Session.Repository); EvictCaches(tab); Status = UiText.Get("HistoryLoaded");
+                tab.Apply(history.Session.Repository); EvictCaches(tab); SetStatus(UiText.Get("HistoryLoaded"));
                 historyPublished = readSucceeded = true;
                 if (direction == 0) state.Divergence = new(DivergenceState.Pending);
-                PublishState(); // Rows are usable before optional ahead/behind traversal or a profile write.
+                if (SelectedRepository == tab) PublishState(); // Rows are usable before optional ahead/behind traversal or a profile write.
                 if (identityChanged)
                 {
                     _knownIdentities[tab.Directory] = new(tab.Directory, identity.Fingerprint);
                     await PersistRepositoryIdentitiesAsync();
                 }
                 if (direction != 0) return; // The page uses the same immutable tips and cached comparison.
-                _readingDivergence = true; Changed(nameof(OperationStatus)); UpdateReadActivity();
+                if (SelectedRepository == tab) { _readingDivergence = true; Changed(nameof(OperationStatus)); UpdateReadActivity(); }
                 try
                 {
                     var divergence = await _reader.ReadDivergenceAsync(_git, history.Session, cancellation.Token);
@@ -352,37 +354,46 @@ public sealed partial class ShellViewModel : ObservableObject
                 {
                     state.NeedsRefresh = exception.Failure == GitFailure.ChangedDuringRead;
                     state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryFailed" : "HistoryRefreshFailed");
-                    state.Error = UiText.Get("GitError" + exception.Failure); state.RawOutput = exception.RawOutput; Status = state.Error;
+                    state.Error = UiText.Get("GitError" + exception.Failure); state.RawOutput = exception.RawOutput; SetStatus(state.Error);
                 }
             }
             catch (OperationCanceledException)
-            { if (!Obsolete(ignoreCancellation: true)) { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); } }
+            { if (!Obsolete(ignoreCancellation: true)) { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); SetStatus(UiText.Get("GitErrorCancelled")); } }
             catch (Exception)
-            { if (!Obsolete()) { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryFailed" : "HistoryRefreshFailed"); Status = UiText.Get("GitErrorUnexpected"); } }
+            { if (!Obsolete()) { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryFailed" : "HistoryRefreshFailed"); SetStatus(UiText.Get("GitErrorUnexpected")); } }
             finally
             {
                 if (historyPublished && cancellation.IsCancellationRequested) state.Divergence = new(DivergenceState.Failed);
                 if (ReferenceEquals(_operationCancellation, cancellation)) _operationCancellation = null;
+                if (ReferenceEquals(tab.InspectionCancellation, cancellation)) tab.InspectionCancellation = null;
                 cancellation.Dispose();
-                if (generation == _generation)
+                var readOutcome = cancellation.IsCancellationRequested ? OperationOutcome.Cancelled : !readSucceeded ? OperationOutcome.Failed :
+                    state.Divergence?.State == DivergenceState.Failed ? OperationOutcome.RefreshFailed : OperationOutcome.Success;
+                var completedRead = readAttempt is null ? null : new OperationActivity(readAttempt, UiText.Get("OperationHistoryTitle"), OperationActivity.CompletedPhase(readOutcome), readWatch.Elapsed.TotalSeconds, readOutcome);
+                if (completedRead is not null) Journal.Record(completedRead, tab.Directory, true, state.RawOutput);
+                if (ReferenceEquals(tab.InspectionAttempt, readAttempt)) tab.InspectionAttempt = null;
+                if (generation == tab.InspectionGeneration && SelectedRepository == tab)
                 {
                     if (cancellation.IsCancellationRequested && !_stopping && !historyPublished)
-                    { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); Status = UiText.Get("GitErrorCancelled"); }
+                    { state.Notice = UiText.Get(state.Rows.Count == 0 ? "HistoryCancelled" : "HistoryRefreshCancelled"); SetStatus(UiText.Get("GitErrorCancelled")); }
                     _readingDivergence = false; _elapsed.Stop(); _operationCancellation = null; IsBusy = false;
-                    FinishReadActivity(cancellation.IsCancellationRequested ? OperationOutcome.Cancelled :
-                        !readSucceeded ? OperationOutcome.Failed : state.Divergence?.State == DivergenceState.Failed ? OperationOutcome.RefreshFailed : OperationOutcome.Success);
+                    _readAttempt = readAttempt;
+                    if (completedRead is not null && !IsActionRunning && _commitSessions.GetValueOrDefault(tab)?.HasPendingWork != true) PublishActivity(completedRead);
+                    _readAttempt = null;
                     Changed(nameof(OperationStatus)); PublishState();
                     if (historyPublished && !_stopping && !_commitOpen) { tab.SidebarReadAt = default; if (checkChanges) BeginCountRead(tab); }
                     if (!_stopping && !_commitOpen && !RepositoryBusy(tab) && tab.Snapshot is not null) BeginSidebarRead(tab);
                 }
+                _ = Dispatcher.CurrentDispatcher.BeginInvoke(() => { DrainActionQueue(); PruneRetainedRepositories(); }, DispatcherPriority.Background);
             }
+            void SetStatus(string text) { if (SelectedRepository == tab) Status = text; }
             void RejectChangedIdentity()
             {
                 if (Obsolete()) return;
                 state.Clear(); tab.Invalidate();
-                state.Notice = UiText.Get("IdentityChanged"); Status = state.Notice;
+                state.Notice = UiText.Get("IdentityChanged"); SetStatus(state.Notice);
             }
-            bool Obsolete(bool ignoreCancellation = false) => _stopping || generation != _generation || !Repositories.Contains(tab) || (!ignoreCancellation && cancellation.IsCancellationRequested);
+            bool Obsolete(bool ignoreCancellation = false) => _stopping || generation != tab.InspectionGeneration || (!ignoreCancellation && cancellation.IsCancellationRequested);
         }
     }
     private static string LoadedNotice(CommitHistory history) => UiText.Get(history.Entries.Count == 0
@@ -394,7 +405,9 @@ public sealed partial class ShellViewModel : ObservableObject
         var cached = Repositories.Where(tab => tab.History.Page is not null).OrderBy(tab => tab.History.LastUse).ToList();
         while (cached.Count > CachedTabLimit || (cached.Count > 1 && cached.Sum(tab => tab.History.EstimatedBytes) > 32 * 1024 * 1024))
         {
-            var oldest = cached.First(tab => tab != active); oldest.History.Clear(); oldest.Sidebar = null; oldest.RemoteConfiguration = null; oldest.SidebarReadAt = default; oldest.Stashes.List = null; cached.Remove(oldest);
+            var oldest = cached.FirstOrDefault(tab => tab != active && tab != SelectedRepository && tab.InspectionTask.IsCompleted && !RepositoryOperationBusy(tab) && !HasQueuedAction(tab));
+            if (oldest is null) break;
+            oldest.History.Clear(); oldest.Sidebar = null; oldest.RemoteConfiguration = null; oldest.SidebarReadAt = default; oldest.Stashes.List = null; cached.Remove(oldest);
         }
     }
     private async Task<bool> PersistRepositoryIdentitiesAsync()
@@ -421,14 +434,14 @@ public sealed partial class ShellViewModel : ObservableObject
     }
     public void CloseTab(RepositoryTab tab)
     {
-        if (!CanNavigate || HasQueuedAction(tab) || RepositoryOperationBusy(tab) || !Repositories.Contains(tab)) return;
+        if (!CanNavigate || !Repositories.Contains(tab)) return;
         var index = Repositories.IndexOf(tab);
         var selected = SelectedRepository == tab;
-        Repositories.Remove(tab); _knownIdentities.Remove(tab.Directory);
-        if (_repositoryActions.Remove(tab.Directory, out var previous)) previous.PropertyChanged -= OnActionChanged;
+        _retainedRepositories[tab.Directory] = tab;
+        Repositories.Remove(tab);
         _nextAutoFetch.Remove(tab);
         if (selected) SelectedRepository = Repositories.Count == 0 ? null : Repositories[Math.Min(index, Repositories.Count - 1)];
-        RefreshCommands();
+        RefreshCommands(); PruneRetainedRepositories();
     }
     private bool CanMove(RepositoryTab? tab, int offset) => CanNavigate && tab is not null && Repositories.Contains(tab) &&
         Repositories.IndexOf(tab) + offset >= 0 && Repositories.IndexOf(tab) + offset < Repositories.Count;
@@ -444,6 +457,7 @@ public sealed partial class ShellViewModel : ObservableObject
     }
     private void RefreshCommands()
     {
+        foreach (var entry in Journal.Entries) entry.ReopenCommit?.Refresh();
         RefreshWorkspaceTools();
         RefreshSidebarCommands();
         NewRepositoryCommand?.Refresh();
@@ -485,7 +499,23 @@ public sealed partial class ShellViewModel : ObservableObject
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
-    public void BeginShutdown() { _stopping = true; CancelHistoryFileActions(); foreach (var tab in Repositories) CancelQueuedActions(tab); _autoFetchTimer?.Stop(); _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
-    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _startupPreviewTask; await _countTask; await _oldCommitFiles; await DrainHistoryFileActionsAsync(); await _sidebarTask; }
-    public void ResumeAfterSaveFailure() { _stopping = false; if (_autoFetchTimer is not null) StartAutoFetch(); IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
+    public void BeginShutdown() { _stopping = true; foreach (var tab in AllRepositoryOwners) tab.InspectionCancellation?.Cancel(); foreach (var tab in Repositories) CancelQueuedActions(tab); _autoFetchTimer?.Stop(); _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
+    public async Task WaitForIdleAsync()
+    {
+        if (_stopping)
+        {
+            await Task.WhenAll(AllRepositoryOwners.Select(tab => tab.InspectionTask));
+            foreach (var editor in _commitSessions.Values.ToArray()) await editor.CloseAsync();
+        }
+        Task task; do { task = _activeOperation; await task; } while (task != _activeOperation);
+        await _retiredEditors; await _startupPreviewTask; await _countTask; await _oldCommitFiles;
+        await DrainHistoryFileActionsAsync(); await _sidebarTask;
+    }
+    public void ResumeAfterSaveFailure()
+    {
+        // Shutdown drained and closed these draft writers. Reopen creates a fresh writer
+        // from the retained workspace/draft instead of binding a permanently closed model.
+        _commitSessions.Clear();
+        _stopping = false; if (_autoFetchTimer is not null) StartAutoFetch(); IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus");
+    }
 }

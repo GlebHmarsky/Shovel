@@ -10,6 +10,10 @@ public sealed class ActivityEntry(object attempt, string repository, bool backgr
 {
     public object Attempt { get; } = attempt;
     public string Repository { get; } = repository;
+    private RelayCommand? _cancelWaiting, _reopenCommit;
+    public RelayCommand? CancelWaiting { get => _cancelWaiting; set { Set(ref _cancelWaiting, value); Changed(nameof(CanRemoveWaiting)); } }
+    public bool CanRemoveWaiting => CancelWaiting?.CanExecute(null) == true;
+    public RelayCommand? ReopenCommit { get => _reopenCommit; set => Set(ref _reopenCommit, value); }
     public bool Background { get; } = background;
     public DateTimeOffset Started { get; } = DateTimeOffset.Now;
     public string Time => Started.ToString("HH:mm:ss");
@@ -32,7 +36,7 @@ public sealed class ActivityEntry(object attempt, string repository, bool backgr
             _output = safe.Length <= ActivityJournal.OutputLimit ? safe : safe[..ActivityJournal.OutputLimit] + "\n" + UiText.Get("ActivityOutputLimit");
             Changed(nameof(Output));
         }
-        Changed(nameof(Output)); Changed(nameof(Title)); Changed(nameof(Status)); Changed(nameof(Summary)); Changed(nameof(Running));
+        Changed(nameof(CanRemoveWaiting)); Changed(nameof(Output)); Changed(nameof(Title)); Changed(nameof(Status)); Changed(nameof(Summary)); Changed(nameof(Running));
     }
 }
 
@@ -45,13 +49,20 @@ public sealed class ActivityJournal : ObservableObject
     public ActivityEntry? Selected { get => _selected; set => Set(ref _selected, value); }
     private string _repository = "";
     public string Repository { get => _repository; set { if (Set(ref _repository, value)) Refilter(); } }
+    private bool _allRepositories;
+    public bool AllRepositories { get => _allRepositories; set { if (Set(ref _allRepositories, value)) Refilter(); } }
     private int _filter;
     public int Filter { get => _filter; set { if (Set(ref _filter, Math.Clamp(value, 0, 2))) Refilter(); } }
     public ActivityJournal()
     {
         Visible = new ListCollectionView(Entries);
-        Visible.Filter = item => item is ActivityEntry entry && entry.Repository.Equals(Repository, StringComparison.OrdinalIgnoreCase) &&
+        Visible.Filter = item => item is ActivityEntry entry && (AllRepositories || Repository.Length == 0 || entry.Repository.Equals(Repository, StringComparison.OrdinalIgnoreCase)) &&
             (Filter == 0 || entry.Background == (Filter == 2));
+    }
+    public void Remove(object attempt)
+    {
+        var entry = Entries.FirstOrDefault(item => ReferenceEquals(item.Attempt, attempt));
+        if (entry is null) return; Entries.Remove(entry); Refilter();
     }
     public ActivityRead BeginRead(string repository, string title) => new(this, repository, title);
     private void Refilter()
@@ -68,7 +79,9 @@ public sealed class ActivityJournal : ObservableObject
             Entries.Insert(0, entry);
             while (Entries.Count > EntryLimit)
             {
-                var oldest = Entries.LastOrDefault(e => !e.Running) ?? Entries[^1]; Entries.Remove(oldest);
+                var oldest = Entries.LastOrDefault(e => !e.Running);
+                if (oldest is null) break; // Accepted work must remain reachable until it settles.
+                Entries.Remove(oldest);
                 if (Selected == oldest) Selected = null;
             }
             if (Selected is null && Visible.Contains(entry)) Selected = entry;

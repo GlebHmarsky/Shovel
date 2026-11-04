@@ -13,8 +13,8 @@ public sealed partial class ShellViewModel
     private readonly Dictionary<string, GitActionViewModel> _repositoryActions = new(StringComparer.OrdinalIgnoreCase);
     public bool ActionOpen => _actionOpen || _operationOwners.Count != 0 || _queuedActions.Count != 0 || _commitOpen;
     private readonly HashSet<RepositoryTab> _fetchOwners = [];
-    private bool RepositoryBusy(RepositoryTab? tab) => tab is not null && (HistoryFileBusy(tab) || _actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => !_fetchOwners.Contains(owner) && SameRepository(owner, tab)));
-    private bool RepositoryOperationBusy(RepositoryTab? tab) => tab is not null && (HistoryFileBusy(tab) || _actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => owner == tab ||
+    private bool RepositoryBusy(RepositoryTab? tab) => tab is not null && (_commitSessions.Any(pair => pair.Value.CommandExecuting && SameRepository(pair.Key, tab)) || HistoryFileBusy(tab) || _actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => !_fetchOwners.Contains(owner) && SameRepository(owner, tab)));
+    private bool RepositoryOperationBusy(RepositoryTab? tab) => tab is not null && (_commitSessions.Any(pair => pair.Value.CommandExecuting && SameRepository(pair.Key, tab)) || HistoryFileBusy(tab) || _actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => owner == tab ||
         owner.Snapshot?.CommonDirectory is { } common && string.Equals(common, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)));
     private GitActionViewModel? _lastAction;
     public GitActionViewModel? CurrentAction => SelectedRepository is { } tab && _repositoryActions.TryGetValue(tab.Directory, out var action)
@@ -39,11 +39,11 @@ public sealed partial class ShellViewModel
     public bool CanSkipRecovery => SelectedRepository?.Snapshot?.Recovery?.CanSkip == true;
     public string RecoveryHelp => SelectedRepository?.Snapshot?.Recovery is { } recovery
         ? UiText.Format("RecoveryHelp", UiText.Get("Operation" + recovery.Kind)) : UiText.Get("RecoveryUnavailable");
-    private bool CanRecover => CanNavigate && !RepositoryBusy(SelectedRepository) && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && HasRecovery && State?.Page is not null;
+    private bool CanRecover => CanNavigate && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && HasRecovery && State?.Page is not null;
     public RelayCommand<string> SwitchBranchCommand { get; private set; } = null!;
     public IReadOnlyList<string> LocalBranches => State?.Page?.Session.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray() ?? [];
     public IReadOnlyList<BranchMenuItem> BranchMenuItems => LocalBranches.Select(name => new BranchMenuItem(name, SwitchBranchCommand)).ToArray();
-    private bool CanAct => CanNavigate && !RepositoryBusy(SelectedRepository) && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
+    private bool CanAct => CanNavigate && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
     public bool CanOpenBranchMenu => CanRequestAction;
     private string? ActionUnavailableKey => !IsReady || _stopping ? "ActionWorkspaceStarting" :
         SelectedRepository is null ? "ActionOpenRepository" :
@@ -89,9 +89,9 @@ public sealed partial class ShellViewModel
         NewBranchCommand = new(() => OpenAction(GitAction.NewBranch), () => CanRequestAction);
         FetchCommand = new(() => OpenAction(GitAction.Fetch), () => CanRequestAction);
         PullCommand = new(() => OpenAction(GitAction.Pull), () => CanRequestAction && SelectedRepository?.Snapshot?.HeadKind == HeadKind.Branch);
-        DefaultPullCommand = new(() => OpenAction(GitAction.Pull, defaultPull: true), () => CanRequestAction && DefaultPullTarget is not null);
-        DefaultFetchCommand = new(() => OpenAction(GitAction.Fetch, directNetwork: true), () => CanRequestAction && SelectedRepository?.Snapshot?.RemoteNames.Count > 0);
-        DefaultPushCommand = new(() => OpenAction(GitAction.Push, directNetwork: true), () => CanRequestAction && SelectedRepository?.Snapshot is { HeadKind: HeadKind.Branch, RemoteNames.Count: > 0 });
+        DefaultPullCommand = new(() => OpenAction(GitAction.Pull, defaultPull: true), () => CanRequestAction && (SelectedRepository?.Snapshot is null || DefaultPullTarget is not null));
+        DefaultFetchCommand = new(() => OpenAction(GitAction.Fetch, directNetwork: true), () => CanRequestAction && (SelectedRepository?.Snapshot is null || SelectedRepository.Snapshot.RemoteNames.Count > 0));
+        DefaultPushCommand = new(() => OpenAction(GitAction.Push, directNetwork: true), () => CanRequestAction && (SelectedRepository?.Snapshot is null || SelectedRepository.Snapshot is { HeadKind: HeadKind.Branch, RemoteNames.Count: > 0 }));
         PushCommand = new(() => OpenAction(GitAction.Push), () => CanRequestAction && LocalBranches.Count != 0);
         SwitchBranchCommand = new(branch => OpenAction(GitAction.SwitchBranch, branch), branch => CanRequestAction && LocalBranches.Contains(branch));
     }

@@ -7,7 +7,7 @@ namespace GitGui.App.ViewModels;
 public sealed partial class ShellViewModel
 {
     private sealed record QueuedAction(RepositoryTab Tab, string Key, string Title, Func<Task> Run,
-        string? Identity, string? Branch, bool IsFetch)
+        string? Identity, string? Branch, bool IsFetch, bool WorkingCopy, bool Independent)
     {
         public TaskCompletionSource Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool Running { get; set; }
@@ -23,7 +23,7 @@ public sealed partial class ShellViewModel
     {
         if (SelectedRepository == tab) { BeginCurrentRead(tab, force: true); await _activeOperation; }
         else await ReconcileActionAsync(tab);
-    });
+    }, independent: true);
 
     private Task QueueSelectedAction(string key, string title, Func<RepositoryTab, Task> run)
     {
@@ -31,13 +31,15 @@ public sealed partial class ShellViewModel
         return QueueAction(tab, key, title, () => run(tab));
     }
 
-    private Task QueueAction(RepositoryTab tab, string key, string title, Func<Task> run, bool isFetch = false)
+    private Task QueueAction(RepositoryTab tab, string key, string title, Func<Task> run, bool isFetch = false, bool workingCopy = false, bool independent = false)
     {
         var existing = _queuedActions.FirstOrDefault(item => item.Tab == tab && item.Key == key);
         if (existing is not null) return existing.Completion.Task;
-        var request = new QueuedAction(tab, key, title, run, _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, tab.Snapshot?.Branch, isFetch);
+        var request = new QueuedAction(tab, key, title, run, _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, tab.Snapshot?.Branch, isFetch, workingCopy, independent);
         _queuedActions.Add(request);
         if (key != "Commit") PreemptBackgroundFetch(tab);
+        Journal.Record(new(request, title, UiText.Get("OperationWaiting"), 0, OperationOutcome.Running), tab.Directory, false);
+        Journal.Entries.First(entry => ReferenceEquals(entry.Attempt, request)).CancelWaiting = new(() => CancelQueuedAction(request), () => !request.Started && _queuedActions.Contains(request));
         Changed(nameof(QueueStatus)); Changed(nameof(ActionOpen)); RefreshCommands();
         DrainActionQueue(defer: false);
         return request.Completion.Task;
@@ -45,17 +47,26 @@ public sealed partial class ShellViewModel
 
     private void DrainActionQueue(bool defer = true)
     {
-        if (_stopping || _commitOpen || _actionOpen) return;
+        if (_stopping) return;
         foreach (var request in _queuedActions.ToArray())
         {
-            if (request.Running || (request.Key == "Commit" ? RepositoryBusy(request.Tab) : RepositoryOperationBusy(request.Tab)) ||
-                _queuedActions.Any(other => other.Running && (request.Key != "Commit" || !other.IsFetch) && SameRepository(other.Tab, request.Tab)) ||
-                request.Key != "Commit" && SelectedRepository == request.Tab && IsBusy) continue;
+            if (request.Running) continue;
+            if (request.Tab.Snapshot is null || !_knownIdentities.ContainsKey(request.Tab.Directory))
+            {
+                if (!request.Tab.InspectionTask.IsCompleted) continue;
+                // Let execution report a failed initialization, never start against guessed state.
+            }
+            else if (request.Tab.History.Page is null && !request.WorkingCopy && !request.Tab.InspectionTask.IsCompleted) continue;
+            var fetching = _fetchOwners.Any(owner => SameRepository(owner, request.Tab));
+            if (!request.Independent && (request.IsFetch ? fetching : RepositoryBusy(request.Tab) || !request.WorkingCopy && fetching)) continue;
+            if (_queuedActions.TakeWhile(other => other != request).Any(other =>
+                SameRepository(other.Tab, request.Tab) && Conflicts(other, request))) continue;
             request.Running = true;
             _ = RunQueuedAsync(request, defer);
-            break;
         }
     }
+    private static bool Conflicts(QueuedAction first, QueuedAction second) =>
+        !first.Independent && !second.Independent && !(first.IsFetch && second.WorkingCopy || second.IsFetch && first.WorkingCopy);
 
     private static bool SameRepository(RepositoryTab a, RepositoryTab b) => a == b ||
         a.Snapshot?.CommonDirectory is { } common && string.Equals(common, b.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase);
@@ -64,25 +75,36 @@ public sealed partial class ShellViewModel
     {
         // Never open a modal or execute Git inside a command-state/property notification.
         if (defer) await Dispatcher.Yield(DispatcherPriority.Background);
-        if (_commitOpen || _actionOpen) { request.Running = false; return; }
         try
         {
             if (_stopping || !_queuedActions.Contains(request)) return;
             var tab = request.Tab;
-            if (request.Key == "Refresh") { request.Started = true; await request.Run(); return; }
-            if (!Repositories.Contains(tab) || tab.History.StartupPreview || tab.Snapshot is null ||
+            if (request.Key == "Refresh") { request.Started = true; Journal.Remove(request); await request.Run(); return; }
+            if (tab.History.StartupPreview || tab.Snapshot is null ||
                 !_knownIdentities.TryGetValue(tab.Directory, out var identity)) throw new GitActionException("ActionInspectionNeeded");
             if (request.Identity is not null && request.Identity != identity.Fingerprint) throw new GitActionException("ActionIdentityChanged");
             if (request.Key != "Refresh" && request.Branch is not null && request.Branch != tab.Snapshot.Branch) throw new GitActionException("ActionChanged");
             request.Started = true;
+            Journal.Remove(request);
+            var previous = _repositoryActions.GetValueOrDefault(tab.Directory);
             await request.Run();
+            var result = _repositoryActions.GetValueOrDefault(tab.Directory);
+            if (result != previous && result is { HasAttempt: true, Succeeded: false }) FailWaitingRequests(tab);
         }
-        catch (GitActionException error) { _interaction?.ShowActionError(UiText.Get(error.Code)); }
-        catch (Exception) { _interaction?.ShowActionError(UiText.Get("ActionReadFailed")); }
+        catch (GitActionException error) { ReportFailure(UiText.Get(error.Code)); }
+        catch (Exception) { ReportFailure(UiText.Get("ActionReadFailed")); }
         finally
         {
             _queuedActions.Remove(request); request.Completion.TrySetResult();
+            Journal.Entries.FirstOrDefault(entry => ReferenceEquals(entry.Attempt, request))?.CancelWaiting?.Refresh();
             Changed(nameof(QueueStatus)); Changed(nameof(ActionOpen)); RefreshCommands(); DrainActionQueue();
+            PruneRetainedRepositories();
+        }
+        void ReportFailure(string message)
+        {
+            FailWaitingRequests(request.Tab);
+            Journal.Record(new(request, request.Title, message, 0, OperationOutcome.Failed), request.Tab.Directory, false);
+            _interaction?.ShowActionError(message);
         }
     }
 

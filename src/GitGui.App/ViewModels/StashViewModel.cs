@@ -25,7 +25,7 @@ public sealed class StashViewModel : ObservableObject
     private readonly Action<GitActionViewModel> _started;
     private CancellationTokenSource? _readCancel, _inspectCancel;
     private long _readGeneration, _inspectGeneration;
-    private bool _closed, _running, _readFailed;
+    private bool _closed, _readFailed;
     private Task _read = Task.CompletedTask, _inspect = Task.CompletedTask, _oldDetails = Task.CompletedTask;
     private IReadOnlyList<StashRow> _rows;
     private StashRow? _selected;
@@ -46,7 +46,9 @@ public sealed class StashViewModel : ObservableObject
     public string Message { get => _message; set { if (Set(ref _message, value)) _cache.Message = value; } }
     public bool IncludeUntracked { get; set; }
     public bool RestoreIndex { get; set; }
-    public bool CanEdit => !_closed && !_running;
+    public bool CanEdit => !_closed;
+    public Func<string, string, Func<Task>, Task>? ScheduleOperation { get; init; }
+    private readonly Dictionary<string, Task> _pending = [];
     public GitActionViewModel? Action { get => _action; private set => Set(ref _action, value); }
     public bool HasMutation { get; private set; }
     public Task Running { get; private set; } = Task.CompletedTask;
@@ -68,7 +70,7 @@ public sealed class StashViewModel : ObservableObject
         PopCommand = new(() => Run(StashAction.Pop), CanSelectAction);
         DropCommand = new(() => Run(StashAction.Drop), CanSelectAction);
         RefreshCommand = new(() => _ = RefreshAsync(), () => CanEdit);
-        CancelCommand = new(() => { _readCancel?.Cancel(); _inspectCancel?.Cancel(); Files?.CancelCommand.Execute(null); Action?.Cancel(); });
+        CancelCommand = new(() => { _readCancel?.Cancel(); _inspectCancel?.Cancel(); Files?.CancelCommand.Execute(null); });
     }
     private bool CanSelectAction() => CanEdit && !_readFailed && Selected is not null && _cache.List is not null;
     private void RefreshCommands() { Changed(nameof(CanEdit)); CreateCommand.Refresh(); ApplyCommand.Refresh(); PopCommand.Refresh(); DropCommand.Refresh(); RefreshCommand.Refresh(); }
@@ -107,7 +109,7 @@ public sealed class StashViewModel : ObservableObject
     private void Inspect()
     {
         _inspectCancel?.Cancel(); _inspectCancel = null; var old = _inspect; var generation = ++_inspectGeneration;
-        if (_closed || _running || Selected is not { } selected) { ClearInspection(); return; }
+        if (_closed || Selected is not { } selected) { ClearInspection(); return; }
         Files?.Pause(); Status = UiText.Get("StashLoading");
         var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(45)); _inspectCancel = cancel;
         _inspect = Read();
@@ -131,7 +133,7 @@ public sealed class StashViewModel : ObservableObject
     }
     private void ShowComparison()
     {
-        if (_closed || _running) { StopFiles(); return; }
+        if (_closed) { StopFiles(); return; }
         if (Comparison is not { } choice) return;
         if (Files is { } retained) { retained.SelectCommit(choice.Commit); return; }
         var model = new CommitFilesViewModel(_reader, _context.Git, Repository, choice.Commit) { ShowParentSelector = false }; Files = model;
@@ -144,16 +146,30 @@ public sealed class StashViewModel : ObservableObject
         // Freeze the reviewed target before a modal confirmation pumps the dispatcher.
         if (action == StashAction.Drop && !_interaction.ConfirmRecovery(UiText.Format("StashConfirmDrop", Repository, selected!.Selector, selected.Hash, selected.Message), UiText.Get("ActionTitleStashDrop"))) return;
         var options = new StashOptions(action, list, selected, Message, IncludeUntracked, RestoreIndex);
-        _running = true; HasMutation = true; _readGeneration++; _inspectGeneration++;
-        _readCancel?.Cancel(); _readCancel = null; _inspectCancel?.Cancel(); _inspectCancel = null; StopFiles(); RefreshCommands();
-        var model = new GitActionViewModel(_context, action switch { StashAction.Create => GitAction.StashCreate, StashAction.Apply => GitAction.StashApply, StashAction.Pop => GitAction.StashPop, _ => GitAction.StashDrop },
-            _actions, async () => { await RefreshAsync(); if (_readFailed) throw new System.IO.IOException(); },
-            execute: (token, output) => _actions.ExecuteStashAsync(_context, options, token, output));
-        Action = model; _started(model); model.RunCommand.Execute(null); Running = Finish();
-        async Task Finish()
+        var key = "Stash" + action + "|" + selected?.Hash + "|" + options.Message;
+        if (_pending.ContainsKey(key)) return;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var preceding = Task.WhenAll(_pending.Values);
+        _pending.Add(key, completion.Task); Running = Task.WhenAll(_pending.Values);
+        _ = Schedule();
+        async Task Schedule()
         {
-            try { await model.RunningTask; if (model.Succeeded && action == StashAction.Create) Message = ""; }
-            finally { _running = false; RefreshCommands(); if (!_closed) Inspect(); }
+            try
+            {
+                if (ScheduleOperation is not null) await ScheduleOperation(key, UiText.Get("ActionTitleStash" + action), Execute);
+                else { await preceding; await Execute(); }
+            }
+            finally { _pending.Remove(key); completion.TrySetResult(); }
+        }
+        async Task Execute()
+        {
+            HasMutation = true; RefreshCommands();
+            var model = new GitActionViewModel(_context, action switch { StashAction.Create => GitAction.StashCreate, StashAction.Apply => GitAction.StashApply, StashAction.Pop => GitAction.StashPop, _ => GitAction.StashDrop },
+                _actions, async () => { await RefreshAsync(); if (_readFailed) throw new System.IO.IOException(); },
+                execute: (token, output) => _actions.ExecuteStashAsync(_context, options, token, output));
+            Action = model; _started(model); model.RunCommand.Execute(null);
+            try { await model.RunningTask; if (model.Succeeded && action == StashAction.Create && Message == options.Message) Message = ""; }
+            finally { RefreshCommands(); if (!_closed) Inspect(); }
         }
     }
     private void ShowError(Exception error)
@@ -172,7 +188,7 @@ public sealed class StashViewModel : ObservableObject
     {
         _closed = true; _readGeneration++; _inspectGeneration++;
         _readCancel?.Cancel(); _readCancel = null; _inspectCancel?.Cancel(); _inspectCancel = null;
-        StopFiles(); Action?.Cancel(); RefreshCommands();
+        StopFiles(); RefreshCommands();
         await Running; await Task.WhenAll(_read, _inspect, _oldDetails);
     }
 }

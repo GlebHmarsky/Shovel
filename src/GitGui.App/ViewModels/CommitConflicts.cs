@@ -26,7 +26,13 @@ public sealed partial class CommitViewModel
             _conflictDrain = Task.WhenAll(_conflictDrain, prior.CloseAsync());
         }
         var model = new ConflictViewModel(_state.Context, change, _actions, ExternalMergeTool) { Journal = Journal,
-            ReportProblem = (status, output) => _interaction.ShowOperationProblem(Directory, UiText.Get("ConflictResolve"), status, output) };
+            ScheduleOperation = async run =>
+            {
+                async Task Execute() { CommandExecuting = true; try { await run(); } finally { CommandExecuting = false; } }
+                if (ScheduleOperation is not null) await ScheduleOperation("Resolve|" + change.Path, UiText.Get("ConflictResolve"), Execute);
+                else await Execute();
+            },
+            ReportProblem = (status, output) => { OperationFailed?.Invoke(); _interaction.ShowOperationProblem(Directory, UiText.Get("ConflictResolve"), status, output); } };
         model.PropertyChanged += OnConflictChanged; model.Completed += OnConflictCompleted; Conflict = model;
         _diffCancel?.Cancel(); _diffCancel = null; _diffGeneration++; _diffLoading = false;
         await _conflictDrain;

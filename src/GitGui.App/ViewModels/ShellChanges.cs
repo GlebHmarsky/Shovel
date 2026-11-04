@@ -18,6 +18,7 @@ public sealed record ChangeRow(LocalChange Change)
 public sealed partial class ShellViewModel
 {
     private bool _commitOpen;
+    private readonly Dictionary<RepositoryTab, CommitViewModel> _commitSessions = [];
     private GitGui.Core.Settings.CommitLayout _commitLayout = new();
     public ICommitDraftStore? DraftStore { private get; set; }
     private CommitViewModel? _commitModel;
@@ -34,32 +35,62 @@ public sealed partial class ShellViewModel
         ShowChangesCommand = new(() =>
         {
             var tab = SelectedRepository!;
-            CommitDialogTask = QueueAction(tab, "Commit", UiText.Get("CommitWorkspace"), () => OpenCommitAsync(tab));
+            CommitDialogTask = OpenCommitAsync(tab);
         }, () => CanRequestAction);
         ShowHistoryCommand = new(() => { RevealDetails(DetailsIndex); if (!IsBusy && State?.Page?.Cursor.Offset > 0) BeginInspection(SelectedRepository!, force: true, firstPage: true); }, () => CanRead);
     }
     private void BeginCurrentRead(RepositoryTab tab, bool force = false, bool reopen = false)
-    { if (RepositoryBusy(tab)) return; if (force) tab.Changes.ReadAt = default; BeginInspection(tab, force: force, reopen: reopen); }
+    { if (force) tab.Changes.ReadAt = default; BeginInspection(tab, force: force, reopen: reopen); }
     private void CancelCountRead() { _countCancel?.Cancel(); _countCancel = null; _countGeneration++; }
     private void RevealDetails(int index) { DetailsIndex = index; PublishState(); }
     private void PublishChanges() => Changed(nameof(CommitButtonLabel));
 
     private async Task OpenCommitAsync(RepositoryTab tab)
     {
-        _operationCancellation?.Cancel(); CancelCountRead(); _sidebarCancel?.Cancel(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
-        var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
+        _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
+        var retained = _commitSessions.TryGetValue(tab, out var existing);
+        var model = existing ?? new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
             _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities))
             { ExternalMergeTool = ExternalMergeTool };
-        model.Layout = _commitLayout; model.Journal = Journal;
+        model.Layout = _commitLayout; model.Journal = Journal; model.AttachView();
+        _commitSessions[tab] = model;
+        model.ScheduleOperation = (key, title, run) => QueueAction(tab, "CommitWork" + key, title, run, workingCopy: true);
+        model.OperationFailed = () => FailWaitingRequests(tab);
+        model.ReopenRequested = () =>
+        {
+            if (!CanNavigate) { _interaction?.ShowActionError(GitGui.App.Localization.UiText.Get("CommitCloseBeforeReopen")); return; }
+            _retainedRepositories.Remove(tab.Directory);
+            if (!Repositories.Contains(tab)) Repositories.Add(tab);
+            SelectedRepository = tab; CommitDialogTask = OpenCommitAsync(tab);
+        };
+
         _commitModel = model;
+        object? reportedAttempt = null;
         void OnChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
         {
-            if (args.PropertyName != nameof(CommitViewModel.Summary)) return;
-            if (model.Activity is { } activity) PublishActivity(activity);
+            if (args.PropertyName != nameof(CommitViewModel.Summary) && args.PropertyName != nameof(CommitViewModel.RawOutput)) return;
+            if (model.Activity is { IsComplete: true } completed && !ReferenceEquals(completed.Attempt, reportedAttempt))
+            {
+                reportedAttempt = completed.Attempt;
+                if (completed.Outcome is OperationOutcome.Failed or OperationOutcome.Conflict or OperationOutcome.RefreshFailed) FailWaitingRequests(tab);
+                Journal.Record(completed, tab.Directory, false, model.RawOutput);
+                var entry = Journal.Entries.FirstOrDefault(item => ReferenceEquals(item.Attempt, completed.Attempt));
+                if (entry is not null && completed.Outcome != OperationOutcome.Success)
+                    entry.ReopenCommit = new(() => model.ReopenRequested(), () => CanNavigate);
+                tab.History.NeedsRefresh = true;
+            }
+            if (model.Activity is { } activity) { Journal.Record(activity, tab.Directory, false, model.RawOutput); if (SelectedRepository == tab) PublishActivity(activity); }
             Changed(nameof(OperationStatus));
         }
         void OnSnapshot(object? sender, EventArgs args) { TrimChangesCache(tab); PublishChanges(); if (tab.Changes.Context is { } context) tab.Apply(context.Repository); }
-        model.PropertyChanged += OnChanged; model.SnapshotChanged += OnSnapshot;
+        async void OnSettled(object? sender, EventArgs args)
+        {
+            await tab.InspectionTask;
+            if (!_stopping && !model.HasPendingWork && !_commitOpen && SelectedRepository == tab && tab.History.NeedsRefresh)
+                BeginInspection(tab, force: true);
+            PruneRetainedRepositories();
+        }
+        if (!retained) { model.PropertyChanged += OnChanged; model.SnapshotChanged += OnSnapshot; model.WorkSettled += OnSettled; }
         try
         {
             // No awaits/queries before showing the editor. Its Loaded handler schedules the read after layout.
@@ -67,14 +98,14 @@ public sealed partial class ShellViewModel
         }
         finally
         {
-            await model.CloseAsync();
+            model.DetachView();
             _commitLayout = model.Layout.Normalize(); PreferenceTask = SavePreferencesAsync();
             if (model.HasMutation)
                 foreach (var related in Repositories.Where(item => item == tab || item.Snapshot?.CommonDirectory == tab.Snapshot?.CommonDirectory))
                 { related.History.ValidatedAt = default; related.History.NeedsRefresh = true; related.Changes.ReadAt = default; }
-            model.PropertyChanged -= OnChanged; model.SnapshotChanged -= OnSnapshot;
+
             _commitModel = null; _commitOpen = false; Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate)); Changed(nameof(OperationStatus)); PublishChanges(); RefreshCommands();
-            if (model.HasMutation && !_stopping && SelectedRepository == tab) BeginInspection(tab, force: true);
+            if (!model.HasPendingWork && !_stopping && SelectedRepository == tab && tab.History.NeedsRefresh) BeginInspection(tab, force: true);
             DrainActionQueue();
         }
     }
@@ -110,7 +141,7 @@ public sealed partial class ShellViewModel
     }
     private void TrimChangesCache(RepositoryTab active)
     {
-        foreach (var other in Repositories.Where(item => item != active && (item.Changes.Context is not null || item.Changes.Rows.Count != 0))
+        foreach (var other in Repositories.Where(item => item != active && _commitSessions.GetValueOrDefault(item)?.HasPendingWork != true && (item.Changes.Context is not null || item.Changes.Rows.Count != 0))
             .OrderByDescending(item => item.History.LastUse).Skip(CachedTabLimit - 1)) other.Changes.Clear();
     }
 }

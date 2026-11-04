@@ -154,11 +154,8 @@ public sealed partial class ShellViewModel
     }
     public event EventHandler? SidebarCommitLocated;
 
-    private async Task SwitchSidebarAsync(RepositoryTab tab, string name)
-    {
-        _operationCancellation?.Cancel(); await _activeOperation;
-        if (SelectedRepository == tab && CanAct) await QueueAction(tab, "SwitchBranch" + name, name, () => ExecuteSidebarAsync(tab, GitAction.SwitchBranch, name));
-    }
+    private Task SwitchSidebarAsync(RepositoryTab tab, string name) =>
+        QueueAction(tab, "SwitchBranch" + name, name, () => ExecuteSidebarAsync(tab, GitAction.SwitchBranch, name));
 
     private ActionContext SidebarContext(RepositoryTab tab)
     {
@@ -178,7 +175,7 @@ public sealed partial class ShellViewModel
     private async Task ExecuteSidebarAsync(RepositoryTab tab, GitAction action, string branch = "", string remote = "", string start = "HEAD", StashOptions? stash = null,
         StashAction? historyStashAction = null, string historyStashHash = "", string historyStashSelector = "")
     {
-        if (!Repositories.Contains(tab) || RepositoryBusy(tab)) return;
+        if (tab.Snapshot is null) throw new GitActionException("ActionInspectionNeeded");
         var cached = SidebarContext(tab); ActionContext? prepared = null;
         CancelCountRead(); _sidebarCancel?.Cancel();
         if (action == GitAction.Fetch) _fetchOwners.Add(tab);

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.46.0 - 2026-11-04 (Beta)
+
+- Keep initialization and accepted Git operations alive when Commit opens or tabs/views close.
+- Run independent work concurrently and queue conflicting actions with individual waiting-request removal.
+- Close Commit on submission; retain staged files and drafts on failure, with explicit Reopen Commit actions.
+- Stop only the affected repository's waiting queue after failure; preserve running work and other repositories.
+- Protect started user commands from UI cancellation and timeout termination; keep automatic fetch preemption and guarded app exit.
+- Keep Stable at 0.39.1.
+
 ## 0.45.0 — 2026-11-04 (Beta)
 
 - Expand File → Settings into left-side Appearance, History & avatars, Diff, Git, Git identity, Tools and Updates categories.

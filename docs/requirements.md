@@ -1,5 +1,15 @@
 # Requirements and acceptance
 
+## Operation lifetime acceptance (0.46.0)
+
+Confirmed 2026-11-04; supersedes older view-close/current-command cancellation expectations. Open Commit during held initialization: show available content, finish initialization, and publish both history and local changes. Switch/close/reopen tabs during work: retain original repository ownership, accepted requests and results. Submit Commit: close immediately and finish in the background; failed hooks preserve draft/index and offer explicit repository-specific reopening.
+
+Run independent repositories and history/comparison reads concurrently; allow stage/unstage/commit during Fetch. Serialize conflicting mutations and preserve captured targets with native stale-state validation. Accept distinct waiting requests, coalesce duplicates, remove one waiting request without touching a running command, and stop that repository's remaining queue after failure/conflict/stale targets with an explanation. Reconciliation refreshes an attached editor without changing its draft.
+
+Never terminate a started user command because its view/tab closed, a deadline expired or a cancel control was used. Manual Fetch follows that rule; automatic fetch alone may yield to user work and remains quiet. App close/update must explain why accepted work prevents exit and stay responsive; settled recovery state alone must not prevent exit. Defer running-command cancellation and ask the owner again before implementing it. Keep bounded completed activity/cache retention without evicting active owners.
+
+Use disposable Git repositories, held commands, real hooks and process probes. Verify exact HEAD/index/message outcomes as well as availability and completion. Offscreen renders do not prove desktop input/focus, live authentication or installed-update acceptance.
+
 ## Settings and avatar acceptance (0.45.0)
 
 Left-side categories must expose real saved behavior, remain usable at normal/minimum sizes in Dark and Light, and keep Save/error feedback outside scrolling content. Opening/navigating must not prepare Git, network or tools. Verify preference round-trip, failed-write retention, current/new diff bindings, shared scale/theme, scheduler compatibility and update-channel cancellation without granting download/restart approval. Global Git identity reads/writes occur only through explicit actions, use isolated config in tests, reject stale reviewed values and retain existing lock files/partial outcomes.

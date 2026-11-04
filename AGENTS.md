@@ -16,6 +16,8 @@ Master includes the installer/updater branch. GlebHmarsky/Shovel is the single p
 
 ## Project and implementation
 
+- **Operation lifetimes (confirmed 2026-11-04):** started user commands must finish; never cancel them because a tab/view closes or a deadline expires. Cancel only individual waiting requests; automatic fetch alone may be preempted. Keep initialization and accepted work repository-owned, close Commit on submission, preserve failed drafts/index, and refuse app exit with an explanation while accepted work remains. Running-command cancellation is deferred until the owner is asked again. Current product/architecture sections own scheduling boundaries.
+
 - **Completed parallel assignment (2026-10-29):** the three numbered assignments in TODO used separate branches AND separate worktrees, with source-only worker handoffs, then were integrated and verified in 0.22.0. Preserve their original branches. Their historical integration checks do not override the routine verification policy below.
 
 - **Confirmed** = user-approved; **Proposed** = unapproved; **Open** = unresolved; **Deferred** = future scope. Later user requests can advance deferred work; old phase order must not block an explicitly requested feature.

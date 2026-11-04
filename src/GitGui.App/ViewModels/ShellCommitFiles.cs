@@ -19,6 +19,8 @@ public sealed partial class ShellViewModel
         var model = new CommitFilesViewModel(_reader, _git, path, commit) { Journal = Journal, Actions = _actions, Interaction = _interaction,
             ExpectedIdentity = _knownIdentities.GetValueOrDefault(path)?.Fingerprint,
             AfterFileMutation = () => ReconcileActionAsync(ownerTab),
+            ScheduleFileAction = (key, title, mutates, run) => QueueAction(ownerTab, key, title, run, workingCopy: true, independent: !mutates),
+            FileActionFailed = () => FailWaitingRequests(ownerTab),
             FileActionStateChanged = (actionModel, running) => TrackHistoryFileAction(actionModel, ownerTab, running) }; CommitFiles = model;
         StartAfterDrain();
         async void StartAfterDrain() { await _oldCommitFiles; if (ReferenceEquals(CommitFiles, model) && !_stopping) model.Start(); }

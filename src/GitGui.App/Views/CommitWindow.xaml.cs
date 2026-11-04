@@ -24,8 +24,9 @@ public partial class CommitWindow : Window
             ProportionalPanes.Rows(DiffRow, MessageRow);
             await _model.StartLoading();
         };
-        _model.CommitCompleted += OnCommitted;
-        Closed += (_, _) => _model.CommitCompleted -= OnCommitted;
+        _model.AttachView();
+        _model.CommitSubmitted += OnCommitted;
+        Closed += (_, _) => _model.CommitSubmitted -= OnCommitted;
         PreviewKeyDown += OnKeyState; PreviewKeyUp += OnKeyState;
         PreviewMouseRightButtonUp += (_, _) => Dispatcher.BeginInvoke(() => { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); }, DispatcherPriority.Background);
         PreviewMouseLeftButtonDown += (_, _) => { if (_openFileMenu?.IsOpen != true) _model.EndFileMenu(); };
@@ -153,6 +154,6 @@ public partial class CommitWindow : Window
         // before closing again; otherwise the ordinary idle close throws VerifyNotClosing.
         await System.Windows.Threading.Dispatcher.Yield();
         if (!_model.ConfirmCloseConflict()) { _closing = false; return; }
-        CaptureLayout(); await _model.CloseAsync(); _allowClose = true; Close();
+        CaptureLayout(); _model.DetachView(); _allowClose = true; Close();
     }
 }

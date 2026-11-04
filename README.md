@@ -1,6 +1,6 @@
 # Shovel
 
-**0.45.0 Beta:** categorized File → Settings, saved appearance/scale/diff/tool/update preferences, explicit global Git identity editing, and background author pictures from GitHub, configured Gitea or Gravatar with colored initials as fallback. [Setup and limits](docs/product.md#categorized-settings-and-author-pictures-0450-beta). Stable remains **0.39.1**.
+**0.46.0 Beta:** repository-owned initialization and operations, background Commit, individual waiting-request removal, and preserved drafts/staged state after failure. [Behavior and limits](docs/product.md#repository-owned-work-0460-beta). Stable remains **0.39.1**.
 
 Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help → Shovel updates. Launch checks discover updates; opening that window checks immediately, and **Update and restart** approves the download and guarded restart. Every task delivers a signed-feed Beta installer through Build-Release; routine smoke remains 26 checks.
 
@@ -8,9 +8,11 @@ Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help 
 
 **Delivery policy:** requested controls must perform real actions; no new placeholders or UI-only completion. Established work environment: no repo-trust/first-use/program-consent layer for ordinary Git actions, and no extra safety measures without concrete need. Normal action buttons authorize the operation and configured hooks/helpers; required auth/destructive confirmations remain. Unfinished entry points are omitted; disabled working actions explain the missing target/dependency or active operation.
 
-Operations show static phase/outcome text and retain Cancel and activity logs. Elapsed badges, animated progress and fading capsules are removed. `--check-operation-style` runs four focused outcome/static-status/offscreen layout checks without showing a window.
+Operations show static phase/outcome text and activity logs. Remove waiting requests individually; started user commands finish, and only automatic fetch can be preempted. Elapsed badges, animated progress and fading capsules are removed. `--check-operation-style` runs four focused outcome/static-status/offscreen layout checks without showing a window.
 
 ## Prerequisites
+
+Operation-lifetime checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-operation-lifetimes` (11 focused checks): held initialization, close/reopen ownership, background Commit, preserved failed drafts/index, waiting removal, failure queues, ordered staging/Commit, background Stash and protected native-process completion. No desktop launch. [Behavior](docs/product.md#repository-owned-work-0460-beta).
 
 Settings/avatar checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-settings-pages` (16 focused checks for persistence/failure, seven bound category layouts, diff resources, isolated native Git identity, provider mapping, bounded image loading and update cancellation). Uses mock HTTP and offscreen rendering, with no desktop launch or live-server authentication.
 

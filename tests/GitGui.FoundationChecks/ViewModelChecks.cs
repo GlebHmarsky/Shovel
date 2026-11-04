@@ -63,6 +63,7 @@ internal static partial class Program
             if (_historyActivityChecks) { await RunHistoryActivityChecksAsync(); return; }
             if (_mergeToolSettingsChecks) { await RunMergeToolSettingsChecksAsync(); return; }
             if (_autoFetchSettingsChecks) { await RunAutoFetchSettingsChecksAsync(); return; }
+            if (_operationLifetimeChecks) { await RunOperationLifetimeChecksAsync(); return; }
             if (_repositoryWorkflowChecks) { await RunRepositoryWorkflowChecksAsync(); return; }
             if (_networkWorkflowChecks) { await RunNetworkWorkflowChecksAsync(); return; }
             if (_qolChecks) { await RunQolChecksAsync(); return; }

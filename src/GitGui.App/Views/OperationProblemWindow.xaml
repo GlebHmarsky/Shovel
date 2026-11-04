@@ -10,6 +10,11 @@
   <TextBlock Grid.Row="2" Text="{Binding Status}" Margin="0,6,0,12" TextWrapping="Wrap" AutomationProperties.LiveSetting="Assertive"/>
   <TextBox Grid.Row="3" Text="{Binding Output, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" TextWrapping="NoWrap"
    HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{loc:Text Key=OperationAttentionLogs}"/>
-  <Button Grid.Row="4" Content="{loc:Text Key=OperationAttentionDismiss}" IsDefault="True" IsCancel="True" Click="OnDismiss" HorizontalAlignment="Right" MinWidth="100" Margin="0,12,0,0"/>
+  <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+   <Button Content="{loc:Text Key=ReopenCommit}" Click="OnReopen" Margin="0,0,8,0">
+    <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding CanReopen}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style>
+   </Button>
+   <Button Content="{loc:Text Key=OperationAttentionDismiss}" IsDefault="True" IsCancel="True" Click="OnDismiss" MinWidth="100"/>
+  </StackPanel>
  </Grid>
 </Window>

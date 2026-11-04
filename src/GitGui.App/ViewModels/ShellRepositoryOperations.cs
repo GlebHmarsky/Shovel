@@ -10,7 +10,7 @@ public sealed partial class ShellViewModel
     // an inactive tab through the selected-view read pipeline: it owns a different generation.
     private async Task ReconcileActionAsync(RepositoryTab tab, bool refreshChanges = true)
     {
-        foreach (var related in Repositories.Where(item => item == tab ||
+        foreach (var related in AllRepositoryOwners.Where(item => item == tab ||
             string.Equals(item.Snapshot?.CommonDirectory, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)))
         {
             related.History.ValidatedAt = default; related.History.NeedsRefresh = true;
@@ -39,7 +39,8 @@ public sealed partial class ShellViewModel
             BeginInspection(viewTab, force: true, actionReconcile: true, checkChanges: refreshChanges);
             var inspection = _activeOperation;
             await inspection;
-            // Switching tabs cancels only this view read, not the completed Git operation.
+            if (refreshChanges && _commitSessions.GetValueOrDefault(viewTab) is { ViewAttached: true } editor) await editor.StartLoading();
+            // Repository initialization finishes even after the selected tab changes.
             if (SelectedRepository == viewTab && (viewTab.History.ValidatedAt == default || viewTab.History.Error.Length != 0))
                 throw new System.IO.IOException();
         }
@@ -51,6 +52,8 @@ public sealed partial class ShellViewModel
         if (!_reportedOperations.Add(operation)) return;
         // Bound retained attempt identities to the current per-repository results.
         _reportedOperations.RemoveWhere(item => item != _lastAction && !_repositoryActions.ContainsValue(item));
+        if (!operation.IsBackground && (!operation.Succeeded || operation.Activity?.Outcome == OperationOutcome.Conflict))
+        { var owner = AllRepositoryOwners.FirstOrDefault(tab => tab.Directory.Equals(operation.CurrentRepository, StringComparison.OrdinalIgnoreCase)); if (owner is not null) FailWaitingRequests(owner); }
         if (!operation.NeedsAttention) return;
         if (operation.IsBackground) return;
         _interaction?.ShowOperationProblem(operation.CurrentRepository, operation.Title, operation.Status, operation.RawOutput);
@@ -72,7 +75,7 @@ public sealed partial class ShellViewModel
         return ReconcileActionAsync(tab, refreshChanges: false);
     }
 
-    public bool HasUserOperation => HasHistoryFileAction || _queuedActions.Count != 0 || _actionOpen || _commitOpen || _operationOwners.Any(tab =>
+    public bool HasUserOperation => _commitSessions.Values.Any(model => model.HasPendingWork) || HasHistoryFileAction || _queuedActions.Count != 0 || _actionOpen || _commitOpen || _operationOwners.Any(tab =>
         _repositoryActions.GetValueOrDefault(tab.Directory)?.IsBackground != true);
     public void RevealRunningOperation()
     {

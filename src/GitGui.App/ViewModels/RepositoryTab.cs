@@ -6,6 +6,10 @@ namespace GitGui.App.ViewModels;
 
 public sealed class RepositoryTab(string directory) : ObservableObject
 {
+    internal Task InspectionTask { get; set; } = Task.CompletedTask;
+    internal CancellationTokenSource? InspectionCancellation { get; set; }
+    internal long InspectionGeneration { get; set; }
+    internal object? InspectionAttempt { get; set; }
     internal CommitWorkspaceState Changes { get; } = new();
     internal StashCache Stashes { get; } = new();
     internal RepositorySidebar? Sidebar { get; set; }

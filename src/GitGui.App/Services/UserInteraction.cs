@@ -33,6 +33,7 @@ public interface IUserInteraction
     bool ConfirmRecovery(string message, string title) => false;
     void ShowActionError(string message) { }
     void ShowOperationProblem(string repository, string title, string status, string output) { }
+    void ShowCommitProblem(string repository, string title, string status, string output, Action? reopen) => ShowOperationProblem(repository, title, status, output);
     IAuthenticationSession? CreateAuthenticationSession(string context,
         Func<AuthenticationPrompt, CancellationToken, Task<AuthenticationAnswer?>> prompt, CancellationToken token) => null;
     Task<AuthenticationAnswer?> ShowAuthenticationAsync(string context, AuthenticationPrompt prompt, CancellationToken token) => Task.FromResult<AuthenticationAnswer?>(null);
@@ -42,11 +43,12 @@ public sealed class UserInteraction : IUserInteraction
 {
     private readonly List<OperationProblem> _problems = [];
     private bool _showingProblems;
-    public void ShowOperationProblem(string repository, string title, string status, string output)
+    public void ShowOperationProblem(string repository, string title, string status, string output) => ShowCommitProblem(repository, title, status, output, null);
+    public void ShowCommitProblem(string repository, string title, string status, string output, Action? reopen)
     {
         var safe = GitActions.Redact(output);
         var problem = new OperationProblem(repository, title, status,
-            safe.Length > ActivityJournal.OutputLimit ? safe[..ActivityJournal.OutputLimit] + "\n" + UiText.Get("ActivityOutputLimit") : safe);
+            safe.Length > ActivityJournal.OutputLimit ? safe[..ActivityJournal.OutputLimit] + "\n" + UiText.Get("ActivityOutputLimit") : safe, reopen);
         // One pending latest result per repository; full session history remains in Activity.
         _problems.RemoveAll(item => item.Repository == repository);
         _problems.Add(problem);

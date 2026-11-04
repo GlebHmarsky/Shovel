@@ -38,6 +38,8 @@ internal static partial class Program
                 return 0;
             case "stdin":
                 return Console.Read() == -1 ? 0 : 2;
+            case "finish-started":
+                Console.WriteLine("started"); await Console.Out.FlushAsync(); await Task.Delay(400); Console.WriteLine("finished"); return 0;
             case "wait":
                 await Task.Delay(TimeSpan.FromSeconds(60)); return 0;
             case "child":
