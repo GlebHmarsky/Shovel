@@ -5,7 +5,7 @@ Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Current phase
 
 - [x] **P1 — Categorized settings and author pictures (0.45.0 Beta).** Seven left-side categories expose existing preferences plus diff font/default, explicit global Git identity and configurable GitHub/Gitea/Gravatar pictures with immediate colored initials. 55 focused checks passed. [Behavior and limits](docs/product.md#categorized-settings-and-author-pictures-0450-beta).
-- [ ] **P1 — Deliver 0.45.0 Beta.** Run final routine smoke once, package/sign/publish and verify the anonymous production update download. Keep Stable at 0.39.1. [Evidence](docs/roadmap.md#categorized-settings-and-author-pictures-0450-beta).
+- [x] **P1 — Deliver 0.45.0 Beta.** 55 focused checks and 26 smoke checks in 70.0 s; matching installer/signed feed, all ten published asset digests and anonymous production download verified. Stable remains 0.39.1. [Evidence and limits](docs/roadmap.md#categorized-settings-and-author-pictures-0450-beta).
 
 - [x] **P1 — Quiet fetch and usable workspaces (0.44.0 Beta).** One-minute default/migration, background-only logging, independent working-copy use during fetch, user action priority and repository/context-menu availability.
 - [x] **P1 — Historical-file actions and history/activity UI (0.44.0 Beta).** Screenshot context menu with real scoped actions, saved ref-label placement and visible command transcripts.
