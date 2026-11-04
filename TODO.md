@@ -4,7 +4,7 @@ Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
-- [ ] **P1 — Deliver 0.42.0 Beta.** Final focused/smoke checks, signed feed/installer publication and anonymous update-download verification; keep Stable at 0.39.1. [Evidence](docs/roadmap.md#auto-fetch-settings-0420-beta).
+- [x] **P1 — Deliver 0.42.0 Beta.** 21 focused checks and 26 smoke checks in 62.3 s; matching installer, signed update feed and anonymous full-package verification passed. Stable remains 0.39.1. [Evidence](docs/roadmap.md#auto-fetch-settings-0420-beta).
 
 - [x] **P1 — Queue interactions and remove timer feedback (0.41.0 Beta).** Unique toolbar requests retain repository/branch and serialize conflicting work; timers/animations removed, full-window/full-slot drag feedback, viewport profiling and earlier branch context. [Evidence and limits](docs/roadmap.md#queued-actions-and-quiet-feedback-0410-beta).
 - [x] **P1 — Deliver 0.41.0 Beta.** 26 smoke checks in 36.8 s; matching installer, signed update feed and anonymous full-package verification passed. Stable stays 0.39.1. [Evidence](docs/roadmap.md#queued-actions-and-quiet-feedback-0410-beta).
