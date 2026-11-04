@@ -6,7 +6,7 @@ Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 - [x] **P1 — Quiet fetch and usable workspaces (0.44.0 Beta).** One-minute default/migration, background-only logging, independent working-copy use during fetch, user action priority and repository/context-menu availability.
 - [x] **P1 — Historical-file actions and history/activity UI (0.44.0 Beta).** Screenshot context menu with real scoped actions, saved ref-label placement and visible command transcripts.
-- [ ] **P1 — Deliver 0.44.0 Beta.** Focused checks, final smoke, signed-feed installer publication and anonymous update verification. Stable stays 0.39.1.
+- [x] **P1 — Deliver 0.44.0 Beta.** 55 focused checks and 26 smoke checks in 66.1 s; signed-feed installer published after verified draft-upload recovery; anonymous full-package verification passed. Stable remains 0.39.1. [Evidence and limits](docs/roadmap.md#background-fetch-and-history-actions-0440-beta).
 
 - [x] **P1 — External merge-tool configuration (0.43.0 Beta).** Saved Git-default/named executable/custom-command settings, native per-invocation launch and 35 passing focused checks. [Behavior](docs/product.md#external-merge-tool-configuration-0430-beta).
 - [x] **P1 — Deliver 0.43.0 Beta.** 26 smoke checks in 58.9 s; matching installer, signed feed and anonymous full-package verification passed after CDN propagation. Stable remains 0.39.1. [Evidence](docs/roadmap.md#external-merge-tool-configuration-0430-beta).

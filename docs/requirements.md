@@ -98,7 +98,7 @@ The established work environment is trusted. **Do not add extra safety measures,
 | S2 | Opened/restored history reads automatically with no trust/consent dialog or setting. Normal action button authorizes ordinary mutations/configured programs. Identity checks detect replacement/errors internally, not permissions; retain Git ownership checks without changing safe.directory. No unsolicited network actions. |
 | S3 | Render repo/output/release-note text as data; structured arguments, literal paths, machine parsers; no shell interpolation. |
 | S4 | Established credential storage; no plaintext secrets/shared embedded tokens. Redact sensitive output before export/logging; bounded diagnostics, arbitrary hook output can contain secrets. |
-| S5 | No default telemetry/uploads/avatar requests/unsolicited network. Confirmed 2026-11-02: ten-second auto-fetch of validated open repositories, with noninteractive credentials and bounded concurrency. Other confirmed exception: disclosed startup updater endpoint; configurable periodic checks, no repo content. Disclose normal HTTP metadata/access logs. Supersedes historical advice to disable update checks. |
+| S5 | No default telemetry/uploads/avatar requests/unsolicited network. Confirmed automatic fetch of validated open repositories uses noninteractive credentials and bounded concurrency; 2026-11-04 changes its default to one minute, with user-configurable enablement/interval. Other confirmed exception: disclosed startup updater endpoint; configurable periodic checks, no repo content. Disclose normal HTTP metadata/access logs. Supersedes historical advice to disable update checks. |
 
 ## Localization, accessibility, and lifecycle
 
