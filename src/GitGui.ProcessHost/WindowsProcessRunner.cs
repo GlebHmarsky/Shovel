@@ -14,7 +14,7 @@ public sealed class WindowsProcessRunner : IProcessRunner
     private async Task<ProcessResult> RunWorkerAsync(ProcessRequest request, CancellationToken cancellationToken,
         Action<ProcessOutput>? output)
     {
-        if (request.MaximumOutputBytes is < 1 or > 16 * 1024 * 1024 || request.Timeout <= TimeSpan.Zero ||
+        if (request.MaximumOutputBytes is < 1 or > ProcessRequest.MaximumCaptureBytes || request.Timeout <= TimeSpan.Zero ||
             request.Timeout > TimeSpan.FromMinutes(10)) throw new ArgumentOutOfRangeException(nameof(request));
         var watch = Stopwatch.StartNew();
         try { await _slots.WaitAsync(cancellationToken).ConfigureAwait(false); }

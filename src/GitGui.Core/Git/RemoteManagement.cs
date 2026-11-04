@@ -71,7 +71,7 @@ public sealed partial class GitActions
             {
                 token.ThrowIfCancellationRequested();
                 var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null;
-                var result = await runner.RunAsync(new(git.Executable, path, ["--no-pager", "--no-lazy-fetch", .. command])
+                var result = await RunLoggedAsync(new(git.Executable, path, ["--no-pager", "--no-lazy-fetch", .. command])
                     { Environment = environment, Timeout = TimeSpan.FromSeconds(30), MaximumOutputBytes = 1024 * 1024 }, token, progress);
                 output.Append(Redact(Decode(result) + Encoding.UTF8.GetString(result.StandardError)));
                 last = new(result.Outcome, result.ExitCode, output.ToString());

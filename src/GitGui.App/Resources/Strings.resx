@@ -960,7 +960,7 @@ Previous HEAD: {1}</value></data>
   <data name="SettingsFetchTitle" xml:space="preserve"><value>Automatic fetch</value></data>
   <data name="SettingsFetchEnabled" xml:space="preserve"><value>Fetch open repositories automatically</value></data>
   <data name="SettingsFetchInterval" xml:space="preserve"><value>Fetch interval (seconds)</value></data>
-  <data name="SettingsFetchHelp" xml:space="preserve"><value>Applies to all open repositories. Default: 10 seconds; range: 10–3600 seconds. Busy repositories wait until available. Fetch updates remote information without pulling changes into your working files. Turning this off stops background fetches; manual Fetch remains available.</value></data>
+  <data name="SettingsFetchHelp" xml:space="preserve"><value>Applies to all open repositories. Default: 60 seconds; range: 10–3600 seconds. Fetch updates remote information without pulling changes into your working files. Background failures stay in Activity without interrupting you. Turning this off stops background fetches; manual Fetch remains available.</value></data>
   <data name="SettingsFetchIntervalInvalid" xml:space="preserve"><value>Enter a whole number from 10 to 3600 seconds.</value></data>
   <data name="SettingsReadOnly" xml:space="preserve"><value>This profile cannot be saved. Resolve the settings warning in the main window before changing these preferences.</value></data>
   <data name="SettingsSaveFailed" xml:space="preserve"><value>Settings could not be saved. Your edits are retained; try again.</value></data>
@@ -984,4 +984,27 @@ Previous HEAD: {1}</value></data>
   <data name="ConflictToolPathInvalid" xml:space="preserve"><value>Enter an absolute .exe path without quotes, or leave it empty to use Git’s configured location.</value></data>
   <data name="ConflictToolCommandInvalid" xml:space="preserve"><value>Enter a nonempty Git shell command of up to 8192 characters without NUL characters.</value></data>
   <data name="ConflictToolExecutableMissing" xml:space="preserve"><value>The configured merge-tool executable was not found. Update its path in File → Settings.</value></data>
+  <data name="HistoryRefsSettingsTitle" xml:space="preserve"><value>Branch and tag labels</value></data>
+  <data name="HistoryRefsLeft" xml:space="preserve"><value>Left of message</value></data>
+  <data name="HistoryRefsRight" xml:space="preserve"><value>Right of message</value></data>
+  <data name="ActivityNoOutput" xml:space="preserve"><value>No command output was produced.</value></data>
+  <data name="HistoryFileReset" xml:space="preserve"><value>Reset File To</value></data>
+  <data name="HistoryFileResetHead" xml:space="preserve"><value>Current HEAD</value></data>
+  <data name="HistoryFileResetCommit" xml:space="preserve"><value>Selected commit ({0})</value></data>
+  <data name="HistoryFileResetParent" xml:space="preserve"><value>Compared parent ({0})</value></data>
+  <data name="HistoryFileResetConfirm" xml:space="preserve"><value>Restore working file {0} to commit {1} in {2}? This replaces local file contents, or removes the file if absent in that commit. Staged changes are preserved.</value></data>
+  <data name="HistoryFileBlame" xml:space="preserve"><value>Blame / Timeline</value></data>
+  <data name="HistoryFileHistory" xml:space="preserve"><value>History…</value></data>
+  <data name="HistoryFileTree" xml:space="preserve"><value>Show in File Tree</value></data>
+  <data name="HistoryFileTreeUp" xml:space="preserve"><value>Up</value></data>
+  <data name="HistoryFileTreeExit" xml:space="preserve"><value>Changed files</value></data>
+  <data name="HistoryFileTreeScope" xml:space="preserve"><value>Tree at {0} — {1}. Double-click a folder to open it.</value></data>
+  <data name="HistoryFileLfs" xml:space="preserve"><value>LFS</value></data>
+  <data name="HistoryFileSave" xml:space="preserve"><value>Save as…</value></data>
+  <data name="HistoryFileAction" xml:space="preserve"><value>{0} — {1}</value></data>
+  <data name="HistoryFileWorking" xml:space="preserve"><value>Working on the selected historical file…</value></data>
+  <data name="HistoryFileDone" xml:space="preserve"><value>File action completed.</value></data>
+  <data name="HistoryFileAbsent" xml:space="preserve"><value>This file does not exist in the selected commit.</value></data>
+  <data name="HistoryFileTreeEntry" xml:space="preserve"><value>Historical file</value></data>
+  <data name="HistoryFileFolder" xml:space="preserve"><value>Folder — double-click to open</value></data>
 </root>

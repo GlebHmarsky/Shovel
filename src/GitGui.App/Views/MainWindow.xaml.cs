@@ -58,7 +58,7 @@ public partial class MainWindow : Window
     private void OnSettings(object sender, RoutedEventArgs e)
     {
         var model = new SettingsViewModel(ViewModel.AutoFetchEnabled, ViewModel.AutoFetchIntervalSeconds,
-            ViewModel.LoadedSettings?.CanSave == true, ViewModel.ExternalMergeTool, ViewModel.SaveSettingsAsync);
+            ViewModel.LoadedSettings?.CanSave == true, ViewModel.ExternalMergeTool, ViewModel.HistoryRefsOnRight, ViewModel.SaveSettingsAsync);
         new SettingsWindow(model) { Owner = this }.ShowDialog();
     }
 

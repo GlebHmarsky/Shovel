@@ -13,20 +13,20 @@ public sealed partial class ShellViewModel
 
     private void InitializeBranchManagement()
     {
-        AddRemoteCommand = new(() => ActionTask = AddRemoteAsync(), () => CanAct);
-        ManageRemotesCommand = new(() => ActionTask = ManageRemotesAsync(), () => CanAct && SelectedRepository?.RemoteConfiguration is not null);
-        DeleteBranchCommand = new(() => ActionTask = ManageBranchAsync(BranchManagementAction.Delete), () => CanAct && LocalBranches.Count != 0);
-        SetBranchUpstreamCommand = new(() => ActionTask = ManageBranchAsync(BranchManagementAction.SetUpstream), () => CanAct && LocalBranches.Count != 0);
-        UnsetBranchUpstreamCommand = new(() => ActionTask = ManageBranchAsync(BranchManagementAction.UnsetUpstream), () => CanAct && LocalBranches.Count != 0);
+        AddRemoteCommand = new(() => ActionTask = QueueSelectedAction("AddRemote", UiText.Get("RemoteAddTitle"), tab => AddRemoteAsync(tab)), () => CanAct);
+        ManageRemotesCommand = new(() => ActionTask = QueueSelectedAction("ManageRemotes", UiText.Get("RemoteManageTitle"), tab => ManageRemotesAsync(targetTab: tab)), () => CanAct && SelectedRepository?.RemoteConfiguration is not null);
+        DeleteBranchCommand = new(() => ActionTask = QueueSelectedAction("BranchDelete", UiText.Get("BranchManageTitleDeleteBranch"), tab => ManageBranchAsync(BranchManagementAction.Delete, targetTab: tab)), () => CanAct && LocalBranches.Count != 0);
+        SetBranchUpstreamCommand = new(() => ActionTask = QueueSelectedAction("BranchSetUpstream", UiText.Get("BranchManageTitleSetUpstream"), tab => ManageBranchAsync(BranchManagementAction.SetUpstream, targetTab: tab)), () => CanAct && LocalBranches.Count != 0);
+        UnsetBranchUpstreamCommand = new(() => ActionTask = QueueSelectedAction("BranchUnsetUpstream", UiText.Get("BranchManageTitleUnsetUpstream"), tab => ManageBranchAsync(BranchManagementAction.UnsetUpstream, targetTab: tab)), () => CanAct && LocalBranches.Count != 0);
     }
     private void RefreshBranchManagement()
     {
         AddRemoteCommand?.Refresh(); ManageRemotesCommand?.Refresh(); Changed(nameof(ManageRemotesHelp)); DeleteBranchCommand?.Refresh(); SetBranchUpstreamCommand?.Refresh(); UnsetBranchUpstreamCommand?.Refresh();
         Changed(nameof(BranchManagementHelp));
     }
-    private async Task ManageBranchAsync(BranchManagementAction action, string? selectedBranch = null)
+    private async Task ManageBranchAsync(BranchManagementAction action, string? selectedBranch = null, RepositoryTab? targetTab = null)
     {
-        var tab = SelectedRepository!;
+        var tab = targetTab ?? SelectedRepository!;
         // Freeze before the modal pumps the dispatcher; neither confirmation nor a later
         // refresh may substitute the branch/hash that the user actually submitted.
         var snapshot = tab.Snapshot!; var page = tab.History.Page!;
@@ -42,7 +42,7 @@ public sealed partial class ShellViewModel
             var choices = new BranchManagementViewModel(action, snapshot, page.Session);
             if (selectedBranch is not null) choices.Branch = choices.Branches.FirstOrDefault(b => b.Name == selectedBranch);
             var options = _interaction!.ChooseBranchManagement(choices);
-            if (options is null || SelectedRepository != tab) return;
+            if (options is null) return;
             var kind = action switch
             {
                 BranchManagementAction.Delete => GitAction.DeleteBranch,

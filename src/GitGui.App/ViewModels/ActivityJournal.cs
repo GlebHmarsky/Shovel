@@ -20,7 +20,7 @@ public sealed class ActivityEntry(object attempt, string repository, bool backgr
     public bool Running => !_activity.IsComplete;
     private string _output = "";
     private WeakReference<string>? _lastOutput;
-    public string Output => _output;
+    public string Output => _output.Length > 0 ? _output : Status + "\n\n" + UiText.Get("ActivityNoOutput");
     public void Update(OperationActivity value, string? output)
     {
         _activity = value;
@@ -32,7 +32,7 @@ public sealed class ActivityEntry(object attempt, string repository, bool backgr
             _output = safe.Length <= ActivityJournal.OutputLimit ? safe : safe[..ActivityJournal.OutputLimit] + "\n" + UiText.Get("ActivityOutputLimit");
             Changed(nameof(Output));
         }
-        Changed(nameof(Title)); Changed(nameof(Status)); Changed(nameof(Summary)); Changed(nameof(Running));
+        Changed(nameof(Output)); Changed(nameof(Title)); Changed(nameof(Status)); Changed(nameof(Summary)); Changed(nameof(Running));
     }
 }
 

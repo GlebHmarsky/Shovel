@@ -30,10 +30,11 @@ public enum NavigationSection
 public sealed record AppSettings
 {
     public const int CurrentSchemaVersion = 6;
-    public const int DefaultAutoFetchIntervalSeconds = 10;
+    public const int DefaultAutoFetchIntervalSeconds = 60;
     public const int MinimumAutoFetchIntervalSeconds = 10;
     public const int MaximumAutoFetchIntervalSeconds = 3600;
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
+    public bool HistoryRefsOnRight { get; init; }
     public double UiScale { get; init; } = 1;
     public double WindowWidth { get; init; } = 1200;
     public double WindowHeight { get; init; } = 800;
@@ -50,6 +51,7 @@ public sealed record AppSettings
     public bool CheckUpdatesPeriodically { get; init; } = true;
     public ExternalMergeToolSettings ExternalMergeTool { get; init; } = new();
     public bool AutoFetchEnabled { get; init; } = true;
+    public int AutoFetchCadenceRevision { get; init; } = 1;
     public int AutoFetchIntervalSeconds { get; init; } = DefaultAutoFetchIntervalSeconds;
     public string UpdateChannel { get; init; } = "win-stable";
     public AppAppearance Appearance { get; init; } = AppAppearance.Dark;
@@ -62,7 +64,8 @@ public sealed record AppSettings
         UiScale = double.IsFinite(UiScale) ? Math.Clamp(Math.Round(UiScale * 10) / 10, .7, 2) : 1,
         UpdateChannel = UpdateChannel == "win-beta" ? "win-beta" : "win-stable",
         ExternalMergeTool = (ExternalMergeTool ?? new()).Normalize(),
-        AutoFetchIntervalSeconds = Math.Clamp(AutoFetchIntervalSeconds, MinimumAutoFetchIntervalSeconds, MaximumAutoFetchIntervalSeconds),
+        AutoFetchIntervalSeconds = Math.Clamp(AutoFetchCadenceRevision == 0 && AutoFetchIntervalSeconds == 10 ? DefaultAutoFetchIntervalSeconds : AutoFetchIntervalSeconds, MinimumAutoFetchIntervalSeconds, MaximumAutoFetchIntervalSeconds),
+        AutoFetchCadenceRevision = 1,
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),
         WindowHeight = Clamp(WindowHeight, 800, 620, 2160),
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Max(160, SidebarWidth) : 210,

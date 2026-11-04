@@ -11,7 +11,11 @@ public sealed class SettingsViewModel : ObservableObject
     public sealed record ModeOption(ExternalMergeToolMode Value, string Label);
     public IReadOnlyList<ModeOption> Modes { get; } = Enum.GetValues<ExternalMergeToolMode>()
         .Select(mode => new ModeOption(mode, UiText.Get("SettingsMergeMode" + mode))).ToArray();
-    private readonly Func<bool, int, ExternalMergeToolSettings, Task<bool>> _save;
+    private readonly Func<bool, int, ExternalMergeToolSettings, bool, Task<bool>> _save;
+    private bool _historyRefsOnRight;
+    public bool HistoryRefsOnRight { get => _historyRefsOnRight; set { if (Set(ref _historyRefsOnRight, value)) { Refresh(); Changed(nameof(HistoryRefsOnLeft)); Changed(nameof(HistoryRefsRight)); } } }
+    public bool HistoryRefsOnLeft { get => !_historyRefsOnRight; set { if (value) { HistoryRefsOnRight = false; Changed(nameof(HistoryRefsOnRight)); } } }
+    public bool HistoryRefsRight { get => _historyRefsOnRight; set { if (value) { HistoryRefsOnRight = true; Changed(nameof(HistoryRefsOnLeft)); } } }
     private ExternalMergeToolMode _mergeToolMode;
     private string _mergeToolName, _mergeToolExecutablePath, _mergeToolCommand;
     public ExternalMergeToolMode MergeToolMode { get => _mergeToolMode; set { if (Set(ref _mergeToolMode, value)) { Refresh(); Changed(nameof(IsNamedTool)); Changed(nameof(IsCustomCommand)); } } }
@@ -41,7 +45,12 @@ public sealed class SettingsViewModel : ObservableObject
 
     public SettingsViewModel(bool enabled, int intervalSeconds, bool canSave, ExternalMergeToolSettings mergeTool,
         Func<bool, int, ExternalMergeToolSettings, Task<bool>> save)
+        : this(enabled, intervalSeconds, canSave, mergeTool, false, (enabledValue, seconds, tool, _) => save(enabledValue, seconds, tool)) { }
+
+    public SettingsViewModel(bool enabled, int intervalSeconds, bool canSave, ExternalMergeToolSettings mergeTool, bool historyRefsOnRight,
+        Func<bool, int, ExternalMergeToolSettings, bool, Task<bool>> save)
     {
+        _historyRefsOnRight = historyRefsOnRight;
         var tool = mergeTool.Normalize();
         _mergeToolMode = tool.Mode; _mergeToolName = tool.ToolName;
         _mergeToolExecutablePath = tool.ExecutablePath; _mergeToolCommand = tool.Command;
@@ -58,9 +67,10 @@ public sealed class SettingsViewModel : ObservableObject
         var enabled = AutoFetchEnabled;
         var interval = int.Parse(IntervalSeconds, CultureInfo.CurrentCulture);
         var tool = MergeToolSettings;
+        var refsOnRight = HistoryRefsOnRight;
         _saving = true; Refresh(); Changed(nameof(IsSaving)); Changed(nameof(CanEdit));
         var saved = false;
-        try { saved = await _save(enabled, interval, tool); }
+        try { saved = await _save(enabled, interval, tool, refsOnRight); }
         catch (Exception) { /* Keep edits and offer retry without exposing arbitrary exceptions. */ }
         finally
         {

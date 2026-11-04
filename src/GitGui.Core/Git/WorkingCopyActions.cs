@@ -177,7 +177,7 @@ public sealed partial class GitActions
                 // Terminal stdin is closed by the runner. Visible progress/cancel/timeout cover owned work.
                 environment["GIT_EDITOR"] = "false";
                 var validationMilliseconds = timing.Elapsed.TotalMilliseconds;
-                var result = await runner.RunAsync(new(git.Executable, path,
+                var result = await RunLoggedAsync(new(git.Executable, path,
                     ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", .. args])
                     { Environment = environment, Timeout = TimeSpan.FromMinutes(5), MaximumOutputBytes = 1024 * 1024 }, token, progress);
                 var action = new ActionResult(result.Outcome, result.ExitCode, Redact(Decode(result) + Encoding.UTF8.GetString(result.StandardError)));

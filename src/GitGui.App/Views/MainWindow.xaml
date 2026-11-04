@@ -351,7 +351,10 @@
               <DataGridTemplateColumn Header="{loc:Text Key=HistoryDescription}" Width="*" MinWidth="300">
                 <DataGridTemplateColumn.CellTemplate><DataTemplate>
                   <DockPanel Margin="8,0" VerticalAlignment="Center">
-                    <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding Badges}" MaxWidth="210" ClipToBounds="True" ToolTip="{Binding RefLabels}" Margin="0,0,6,0">
+                    <ItemsControl ItemsSource="{Binding Badges}" MaxWidth="210" ClipToBounds="True" ToolTip="{Binding RefLabels}">
+                     <ItemsControl.Style><Style TargetType="ItemsControl"><Setter Property="DockPanel.Dock" Value="Left"/><Setter Property="Margin" Value="0,0,6,0"/>
+                      <Style.Triggers><DataTrigger Binding="{Binding DataContext.HistoryRefsOnRight, RelativeSource={RelativeSource AncestorType=DataGrid}}" Value="True"><Setter Property="DockPanel.Dock" Value="Right"/><Setter Property="Margin" Value="6,0,0,0"/></DataTrigger></Style.Triggers>
+                     </Style></ItemsControl.Style>
                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                      <ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{Binding Foreground, RelativeSource={RelativeSource AncestorType=DataGridCell}}" BorderThickness="1" CornerRadius="3" Padding="4,1" Margin="0,2,4,2" ToolTip="{Binding Help}" AutomationProperties.Name="{Binding Help}">
                       <StackPanel Orientation="Horizontal">

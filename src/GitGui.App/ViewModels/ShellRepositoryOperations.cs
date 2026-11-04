@@ -46,28 +46,37 @@ public sealed partial class ShellViewModel
     }
 
     private readonly HashSet<GitActionViewModel> _reportedOperations = [];
-    private readonly Dictionary<string, string> _backgroundProblems = new(StringComparer.OrdinalIgnoreCase);
     private void ReportOperationProblem(GitActionViewModel operation)
     {
         if (!_reportedOperations.Add(operation)) return;
         // Bound retained attempt identities to the current per-repository results.
         _reportedOperations.RemoveWhere(item => item != _lastAction && !_repositoryActions.ContainsValue(item));
-        if (!operation.NeedsAttention)
-        { if (operation.Succeeded) _backgroundProblems.Remove(operation.CurrentRepository); return; }
-        if (operation.IsBackground)
-        {
-            var problem = operation.Status + "\n" + operation.RawOutput;
-            if (_backgroundProblems.GetValueOrDefault(operation.CurrentRepository) == problem) return;
-            _backgroundProblems[operation.CurrentRepository] = problem;
-        }
+        if (!operation.NeedsAttention) return;
+        if (operation.IsBackground) return;
         _interaction?.ShowOperationProblem(operation.CurrentRepository, operation.Title, operation.Status, operation.RawOutput);
     }
 
-    public bool HasUserOperation => _queuedActions.Count != 0 || _actionOpen || _commitOpen || _operationOwners.Any(tab =>
+    private void PreemptBackgroundFetch(RepositoryTab tab)
+    {
+        foreach (var owner in _fetchOwners.Where(owner => SameRepository(owner, tab)).ToArray())
+            if (_repositoryActions.GetValueOrDefault(owner.Directory) is { IsBackground: true } action) action.Cancel();
+    }
+
+    private Task ReconcileFetchAsync(RepositoryTab tab)
+    {
+        // Remote refs do not invalidate the worktree/index preview. Let user work
+        // own the next refresh instead of starting a blocking read behind it.
+        foreach (var related in Repositories.Where(item => SameRepository(item, tab)))
+        { related.History.NeedsRefresh = true; related.SidebarReadAt = default; }
+        if (_commitOpen || HistoryFileBusy(tab) || _queuedActions.Any(item => !item.Started && SameRepository(item.Tab, tab))) return Task.CompletedTask;
+        return ReconcileActionAsync(tab, refreshChanges: false);
+    }
+
+    public bool HasUserOperation => HasHistoryFileAction || _queuedActions.Count != 0 || _actionOpen || _commitOpen || _operationOwners.Any(tab =>
         _repositoryActions.GetValueOrDefault(tab.Directory)?.IsBackground != true);
     public void RevealRunningOperation()
     {
-        var owner = _operationOwners.FirstOrDefault(tab => _repositoryActions.GetValueOrDefault(tab.Directory)?.IsBackground != true) ?? _initializationOwner ?? _queuedActions.FirstOrDefault()?.Tab;
+        var owner = _operationOwners.FirstOrDefault(tab => _repositoryActions.GetValueOrDefault(tab.Directory)?.IsBackground != true) ?? _historyFileActions.Values.FirstOrDefault() ?? _initializationOwner ?? _queuedActions.FirstOrDefault()?.Tab;
         if (owner is not null && Repositories.Contains(owner)) SelectedRepository = owner;
         ShowActionDetailsCommand.Execute(null);
     }
@@ -105,7 +114,7 @@ public sealed partial class ShellViewModel
         foreach (var tab in Repositories.OrderBy(tab => _nextAutoFetch.GetValueOrDefault(tab)).ToArray())
         {
             if (slots <= 0) break;
-            if (RepositoryBusy(tab) || _queuedActions.Any(item => SameRepository(item.Tab, tab)) || tab.History.StartupPreview ||
+            if (RepositoryOperationBusy(tab) || _queuedActions.Any(item => SameRepository(item.Tab, tab)) || tab.History.StartupPreview ||
                 tab.Snapshot is not { RemoteNames.Count: > 0, Operation: RepositoryOperation.None } ||
                 !_knownIdentities.ContainsKey(tab.Directory) || now < _nextAutoFetch.GetValueOrDefault(tab) ||
                 SelectedRepository == tab && IsBusy) continue;

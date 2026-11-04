@@ -46,6 +46,7 @@ public sealed partial class CommitViewModel : ObservableObject
     private readonly Stopwatch _elapsed = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly List<byte> _output = [];
+    private readonly CommandTranscript _commands = new();
     private CancellationTokenSource? _readCancel, _diffCancel, _actionCancel;
     private long _readGeneration, _diffGeneration;
     private bool _loading, _backgroundLoading, _mutating, _diffLoading, _closed, _shift, _amend, _ignoreWhitespace, _wholeFile;
@@ -346,6 +347,7 @@ public sealed partial class CommitViewModel : ObservableObject
         _elapsed.Restart(); _phase = UiText.Get("CommitPhase" + action); Status = _phase; RawOutput = "";
         _activityAttempt = new object(); _activityTitle = push ? UiText.Get("CommitAndPush") : _phase; _activityOutcome = OperationOutcome.Failed;
         lock (_output) { _output.Clear(); _publishedBytes = 0; }
+        _commands.Clear();
         _actionCancel = new CancellationTokenSource(); UpdateBusy(); OperationTask = RunAsync();
         async Task RunAsync()
         {
@@ -359,7 +361,7 @@ public sealed partial class CommitViewModel : ObservableObject
                 var result = await _actions.ExecuteWorkingCopyAsync(context, options, _actionCancel.Token, CollectOutput);
                 measured = result;
                 _activityOutcome = ActivityOutcome(result.Result);
-                await _outputTask; RawOutput = result.Result.Output; committed = result.CommitHash;
+                await _outputTask; RawOutput = _commands.Complete(result.Result.Output); committed = result.CommitHash;
                 Status = UiText.Get(result.Result.MessageCode ?? (result.Result.Success ? "CommitSucceeded" + action : "ActionResult" + result.Result.Outcome));
                 if (result.Result.Success && action == WorkingCopyAction.Commit)
                 {
@@ -419,7 +421,7 @@ public sealed partial class CommitViewModel : ObservableObject
             finally { await _dispatcher.InvokeAsync(() => { _phase = UiText.Get("ActionStagePushing"); Changed(nameof(Summary)); }); }
         }, token));
         var result = await _actions.ExecuteAsync(context, new(GitAction.Push, context.Repository.Branch!, Remote: target.Remote, RemoteBranch: target.Branch), token, CollectOutput, authentication);
-        await _outputTask; RawOutput += result.Output;
+        await _outputTask; RawOutput += _commands.Complete(result.Output);
         Status = result.Success && authentication?.Failure is null ? UiText.Format("CommitCreatedPushed", commit)
             : UiText.Format("CommitCreatedPushFailed", commit, UiText.Get(authentication?.Failure is { } failure ? "ActionAuthentication" + failure : "ActionResult" + result.Outcome));
         return authentication?.Failure is not null ? OperationOutcome.Failed : ActivityOutcome(result);
@@ -434,7 +436,7 @@ public sealed partial class CommitViewModel : ObservableObject
     {
         var parts = message.Replace("\r\n", "\n").Split('\n', 2); Subject = parts[0]; Description = parts.Length == 2 ? parts[1].TrimStart('\n') : "";
     }
-    private void CollectOutput(ProcessOutput chunk) { lock (_output) { if (_output.Count + chunk.Bytes.Length <= 1024 * 1024) _output.AddRange(chunk.Bytes); } }
+    private void CollectOutput(ProcessOutput chunk) { _commands.Collect(chunk); lock (_output) { if (_output.Count + chunk.Bytes.Length <= 1024 * 1024) _output.AddRange(chunk.Bytes); } }
     private async Task PublishOutputAsync()
     {
         var text = await Task.Run(() => { byte[] bytes; lock (_output) { if (_publishedBytes == _output.Count) return null; _publishedBytes = _output.Count; bytes = _output.ToArray(); } return GitActions.Redact(Encoding.UTF8.GetString(bytes)); });

@@ -104,7 +104,7 @@ public sealed partial class GitActions
             environment["GIT_EDITOR"] = "true"; environment["GIT_SEQUENCE_EDITOR"] = "false";
             environment["GIT_MERGE_AUTOEDIT"] = "no";
             stage?.Invoke(GitActionStage.Recovering);
-            var result = await runner.RunAsync(new(git.Executable, path,
+            var result = await RunLoggedAsync(new(git.Executable, path,
                 ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
                     "-c", "submodule.recurse=false", expected.Command, "--" + action.ToString().ToLowerInvariant()])
                 { Environment = environment, Timeout = TimeSpan.FromMinutes(5), MaximumOutputBytes = 1024 * 1024 }, token, progress);

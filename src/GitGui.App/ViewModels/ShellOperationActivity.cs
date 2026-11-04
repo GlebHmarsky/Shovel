@@ -34,8 +34,13 @@ public sealed partial class ShellViewModel
     private void PublishActivity(OperationActivity? activity)
     {
         if (activity is not null && SelectedRepository is { } tab)
-            Journal.Record(activity, tab.Directory, ReferenceEquals(activity.Attempt, _readAttempt) || CurrentAction?.IsBackground == true,
-                ReferenceEquals(activity.Attempt, _readAttempt) ? (activity.IsComplete ? RawOutput : null) : _commitModel?.RawOutput ?? CurrentAction?.RawOutput);
+        {
+            var action = activity.Attempt as GitActionViewModel;
+            var isRead = ReferenceEquals(activity.Attempt, _readAttempt);
+            var isCommit = ReferenceEquals(activity.Attempt, _commitModel?.Activity?.Attempt);
+            Journal.Record(activity, action?.CurrentRepository ?? tab.Directory, isRead || action?.IsBackground == true,
+                isRead ? (activity.IsComplete ? RawOutput : null) : isCommit ? _commitModel?.RawOutput : action?.RawOutput);
+        }
         if (activity is null || !ReferenceEquals(activity.Attempt, _activity?.Attempt)) _showWorkspaceStatus = false;
         if (Set(ref _activity, activity, nameof(Activity))) Changed(nameof(OperationCaption));
     }

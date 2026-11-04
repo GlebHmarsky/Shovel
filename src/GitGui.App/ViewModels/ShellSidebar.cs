@@ -39,7 +39,7 @@ public sealed partial class ShellViewModel
         SidebarMenuAction Menu(string key, Action action) => new(UiText.Get(key), Command(action));
         RelayCommand Jump(string hash) => new(() => LocateSidebarCommit(tab, hash), () => SelectedRepository == tab && CanRead && !IsBusy);
         SidebarNode Group(string key, IEnumerable<SidebarNode> nodes) => new(UiText.Get(key), "", "", nodes.ToArray());
-        void BranchManage(BranchManagementAction action, string name) => ActionTask = ManageBranchAsync(action, name);
+        void BranchManage(BranchManagementAction action, string name) => ActionTask = QueueAction(tab, "Branch" + action + name, name, () => ManageBranchAsync(action, name, tab));
         var refs = page.Session.References;
         var branches = refs.Where(r => r.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(r =>
         {
@@ -61,7 +61,7 @@ public sealed partial class ShellViewModel
             new SidebarNode(name, "↔", "", remoteRefs.Where(r => r.Name.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)).Select(r =>
                 new SidebarNode(r.Name[(14 + name.Length)..], "⑂", "", [], Jump(r.Hash), Menu: [new(UiText.Get("SidebarLocate"), Jump(r.Hash))])).ToArray(),
                 Menu: snapshot.RemoteNames.Contains(name) ? [Menu("ActionTitleFetch", () => RunSidebarAction(tab, GitAction.Fetch, remote: name)),
-                    new(UiText.Get("RemoteManageTitle"), new(() => ActionTask = ManageRemotesAsync(name), () => CanUse() && tab.RemoteConfiguration is not null))] : []));
+                    new(UiText.Get("RemoteManageTitle"), new(() => ActionTask = QueueAction(tab, "ManageRemote" + name, name, () => ManageRemotesAsync(name, tab)), () => CanUse() && tab.RemoteConfiguration is not null))] : []));
         var tags = refs.Where(r => r.Name.StartsWith("refs/tags/", StringComparison.Ordinal)).Select(r =>
             new SidebarNode(r.Name[10..], "◇", "", [], Jump(r.Hash), Menu: [new(UiText.Get("SidebarLocate"), Jump(r.Hash))]));
         var stashes = (tab.Stashes.List?.Entries ?? []).Select(entry => new SidebarNode(entry.Message, "▣", entry.Selector, [], Jump(entry.Hash),
@@ -156,7 +156,7 @@ public sealed partial class ShellViewModel
     private async Task SwitchSidebarAsync(RepositoryTab tab, string name)
     {
         _operationCancellation?.Cancel(); await _activeOperation;
-        if (SelectedRepository == tab && CanAct) await ExecuteSidebarAsync(tab, GitAction.SwitchBranch, name);
+        if (SelectedRepository == tab && CanAct) await QueueAction(tab, "SwitchBranch" + name, name, () => ExecuteSidebarAsync(tab, GitAction.SwitchBranch, name));
     }
 
     private ActionContext SidebarContext(RepositoryTab tab)
@@ -166,23 +166,25 @@ public sealed partial class ShellViewModel
             snapshot, tab.History.Page!.Session, snapshot.RemoteNames.Select(n => new GitRemote(n, "", "")).ToArray(), "");
     }
     private void RunSidebarAction(RepositoryTab tab, GitAction action, string branch = "", string remote = "", string start = "HEAD") =>
-        ActionTask = ExecuteSidebarAsync(tab, action, branch, remote, start);
+        ActionTask = QueueAction(tab, action + branch + remote + start, UiText.Get("ActionTitle" + action), () => ExecuteSidebarAsync(tab, action, branch, remote, start), isFetch: action == GitAction.Fetch);
     private void RunSidebarStash(RepositoryTab tab, StashEntry entry, StashAction action)
     {
         var list = tab.Stashes.List!;
         if (action == StashAction.Drop && !_interaction!.ConfirmRecovery(UiText.Format("StashConfirmDrop", tab.Directory, entry.Selector, entry.Hash, entry.Message), UiText.Get("ActionTitleStashDrop"))) return;
-        ActionTask = ExecuteSidebarAsync(tab, action == StashAction.Apply ? GitAction.StashApply : action == StashAction.Pop ? GitAction.StashPop : GitAction.StashDrop,
-            stash: new(action, list, entry));
+        ActionTask = QueueAction(tab, "Stash" + action + entry.Hash, UiText.Get("ActionTitleStash" + action), () => ExecuteSidebarAsync(tab, action == StashAction.Apply ? GitAction.StashApply : action == StashAction.Pop ? GitAction.StashPop : GitAction.StashDrop,
+            stash: new(action, list, entry)));
     }
     private async Task ExecuteSidebarAsync(RepositoryTab tab, GitAction action, string branch = "", string remote = "", string start = "HEAD", StashOptions? stash = null,
         StashAction? historyStashAction = null, string historyStashHash = "", string historyStashSelector = "")
     {
-        if (SelectedRepository != tab || !CanAct) return;
+        if (!Repositories.Contains(tab) || RepositoryBusy(tab)) return;
         var cached = SidebarContext(tab); ActionContext? prepared = null;
-        CancelCountRead(); _sidebarCancel?.Cancel(); SetActionOpen(true, tab);
+        CancelCountRead(); _sidebarCancel?.Cancel();
+        if (action == GitAction.Fetch) _fetchOwners.Add(tab);
+        SetActionOpen(true, tab);
         try
         {
-            var operation = new GitActionViewModel(cached, action, _actions!, () => ReconcileActionAsync(tab), branch, _interaction, async token =>
+            var operation = new GitActionViewModel(cached, action, _actions!, () => action == GitAction.Fetch ? ReconcileFetchAsync(tab) : ReconcileActionAsync(tab), branch, _interaction, async token =>
             {
                 var fresh = await _actions!.PrepareAsync(cached.Git, tab.Directory, token);
                 if (fresh.Identity.Fingerprint != cached.Identity.Fingerprint || fresh.History.Fingerprint != cached.History.Fingerprint) throw new GitActionException("ActionChanged");
@@ -198,12 +200,16 @@ public sealed partial class ShellViewModel
             if (remote.Length > 0) operation.Remote = operation.Remotes.FirstOrDefault(r => r.Name == remote);
             SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); await operation.RunningTask; if (SelectedRepository == tab) Status = operation.Summary;
         }
-        finally { SetActionOpen(false, tab); BeginSidebarRead(tab); await _sidebarTask; }
+        finally
+        {
+            if (action == GitAction.Fetch) _fetchOwners.Remove(tab);
+            SetActionOpen(false, tab);
+            if (!_commitOpen && !HistoryFileBusy(tab)) { BeginSidebarRead(tab); await _sidebarTask; }
+        }
     }
     private async Task OpenSubmoduleAsync(RepositoryTab parent, SubmoduleEntry module)
     {
         if (SelectedRepository != parent || !CanAct) return;
-        SetActionOpen(true, parent);
         string? directory = null;
         try
         {
@@ -216,7 +222,6 @@ public sealed partial class ShellViewModel
             });
         }
         catch (Exception) { Status = UiText.Get("SidebarSubmoduleUnavailable"); }
-        finally { SetActionOpen(false, parent); }
         if (directory is null || _stopping) return;
         var tab = Repositories.FirstOrDefault(t => string.Equals(t.Directory, directory, StringComparison.OrdinalIgnoreCase));
         if (tab is null) { if (Repositories.Count >= 20) { Status = UiText.Get("TooManyRepositories"); return; } tab = new(directory); Repositories.Add(tab); }

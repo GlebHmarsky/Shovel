@@ -40,7 +40,7 @@ public sealed partial class GitActions
             await ConfigureNetworkEnvironmentAsync(git, parent, environment, authentication, token);
             token.ThrowIfCancellationRequested();
             if (!SameDirectory(parent, ValidateDestination(target))) throw new GitActionException("InitDestinationChanged");
-            var result = await runner.RunAsync(new(git.Executable, parent,
+            var result = await RunLoggedAsync(new(git.Executable, parent,
                 ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
                  "-c", "protocol.allow=never", "-c", "protocol.file.allow=always", "-c", "protocol.https.allow=always",
                  "-c", "protocol.http.allow=always", "-c", "protocol.ssh.allow=always", "-c", "protocol.git.allow=always",

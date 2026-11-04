@@ -35,6 +35,7 @@ public sealed partial class ShellViewModel
     {
         RestoreAutoFetchSettings(settings);
         ExternalMergeTool = (settings.ExternalMergeTool ?? new()).Normalize();
+        HistoryRefsOnRight = settings.HistoryRefsOnRight; Changed(nameof(HistoryRefsOnRight));
         UiScale.Set(settings.UiScale);
         _commitLayout = settings.CommitLayout;
         _riderExecutable = settings.RiderExecutable; _codeExecutable = settings.CodeExecutable; _bashExecutable = settings.BashExecutable;

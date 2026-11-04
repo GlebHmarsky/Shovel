@@ -141,7 +141,7 @@ public sealed partial class ShellViewModel : ObservableObject
             }
             SelectedRepository = tab;
             BeginCurrentRead(tab, reopen: true);
-        }, () => CanNavigate && !IsBusy && _reader is not null && _interaction is not null);
+        }, () => CanNavigate && _reader is not null && _interaction is not null);
         RefreshRepositoryCommand = new(() => QueueRefresh(SelectedRepository!), () => CanNavigate && SelectedRepository is not null && _reader is not null);
         LoadMoreHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: 1), () => CanRead && IsHistory && !IsBusy && State?.Page?.HasMore == true && State.NeedsRefresh == false);
         NewerHistoryCommand = new(() => BeginInspection(SelectedRepository!, direction: -1), () => CanRead && IsHistory && !IsBusy && State?.PageIndex > 0 && State.NeedsRefresh == false);
@@ -149,10 +149,11 @@ public sealed partial class ShellViewModel : ObservableObject
         CancelCommand = new(() =>
         {
             CancelQueuedActions(SelectedRepository);
+            CancelSelectedHistoryFileActions();
             if (_commitModel is not null) _commitModel.Cancel();
             else if (IsActionRunning) CurrentAction?.Cancel();
             else _operationCancellation?.Cancel();
-        }, () => HasQueuedAction(SelectedRepository) || (IsActionRunning ? CurrentAction?.CanCancel == true : IsBusy));
+        }, () => SelectedRepository is { } cancelTab && HistoryFileBusy(cancelTab) || HasQueuedAction(SelectedRepository) || (IsActionRunning ? CurrentAction?.CanCancel == true : IsBusy));
         ChooseGitCommand = new(() =>
         {
             var path = _interaction!.ChooseGit(); if (path is null) return;
@@ -161,10 +162,10 @@ public sealed partial class ShellViewModel : ObservableObject
             if (SelectedRepository is not null) BeginCurrentRead(SelectedRepository!, force: true);
         }, () => CanNavigate && !ActionOpen && !IsBusy && _interaction is not null);
         DiagnosticsCommand = new(() => { Changed(nameof(TimingDetails)); RevealDetails(2); }, () => CanNavigate);
-        CloseRepositoryCommand = new(() => CloseTab(SelectedRepository!), () => CanNavigate && SelectedRepository is not null && !RepositoryBusy(SelectedRepository) && !HasQueuedAction(SelectedRepository));
+        CloseRepositoryCommand = new(() => CloseTab(SelectedRepository!), () => CanNavigate && SelectedRepository is not null && !RepositoryOperationBusy(SelectedRepository) && !HasQueuedAction(SelectedRepository));
         MoveLeftCommand = new(() => MoveTab(SelectedRepository!, -1), () => CanMove(SelectedRepository, -1));
         MoveRightCommand = new(() => MoveTab(SelectedRepository!, 1), () => CanMove(SelectedRepository, 1));
-        CloseTabCommand = new(CloseTab, tab => CanNavigate && !RepositoryBusy(tab) && !HasQueuedAction(tab) && Repositories.Contains(tab));
+        CloseTabCommand = new(CloseTab, tab => CanNavigate && !RepositoryOperationBusy(tab) && !HasQueuedAction(tab) && Repositories.Contains(tab));
         CloseOtherTabsCommand = new(tab =>
         {
             SelectedRepository = tab;
@@ -420,12 +421,12 @@ public sealed partial class ShellViewModel : ObservableObject
     }
     public void CloseTab(RepositoryTab tab)
     {
-        if (!CanNavigate || HasQueuedAction(tab) || RepositoryBusy(tab) || !Repositories.Contains(tab)) return;
+        if (!CanNavigate || HasQueuedAction(tab) || RepositoryOperationBusy(tab) || !Repositories.Contains(tab)) return;
         var index = Repositories.IndexOf(tab);
         var selected = SelectedRepository == tab;
         Repositories.Remove(tab); _knownIdentities.Remove(tab.Directory);
         if (_repositoryActions.Remove(tab.Directory, out var previous)) previous.PropertyChanged -= OnActionChanged;
-        _backgroundProblems.Remove(tab.Directory); _nextAutoFetch.Remove(tab);
+        _nextAutoFetch.Remove(tab);
         if (selected) SelectedRepository = Repositories.Count == 0 ? null : Repositories[Math.Min(index, Repositories.Count - 1)];
         RefreshCommands();
     }
@@ -467,6 +468,7 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         CommitLayout = _commitLayout,
         ExternalMergeTool = _pendingSettings?.Tool ?? ExternalMergeTool,
+        HistoryRefsOnRight = _pendingSettings?.RefsOnRight ?? HistoryRefsOnRight,
         AutoFetchEnabled = _pendingSettings?.Enabled ?? AutoFetchEnabled,
         AutoFetchIntervalSeconds = _pendingSettings?.Seconds ?? AutoFetchIntervalSeconds,
 
@@ -477,7 +479,7 @@ public sealed partial class ShellViewModel : ObservableObject
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };
-    public void BeginShutdown() { foreach (var tab in Repositories) CancelQueuedActions(tab); _autoFetchTimer?.Stop(); _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
-    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _startupPreviewTask; await _countTask; await _oldCommitFiles; await _sidebarTask; }
+    public void BeginShutdown() { _stopping = true; CancelHistoryFileActions(); foreach (var tab in Repositories) CancelQueuedActions(tab); _autoFetchTimer?.Stop(); _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
+    public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _startupPreviewTask; await _countTask; await _oldCommitFiles; await DrainHistoryFileActionsAsync(); await _sidebarTask; }
     public void ResumeAfterSaveFailure() { _stopping = false; if (_autoFetchTimer is not null) StartAutoFetch(); IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }

@@ -4,6 +4,10 @@ Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Quiet fetch and usable workspaces (0.44.0 Beta).** One-minute default/migration, background-only logging, independent working-copy use during fetch, user action priority and repository/context-menu availability.
+- [x] **P1 — Historical-file actions and history/activity UI (0.44.0 Beta).** Screenshot context menu with real scoped actions, saved ref-label placement and visible command transcripts.
+- [ ] **P1 — Deliver 0.44.0 Beta.** Focused checks, final smoke, signed-feed installer publication and anonymous update verification. Stable stays 0.39.1.
+
 - [x] **P1 — External merge-tool configuration (0.43.0 Beta).** Saved Git-default/named executable/custom-command settings, native per-invocation launch and 35 passing focused checks. [Behavior](docs/product.md#external-merge-tool-configuration-0430-beta).
 - [x] **P1 — Deliver 0.43.0 Beta.** 26 smoke checks in 58.9 s; matching installer, signed feed and anonymous full-package verification passed after CDN propagation. Stable remains 0.39.1. [Evidence](docs/roadmap.md#external-merge-tool-configuration-0430-beta).
 
@@ -153,7 +157,7 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 - [ ] **P2 — LFS locks (low priority).** Discuss a separately authorized server-capability/authentication test, then consider owner display and Lock/Unlock. Server support is unknown; no live test or fetch yet.
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
-- [ ] **P2 — Diff/editor extensions.** Historical file-tree browsing, individual-line staging, broader hunk file types, image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
+- [ ] **P2 — Diff/editor extensions.** Individual-line staging, broader hunk file types, image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.
 
 - [ ] **P1 — Broader network authentication/input.** Credential Manager/browser sign-in, custom SSH commands and interactive signing/hooks remain. Clone and local remote add/edit/remove, upstream management, Pull rebase/merge/auto-stash and sequence recovery are delivered. Add explicit longer/shallow/bare/recursive clone options only with supported UI and failure coverage; current bounds are documented.
 - [ ] **P2 — Installed distribution acceptance.** 0.30.0 selects Velopack/public GitHub Releases; finish the explicit rollout task above and pass U1–U7/D1 on installed Windows, including key-rotation and uninstall-data-choice requirements.

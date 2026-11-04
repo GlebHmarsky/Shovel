@@ -8,7 +8,7 @@ public sealed partial class ShellViewModel
     private RepositoryTab? _initializationOwner;
     public RelayCommand NewRepositoryCommand { get; private set; } = null!;
     public string NewRepositoryHelp => UiText.Get(!IsReady || _stopping ? "ActionWorkspaceStarting" :
-        ActionOpen ? "ActionWorkspaceBusy" : IsBusy ? "ActionWaitForRead" : Repositories.Count >= 20 ? "TooManyRepositories" : "ActionExplainInit");
+        _actionOpen ? "ActionWorkspaceBusy" : Repositories.Count >= 20 ? "TooManyRepositories" : "ActionExplainInit");
     private async Task InitializeRepositoryAsync()
     {
         CancelCountRead(); SetActionOpen(true);

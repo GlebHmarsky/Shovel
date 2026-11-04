@@ -2,18 +2,23 @@
  <UserControl.Resources><BooleanToVisibilityConverter x:Key="Visible"/></UserControl.Resources>
  <Grid Background="{DynamicResource Theme.Canvas}">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <DockPanel Margin="6,3" Visibility="{Binding ShowParentSelector, Converter={StaticResource Visible}}">
-   <Button DockPanel.Dock="Right" Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Margin="6,0" IsEnabled="{Binding Busy}"/>
+  <StackPanel><DockPanel Margin="6,3" Visibility="{Binding ShowParentSelector, Converter={StaticResource Visible}}">
+   <Button DockPanel.Dock="Right" Content="{loc:Text Key=ActionCancel}" Command="{Binding CancelCommand}" Margin="6,0" IsEnabled="{Binding CanCancel}"/>
    <Button DockPanel.Dock="Right" Content="{loc:Text Key=CommitRefresh}" Command="{Binding RefreshCommand}"/>
    <TextBlock DockPanel.Dock="Left" Text="{loc:Text Key=CommitFilesCompare}" VerticalAlignment="Center" Margin="0,0,6,0"/>
    <ComboBox ItemsSource="{Binding Parents}" SelectedItem="{Binding Parent}" DisplayMemberPath="Label" MaxWidth="580" HorizontalAlignment="Left" AutomationProperties.Name="{loc:Text Key=CommitFilesCompare}"/>
   </DockPanel>
+  <DockPanel Margin="6,3" Visibility="{Binding TreeMode, Converter={StaticResource Visible}}"><Button Content="{loc:Text Key=HistoryFileTreeUp}" Command="{Binding TreeUpCommand}"/><Button Content="{loc:Text Key=HistoryFileTreeExit}" Command="{Binding TreeExitCommand}" Margin="6,0"/><TextBlock Text="{Binding TreeDirectory}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/></DockPanel></StackPanel>
   <Grid Grid.Row="1">
    <Grid.ColumnDefinitions><ColumnDefinition x:Name="FilesColumn" Width="340" MinWidth="160"/><ColumnDefinition Width="5"/><ColumnDefinition x:Name="DiffColumn" Width="*" MinWidth="240"/></Grid.ColumnDefinitions>
-   <DataGrid ItemsSource="{Binding Files}" SelectedItem="{Binding Selected}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="None" RowHeaderWidth="0" RowHeight="24" SelectionUnit="FullRow" SelectionMode="Single" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" AutomationProperties.Name="{loc:Text Key=CommitFilesTitle}" AutomationProperties.AutomationId="CommitFiles">
+   <DataGrid ContextMenuOpening="OnFileMenu" PreviewMouseRightButtonDown="OnFileRightClick" MouseDoubleClick="OnFileDoubleClick" ItemsSource="{Binding Files}" SelectedItem="{Binding Selected}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="None" RowHeaderWidth="0" RowHeight="24" SelectionUnit="FullRow" SelectionMode="Single" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" AutomationProperties.Name="{loc:Text Key=CommitFilesTitle}" AutomationProperties.AutomationId="CommitFiles">
+    <DataGrid.ContextMenu><ContextMenu/></DataGrid.ContextMenu>
     <DataGrid.Columns>
-     <DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Style="{StaticResource FileChangeMarker}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-     <DataGridTextColumn Binding="{Binding Path}" Width="*"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding CommittedDetails}"/><Setter Property="AutomationProperties.Name" Value="{Binding CommittedDetails}"/></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
+     <DataGridTemplateColumn Width="26"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource FileChangeMarker}"><Style.Triggers>
+      <DataTrigger Binding="{Binding DataContext.TreeMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="Text" Value="·"/><Setter Property="Foreground" Value="{DynamicResource Theme.Muted}"/><Setter Property="ToolTip" Value="{loc:Text Key=HistoryFileTreeEntry}"/><Setter Property="AutomationProperties.Name" Value="{loc:Text Key=HistoryFileTreeEntry}"/></DataTrigger>
+      <DataTrigger Binding="{Binding Change.IndexMode}" Value="040000"><Setter Property="Text" Value="▸"/><Setter Property="ToolTip" Value="{loc:Text Key=HistoryFileFolder}"/><Setter Property="AutomationProperties.Name" Value="{loc:Text Key=HistoryFileFolder}"/></DataTrigger>
+     </Style.Triggers></Style></TextBlock.Style></TextBlock></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+     <DataGridTextColumn Binding="{Binding Path}" Width="*"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding CommittedDetails}"/><Setter Property="AutomationProperties.Name" Value="{Binding CommittedDetails}"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.TreeMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="ToolTip" Value="{Binding Path}"/><Setter Property="AutomationProperties.Name" Value="{Binding Path}"/></DataTrigger></Style.Triggers></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
     </DataGrid.Columns>
    </DataGrid>
    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Theme.Border}" AutomationProperties.Name="{loc:Text Key=CommitFilesResize}"/>

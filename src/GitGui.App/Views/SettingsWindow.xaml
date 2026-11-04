@@ -13,6 +13,11 @@
    <Label Content="{loc:Text Key=SettingsFetchInterval}" Target="{Binding ElementName=AutoFetchIntervalInput}" Padding="0,0,0,6"/>
    <TextBox x:Name="AutoFetchIntervalInput" Text="{Binding IntervalSeconds, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" Width="110" HorizontalAlignment="Left" MaxLength="10" AutomationProperties.Name="{loc:Text Key=SettingsFetchInterval}"/>
    <TextBlock Text="{loc:Text Key=SettingsFetchHelp}" TextWrapping="Wrap" Margin="0,12,0,0" Foreground="{DynamicResource Theme.Muted}"/>
+   <TextBlock Text="{loc:Text Key=HistoryRefsSettingsTitle}" FontSize="22" FontWeight="SemiBold" Margin="0,24,0,12"/>
+   <StackPanel Orientation="Horizontal" IsEnabled="{Binding CanEdit}">
+    <RadioButton Content="{loc:Text Key=HistoryRefsLeft}" IsChecked="{Binding HistoryRefsOnLeft}" GroupName="HistoryRefs" Margin="0,0,20,0"/>
+    <RadioButton Content="{loc:Text Key=HistoryRefsRight}" IsChecked="{Binding HistoryRefsRight}" GroupName="HistoryRefs"/>
+   </StackPanel>
    <TextBlock Text="{loc:Text Key=SettingsMergeTitle}" FontSize="22" FontWeight="SemiBold" Margin="0,24,0,12"/>
    <ComboBox x:Name="MergeToolModeInput" ItemsSource="{Binding Modes}" DisplayMemberPath="Label" SelectedValuePath="Value"
     SelectedValue="{Binding MergeToolMode}" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="{loc:Text Key=SettingsMergeTitle}"/>

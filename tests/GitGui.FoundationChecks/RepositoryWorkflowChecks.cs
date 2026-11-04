@@ -110,6 +110,11 @@ internal static partial class Program
                 shell.DefaultFetchCommand.Execute(null); var firstTask = shell.ActionTask; var firstAction = shell.CurrentAction;
                 await runner.FirstStarted.Task.WaitAsync(TimeSpan.FromSeconds(8));
                 Expect(shell.CanNavigate && shell.ActionOpen && !shell.CanPrepareUpdate, "Navigation allowed, update/shutdown remains guarded");
+                Expect(shell.OpenRepositoryCommand.CanExecute(null) && shell.NewRepositoryCommand.CanExecute(null), "Repository opening is available during fetch");
+                Expect(shell.CreateHistoryMenu(shell.Commits[0]).Where(item => item.Command is not null).All(item => item.Command!.CanExecute(null)), "History menu stays interactive during fetch");
+                ui.RepositoryChoice = b; shell.OpenRepositoryCommand.Execute(null); await shell.WaitForIdleAsync();
+                Expect(shell.SelectedRepository == secondTab, "Open repository works while another fetch is held");
+                shell.SelectedRepository = firstTab; await shell.WaitForIdleAsync();
                 var linkedTab = shell.Repositories[2]; shell.SelectedRepository = linkedTab; await shell.WaitForIdleAsync();
                 Expect(shell.DefaultFetchCommand.CanExecute(null) && shell.ShowChangesCommand.CanExecute(null), "Linked worktree accepts queued requests");
                 shell.SelectedRepository = secondTab; await shell.WaitForIdleAsync();
@@ -131,6 +136,48 @@ internal static partial class Program
                 Expect(runner.FetchCalls == calls + 1 && shell.CurrentAction?.Action == GitAction.Pull && shell.CurrentAction.Succeeded, "Queued Pull executes once after Fetch with fresh validation");
                 shell.SelectedRepository = secondTab; await shell.WaitForIdleAsync(); Expect(shell.CurrentAction == secondAction, "Other result survives completion");
                 shell.CloseTab(linkedTab);
+            });
+            await Check("Commit opens and stages, unstages and commits while a sidebar remote fetch is held", async () =>
+            {
+                shell.SelectedRepository = firstTab; await shell.WaitForIdleAsync();
+                await File.WriteAllTextAsync(Path.Combine(a, "during-fetch.txt"), "interactive work\n");
+                runner.HoldFetch = true; runner.Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                var calls = runner.FetchCalls;
+                var remoteNode = shell.SidebarNodes.SelectMany(group => group.Children).Single(node => node.Label == "origin");
+                var sidebarFetch = remoteNode.Menu!.Single(item => item.Label == GitGui.App.Localization.UiText.Get("ActionTitleFetch"));
+                Expect(sidebarFetch.Command.CanExecute(null), "Actual sidebar Fetch menu is available");
+                sidebarFetch.Command.Execute(null); var fetch = shell.ActionTask;
+                while (runner.FetchCalls == calls)
+                {
+                    Expect(!fetch.IsCompleted, "Sidebar Fetch reached the native command: " + shell.CurrentAction?.Status);
+                    await Task.Delay(10);
+                }
+                var opened = new TaskCompletionSource<CommitViewModel>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var close = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                ui.CommitHandler = model => { opened.TrySetResult(model); return close.Task; };
+                try
+                {
+                    shell.ShowChangesCommand.Execute(null);
+                    var editor = await opened.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                    Expect(!fetch.IsCompleted, "Editor opens before fetch completes");
+                    await editor.StartLoading();
+                    editor.SelectedUnstaged = editor.Unstaged.Single(row => row.Path == "during-fetch.txt");
+                    editor.StageCommand.Execute(null); await editor.OperationTask;
+                    Expect(editor.Staged.Any(row => row.Path == "during-fetch.txt"), "Real stage succeeds while fetch owns its gate");
+                    editor.SelectedStaged = editor.Staged.Single(row => row.Path == "during-fetch.txt");
+                    editor.UnstageCommand.Execute(null); await editor.OperationTask;
+                    Expect(editor.Unstaged.Any(row => row.Path == "during-fetch.txt"), "Real unstage succeeds while fetch is held");
+                    editor.SelectedUnstaged = editor.Unstaged.Single(row => row.Path == "during-fetch.txt");
+                    editor.StageCommand.Execute(null); await editor.OperationTask;
+                    editor.Subject = "commit during fetch";
+                    editor.CommitCommand.Execute(null); await editor.OperationTask;
+                    Expect(!fetch.IsCompleted && await Git(a, "log", "-1", "--format=%s") == "commit during fetch", "Actual commit succeeds before the held fetch finishes");
+                    editor.Subject = "retained next draft";
+                    runner.Release.TrySetResult(); await fetch;
+                    Expect(editor.Subject == "retained next draft" && editor.Staged.Count == 0 && await Git(a, "log", "-1", "--format=%s") == "commit during fetch", "Fetch completion retains draft, committed index state and new HEAD");
+                }
+                finally { runner.Release.TrySetResult(); runner.HoldFetch = false; close.TrySetResult(); ui.CommitHandler = null; await shell.CommitDialogTask; await fetch; }
+                await shell.WaitForIdleAsync();
             });
             await Check("Toolbar accepts one queued action during a read, cancellation removes it, and inactive targets stay captured", async () =>
             {
@@ -175,19 +222,35 @@ internal static partial class Program
                 Expect(window.InputBindings.OfType<System.Windows.Input.KeyBinding>().Any(k => k.Key == System.Windows.Input.Key.F5 && k.Command == shell.RefreshRepositoryCommand), "Window F5 invokes full refresh");
                 window.Close();
             });
-            await Check("Auto-fetch honors 10-second cadence, uses no prompts, and deduplicates repeated background failures", async () =>
+            await Check("Auto-fetch honors one-minute cadence, uses no prompts, and keeps every background failure quiet", async () =>
             {
                 await shell.WaitForIdleAsync(); var statusCalls = runner.StatusCalls;
                 runner.FailFetch = true; var now = DateTimeOffset.UtcNow; var before = runner.FetchCalls; var problems = ui.Problems.Count;
                 await shell.AutoFetchDueAsync(now); var calls = runner.FetchCalls;
-                Expect(calls == before + 2 && ui.Problems.Count == problems + 2, "Both validated repositories attempted and failures reported");
-                await shell.AutoFetchDueAsync(now + TimeSpan.FromSeconds(9)); Expect(runner.FetchCalls == calls, "No early retry");
-                await shell.AutoFetchDueAsync(now + ShellViewModel.AutoFetchInterval); Expect(runner.FetchCalls == calls + 2 && ui.Problems.Count == problems + 2, "Retry retains log but suppresses identical alert");
+                Expect(calls == before + 2 && ui.Problems.Count == problems, "Both validated repositories attempted with no attention popup");
+                await shell.AutoFetchDueAsync(now + TimeSpan.FromSeconds(59)); Expect(runner.FetchCalls == calls, "No early retry");
+                await shell.AutoFetchDueAsync(now + ShellViewModel.AutoFetchInterval); Expect(runner.FetchCalls == calls + 2 && ui.Problems.Count == problems, "Retry retains log but suppresses identical alert");
                 Expect(shell.Journal.Entries.Any(e => e.Background && e.Title.Contains("Fetch")), "Background category includes auto-fetch");
                 Expect(runner.LastFetch!.Environment["GCM_INTERACTIVE"] == "never" && ui.AuthPrompts == 0, "Automatic fetch does not prompt for credentials");
-                runner.FailFetch = false; await shell.AutoFetchDueAsync(now + TimeSpan.FromSeconds(20));
-                Expect(shell.CurrentAction?.Succeeded == true, "Recovery succeeds and rearms notification");
+                runner.FailFetch = false; await shell.AutoFetchDueAsync(now + TimeSpan.FromSeconds(120));
+                Expect(shell.CurrentAction?.Succeeded == true, "Recovery succeeds without attention notification");
                 Expect(runner.StatusCalls == statusCalls, "Background fetch does not poll local status");
+            });
+            await Check("User fetch preempts a held background fetch without reporting background cancellation", async () =>
+            {
+                shell.SelectedRepository = firstTab; await shell.WaitForIdleAsync();
+                runner.BlockBackground = true; runner.BackgroundStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                runner.BackgroundCancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                runner.BackgroundBlockPath = a; runner.BackgroundBlockBudget = 1;
+                var before = ui.Problems.Count;
+                var background = shell.AutoFetchDueAsync(DateTimeOffset.UtcNow + TimeSpan.FromMinutes(4));
+                await runner.BackgroundStarted.Task.WaitAsync(TimeSpan.FromSeconds(8));
+                shell.DefaultFetchCommand.Execute(null);
+                await shell.ActionTask.WaitAsync(TimeSpan.FromSeconds(15));
+                Expect(runner.BackgroundCancelled.Task.IsCompletedSuccessfully && shell.CurrentAction is { IsBackground: false, Succeeded: true }, "Explicit Fetch cancels the held automatic attempt and runs without its remote timeout");
+                await shell.StopAutoFetchAsync(); await background;
+                Expect(ui.Problems.Count == before, "Preempted automatic work stays quiet");
+                runner.BlockBackground = false;
             });
             await Check("Successful commit signals close after reconciliation; rejected commit retains message and logs", async () =>
             {
@@ -230,8 +293,10 @@ internal static partial class Program
             });
             await Check("Shutdown cancels and drains background fetch without an error alert", async () =>
             {
-                runner.BlockBackground = true; var before = ui.Problems.Count;
-                var pending = shell.AutoFetchDueAsync(DateTimeOffset.UtcNow + TimeSpan.FromMinutes(1));
+                runner.BlockBackground = true; runner.BackgroundStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                runner.BackgroundBlockPath = null; runner.BackgroundBlockBudget = int.MaxValue;
+                var before = ui.Problems.Count;
+                var pending = shell.AutoFetchDueAsync(DateTimeOffset.UtcNow + TimeSpan.FromMinutes(10));
                 await runner.BackgroundStarted.Task.WaitAsync(TimeSpan.FromSeconds(8));
                 Expect(shell.ActionOpen && !shell.HasUserOperation, "Only background work owns repositories");
                 shell.BeginShutdown(); await shell.StopAutoFetchAsync(); await pending;
@@ -244,7 +309,10 @@ internal static partial class Program
     {
         public List<OperationProblem> Problems { get; } = [];
         public int AuthPrompts { get; private set; }
-        public string? ChooseRepository() => null;
+        public string? RepositoryChoice { get; set; }
+        public Func<CommitViewModel, Task>? CommitHandler { get; set; }
+        public Task ShowCommitAsync(CommitViewModel model) => CommitHandler?.Invoke(model) ?? Task.CompletedTask;
+        public string? ChooseRepository() => RepositoryChoice;
         public string? ChooseGit() => null;
         public void ShowOperationProblem(string repository, string title, string status, string output) => Problems.Add(new(repository, title, status, output));
         public Task<AuthenticationAnswer?> ShowAuthenticationAsync(string context, AuthenticationPrompt prompt, CancellationToken token)
@@ -256,7 +324,10 @@ internal static partial class Program
         public bool HoldFetch, FailFetch, BlockBackground, HoldLogs;
         public TaskCompletionSource LogStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource LogRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource BackgroundStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource BackgroundStarted { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource BackgroundCancelled { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string? BackgroundBlockPath;
+        public int BackgroundBlockBudget = int.MaxValue;
         public int FetchCalls, StatusCalls;
         public ProcessRequest? LastFetch;
         public TaskCompletionSource FirstStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -269,7 +340,13 @@ internal static partial class Program
             if (request.Arguments.Contains("fetch"))
             {
                 LastFetch = request;
-                if (BlockBackground) { BackgroundStarted.TrySetResult(); await Task.Delay(Timeout.Infinite, token); }
+                if (BlockBackground && request.Environment.GetValueOrDefault("GCM_INTERACTIVE") == "never" &&
+                    (BackgroundBlockPath is null || request.WorkingDirectory == BackgroundBlockPath) && Interlocked.Decrement(ref BackgroundBlockBudget) >= 0)
+                {
+                    BackgroundStarted.TrySetResult();
+                    try { await Task.Delay(Timeout.Infinite, token); }
+                    finally { if (token.IsCancellationRequested) BackgroundCancelled.TrySetResult(); }
+                }
                 var count = Interlocked.Increment(ref FetchCalls);
                 if (HoldFetch) { (count == 1 ? FirstStarted : SecondStarted).TrySetResult(); await Release.Task.WaitAsync(token); }
                 if (FailFetch) return new(ProcessOutcome.Exited, 1, [], Encoding.UTF8.GetBytes("fatal: fixture remote unavailable"), TimeSpan.Zero);

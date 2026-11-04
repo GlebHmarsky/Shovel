@@ -46,7 +46,7 @@ public sealed partial class ShellViewModel
 
     private async Task OpenCommitAsync(RepositoryTab tab)
     {
-        CancelCountRead(); _sidebarCancel?.Cancel(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
+        _operationCancellation?.Cancel(); CancelCountRead(); _sidebarCancel?.Cancel(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
         var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
             _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities))
             { ExternalMergeTool = ExternalMergeTool };

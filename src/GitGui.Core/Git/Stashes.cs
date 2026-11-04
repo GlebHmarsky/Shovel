@@ -110,7 +110,7 @@ public sealed partial class GitActions
             async Task<ActionResult> Write(string[] arguments, CancellationToken cancellation)
             {
                 var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null; environment["GIT_EDITOR"] = "false";
-                var run = await runner.RunAsync(new(git.Executable, path, ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false",
+                var run = await RunLoggedAsync(new(git.Executable, path, ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false",
                     "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "submodule.recurse=false", .. arguments])
                     { Environment = environment, Timeout = TimeSpan.FromMinutes(5), MaximumOutputBytes = 1024 * 1024 }, cancellation, progress);
                 return new(run.Outcome, run.ExitCode, Redact(Decode(run) + Encoding.UTF8.GetString(run.StandardError)));

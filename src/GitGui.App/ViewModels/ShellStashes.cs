@@ -6,11 +6,11 @@ public sealed partial class ShellViewModel
 {
     public RelayCommand StashesCommand { get; private set; } = null!;
     public Task StashDialogTask { get; private set; } = Task.CompletedTask;
-    private void InitializeStashes() => StashesCommand = new(() => StashDialogTask = OpenStashesAsync(),
+    private void InitializeStashes() => StashesCommand = new(() => StashDialogTask = QueueSelectedAction("Stashes", GitGui.App.Localization.UiText.Get("Stashes"), OpenStashesAsync),
         () => CanRead && _git is not null && _actions is not null && _interaction is not null && SelectedRepository?.Snapshot is not null);
-    private async Task OpenStashesAsync()
+    private async Task OpenStashesAsync(RepositoryTab tab)
     {
-        var tab = SelectedRepository!; var snapshot = tab.Snapshot!;
+        var snapshot = tab.Snapshot!;
         if (!_knownIdentities.TryGetValue(tab.Directory, out var known)) return;
         CancelCountRead(); SetActionOpen(true, tab); _preparingAction = false;
         var context = new ActionContext(_git!, new(snapshot.Worktree, snapshot.GitDirectory, snapshot.CommonDirectory, known.Fingerprint), snapshot,

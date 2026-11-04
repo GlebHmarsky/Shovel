@@ -15,7 +15,11 @@ public sealed partial class ShellViewModel
         if (_commitFilesPath == path && CommitFiles?.CommitHash == commit.Hash) return;
         if (_commitFilesPath == path && CommitFiles is { } retained) { retained.SelectCommit(commit); return; }
         StopCommitFiles(); _commitFilesPath = path;
-        var model = new CommitFilesViewModel(_reader, _git, path, commit) { Journal = Journal }; CommitFiles = model;
+        var ownerTab = SelectedRepository!;
+        var model = new CommitFilesViewModel(_reader, _git, path, commit) { Journal = Journal, Actions = _actions, Interaction = _interaction,
+            ExpectedIdentity = _knownIdentities.GetValueOrDefault(path)?.Fingerprint,
+            AfterFileMutation = () => ReconcileActionAsync(ownerTab),
+            FileActionStateChanged = (actionModel, running) => TrackHistoryFileAction(actionModel, ownerTab, running) }; CommitFiles = model;
         StartAfterDrain();
         async void StartAfterDrain() { await _oldCommitFiles; if (ReferenceEquals(CommitFiles, model) && !_stopping) model.Start(); }
     }

@@ -12,7 +12,9 @@ public sealed partial class ShellViewModel
     private readonly HashSet<RepositoryTab> _operationOwners = [];
     private readonly Dictionary<string, GitActionViewModel> _repositoryActions = new(StringComparer.OrdinalIgnoreCase);
     public bool ActionOpen => _actionOpen || _operationOwners.Count != 0 || _queuedActions.Count != 0 || _commitOpen;
-    private bool RepositoryBusy(RepositoryTab? tab) => tab is not null && (_actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => owner == tab ||
+    private readonly HashSet<RepositoryTab> _fetchOwners = [];
+    private bool RepositoryBusy(RepositoryTab? tab) => tab is not null && (HistoryFileBusy(tab) || _actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => !_fetchOwners.Contains(owner) && SameRepository(owner, tab)));
+    private bool RepositoryOperationBusy(RepositoryTab? tab) => tab is not null && (HistoryFileBusy(tab) || _actionOpen && tab == _initializationOwner || _operationOwners.Any(owner => owner == tab ||
         owner.Snapshot?.CommonDirectory is { } common && string.Equals(common, tab.Snapshot?.CommonDirectory, StringComparison.OrdinalIgnoreCase)));
     private GitActionViewModel? _lastAction;
     public GitActionViewModel? CurrentAction => SelectedRepository is { } tab && _repositoryActions.TryGetValue(tab.Directory, out var action)
@@ -37,11 +39,11 @@ public sealed partial class ShellViewModel
     public bool CanSkipRecovery => SelectedRepository?.Snapshot?.Recovery?.CanSkip == true;
     public string RecoveryHelp => SelectedRepository?.Snapshot?.Recovery is { } recovery
         ? UiText.Format("RecoveryHelp", UiText.Get("Operation" + recovery.Kind)) : UiText.Get("RecoveryUnavailable");
-    private bool CanRecover => CanNavigate && !RepositoryBusy(SelectedRepository) && !IsBusy && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && HasRecovery && State?.Page is not null;
+    private bool CanRecover => CanNavigate && !RepositoryBusy(SelectedRepository) && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && HasRecovery && State?.Page is not null;
     public RelayCommand<string> SwitchBranchCommand { get; private set; } = null!;
     public IReadOnlyList<string> LocalBranches => State?.Page?.Session.References.Where(item => item.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(item => item.Name[11..]).ToArray() ?? [];
     public IReadOnlyList<BranchMenuItem> BranchMenuItems => LocalBranches.Select(name => new BranchMenuItem(name, SwitchBranchCommand)).ToArray();
-    private bool CanAct => CanNavigate && !HasQueuedAction(SelectedRepository) && !RepositoryBusy(SelectedRepository) && !IsBusy && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
+    private bool CanAct => CanNavigate && !RepositoryBusy(SelectedRepository) && !ShowingStartupPreview && _interaction is not null && _actions is not null && _git is not null && State?.Page is not null && SelectedRepository?.Snapshot is { Operation: RepositoryOperation.None };
     public bool CanOpenBranchMenu => CanRequestAction;
     private string? ActionUnavailableKey => !IsReady || _stopping ? "ActionWorkspaceStarting" :
         SelectedRepository is null ? "ActionOpenRepository" :
@@ -75,7 +77,7 @@ public sealed partial class ShellViewModel
     private void InitializeActions(GitActions? actions)
     {
         _actions = actions;
-        NewRepositoryCommand = new(() => ActionTask = InitializeRepositoryAsync(), () => CanNavigate && !ActionOpen && !IsBusy &&
+        NewRepositoryCommand = new(() => ActionTask = InitializeRepositoryAsync(), () => CanNavigate && !_actionOpen &&
             _reader is not null && _interaction is not null && _actions is not null && Repositories.Count < 20);
         CloneRepositoryCommand = new(() => ActionTask = CloneRepositoryAsync(), () => NewRepositoryCommand.CanExecute(null));
         InitializeStashes();
@@ -97,7 +99,7 @@ public sealed partial class ShellViewModel
     {
         var tab = SelectedRepository!;
         ActionTask = QueueAction(tab, action.ToString(), UiText.Get("ActionTitle" + action),
-            () => OpenActionAsync(action, branch, defaultPull, directNetwork, tab));
+            () => OpenActionAsync(action, branch, defaultPull, directNetwork, tab), isFetch: action == GitAction.Fetch);
     }
     private async Task OpenActionAsync(GitAction action, string? branch, bool defaultPull = false, bool directNetwork = false, RepositoryTab? targetTab = null, bool background = false)
     {
@@ -116,6 +118,7 @@ public sealed partial class ShellViewModel
                 recovery.Target.Length > 0 ? recovery.Target : reviewedSnapshot.Commit ?? UiText.Get("NoBranch"), recovery.CurrentCommit), UiText.Get("ActionTitle" + action))) return;
         if (SelectedRepository == tab) CancelCountRead();
         var attempted = false;
+        if (action == GitAction.Fetch) _fetchOwners.Add(tab);
         SetActionOpen(true, tab); if (!background) Status = UiText.Get("ActionPreparing");
         try
         {
@@ -127,7 +130,7 @@ public sealed partial class ShellViewModel
             var cached = new ActionContext(_git!, new RepositoryIdentity(snapshot.Worktree, snapshot.GitDirectory,
                 snapshot.CommonDirectory, identity.Fingerprint), snapshot, history,
                 snapshot.RemoteNames.Select(name => new GitRemote(name, name, name)).ToArray(), "");
-            var model = new GitActionViewModel(cached, action, _actions!, () => ReconcileActionAsync(tab, refreshChanges: !background), branch, background ? null : _interaction, recoveryAction ? null : async token =>
+            var model = new GitActionViewModel(cached, action, _actions!, () => action == GitAction.Fetch ? ReconcileFetchAsync(tab) : ReconcileActionAsync(tab), branch, background ? null : _interaction, recoveryAction ? null : async token =>
             {
                 var context = await _actions!.PrepareAsync(_git!, tab.Directory, token);
                 if (!_knownIdentities.TryGetValue(tab.Directory, out var known) || known.Fingerprint != context.Identity.Fingerprint)
@@ -160,18 +163,19 @@ public sealed partial class ShellViewModel
                 if (!background && SelectedRepository == tab) Status = model.Summary;
             }
         }
-        catch (GitActionException exception) { _interaction!.ShowActionError(UiText.Get(exception.Code)); }
+        catch (GitActionException exception) { if (!background) _interaction!.ShowActionError(UiText.Get(exception.Code)); }
         catch (GitReadException exception)
         {
             if (State is { } state) { state.RawOutput = GitActions.Redact(exception.RawOutput); Changed(nameof(RawOutput)); }
-            _interaction!.ShowActionError(UiText.Get("ActionReadFailed"));
+            if (!background) _interaction!.ShowActionError(UiText.Get("ActionReadFailed"));
         }
-        catch (OperationCanceledException) { _interaction!.ShowActionError(UiText.Get("ActionReadFailed")); }
+        catch (OperationCanceledException) { if (!background) _interaction!.ShowActionError(UiText.Get("ActionReadFailed")); }
         catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
-        { _interaction!.ShowActionError(UiText.Get("ActionReadFailed")); }
+        { if (!background) _interaction!.ShowActionError(UiText.Get("ActionReadFailed")); }
         finally
         {
             if (Status == UiText.Get("ActionPreparing")) Status = UiText.Get("NoActiveOperation");
+            _fetchOwners.Remove(tab);
             SetActionOpen(false, tab);
             DrainActionQueue();
             if (attempted) { if (!background) BeginCountRead(tab); BeginSidebarRead(tab); }

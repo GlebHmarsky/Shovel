@@ -26,6 +26,8 @@ public interface IUserInteraction
     Task<bool> OpenWorkingFileAsync(string root, string relative, bool explorer, CancellationToken token) => throw new NotSupportedException();
     string? ConfirmFileAction(FileActionPrompt prompt) => null;
     string? ChoosePatchFile() => null;
+    string? ChooseHistorySaveFile(string name) => null;
+    Task OpenHistoricalFileAsync(string name, byte[] bytes, CancellationToken token) => throw new NotSupportedException();
     void ShowFileHistory(FileHistoryViewModel model) { }
     bool ConfirmAmend(string branch, string hash) => false;
     bool ConfirmRecovery(string message, string title) => false;
@@ -109,6 +111,18 @@ public sealed class UserInteraction : IUserInteraction
         return picker.ShowDialog(Owner) == true ? picker.FileName : null;
     }
     public void ShowFileHistory(FileHistoryViewModel model) => new FileHistoryWindow(model) { Owner = Owner }.ShowDialog();
+    public string? ChooseHistorySaveFile(string name)
+    {
+        var picker = new SaveFileDialog { Title = UiText.Get("HistoryFileSave"), FileName = name, OverwritePrompt = true };
+        return picker.ShowDialog(Owner) == true ? picker.FileName : null;
+    }
+    public Task OpenHistoricalFileAsync(string name, byte[] bytes, CancellationToken token) => Task.Run(async () =>
+    {
+        var directory = System.IO.Directory.CreateTempSubdirectory("shovel-history-").FullName;
+        var fileName = System.IO.Path.GetFileName(name);
+        await System.IO.File.WriteAllBytesAsync(System.IO.Path.Combine(directory, fileName), bytes, token);
+        await OpenWorkingFileAsync(directory, fileName, false, token);
+    }, token);
     public void CopyFilePaths(string text) => Clipboard.SetText(text);
     public Task<bool> OpenWorkingFileAsync(string root, string relative, bool explorer, CancellationToken token) => FileShellActions.OpenAsync(root, relative, explorer, token);
     public Task ShowStashesAsync(StashViewModel model) { new StashWindow(model) { Owner = Owner }.ShowDialog(); return Task.CompletedTask; }

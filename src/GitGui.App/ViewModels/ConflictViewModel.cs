@@ -127,6 +127,7 @@ public sealed class ConflictViewModel : ObservableObject
     {
         var resolution = new ConflictResolution(_preview!, choice, Text, ExternalTool == SavedToolOption ? "" : ExternalTool,
             ExternalTool == SavedToolOption ? _toolSettings : null); HasMutation = true; Begin(mutation: true);
+        var transcript = new CommandTranscript();
         var outcome = OperationOutcome.Failed;
         var attempt = new object(); Journal?.Record(new(attempt, Title, UiText.Get("ConflictResolving"), 0, OperationOutcome.Running), _context.Identity.Worktree, false);
         var retryWithoutReload = false;
@@ -134,8 +135,8 @@ public sealed class ConflictViewModel : ObservableObject
         try
         {
             await Dispatcher.Yield(DispatcherPriority.Background);
-            var result = await _actions.ExecuteWorkingCopyAsync(_context, new(WorkingCopyAction.ResolveConflict, [_change], Resolution: resolution), _cancel!.Token);
-            Output = result.Result.Output;
+            var result = await _actions.ExecuteWorkingCopyAsync(_context, new(WorkingCopyAction.ResolveConflict, [_change], Resolution: resolution), _cancel!.Token, transcript.Collect);
+            Output = transcript.Complete(result.Result.Output);
             Resolved = result.Result.Success && !result.Result.HasConflicts;
             outcome = Resolved ? OperationOutcome.Success : result.Result.Outcome == ProcessOutcome.Cancelled ? OperationOutcome.Cancelled : OperationOutcome.Failed;
             Status = UiText.Get(result.Result.MessageCode ?? (Resolved ? "ConflictResolved" : "ActionResult" + result.Result.Outcome));

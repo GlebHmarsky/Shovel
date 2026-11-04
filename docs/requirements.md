@@ -1,8 +1,14 @@
 # Requirements and acceptance
 
+## Fetch and history acceptance (0.44.0)
+
+Hold a real fetch and prove that Commit can open, stage, unstage and commit without waiting for that fetch. Opening/switching repositories and contextual controls remain usable. Background errors, warnings and preparation/reconciliation failures must never invoke attention dialogs/taskbar flashing; explicit user failures still do. Preserve scoped ownership, linked-worktree/cross-profile protection, cancellation, queue targeting and update/shutdown drainage. Migrate the old ten-second default once to 60 seconds without repeatedly overriding later explicit preferences.
+
+Historical-file actions must use the selected immutable commit/path and explicit parent, including rename/deletion cases. Confirm destructive worktree restores, preserve index/unrelated files, revalidate identity/index/worktree and use native Git filters/LFS. Opening a context menu does no preparation. Exports and external-tool results must report real failures/cancellation; tree/history/blame controls must show actual data. Saved history ref placement must survive restart and preserve virtualization and selected rows. Activity's actual selected detail pane must show a quiet successful command, streamed output and failure output without exposing sensitive configuration/message values or persisting transcripts.
+
 ## Auto-fetch settings acceptance (0.42.0)
 
-Persist enablement and whole-second interval with enabled/10-second defaults for old profiles. Reject invalid form input and normalize corrupt out-of-range stored integers to 10–3600 seconds. Opening/dismissing Settings performs no Git, discovery or persistence. Save failures retain user input without changing live scheduling. Concurrent preference writes must not overwrite the newly saved choice.
+Persist enablement and whole-second interval; 0.44.0 uses enabled/60-second defaults with the one-time migration above. Reject invalid form input and normalize corrupt out-of-range stored integers to 10–3600 seconds. Opening/dismissing Settings performs no Git, discovery or persistence. Save failures retain user input without changing live scheduling. Concurrent preference writes must not overwrite the newly saved choice.
 
 A changed interval/re-enable waits a fresh interval; disabled scheduling admits no fetches. Manual Fetch remains functional, and disabling cancels only background operations. Closing Settings must not wait for Git reconciliation; shutdown/update ownership still drains it. Preserve queue priority, two-operation concurrency, hook/filter behavior, noninteractive background credentials and no local-status polling. Validate with disposable repositories and offscreen Dark/Light layouts, not desktop automation.
 

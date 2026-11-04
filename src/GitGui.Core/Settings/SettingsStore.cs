@@ -38,6 +38,8 @@ public sealed class SettingsStore(string directory)
                 return Complete(new(), SettingsLoadStatus.UnsupportedSchema);
 
             var settings = JsonSerializer.Deserialize<AppSettings>(_loadedBytes, JsonOptions);
+            if (settings is not null && !document.RootElement.TryGetProperty(nameof(AppSettings.AutoFetchCadenceRevision), out _))
+                settings = settings with { AutoFetchCadenceRevision = 0 };
             // Former approval fingerprints remain useful as replacement-detection stamps, not consent.
             if (schema == 3 && settings is not null && document.RootElement.TryGetProperty("Approvals", out var legacy))
                 settings = settings with { RepositoryIdentities = legacy.Deserialize<GitGui.Core.Git.RepositoryIdentityStamp[]>(JsonOptions) ?? [] };

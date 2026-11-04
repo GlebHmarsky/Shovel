@@ -7,7 +7,7 @@ namespace GitGui.App.ViewModels;
 public sealed partial class ShellViewModel
 {
     private sealed record QueuedAction(RepositoryTab Tab, string Key, string Title, Func<Task> Run,
-        string? Identity, string? Branch)
+        string? Identity, string? Branch, bool IsFetch)
     {
         public TaskCompletionSource Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool Running { get; set; }
@@ -25,12 +25,19 @@ public sealed partial class ShellViewModel
         else await ReconcileActionAsync(tab);
     });
 
-    private Task QueueAction(RepositoryTab tab, string key, string title, Func<Task> run)
+    private Task QueueSelectedAction(string key, string title, Func<RepositoryTab, Task> run)
+    {
+        var tab = SelectedRepository!;
+        return QueueAction(tab, key, title, () => run(tab));
+    }
+
+    private Task QueueAction(RepositoryTab tab, string key, string title, Func<Task> run, bool isFetch = false)
     {
         var existing = _queuedActions.FirstOrDefault(item => item.Tab == tab && item.Key == key);
         if (existing is not null) return existing.Completion.Task;
-        var request = new QueuedAction(tab, key, title, run, _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, tab.Snapshot?.Branch);
+        var request = new QueuedAction(tab, key, title, run, _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, tab.Snapshot?.Branch, isFetch);
         _queuedActions.Add(request);
+        if (key != "Commit") PreemptBackgroundFetch(tab);
         Changed(nameof(QueueStatus)); Changed(nameof(ActionOpen)); RefreshCommands();
         DrainActionQueue(defer: false);
         return request.Completion.Task;
@@ -41,9 +48,9 @@ public sealed partial class ShellViewModel
         if (_stopping || _commitOpen || _actionOpen) return;
         foreach (var request in _queuedActions.ToArray())
         {
-            if (request.Running || RepositoryBusy(request.Tab) ||
-                _queuedActions.Any(other => other.Running && SameRepository(other.Tab, request.Tab)) ||
-                SelectedRepository == request.Tab && IsBusy) continue;
+            if (request.Running || (request.Key == "Commit" ? RepositoryBusy(request.Tab) : RepositoryOperationBusy(request.Tab)) ||
+                _queuedActions.Any(other => other.Running && (request.Key != "Commit" || !other.IsFetch) && SameRepository(other.Tab, request.Tab)) ||
+                request.Key != "Commit" && SelectedRepository == request.Tab && IsBusy) continue;
             request.Running = true;
             _ = RunQueuedAsync(request, defer);
             break;

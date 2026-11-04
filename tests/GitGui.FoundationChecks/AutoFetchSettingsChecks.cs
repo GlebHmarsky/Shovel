@@ -23,10 +23,16 @@ internal static partial class Program
             var directory = Fixture("auto-fetch-settings-profile"); var store = new SettingsStore(directory);
             await File.WriteAllTextAsync(store.FilePath, "{\"SchemaVersion\":6,\"UiScale\":1.3,\"UpdateChannel\":\"win-beta\"}");
             var loaded = await store.LoadAsync(default);
-            Expect(loaded.CanSave && loaded.Settings.AutoFetchEnabled && loaded.Settings.AutoFetchIntervalSeconds == 10, "Existing schema-6 profiles retain the original default");
+            Expect(loaded.CanSave && loaded.Settings.AutoFetchEnabled && loaded.Settings.AutoFetchIntervalSeconds == 60, "Existing schema-6 profiles use the one-minute default");
             await store.SaveAsync(loaded.Settings with { AutoFetchEnabled = false, AutoFetchIntervalSeconds = 75 }, default);
             var restarted = await new SettingsStore(directory).LoadAsync(default);
             Expect(!restarted.Settings.AutoFetchEnabled && restarted.Settings.AutoFetchIntervalSeconds == 75 && restarted.Settings.UiScale == 1.3 && restarted.Settings.UpdateChannel == "win-beta", "Both preferences round-trip without disturbing other settings");
+            var legacyStore = new SettingsStore(Fixture("auto-fetch-legacy-cadence"));
+            await File.WriteAllTextAsync(legacyStore.FilePath, "{\"SchemaVersion\":6,\"AutoFetchIntervalSeconds\":10}");
+            var migrated = await legacyStore.LoadAsync(default);
+            Expect(migrated.Settings.AutoFetchIntervalSeconds == 60 && migrated.Settings.AutoFetchCadenceRevision == 1, "Old ten-second default migrates once");
+            await legacyStore.SaveAsync(migrated.Settings with { AutoFetchIntervalSeconds = 10 }, default);
+            Expect((await new SettingsStore(Path.GetDirectoryName(legacyStore.FilePath)!).LoadAsync(default)).Settings.AutoFetchIntervalSeconds == 10, "New explicit ten-second setting remains supported after migration");
             Expect(new AppSettings { AutoFetchIntervalSeconds = -1 }.Normalize().AutoFetchIntervalSeconds == 10 &&
                 new AppSettings { AutoFetchIntervalSeconds = int.MaxValue }.Normalize().AutoFetchIntervalSeconds == 3600, "Out-of-range persisted intervals stay within supported bounds");
         });
@@ -62,7 +68,7 @@ internal static partial class Program
             Expect(!shell.AutoFetchEnabled && !restored.AutoFetchEnabled && restored.AutoFetchIntervalSeconds == 90, "Live scheduler and restarted shell use the saved preferences");
             var failed = new ShellViewModel(persist: _ => throw new IOException("fixture save failure"));
             failed.CompleteStartup(new(new(), SettingsLoadStatus.Loaded));
-            Expect(!await failed.SaveAutoFetchSettingsAsync(false, 60) && failed.AutoFetchEnabled && failed.AutoFetchIntervalSeconds == 10, "Failed save leaves existing scheduler behavior intact");
+            Expect(!await failed.SaveAutoFetchSettingsAsync(false, 60) && failed.AutoFetchEnabled && failed.AutoFetchIntervalSeconds == 60, "Failed save leaves existing scheduler behavior intact");
             shell.BeginShutdown(); restored.BeginShutdown(); failed.BeginShutdown();
         });
         await Check("Overlapping preference saves preserve the newly chosen auto-fetch settings in either order", async () =>

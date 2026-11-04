@@ -41,7 +41,7 @@ public sealed partial class GitActions
             // No -f: save local configuration only. Git rejects duplicate names and owns
             // config.lock; no global edits, shell expansion or automatic network request.
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null;
-            var result = await runner.RunAsync(new(git.Executable, path,
+            var result = await RunLoggedAsync(new(git.Executable, path,
                 ["--no-pager", "--no-lazy-fetch", "remote", "add", "--", options.Name, options.Location])
                 { Environment = environment, Timeout = TimeSpan.FromSeconds(30), MaximumOutputBytes = 1024 * 1024 }, token, progress);
             return new(result.Outcome, result.ExitCode, Redact(Decode(result) + Encoding.UTF8.GetString(result.StandardError)));

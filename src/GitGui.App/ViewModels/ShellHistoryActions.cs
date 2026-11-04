@@ -23,7 +23,7 @@ public sealed partial class ShellViewModel
         {
             return new[] { StashAction.Apply, StashAction.Pop, StashAction.Drop }.Select(action =>
             {
-                var command = new RelayCommand(() => ActionTask = RunHistoryStashAsync(tab, row.Commit.Hash, action), () => Current() && CanAct);
+                var command = new RelayCommand(() => ActionTask = QueueAction(tab, "Stash" + action + row.Commit.Hash, UiText.Get("ActionTitleStash" + action), () => RunHistoryStashAsync(tab, row.Commit.Hash, action)), () => Current() && CanAct);
                 _historyMenuCommands.Add(command);
                 var title = UiText.Get("ActionTitleStash" + action);
                 return new HistoryMenuEntry(title, command, title);
@@ -31,7 +31,7 @@ public sealed partial class ShellViewModel
         }
         HistoryMenuEntry Action(GitAction action, int mainline = 0)
         {
-            var command = new RelayCommand(() => ActionTask = RunHistoryActionAsync(tab, row, action, mainline),
+            var command = new RelayCommand(() => ActionTask = QueueAction(tab, action + row.Commit.Hash + mainline, UiText.Get("HistoryMenu" + action), () => RunHistoryActionAsync(tab, row, action, mainline)),
                 () => Current() && CanAct && (!GitActions.IsReset(action) || snapshot?.HeadKind == HeadKind.Branch));
             _historyMenuCommands.Add(command);
             var label = mainline == 0 ? UiText.Get("HistoryMenu" + action) : UiText.Format("HistoryRevertParent", mainline, row.Commit.Parents[mainline - 1]);
@@ -57,7 +57,7 @@ public sealed partial class ShellViewModel
     {
         // Menu opening uses only refs. Read the current ordinal list after submission, pin the hash,
         // and let ExecuteStashAsync reject subsequent list changes before any removal.
-        if (SelectedRepository != tab || !CanAct) return;
+        if (!Repositories.Contains(tab) || RepositoryBusy(tab)) return;
         var selector = tab.History.Page!.Session.References.FirstOrDefault(r => r.Name.StartsWith("stash@{", StringComparison.Ordinal) && r.Hash == hash)?.Name;
         var row = tab.History.Rows.FirstOrDefault(r => r.Commit.Hash == hash);
         if (selector is null || row is null) return;
@@ -77,7 +77,7 @@ public sealed partial class ShellViewModel
         {
             if (GitActions.IsReset(action) && !_interaction!.ConfirmRecovery(UiText.Format("HistoryResetConfirm", tab.Directory, snapshot.Branch!,
                 snapshot.Commit!, row.Commit.Hash, UiText.Get("HistoryEffect" + action)), UiText.Get("HistoryMenu" + action))) return;
-            if (SelectedRepository != tab) return;
+            if (!Repositories.Contains(tab)) return;
             ActionContext? prepared = null;
             var operation = new GitActionViewModel(cached, action, _actions!, () => ReconcileActionAsync(tab), prepareExecution: async token =>
             {

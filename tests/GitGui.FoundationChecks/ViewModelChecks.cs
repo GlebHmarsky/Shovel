@@ -58,6 +58,8 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_historyFileActionChecks) { await RunHistoricalFileActionChecksAsync(); return; }
+            if (_historyActivityChecks) { await RunHistoryActivityChecksAsync(); return; }
             if (_mergeToolSettingsChecks) { await RunMergeToolSettingsChecksAsync(); return; }
             if (_autoFetchSettingsChecks) { await RunAutoFetchSettingsChecksAsync(); return; }
             if (_repositoryWorkflowChecks) { await RunRepositoryWorkflowChecksAsync(); return; }

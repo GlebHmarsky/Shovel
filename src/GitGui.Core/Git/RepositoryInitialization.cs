@@ -55,7 +55,7 @@ public sealed partial class GitActions
             // Recheck immediately before Git creates directories. No worktree scan or cleanup.
             if (!SameDirectory(parent, ValidateDestination(target)) || HasMetadataAncestor(parent)) throw new GitActionException("InitDestinationChanged");
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null;
-            var result = await runner.RunAsync(new(git.Executable, parent,
+            var result = await RunLoggedAsync(new(git.Executable, parent,
                 ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
                     "init", .. string.IsNullOrWhiteSpace(options.InitialBranch) ? Array.Empty<string>() : ["--initial-branch=" + options.InitialBranch], "--", target])
                 { Environment = environment, Timeout = TimeSpan.FromMinutes(2), MaximumOutputBytes = 1024 * 1024 }, token, progress);

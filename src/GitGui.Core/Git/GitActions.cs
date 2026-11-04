@@ -64,10 +64,13 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
         token = authenticationStop.Token;
         // Named mutex covers shared refs across linked worktrees and Shovel profiles. Acquire/release
         // on this one worker thread: an await continuation must never release another thread's mutex.
-        using var gate = EnterMutationGate(context.Identity);
+        using var gate = EnterMutationGate(context.Identity, options.Action == GitAction.Fetch ? "Fetch" : "GitAction");
         Mutex? childGate = null;
+        Mutex? fetchGate = null;
         try
         {
+            // Pull owns FETCH_HEAD from fetch through merge/rebase, also across profiles.
+            if (options.Action == GitAction.Pull) fetchGate = EnterMutationGate(context.Identity, "Fetch");
             if (options.Action is GitAction.SubmoduleUpdate or GitAction.SubmoduleSync)
             {
                 var child = ValidateSubmodulePath(context.Identity.Worktree, options.Branch);
@@ -81,7 +84,7 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
             }
             return ExecuteLocked().GetAwaiter().GetResult();
         }
-        finally { if (childGate is not null) { childGate.ReleaseMutex(); childGate.Dispose(); } gate.ReleaseMutex(); }
+        finally { if (fetchGate is not null) { fetchGate.ReleaseMutex(); fetchGate.Dispose(); } if (childGate is not null) { childGate.ReleaseMutex(); childGate.Dispose(); } gate.ReleaseMutex(); }
 
         async Task<ActionResult> ExecuteLocked()
         {
@@ -244,7 +247,7 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                 {
                     await ConfigureNetworkEnvironmentAsync(git, path, environment, authentication, token);
                 }
-                var result = await runner.RunAsync(new(git.Executable, path,
+                var result = await RunLoggedAsync(new(git.Executable, path,
                     ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
                      "-c", "protocol.allow=never", "-c", "protocol.file.allow=always", "-c", "protocol.https.allow=always",
                      "-c", "protocol.http.allow=always", "-c", "protocol.ssh.allow=always", "-c", "protocol.git.allow=always", .. args])

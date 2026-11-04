@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.44.0 — 2026-11-04 (Beta)
+
+- Keep automatic fetch failures in Background activity without attention dialogs or taskbar flashing; change the default interval to one minute.
+- Separate fetch ownership from working-copy actions, keep repository opening and context actions usable, and give submitted user work priority over automatic fetch.
+- Add historical-file context actions, including restore from HEAD/selected commit/parent, external diff, history/blame, tree browsing, LFS rules, export and path copying.
+- Add a saved Left/Right placement preference for history branch/tag labels, default Left.
+- Show executed command transcripts and output in activity details, including quiet operations.
+- Keep Stable at 0.39.1.
+
 ## 0.43.0 — 2026-11-04 (Beta)
 
 - Configure an application-wide external merge tool in File → Settings: Git default, a named tool with an optional executable path, or a custom Git-shell command.

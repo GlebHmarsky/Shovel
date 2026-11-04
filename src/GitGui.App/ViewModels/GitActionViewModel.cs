@@ -17,6 +17,7 @@ public sealed class GitActionViewModel : ObservableObject
     private readonly Stopwatch _elapsed = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly List<byte> _output = [];
+    private readonly CommandTranscript _commands = new();
     private int _publishedBytes;
     private Task _outputTask = Task.CompletedTask;
     private ActionContext? _context;
@@ -200,7 +201,7 @@ public sealed class GitActionViewModel : ObservableObject
                 }
             }, _cancel.Token)) : null;
             void Output(GitGui.Core.Processes.ProcessOutput output)
-                { lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }
+                { _commands.Collect(output); lock (_output) { if (_output.Count + output.Bytes.Length <= 1024 * 1024) _output.AddRange(output.Bytes); } }
             if (_execute is not null || _authenticatedExecute is not null) Phase = UiText.Get("ActionRunning");
             var result = _authenticatedExecute is not null ? await _authenticatedExecute(_cancel.Token, Output, authentication) :
                 _execute is not null ? await _execute(_cancel.Token, Output) : await _actions.ExecuteAsync(Context, options, _cancel.Token, Output, authentication,
@@ -210,7 +211,7 @@ public sealed class GitActionViewModel : ObservableObject
                     _gitStage = stage;
                     if (Status != UiText.Get("ActionWaitingAuthentication")) Phase = UiText.Get("ActionStage" + stage);
                 }));
-            _gitFinished = true; await _outputTask; RawOutput = result.Output;
+            _gitFinished = true; await _outputTask; RawOutput = _commands.Complete(result.Output);
             Succeeded = result.Success && authentication?.Failure is null;
             _needsResolution = result.HasConflicts || result.Operation != RepositoryOperation.None;
             _cancelled = result.Outcome == GitGui.Core.Processes.ProcessOutcome.Cancelled;
@@ -225,7 +226,7 @@ public sealed class GitActionViewModel : ObservableObject
         catch (GitReadException exception)
         {
             _gitFinished = true; await _outputTask; _cancelled = exception.Failure == GitFailure.Cancelled;
-            Status = UiText.Get(_cancelled ? "ActionResultCancelled" : "ActionReadFailed"); RawOutput = exception.RawOutput;
+            Status = UiText.Get(_cancelled ? "ActionResultCancelled" : "ActionReadFailed"); RawOutput = _commands.Complete(exception.RawOutput);
         }
         catch (OperationCanceledException) { _gitFinished = true; _cancelled = true; await _outputTask; await PublishOutputAsync(); Status = UiText.Get("ActionResultCancelled"); }
         catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)

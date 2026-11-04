@@ -184,7 +184,7 @@ public sealed partial class GitActions
         {
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null; environment["GIT_EDITOR"] = "false";
             if (customMergeCommand is not null) environment["SHOVEL_EXTERNAL_MERGE_COMMAND"] = customMergeCommand;
-            var run = await runner.RunAsync(new(context.Git.Executable, path, ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false",
+            var run = await RunLoggedAsync(new(context.Git.Executable, path, ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false",
                 "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "submodule.recurse=false", .. args])
                 { Environment = environment, Timeout = TimeSpan.FromMinutes(10), MaximumOutputBytes = 1024 * 1024 }, token, progress);
             return new(run.Outcome, run.ExitCode, Redact(Decode(run) + Encoding.UTF8.GetString(run.StandardError)));

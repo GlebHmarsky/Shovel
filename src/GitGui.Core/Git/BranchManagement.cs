@@ -78,7 +78,7 @@ public sealed partial class GitActions
             if (options.Action == BranchManagementAction.Delete) await CheckWorktrees();
             token.ThrowIfCancellationRequested();
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null;
-            var result = await runner.RunAsync(new(git.Executable, path,
+            var result = await RunLoggedAsync(new(git.Executable, path,
                 ["--no-pager", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", .. arguments])
                 { Environment = environment, Timeout = TimeSpan.FromMinutes(2), MaximumOutputBytes = 1024 * 1024 }, token, progress);
             return new(result.Outcome, result.ExitCode, Redact(Decode(result) + Encoding.UTF8.GetString(result.StandardError)));
@@ -122,10 +122,10 @@ public sealed partial class GitActions
     }, token);
 
     // Same common-directory name and acquisition semantics as all existing mutations.
-    private static Mutex EnterMutationGate(RepositoryIdentity identity)
+    private static Mutex EnterMutationGate(RepositoryIdentity identity, string category = "GitAction")
     {
         var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(identity.CommonDirectory.ToUpperInvariant())));
-        var gate = new Mutex(false, @"Local\Shovel.GitAction." + key);
+        var gate = new Mutex(false, @"Local\Shovel." + category + "." + key);
         bool owned;
         try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
         if (owned) return gate;

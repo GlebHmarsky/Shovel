@@ -1,6 +1,6 @@
 # Shovel
 
-**0.43.0 Beta:** File → Settings saves an external merge tool: Git default, a named tool with an optional executable path, or a custom Git-shell command. Launch the saved choice from the existing inline conflict pane. [Behavior and limits](docs/product.md#external-merge-tool-configuration-0430-beta). Stable remains **0.39.1**.
+**0.44.0 Beta:** quiet one-minute automatic fetch, usable workspaces during fetch, historical-file context actions, saved branch/tag label placement and command transcripts in Activity. [Behavior and limits](docs/product.md#background-fetch-and-history-actions-0440-beta). Stable remains **0.39.1**.
 
 Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help → Shovel updates. Launch checks discover updates; opening that window checks immediately, and **Update and restart** approves the download and guarded restart. Every task delivers a signed-feed Beta installer through Build-Release; routine smoke remains 26 checks.
 
@@ -12,6 +12,8 @@ Operations show static phase/outcome text and retain Cancel and activity logs. E
 
 ## Prerequisites
 
+History/file activity checks: `--check-history-file-actions` (11) and `--check-history-activity` (4), using the same `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- <flag>` command. Disposable fixtures cover native restore/export/filters, LFS rules, history/blame, tool cancellation, retained command output and saved label placement; no desktop launch.
+
 External merge-tool checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-merge-tool-settings` (ten focused checks: saved settings, form/chooser binding, real custom/named tool execution, paths, failure, stale edits and cancellation). Uses disposable repositories and a console test helper, never a third-party GUI.
 
 Focused settings checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-auto-fetch-settings` (eight checks for persistence, concurrent writes, validation/retry, scheduling, cancellation and offscreen layouts). No desktop launch.
@@ -20,7 +22,7 @@ Clone/remote checks after building: `dotnet run --project tests/GitGui.Foundatio
 
 QOL checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-qol` (eight bounded checks for retained views/selection, commit overview, saved scale, layout migration, session activity and offscreen layouts). `--check-conflicts` includes seventeen disposable conflict scenarios and inline Commit staging. These are optional focused suites; normal packaging runs the unchanged smoke suite.
 
-Repository workflow checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-repository-workflows` (13 focused checks, including queue/drag/viewport coverage: parallel repositories, rejected push, F5, auto-fetch cadence/shutdown, commits, graph, proportional panes and attention renders). Uses disposable local remotes; no desktop control or installed launch.
+Repository workflow checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-repository-workflows` (15 focused checks, including held-fetch Commit and automatic-fetch preemption: parallel repositories, rejected push, F5, auto-fetch cadence/shutdown, commits, graph, proportional panes and attention renders). Uses disposable local remotes; no desktop control or installed launch.
 
 History/caption checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-history-layout` (four opt-in checks; disposable stashes, topology/paging and offscreen caption/toolbar renders). [Caption and folded-stash behavior](docs/product.md#compact-caption-and-history-0260). Native caption interactions require separate authorized desktop validation.
 

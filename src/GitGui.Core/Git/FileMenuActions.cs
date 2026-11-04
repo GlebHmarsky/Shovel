@@ -205,7 +205,7 @@ public sealed partial class GitActions
         {
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null; environment["GIT_EDITOR"] = "false";
             if (indexFile is not null) environment["GIT_INDEX_FILE"] = indexFile;
-            var run = await runner.RunAsync(new(git.Executable, path, ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false",
+            var run = await RunLoggedAsync(new(git.Executable, path, ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false",
                 "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "submodule.recurse=false", .. arguments])
                 { Environment = environment, StandardInputFile = standardInputFile, Timeout = TimeSpan.FromMinutes(options.Action == WorkingCopyAction.ExternalDiff ? 10 : 5), MaximumOutputBytes = 1024 * 1024 }, token, progress);
             commandTime += run.Duration.TotalMilliseconds;
