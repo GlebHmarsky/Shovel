@@ -48,6 +48,7 @@ public sealed record AppSettings
     public RepositoryPreference[] RepositoryPreferences { get; init; } = [];
     public string? SelectedRepositoryPath { get; init; }
     public bool CheckUpdatesPeriodically { get; init; } = true;
+    public ExternalMergeToolSettings ExternalMergeTool { get; init; } = new();
     public bool AutoFetchEnabled { get; init; } = true;
     public int AutoFetchIntervalSeconds { get; init; } = DefaultAutoFetchIntervalSeconds;
     public string UpdateChannel { get; init; } = "win-stable";
@@ -60,6 +61,7 @@ public sealed record AppSettings
     {
         UiScale = double.IsFinite(UiScale) ? Math.Clamp(Math.Round(UiScale * 10) / 10, .7, 2) : 1,
         UpdateChannel = UpdateChannel == "win-beta" ? "win-beta" : "win-stable",
+        ExternalMergeTool = (ExternalMergeTool ?? new()).Normalize(),
         AutoFetchIntervalSeconds = Math.Clamp(AutoFetchIntervalSeconds, MinimumAutoFetchIntervalSeconds, MaximumAutoFetchIntervalSeconds),
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),
         WindowHeight = Clamp(WindowHeight, 800, 620, 2160),

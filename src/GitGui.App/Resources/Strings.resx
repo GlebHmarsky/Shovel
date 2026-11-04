@@ -942,7 +942,7 @@ Previous HEAD: {1}</value></data>
   <data name="UpdateChannelHelp" xml:space="preserve"><value>Applies to manual and launch checks. Switching clears pending updates and checks the selected channel immediately. Returning to Stable waits for a newer stable version; it does not downgrade.</value></data>
   <data name="ConflictToolDefault" xml:space="preserve"><value>Configured default</value></data>
   <data name="ConflictToolLabel" xml:space="preserve"><value>External merge tool</value></data>
-  <data name="ConflictToolHelp" xml:space="preserve"><value>Choose a tool, then select External merge tool. Git checks availability on launch. This does not change Git configuration or save editor text.</value></data>
+  <data name="ConflictToolHelp" xml:space="preserve"><value>Choose a tool, then select External merge tool. Configure the saved Shovel tool in File → Settings. Git checks availability on launch. This does not change Git configuration or save editor text.</value></data>
   <data name="ConflictToolInvalid" xml:space="preserve"><value>The selected merge tool is no longer available in this preview. Reload the conflict and select it again.</value></data>
   <data name="ChangesTab" xml:space="preserve"><value>Changes</value></data>
   <data name="UpdateOffered" xml:space="preserve"><value>Version {0} is available. Approve to download and restart.</value></data>
@@ -966,4 +966,22 @@ Previous HEAD: {1}</value></data>
   <data name="SettingsSaveFailed" xml:space="preserve"><value>Settings could not be saved. Your edits are retained; try again.</value></data>
   <data name="SettingsSaving" xml:space="preserve"><value>Saving settings…</value></data>
   <data name="SettingsSave" xml:space="preserve"><value>Save</value></data>
+  <data name="ConflictToolSaved" xml:space="preserve"><value>Saved Shovel tool</value></data>
+  <data name="SettingsMergeTitle" xml:space="preserve"><value>External merge tool</value></data>
+  <data name="SettingsMergeModeGitDefault" xml:space="preserve"><value>Use Git configuration</value></data>
+  <data name="SettingsMergeModeNamedTool" xml:space="preserve"><value>Named Git tool / executable</value></data>
+  <data name="SettingsMergeModeCustomCommand" xml:space="preserve"><value>Custom command</value></data>
+  <data name="SettingsMergeHelp" xml:space="preserve"><value>Used by External merge tool in the conflict pane. Saved for all repositories in Shovel; Git configuration stays unchanged. Saving does not launch a tool.</value></data>
+  <data name="SettingsMergeName" xml:space="preserve"><value>Git tool name</value></data>
+  <data name="SettingsMergeNameHelp" xml:space="preserve"><value>For example: winmerge, kdiff3, meld, bc or a tool configured in Git. An executable path overrides its location, not its arguments.</value></data>
+  <data name="SettingsMergeExecutable" xml:space="preserve"><value>Executable path (optional)</value></data>
+  <data name="SettingsMergeBrowse" xml:space="preserve"><value>Browse…</value></data>
+  <data name="SettingsMergeExecutableFilter" xml:space="preserve"><value>Windows executables (*.exe)|*.exe</value></data>
+  <data name="SettingsMergeCommand" xml:space="preserve"><value>Git shell command</value></data>
+  <data name="SettingsMergeCommandHelp" xml:space="preserve"><value>Use Git shell syntax and quote paths, for example: "C:/Tools/merge.exe" --wait "$LOCAL" "$REMOTE" "$BASE" "$MERGED". Adapt arguments to your tool. It must wait until editing finishes, write the result to "$MERGED", and exit 0 only on success; nonzero on failure or cancellation. No success prompt is shown.</value></data>
+  <data name="ConflictToolSettingsInvalid" xml:space="preserve"><value>Choose a supported external merge-tool mode.</value></data>
+  <data name="ConflictToolNameInvalid" xml:space="preserve"><value>Enter a Git tool name of up to 128 letters, digits, dots, underscores or hyphens. It cannot start with a hyphen.</value></data>
+  <data name="ConflictToolPathInvalid" xml:space="preserve"><value>Enter an absolute .exe path without quotes, or leave it empty to use Git’s configured location.</value></data>
+  <data name="ConflictToolCommandInvalid" xml:space="preserve"><value>Enter a nonempty Git shell command of up to 8192 characters without NUL characters.</value></data>
+  <data name="ConflictToolExecutableMissing" xml:space="preserve"><value>The configured merge-tool executable was not found. Update its path in File → Settings.</value></data>
 </root>

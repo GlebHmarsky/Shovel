@@ -21,12 +21,19 @@ internal static partial class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        if (args is ["--check-updates"]) return RunUpdateChecks();
-        if (args is ["--check-network-workflows"] or ["--check-repository-workflows"] or ["--check-auto-fetch-settings"])
+        if (Environment.GetEnvironmentVariable("SHOVEL_MERGETOOL_FIXTURE") == "1" && args.FirstOrDefault() == "--auto")
         {
+            var output = Array.IndexOf(args, "-o");
+            if (output < 0 || output + 1 >= args.Length) return 2;
+            File.Copy(args[^1], args[output + 1], true); return 0;
+        }
+        if (args is ["--check-updates"]) return RunUpdateChecks();
+        if (args is ["--check-network-workflows"] or ["--check-repository-workflows"] or ["--check-auto-fetch-settings"] or ["--check-merge-tool-settings"])
+        {
+            _mergeToolSettingsChecks = args[0] == "--check-merge-tool-settings";
             _repositoryWorkflowChecks = args[0] == "--check-repository-workflows";
             _autoFetchSettingsChecks = args[0] == "--check-auto-fetch-settings";
-            _networkWorkflowChecks = !_repositoryWorkflowChecks && !_autoFetchSettingsChecks; _routine = true;
+            _networkWorkflowChecks = !_repositoryWorkflowChecks && !_autoFetchSettingsChecks && !_mergeToolSettingsChecks; _routine = true;
             _root = Path.GetFullPath("artifacts/network-workflow-checks/" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
             using var deadline = RoutineDeadline(TimeSpan.FromMinutes(3), "Network workflow checks exceeded deadline");

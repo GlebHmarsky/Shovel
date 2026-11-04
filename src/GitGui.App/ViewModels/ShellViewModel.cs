@@ -466,8 +466,9 @@ public sealed partial class ShellViewModel : ObservableObject
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
         CommitLayout = _commitLayout,
-        AutoFetchEnabled = _pendingAutoFetchSettings?.Enabled ?? AutoFetchEnabled,
-        AutoFetchIntervalSeconds = _pendingAutoFetchSettings?.Seconds ?? AutoFetchIntervalSeconds,
+        ExternalMergeTool = _pendingSettings?.Tool ?? ExternalMergeTool,
+        AutoFetchEnabled = _pendingSettings?.Enabled ?? AutoFetchEnabled,
+        AutoFetchIntervalSeconds = _pendingSettings?.Seconds ?? AutoFetchIntervalSeconds,
 
         CheckUpdatesPeriodically = Updates?.PeriodicChecks ?? true,
         UpdateChannel = Updates?.Channel ?? "win-stable",

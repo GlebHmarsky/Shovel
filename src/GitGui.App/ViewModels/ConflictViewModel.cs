@@ -8,10 +8,12 @@ namespace GitGui.App.ViewModels;
 
 public sealed class ConflictViewModel : ObservableObject
 {
+    public const string SavedToolOption = "@shovel";
+    private readonly ExternalMergeToolSettings _toolSettings;
     public sealed record ToolOption(string Name, string Label);
     public IReadOnlyList<ToolOption> Tools { get; private set; } = [new("", UiText.Get("ConflictToolDefault"))];
     private string _externalTool = "";
-    public string ExternalTool { get => _externalTool; set => Set(ref _externalTool, value ?? ""); }
+    public string ExternalTool { get => _externalTool; set { if (value is not null) Set(ref _externalTool, value); } }
     public ActivityJournal? Journal { get; init; }
     private readonly GitActions _actions;
     private WorkingCopyContext _context;
@@ -70,8 +72,14 @@ public sealed class ConflictViewModel : ObservableObject
     public Task Work { get; private set; } = Task.CompletedTask;
     public event EventHandler? Completed;
     public Action<string, string>? ReportProblem { get; init; }
-    public ConflictViewModel(WorkingCopyContext context, LocalChange change, GitActions actions)
+    public ConflictViewModel(WorkingCopyContext context, LocalChange change, GitActions actions, ExternalMergeToolSettings? toolSettings = null)
     {
+        _toolSettings = (toolSettings ?? new()).Normalize();
+        if (_toolSettings.Mode != ExternalMergeToolMode.GitDefault)
+        {
+            _externalTool = SavedToolOption;
+            Tools = [new(SavedToolOption, UiText.Get("ConflictToolSaved")), new("", UiText.Get("ConflictToolDefault"))];
+        }
         _context = context; _change = change; _actions = actions;
         ResolveCommand = new(() => Work = ResolveAsync(Current && Incoming ? ConflictChoice.Edited : Current ? ConflictChoice.Current : ConflictChoice.Incoming),
             () => CanChoose && _canSubmit && (Current || Incoming) && (!(Current && Incoming) || CanEdit));
@@ -95,9 +103,13 @@ public sealed class ConflictViewModel : ObservableObject
             }
             _preview = await _actions.ReadConflictAsync(_context, _change, _cancel!.Token);
             if (_closed) return;
-            Tools = [new("", UiText.Get("ConflictToolDefault")), .. _preview.Tools.Select(name => new ToolOption(name, name))];
-            if (!Tools.Any(t => t.Name == ExternalTool)) ExternalTool = "";
+            var selectedTool = ExternalTool;
+            Tools = [.. (_toolSettings.Mode != ExternalMergeToolMode.GitDefault
+                ? new[] { new ToolOption(SavedToolOption, UiText.Get("ConflictToolSaved")) } : []),
+                new("", UiText.Get("ConflictToolDefault")), .. _preview.Tools.Select(name => new ToolOption(name, name))];
             Changed(nameof(Tools));
+            ExternalTool = Tools.Any(t => t.Name == selectedTool) ? selectedTool : "";
+            Changed(nameof(ExternalTool));
             if (!fresh || !HasEditorChanges) { _combinedText = _text = _preview.WorkingText ?? ""; HasEditorChanges = false; _current = _incoming = true; }
             var sides = await System.Threading.Tasks.Task.Run(() => (Numbered(_preview.Current?.Text), Numbered(_preview.Incoming?.Text)));
             if (_closed) return;
@@ -113,7 +125,8 @@ public sealed class ConflictViewModel : ObservableObject
         new DiffRow(new(DiffLineKind.Context, line.TrimEnd('\r'), index + 1, index + 1))).ToArray();
     private async Task ResolveAsync(ConflictChoice choice)
     {
-        var resolution = new ConflictResolution(_preview!, choice, Text, ExternalTool); HasMutation = true; Begin(mutation: true);
+        var resolution = new ConflictResolution(_preview!, choice, Text, ExternalTool == SavedToolOption ? "" : ExternalTool,
+            ExternalTool == SavedToolOption ? _toolSettings : null); HasMutation = true; Begin(mutation: true);
         var outcome = OperationOutcome.Failed;
         var attempt = new object(); Journal?.Record(new(attempt, Title, UiText.Get("ConflictResolving"), 0, OperationOutcome.Running), _context.Identity.Worktree, false);
         var retryWithoutReload = false;

@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_mergeToolSettingsChecks) { await RunMergeToolSettingsChecksAsync(); return; }
             if (_autoFetchSettingsChecks) { await RunAutoFetchSettingsChecksAsync(); return; }
             if (_repositoryWorkflowChecks) { await RunRepositoryWorkflowChecksAsync(); return; }
             if (_networkWorkflowChecks) { await RunNetworkWorkflowChecksAsync(); return; }

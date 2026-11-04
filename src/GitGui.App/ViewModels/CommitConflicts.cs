@@ -5,6 +5,7 @@ using GitGui.Core.Git;
 namespace GitGui.App.ViewModels;
 public sealed partial class CommitViewModel
 {
+    public ExternalMergeToolSettings ExternalMergeTool { get; init; } = new();
     private ConflictViewModel? _conflict;
     private Task _conflictDrain = Task.CompletedTask;
     public ConflictViewModel? Conflict { get => _conflict; private set { if (Set(ref _conflict, value)) { Changed(nameof(HasConflict)); Changed(nameof(ShowRegularDiff)); } } }
@@ -24,7 +25,7 @@ public sealed partial class CommitViewModel
             prior.PropertyChanged -= OnConflictChanged; prior.Completed -= OnConflictCompleted;
             _conflictDrain = Task.WhenAll(_conflictDrain, prior.CloseAsync());
         }
-        var model = new ConflictViewModel(_state.Context, change, _actions) { Journal = Journal,
+        var model = new ConflictViewModel(_state.Context, change, _actions, ExternalMergeTool) { Journal = Journal,
             ReportProblem = (status, output) => _interaction.ShowOperationProblem(Directory, UiText.Get("ConflictResolve"), status, output) };
         model.PropertyChanged += OnConflictChanged; model.Completed += OnConflictCompleted; Conflict = model;
         _diffCancel?.Cancel(); _diffCancel = null; _diffGeneration++; _diffLoading = false;

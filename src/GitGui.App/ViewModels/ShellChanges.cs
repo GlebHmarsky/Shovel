@@ -48,7 +48,8 @@ public sealed partial class ShellViewModel
     {
         CancelCountRead(); _sidebarCancel?.Cancel(); _commitOpen = true; RefreshCommands(); Changed(nameof(ActionOpen)); Changed(nameof(CanNavigate));
         var model = new CommitViewModel(tab.Directory, _git, _reader!, _actions!, _interaction!, tab.Changes,
-            _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities));
+            _knownIdentities.GetValueOrDefault(tab.Directory)?.Fingerprint, DraftStore ?? new CommitDraftStore(null, _identities))
+            { ExternalMergeTool = ExternalMergeTool };
         model.Layout = _commitLayout; model.Journal = Journal;
         _commitModel = model;
         void OnChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)

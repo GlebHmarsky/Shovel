@@ -34,6 +34,7 @@ public sealed partial class ShellViewModel
     private void RestoreWorkspacePreferences(AppSettings settings)
     {
         RestoreAutoFetchSettings(settings);
+        ExternalMergeTool = (settings.ExternalMergeTool ?? new()).Normalize();
         UiScale.Set(settings.UiScale);
         _commitLayout = settings.CommitLayout;
         _riderExecutable = settings.RiderExecutable; _codeExecutable = settings.CodeExecutable; _bashExecutable = settings.BashExecutable;

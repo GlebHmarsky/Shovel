@@ -1,6 +1,6 @@
 # Shovel
 
-**0.42.0 Beta:** File → Settings now saves automatic-fetch enablement and interval (default enabled, 10 seconds; range 10–3600 seconds). Settings applies changes immediately and keeps manual Fetch available. [Behavior and limits](docs/product.md#auto-fetch-settings-0420-beta). Stable remains **0.39.1**.
+**0.43.0 Beta:** File → Settings saves an external merge tool: Git default, a named tool with an optional executable path, or a custom Git-shell command. Launch the saved choice from the existing inline conflict pane. [Behavior and limits](docs/product.md#external-merge-tool-configuration-0430-beta). Stable remains **0.39.1**.
 
 Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help → Shovel updates. Launch checks discover updates; opening that window checks immediately, and **Update and restart** approves the download and guarded restart. Every task delivers a signed-feed Beta installer through Build-Release; routine smoke remains 26 checks.
 
@@ -11,6 +11,8 @@ Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help 
 Operations show static phase/outcome text and retain Cancel and activity logs. Elapsed badges, animated progress and fading capsules are removed. `--check-operation-style` runs four focused outcome/static-status/offscreen layout checks without showing a window.
 
 ## Prerequisites
+
+External merge-tool checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-merge-tool-settings` (ten focused checks: saved settings, form/chooser binding, real custom/named tool execution, paths, failure, stale edits and cancellation). Uses disposable repositories and a console test helper, never a third-party GUI.
 
 Focused settings checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-auto-fetch-settings` (eight checks for persistence, concurrent writes, validation/retry, scheduling, cancellation and offscreen layouts). No desktop launch.
 

@@ -1,20 +1,42 @@
 <Window x:Class="GitGui.App.Views.SettingsWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{loc:Text Key=SettingsTitle}"
- Width="560" Height="380" MinWidth="440" MinHeight="320" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+ Width="620" Height="650" MinWidth="440" MinHeight="320" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
  FlowDirection="{x:Static loc:UiText.Direction}" FontFamily="Segoe UI" FontSize="13"
  Background="{DynamicResource Theme.Sidebar}" Foreground="{DynamicResource Theme.Text}">
+ <Window.Resources><BooleanToVisibilityConverter x:Key="Visible"/></Window.Resources>
  <Border Background="{DynamicResource Theme.Sidebar}" Padding="22"><Grid>
-  <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
    <TextBlock Text="{loc:Text Key=SettingsFetchTitle}" FontSize="22" FontWeight="SemiBold"/>
    <CheckBox x:Name="AutoFetchEnabledInput" Content="{loc:Text Key=SettingsFetchEnabled}" IsChecked="{Binding AutoFetchEnabled}" IsEnabled="{Binding CanEdit}" Margin="0,18,0,12" AutomationProperties.Name="{loc:Text Key=SettingsFetchEnabled}"/>
    <Label Content="{loc:Text Key=SettingsFetchInterval}" Target="{Binding ElementName=AutoFetchIntervalInput}" Padding="0,0,0,6"/>
    <TextBox x:Name="AutoFetchIntervalInput" Text="{Binding IntervalSeconds, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" Width="110" HorizontalAlignment="Left" MaxLength="10" AutomationProperties.Name="{loc:Text Key=SettingsFetchInterval}"/>
    <TextBlock Text="{loc:Text Key=SettingsFetchHelp}" TextWrapping="Wrap" Margin="0,12,0,0" Foreground="{DynamicResource Theme.Muted}"/>
-   <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,14,0,0" AutomationProperties.LiveSetting="Polite"/>
+   <TextBlock Text="{loc:Text Key=SettingsMergeTitle}" FontSize="22" FontWeight="SemiBold" Margin="0,24,0,12"/>
+   <ComboBox x:Name="MergeToolModeInput" ItemsSource="{Binding Modes}" DisplayMemberPath="Label" SelectedValuePath="Value"
+    SelectedValue="{Binding MergeToolMode}" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="{loc:Text Key=SettingsMergeTitle}"/>
+   <TextBlock Text="{loc:Text Key=SettingsMergeHelp}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" Margin="0,8,0,0"/>
+   <StackPanel Visibility="{Binding IsNamedTool, Converter={StaticResource Visible}}" IsEnabled="{Binding CanEdit}">
+    <Label Content="{loc:Text Key=SettingsMergeName}" Target="{Binding ElementName=MergeToolNameInput}" Padding="0,12,0,6"/>
+    <TextBox x:Name="MergeToolNameInput" Text="{Binding MergeToolName, UpdateSourceTrigger=PropertyChanged}" MaxLength="128" AutomationProperties.Name="{loc:Text Key=SettingsMergeName}"/>
+    <TextBlock Text="{loc:Text Key=SettingsMergeNameHelp}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" Margin="0,6,0,0"/>
+    <Label Content="{loc:Text Key=SettingsMergeExecutable}" Target="{Binding ElementName=MergeToolExecutableInput}" Padding="0,12,0,6"/>
+    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <TextBox x:Name="MergeToolExecutableInput" Text="{Binding MergeToolExecutablePath, UpdateSourceTrigger=PropertyChanged}" MaxLength="32767" AutomationProperties.Name="{loc:Text Key=SettingsMergeExecutable}"/>
+     <Button Grid.Column="1" Content="{loc:Text Key=SettingsMergeBrowse}" Click="OnBrowseMergeTool" Margin="8,0,0,0"/>
+    </Grid>
+   </StackPanel>
+   <StackPanel Visibility="{Binding IsCustomCommand, Converter={StaticResource Visible}}" IsEnabled="{Binding CanEdit}">
+    <Label Content="{loc:Text Key=SettingsMergeCommand}" Target="{Binding ElementName=MergeToolCommandInput}" Padding="0,12,0,6"/>
+    <TextBox x:Name="MergeToolCommandInput" Text="{Binding MergeToolCommand, UpdateSourceTrigger=PropertyChanged}" MaxLength="8192" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" MaxHeight="160" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" AutomationProperties.Name="{loc:Text Key=SettingsMergeCommand}"/>
+    <TextBlock Text="{loc:Text Key=SettingsMergeCommandHelp}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" Margin="0,8,0,0"/>
+   </StackPanel>
   </StackPanel></ScrollViewer>
-  <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+  <ScrollViewer Grid.Row="1" MaxHeight="90" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,14,0,0">
+   <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+  </ScrollViewer>
+  <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
    <Button Content="{loc:Text Key=SettingsSave}" Command="{Binding SaveCommand}" IsDefault="True" MinWidth="90"/>
    <Button Content="{loc:Text Key=ActionCancel}" IsCancel="True" IsEnabled="{Binding CanEdit}" MinWidth="85" Margin="8,0,0,0"/>
   </StackPanel>

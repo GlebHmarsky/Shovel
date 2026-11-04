@@ -11,7 +11,8 @@ public sealed record ConflictPreview(WorkingCopyContext Context, LocalChange Cha
     ConflictSide? Incoming, string CurrentSource, string IncomingSource, string WorktreeStamp, string? WorkingText, ConflictTextEncoding? TextEncoding, bool CanEdit, string Attributes)
 { public IReadOnlyList<string> Tools { get; init; } = []; }
 public enum ConflictChoice { Current, Incoming, Edited, External }
-public sealed record ConflictResolution(ConflictPreview Preview, ConflictChoice Choice, string Text = "", string ExternalTool = "");
+public sealed record ConflictResolution(ConflictPreview Preview, ConflictChoice Choice, string Text = "", string ExternalTool = "",
+    ExternalMergeToolSettings? ToolSettings = null);
 
 public sealed partial class GitActions
 {
@@ -85,8 +86,7 @@ public sealed partial class GitActions
             { Tools = tools.Order(StringComparer.Ordinal).Take(64).ToArray() };
     }, token);
 
-    private static bool ValidMergeTool(string name) => name.Length is > 0 and <= 128 && !name.StartsWith('-') &&
-        name.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
+    private static bool ValidMergeTool(string name) => ExternalMergeToolSettings.ValidName(name);
 
     private async Task<WorkingCopyResult> ResolveConflictLockedAsync(WorkingCopyContext context, RepositorySnapshot fresh,
         ConflictResolution resolution, Stopwatch timing, CancellationToken token, Action<ProcessOutput>? progress)
@@ -100,17 +100,46 @@ public sealed partial class GitActions
         var validation = timing.Elapsed.TotalMilliseconds; var command = Stopwatch.StartNew();
         var file = RepositoryReader.WorkingCopyPath(path, relative);
         ActionResult result;
+        string? customMergeCommand = null;
         if (resolution.Choice == ConflictChoice.External)
         {
             string? tool = resolution.ExternalTool;
-            if (tool.Length > 0 && (!ValidMergeTool(tool) || !preview.Tools.Contains(tool))) throw new GitActionException("ConflictToolInvalid");
-            foreach (var key in tool.Length == 0 ? new[] { "merge.guitool", "merge.tool" } : [])
+            List<string> configuration = [];
+            var settings = resolution.ToolSettings;
+            if (settings?.ValidationCode is { } invalid) throw new GitActionException(invalid);
+            if (settings is { Mode: ExternalMergeToolMode.NamedTool })
             {
-                var value = await Raw(context.Git, path, ["config", "--get", key], token);
-                if (value.ExitCode == 0) { tool = Decode(value).Trim(); break; }
+                tool = settings.ToolName;
+                if (settings.ExecutablePath.Length > 0)
+                {
+                    if (!File.Exists(settings.ExecutablePath)) throw new GitActionException("ConflictToolExecutableMissing");
+                    configuration.AddRange(["-c", $"mergetool.{tool}.path={settings.ExecutablePath}"]);
+                }
+            }
+            else if (settings is { Mode: ExternalMergeToolMode.CustomCommand })
+            {
+                tool = "shovel-custom";
+                // Git supplies BASE/LOCAL/REMOTE/MERGED and owns temporary files,
+                // filters, staging and cancellation. A custom command must wait
+                // for its editor and return zero only for an accepted resolution.
+                // Git's helper uses unquoted eval on cmd, collapsing whitespace.
+                // Quoted environment expansion preserves multiline scripts and
+                // literal spacing. WPF CRLF becomes shell LF only at execution.
+                customMergeCommand = settings.Command.Replace("\r\n", "\n", StringComparison.Ordinal);
+                configuration.AddRange(["-c", $"mergetool.{tool}.cmd=eval \"$SHOVEL_EXTERNAL_MERGE_COMMAND\"",
+                    "-c", $"mergetool.{tool}.trustExitCode=true", "-c", $"mergetool.{tool}.hideResolved=false"]);
+            }
+            else
+            {
+                if (tool.Length > 0 && (!ValidMergeTool(tool) || !preview.Tools.Contains(tool))) throw new GitActionException("ConflictToolInvalid");
+                foreach (var key in tool.Length == 0 ? new[] { "merge.guitool", "merge.tool" } : [])
+                {
+                    var value = await Raw(context.Git, path, ["config", "--get", key], token);
+                    if (value.ExitCode == 0) { tool = Decode(value).Trim(); break; }
+                }
             }
             if (string.IsNullOrWhiteSpace(tool) || tool.Any(char.IsControl)) throw new GitActionException("ConflictToolMissing");
-            result = await Write(["mergetool", "--no-prompt", "--tool=" + tool, "--", relative]);
+            result = await Write([.. configuration, "mergetool", "--no-prompt", "--tool=" + tool, "--", relative]);
         }
         else
         {
@@ -154,6 +183,7 @@ public sealed partial class GitActions
         async Task<ActionResult> Write(string[] args)
         {
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null; environment["GIT_EDITOR"] = "false";
+            if (customMergeCommand is not null) environment["SHOVEL_EXTERNAL_MERGE_COMMAND"] = customMergeCommand;
             var run = await runner.RunAsync(new(context.Git.Executable, path, ["--no-pager", "--no-lazy-fetch", "--literal-pathspecs", "-c", "core.fsmonitor=false",
                 "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "submodule.recurse=false", .. args])
                 { Environment = environment, Timeout = TimeSpan.FromMinutes(10), MaximumOutputBytes = 1024 * 1024 }, token, progress);

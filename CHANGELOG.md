@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.43.0 — 2026-11-04 (Beta)
+
+- Configure an application-wide external merge tool in File → Settings: Git default, a named tool with an optional executable path, or a custom Git-shell command.
+- Save the tool alongside auto-fetch preferences and select it from the existing inline conflict pane; explicit named choices still override the saved preference for that file.
+- Run through native Git mergetool with per-invocation overrides, preserving repository/global configuration, stale-state checks, cancellation and actual staged-result verification.
+- Keep Stable at 0.39.1.
+
 ## 0.42.0 — 2026-11-04 (Beta)
 
 - Add File → Settings with saved automatic-fetch enablement and a 10–3600-second interval; existing profiles retain the enabled/10-second default.
