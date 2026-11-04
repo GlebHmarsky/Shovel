@@ -1,15 +1,17 @@
 # Implementation checklist
 
-Updated 2026-11-03. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
+
+- [ ] **P1 — Deliver 0.42.0 Beta.** Final focused/smoke checks, signed feed/installer publication and anonymous update-download verification; keep Stable at 0.39.1. [Evidence](docs/roadmap.md#auto-fetch-settings-0420-beta).
 
 - [x] **P1 — Queue interactions and remove timer feedback (0.41.0 Beta).** Unique toolbar requests retain repository/branch and serialize conflicting work; timers/animations removed, full-window/full-slot drag feedback, viewport profiling and earlier branch context. [Evidence and limits](docs/roadmap.md#queued-actions-and-quiet-feedback-0410-beta).
 - [x] **P1 — Deliver 0.41.0 Beta.** 26 smoke checks in 36.8 s; matching installer, signed update feed and anonymous full-package verification passed. Stable stays 0.39.1. [Evidence](docs/roadmap.md#queued-actions-and-quiet-feedback-0410-beta).
 
 - [x] **P1 — Repository workflow requests (0.40.0 Beta).** Per-repository operations/results, stash lanes, successful Commit close/Ctrl+Enter, proportional panes, ten-second auto-fetch, F5 local refresh, attention logs/taskbar API and left conflict actions. Focused evidence and limits in [roadmap](docs/roadmap.md#repository-workflows-and-attention-0400-beta).
 - [x] **P1 — Deliver 0.40.0 Beta.** 26 smoke checks in 32.6 s; matching installer, signed update feed and anonymous full-package download verified. Stable stays 0.39.1. [Evidence](docs/roadmap.md#repository-workflows-and-attention-0400-beta).
-- [ ] **P2 — Auto-fetch settings.** Expose the interval/enable preference when settings are designed; current default and load/credential behavior are documented in product.
+- [x] **P2 — Auto-fetch settings (0.42.0 Beta).** File → Settings persists application-wide enablement and 10–3600-second interval, applies scheduling changes, cancels background-only work, preserves manual operations and reports save failures. [Behavior](docs/product.md#auto-fetch-settings-0420-beta).
 
 
 - [x] **P1 — Complete representative history measurement (0.39.1).** Corrected stale harness assumptions; merge-heavy/100k/million profiles and five-minute idle passed. Cached publication and full comparison drain are separate; no scope/page reduction. [Evidence](docs/roadmap.md#representative-history-validation-0391).

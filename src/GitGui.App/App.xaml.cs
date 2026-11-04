@@ -106,10 +106,12 @@ public partial class App : Application
     {
         if (MainWindow is not MainWindow window || _shell?.LoadedSettings?.CanSave != true)
             throw new IOException("SettingsNotWritable");
-        var snapshot = _shell.CaptureSession(window.CaptureLayout());
         await _settingsWrites.WaitAsync();
         try
         {
+            // Capture on the dispatcher after earlier saves finish. A waiting write must not
+            // overwrite newly saved preferences with its pre-wait snapshot.
+            var snapshot = _shell.CaptureSession(window.CaptureLayout());
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await Task.Run(() => _settings!.SaveAsync(snapshot, timeout.Token), timeout.Token);
         }

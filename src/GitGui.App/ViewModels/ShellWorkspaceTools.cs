@@ -33,6 +33,7 @@ public sealed partial class ShellViewModel
     }
     private void RestoreWorkspacePreferences(AppSettings settings)
     {
+        RestoreAutoFetchSettings(settings);
         UiScale.Set(settings.UiScale);
         _commitLayout = settings.CommitLayout;
         _riderExecutable = settings.RiderExecutable; _codeExecutable = settings.CodeExecutable; _bashExecutable = settings.BashExecutable;
@@ -47,7 +48,7 @@ public sealed partial class ShellViewModel
     private async Task SavePreferencesAsync()
     {
         if (_persist is null || LoadedSettings?.CanSave != true) return;
-        try { await _persist(CaptureSession(LoadedSettings.Settings)); }
+        try { await PersistCurrentPreferencesAsync(); }
         catch (Exception) { SettingsNotice = UiText.Get("WorkspacePreferenceSaveFailed"); }
     }
     private async Task OpenToolAsync(RepositoryTool tool)

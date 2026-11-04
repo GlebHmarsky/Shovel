@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Auto-fetch settings (0.42.0 Beta)
+
+2026-11-04: implemented the next actionable TODO: application-wide automatic-fetch enablement/interval, persisted with compatible defaults, an immediate File → Settings form, save-failure retention, scheduling reset and background-only cancellation. Reviewed in parallel with separate backend and focused-check ownership; no desktop/app launch/install or user-repository mutations. Live Git reconciliation remains owned after Settings closes. Concurrent preference writes are serialized and capture fresh state.
+
+Eight focused settings checks passed, covering old-profile defaults and restart, invalid/save-failure UI, durable shell application, concurrent writes in both orders, bound Dark/Light forms at 600×360 and 400×260, manual Fetch while disabled, interval reset/cadence/no status scans, and held background reconciliation proving prompt Save completion while manual work continues. Thirteen existing repository-workflow checks also passed. Evidence: `artifacts/auto-fetch-settings-0.42.0-final.txt`, `artifacts/repository-workflows-0.42.0.txt`. Raw Release build passed with zero warnings/errors. Final release smoke and publication evidence follow below. Stable remains 0.39.1. Remaining owner-only desktop/installed/accessibility acceptance and unrelated TODO items are not claimed complete.
+
 ## Queued actions and quiet feedback (0.41.0 Beta)
 
 2026-11-03: toolbar queue, static operation feedback, full-window/full-slot tab dragging and earlier repository context are implemented. Stable remains 0.39.1. [0.41.0 Beta](https://github.com/GlebHmarsky/Shovel/releases/tag/v0.41.0-win-beta) was published from `4cdd5008cdef84f9320e8af5c8cab7ed2f4a94a6` after all **26 smoke checks passed in 36.8 s**. Preview/installer fingerprint: `4B04C1F401634909D58ECD80BA4594B4D9E69D79005BF39F62C6B3B746A8CA0B`. The initial GitHub upload ended prematurely; recovery verified existing assets in the exact unpublished draft, uploaded missing files and then published it without replacing any published version. The public release has all ten assets and is marked prerelease. Latest Stable was independently rechecked as `v0.39.1-win-stable`.

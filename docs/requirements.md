@@ -1,5 +1,11 @@
 # Requirements and acceptance
 
+## Auto-fetch settings acceptance (0.42.0)
+
+Persist enablement and whole-second interval with enabled/10-second defaults for old profiles. Reject invalid form input and normalize corrupt out-of-range stored integers to 10–3600 seconds. Opening/dismissing Settings performs no Git, discovery or persistence. Save failures retain user input without changing live scheduling. Concurrent preference writes must not overwrite the newly saved choice.
+
+A changed interval/re-enable waits a fresh interval; disabled scheduling admits no fetches. Manual Fetch remains functional, and disabling cancels only background operations. Closing Settings must not wait for Git reconciliation; shutdown/update ownership still drains it. Preserve queue priority, two-operation concurrency, hook/filter behavior, noninteractive background credentials and no local-status polling. Validate with disposable repositories and offscreen Dark/Light layouts, not desktop automation.
+
 ## Queued interaction acceptance (0.41.0)
 
 Toolbar actions must accept clicks during reads/operations without concurrent same-repository mutations. Repeated requests share one task, distinct actions retain order, and tab switching cannot redirect the target. Queued requests guard close/update, are cancellable before execution, and do not persist. Validate identity/branch again; native Git protections, filters and hooks stay in force. Auto-fetch must not jump ahead of queued user work.

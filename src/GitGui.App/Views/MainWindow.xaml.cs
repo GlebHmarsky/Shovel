@@ -55,6 +55,13 @@ public partial class MainWindow : Window
 
     private void SaveScale(object? sender, EventArgs e) => ViewModel.SaveScalePreference();
 
+    private void OnSettings(object sender, RoutedEventArgs e)
+    {
+        var model = new SettingsViewModel(ViewModel.AutoFetchEnabled, ViewModel.AutoFetchIntervalSeconds,
+            ViewModel.LoadedSettings?.CanSave == true, ViewModel.SaveAutoFetchSettingsAsync);
+        new SettingsWindow(model) { Owner = this }.ShowDialog();
+    }
+
     private void OnUpdates(object sender, RoutedEventArgs e)
     { if (ViewModel.Updates is { } updates) new UpdateWindow(updates) { Owner = this }.ShowDialog(); }
 

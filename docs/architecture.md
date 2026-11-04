@@ -1,5 +1,13 @@
 # Architecture and distribution
 
+## Configurable auto-fetch (0.42.0)
+
+`AppSettings` adds compatible schema-6 `AutoFetchEnabled` and `AutoFetchIntervalSeconds` fields (true/10 defaults; stored interval clamped 10–3600). `ShellAutoFetchSettings` restores them before startup inspection and applies validated edits, updating an existing dispatcher timer and resetting due times. Production startup owns timer creation; headless model constructors do not start polling. `_autoFetchWork` retains outer action tasks so disabling/shutdown drains shell reconciliation/ownership as well as native execution.
+
+`SettingsViewModel` owns editable values, validation, asynchronous save state and retry errors. The owned `SettingsWindow` uses shared theme/scale/native chrome and blocks closing only during the bounded profile write. `ShellSettings` serializes preference/identity writes with a semaphore, temporarily exposes the submitted values through CaptureSession, and changes the scheduler only after persistence succeeds. The app captures fresh layout/session state inside its disk-write gate. These gates prevent a waiting older preference write from replacing the newer interval. Save returns after configuration/cancellation is requested; `PreferenceTask` and the background operation registry retain the drain without holding the dialog open.
+
+The queue, per-common-directory operation exclusion, noninteractive credentials and two background slots remain unchanged. This preference is application-wide, without per-repository overrides.
+
 ## Toolbar queue and static feedback (0.41.0)
 
 `ShellActionQueue` owns dispatcher-confined requests keyed by tab/action. A request captures its tab, known identity and branch, plus an action closure. Running requests retain their key through reconciliation; duplicate clicks return the same completion task. Admission uses operation owners/common directories and the selected view's read state. Deferred dispatch yields at Background priority rather than running inside property notifications. Other repository requests can start independently. Cancel removes not-yet-started requests; active cancellation remains with the existing model. Queue membership extends ActionOpen/HasUserOperation and tab-close guards, and excludes auto-fetch admission.

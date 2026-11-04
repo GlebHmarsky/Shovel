@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_autoFetchSettingsChecks) { await RunAutoFetchSettingsChecksAsync(); return; }
             if (_repositoryWorkflowChecks) { await RunRepositoryWorkflowChecksAsync(); return; }
             if (_networkWorkflowChecks) { await RunNetworkWorkflowChecksAsync(); return; }
             if (_qolChecks) { await RunQolChecksAsync(); return; }

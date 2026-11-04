@@ -75,6 +75,8 @@
         <MenuItem Header="{loc:Text Key=NewRepository}" Command="{Binding NewRepositoryCommand}" ToolTip="{Binding NewRepositoryHelp}" ToolTipService.ShowOnDisabled="True" />
         <MenuItem Header="{loc:Text Key=OpenRepository}" Command="{Binding OpenRepositoryCommand}" />
         <MenuItem Header="{loc:Text Key=CloseTab}" Command="{Binding CloseRepositoryCommand}" />
+        <Separator/>
+        <MenuItem Header="{loc:Text Key=SettingsMenu}" Click="OnSettings" IsEnabled="{Binding CanNavigate}"/>
       </MenuItem>
       <MenuItem Header="{loc:Text Key=ViewMenu}">
         <MenuItem Header="{loc:Text Key=NewerCommits}" Command="{Binding NewerHistoryCommand}" InputGestureText="{loc:Text Key=HistoryNewerShortcut}" />

@@ -399,7 +399,7 @@ public sealed partial class ShellViewModel : ObservableObject
     private async Task<bool> PersistRepositoryIdentitiesAsync()
     {
         if (_persist is null) return true; // Tests can observe CaptureSession instead of touching a real profile.
-        try { await _persist(CaptureSession(LoadedSettings?.Settings ?? new())); return true; }
+        try { await PersistCurrentPreferencesAsync(); return true; }
         catch (Exception) { SettingsNotice = UiText.Get("IdentitySaveFailed"); return false; }
     }
     private void HighlightAuthors()
@@ -466,6 +466,8 @@ public sealed partial class ShellViewModel : ObservableObject
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
         CommitLayout = _commitLayout,
+        AutoFetchEnabled = _pendingAutoFetchSettings?.Enabled ?? AutoFetchEnabled,
+        AutoFetchIntervalSeconds = _pendingAutoFetchSettings?.Seconds ?? AutoFetchIntervalSeconds,
 
         CheckUpdatesPeriodically = Updates?.PeriodicChecks ?? true,
         UpdateChannel = Updates?.Channel ?? "win-stable",
@@ -476,5 +478,5 @@ public sealed partial class ShellViewModel : ObservableObject
     };
     public void BeginShutdown() { foreach (var tab in Repositories) CancelQueuedActions(tab); _autoFetchTimer?.Stop(); _sidebarCancel?.Cancel(); StopCommitFiles(); _countCancel?.Cancel(); _stopping = true; _operationCancellation?.Cancel(); IsReady = false; Status = UiText.Get("SavingSettings"); }
     public async Task WaitForIdleAsync() { Task task; do { task = _activeOperation; await task; } while (task != _activeOperation); await _startupPreviewTask; await _countTask; await _oldCommitFiles; await _sidebarTask; }
-    public void ResumeAfterSaveFailure() { _autoFetchTimer?.Start(); _stopping = false; IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
+    public void ResumeAfterSaveFailure() { _stopping = false; if (_autoFetchTimer is not null) StartAutoFetch(); IsReady = true; Status = UiText.Get("SettingsSaveFailedStatus"); }
 }

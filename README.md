@@ -1,6 +1,6 @@
 # Shovel
 
-**0.41.0 Beta:** unique queued toolbar actions, static operation feedback, full-window tab dragging with a full-slot preview, and earlier branch context. [Behavior and limits](docs/product.md#queued-toolbar-actions-and-quiet-feedback-0410-beta). Stable remains **0.39.1**; promotion requires owner approval.
+**0.42.0 Beta:** File → Settings now saves automatic-fetch enablement and interval (default enabled, 10 seconds; range 10–3600 seconds). Settings applies changes immediately and keeps manual Fetch available. [Behavior and limits](docs/product.md#auto-fetch-settings-0420-beta). Stable remains **0.39.1**.
 
 Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help → Shovel updates. Launch checks discover updates; opening that window checks immediately, and **Update and restart** approves the download and guarded restart. Every task delivers a signed-feed Beta installer through Build-Release; routine smoke remains 26 checks.
 
@@ -11,6 +11,8 @@ Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help 
 Operations show static phase/outcome text and retain Cancel and activity logs. Elapsed badges, animated progress and fading capsules are removed. `--check-operation-style` runs four focused outcome/static-status/offscreen layout checks without showing a window.
 
 ## Prerequisites
+
+Focused settings checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-auto-fetch-settings` (eight checks for persistence, concurrent writes, validation/retry, scheduling, cancellation and offscreen layouts). No desktop launch.
 
 Clone/remote checks after building: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-network-workflows` (11 focused checks; disposable Git/filter/hook/auth-cancellation fixtures, real bound actions, partial/stale/locked configuration and offscreen Dark/Light forms). No visible app, live server or installation is exercised. [Evidence and limits](docs/roadmap.md#clone-and-remote-management-0330).
 

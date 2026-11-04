@@ -1,5 +1,6 @@
 using System.Windows.Threading;
 using GitGui.Core.Git;
+using GitGui.Core.Settings;
 
 namespace GitGui.App.ViewModels;
 
@@ -73,24 +74,31 @@ public sealed partial class ShellViewModel
     public async Task StopAutoFetchAsync(bool stopTimer = true)
     {
         if (stopTimer) _autoFetchTimer?.Stop();
+        var work = _autoFetchWork.ToArray();
         var active = _repositoryActions.Values.Where(action => action.IsBackground && action.IsRunning).ToArray();
         foreach (var action in active) action.Cancel();
-        await Task.WhenAll(active.Select(action => action.RunningTask));
+        // Include the shell ownership/reconciliation lifetime, not just the Git model.
+        await Task.WhenAll(work.Concat(active.Select(action => action.RunningTask)));
     }
 
-    public static readonly TimeSpan AutoFetchInterval = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan AutoFetchInterval = TimeSpan.FromSeconds(AppSettings.DefaultAutoFetchIntervalSeconds);
     private readonly Dictionary<RepositoryTab, DateTimeOffset> _nextAutoFetch = [];
+    private readonly HashSet<Task> _autoFetchWork = [];
     private DispatcherTimer? _autoFetchTimer;
     public void StartAutoFetch()
     {
-        if (_autoFetchTimer is not null) return;
-        _autoFetchTimer = new DispatcherTimer { Interval = AutoFetchInterval };
-        _autoFetchTimer.Tick += async (_, _) => await AutoFetchDueAsync(DateTimeOffset.UtcNow);
-        _autoFetchTimer.Start();
+        if (_autoFetchTimer is null)
+        {
+            _autoFetchTimer = new DispatcherTimer();
+            _autoFetchTimer.Tick += async (_, _) => await AutoFetchDueAsync(DateTimeOffset.UtcNow);
+        }
+        _autoFetchTimer.Interval = TimeSpan.FromSeconds(AutoFetchIntervalSeconds);
+        if (AutoFetchEnabled && !_stopping) _autoFetchTimer.Start();
+        else _autoFetchTimer.Stop();
     }
     public Task AutoFetchDueAsync(DateTimeOffset now)
     {
-        if (!IsReady || _stopping || _commitOpen || _actionOpen || Updates?.Busy == true || _git is null || _actions is null) return Task.CompletedTask;
+        if (!AutoFetchEnabled || now < _autoFetchNotBefore || !IsReady || _stopping || _commitOpen || _actionOpen || Updates?.Busy == true || _git is null || _actions is null) return Task.CompletedTask;
         foreach (var old in _nextAutoFetch.Keys.Where(tab => !Repositories.Contains(tab)).ToArray()) _nextAutoFetch.Remove(old);
         var work = new List<Task>();
         var slots = 2 - _repositoryActions.Values.Count(action => action.IsBackground && action.IsRunning);
@@ -101,9 +109,16 @@ public sealed partial class ShellViewModel
                 tab.Snapshot is not { RemoteNames.Count: > 0, Operation: RepositoryOperation.None } ||
                 !_knownIdentities.ContainsKey(tab.Directory) || now < _nextAutoFetch.GetValueOrDefault(tab) ||
                 SelectedRepository == tab && IsBusy) continue;
-            slots--; _nextAutoFetch[tab] = now + AutoFetchInterval;
-            work.Add(OpenActionAsync(GitAction.Fetch, null, directNetwork: true, targetTab: tab, background: true));
+            slots--; _nextAutoFetch[tab] = now + TimeSpan.FromSeconds(AutoFetchIntervalSeconds);
+            var task = OpenActionAsync(GitAction.Fetch, null, directNetwork: true, targetTab: tab, background: true);
+            _autoFetchWork.Add(task);
+            work.Add(ObserveAutoFetchAsync(task));
         }
         return Task.WhenAll(work);
+    }
+    private async Task ObserveAutoFetchAsync(Task task)
+    {
+        try { await task; }
+        finally { _autoFetchWork.Remove(task); }
     }
 }

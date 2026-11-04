@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.42.0 — 2026-11-04 (Beta)
+
+- Add File → Settings with saved automatic-fetch enablement and a 10–3600-second interval; existing profiles retain the enabled/10-second default.
+- Apply scheduling changes immediately; disabling requests background-only cancellation without delaying Settings closure or cancelling manual work.
+- Serialize preference writes so older saves cannot overwrite new choices; retain form edits and errors when saving fails.
+- Keep Stable at 0.39.1.
+
 ## 0.41.0 — 2026-11-03 (Beta)
 
 - Accept unique queued toolbar actions during repository reads/operations, retaining the original repository and validating targets when execution starts. Keep other repositories usable.
