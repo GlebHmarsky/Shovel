@@ -5,7 +5,7 @@ Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 ## Current phase
 
 - [x] **P1 - Repository-owned operations (0.46.0 Beta).** Independent initialization, retained tab/view owners, ordered conflicting requests, individual waiting removal, background Commit and failed-draft reopening. [Behavior and limits](docs/product.md#repository-owned-work-0460-beta).
-- [ ] **P1 - Deliver 0.46.0 Beta.** 58 focused checks passed; finish the signed build and anonymous production download verification. Stable stays 0.39.1.
+- [x] **P1 - Deliver 0.46.0 Beta.** 58 focused checks and 26 smoke checks in 68.8 s; matching installer/signed feed, all ten public asset digests and anonymous production download verified. Stable stays 0.39.1. [Evidence](docs/roadmap.md#repository-owned-operations-0460-beta).
 - [ ] **Deferred - Running user-command cancellation.** Ask the owner again before implementing. Current policy permits removing waiting requests and preempting automatic fetch only. Hung hooks/tools can therefore prevent exit.
 
 - [x] **P1 — Categorized settings and author pictures (0.45.0 Beta).** Seven left-side categories expose existing preferences plus diff font/default, explicit global Git identity and configurable GitHub/Gitea/Gravatar pictures with immediate colored initials. 55 focused checks passed. [Behavior and limits](docs/product.md#categorized-settings-and-author-pictures-0450-beta).
