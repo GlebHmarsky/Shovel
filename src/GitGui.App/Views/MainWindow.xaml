@@ -369,7 +369,9 @@
                   </DockPanel>
                 </DataTemplate></DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTextColumn Header="{loc:Text Key=HistoryAuthor}" Binding="{Binding Author}" Width="140" MinWidth="100" ElementStyle="{StaticResource HistoryText}" />
+              <DataGridTemplateColumn Header="{loc:Text Key=HistoryAuthor}" Width="140"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+               <DockPanel><views:AuthorAvatar Author="{Binding}" Service="{Binding DataContext.AvatarImages, RelativeSource={RelativeSource AncestorType=DataGrid}}" Preferences="{Binding DataContext.AvatarPreferences, RelativeSource={RelativeSource AncestorType=DataGrid}}" Remote="{Binding DataContext.AvatarRemote, RelativeSource={RelativeSource AncestorType=DataGrid}}" Width="22" Height="22" Margin="0,0,6,0"/><TextBlock Text="{Binding Author}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></DockPanel>
+              </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
               <DataGridTextColumn Header="{loc:Text Key=HistoryDate}" Binding="{Binding Date}" Width="150" MinWidth="150" ElementStyle="{StaticResource HistoryText}" />
               <DataGridTextColumn Header="{loc:Text Key=HistoryHash}" Binding="{Binding ShortHash}" Width="115" MinWidth="115" ElementStyle="{StaticResource HistoryText}" />
             </DataGrid.Columns>
@@ -386,12 +388,15 @@
         <TabControl SelectedIndex="{Binding DetailsIndex}" SelectionChanged="OnDetailsSelection" Grid.Row="2" Margin="0" AutomationProperties.Name="{loc:Text Key=Details}" AutomationProperties.AutomationId="DetailsTabs">
           <TabItem Header="{loc:Text Key=Commit}">
             <DockPanel>
-              <StackPanel DockPanel.Dock="Top" Margin="12,6">
+              <DockPanel DockPanel.Dock="Top" Margin="12,6">
+               <views:AuthorAvatar Author="{Binding SelectedCommit}" Service="{Binding AvatarImages}" Preferences="{Binding AvatarPreferences}" Remote="{Binding AvatarRemote}" Width="46" Height="46" VerticalAlignment="Top" Margin="0,4,12,0"/>
+               <StackPanel>
                 <TextBlock Text="{Binding SelectedCommit.AuthorDetails}" TextWrapping="Wrap"/>
                 <TextBlock Text="{Binding SelectedCommit.RefLabels}" Foreground="{DynamicResource Theme.Muted}" TextTrimming="CharacterEllipsis"/>
                 <TextBox Text="{Binding SelectedCommit.Commit.Hash, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Padding="0"/>
                 <TextBox Text="{Binding SelectedCommit.MessagePreview, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Padding="0" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="70" VerticalScrollBarVisibility="Auto"/>
-              </StackPanel>
+               </StackPanel>
+              </DockPanel>
               <views:CommitFilesView x:Name="HistoryFiles" DataContext="{Binding CommitFiles}"/>
             </DockPanel>
           </TabItem>

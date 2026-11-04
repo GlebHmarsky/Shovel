@@ -1,5 +1,11 @@
 # Requirements and acceptance
 
+## Settings and avatar acceptance (0.45.0)
+
+Left-side categories must expose real saved behavior, remain usable at normal/minimum sizes in Dark and Light, and keep Save/error feedback outside scrolling content. Opening/navigating must not prepare Git, network or tools. Verify preference round-trip, failed-write retention, current/new diff bindings, shared scale/theme, scheduler compatibility and update-channel cancellation without granting download/restart approval. Global Git identity reads/writes occur only through explicit actions, use isolated config in tests, reject stale reviewed values and retain existing lock files/partial outcomes.
+
+Author initials must render immediately in history and Commit details; picture failure must not disrupt selection, diffs or operation feedback. Preserve viewport virtualization, bound concurrency/cache/response sizes, cancel obsolete consumers and reject stale results. Verify GitHub/SSH and configured Gitea/subpath endpoint mapping, private-repository/public-profile fallback, image decoding, author deduplication, initials-only no-network behavior and absence of credential forwarding. Mocked HTTP plus offscreen WPF checks do not certify live provider permissions, desktop input, OS accessibility or installed updates.
+
 ## Fetch and history acceptance (0.44.0)
 
 Hold a real fetch and prove that Commit can open, stage, unstage and commit without waiting for that fetch. Opening/switching repositories and contextual controls remain usable. Background errors, warnings and preparation/reconciliation failures must never invoke attention dialogs/taskbar flashing; explicit user failures still do. Preserve scoped ownership, linked-worktree/cross-profile protection, cancellation, queue targeting and update/shutdown drainage. Migrate the old ten-second default once to 60 seconds without repeatedly overriding later explicit preferences.

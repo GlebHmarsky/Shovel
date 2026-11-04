@@ -101,7 +101,7 @@
      </StackPanel>
      <Grid>
      <DataGrid x:Name="DiffTable" ItemsSource="{Binding DiffRows}" SelectedItem="{Binding SelectedDiff}" RowStyle="{StaticResource DiffRow}" SelectionChanged="OnDiffSelection"
-      SelectionMode="Extended" FontFamily="Consolas" FontSize="12" RowHeight="22" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.HelpText="{loc:Text Key=HunkSelectionHelp}" AutomationProperties.AutomationId="FileDiff">
+      SelectionMode="Extended" FontFamily="Consolas" FontSize="{DynamicResource Diff.FontSize}" RowHeight="{DynamicResource Diff.RowHeight}" FlowDirection="LeftToRight" AutomationProperties.Name="{loc:Text Key=DiffView}" AutomationProperties.HelpText="{loc:Text Key=HunkSelectionHelp}" AutomationProperties.AutomationId="FileDiff">
       <DataGrid.Style><Style TargetType="DataGrid" BasedOn="{StaticResource FileTable}"><Style.Triggers><DataTrigger Binding="{Binding SideBySide}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding HasBinary}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DataGrid.Style>
       <DataGrid.Columns>
        <DataGridTextColumn Header="{loc:Text Key=DiffOldLine}" Binding="{Binding OldLine}" Width="48" ElementStyle="{StaticResource DiffText}"/>

@@ -4,6 +4,9 @@ Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+- [x] **P1 — Categorized settings and author pictures (0.45.0 Beta).** Seven left-side categories expose existing preferences plus diff font/default, explicit global Git identity and configurable GitHub/Gitea/Gravatar pictures with immediate colored initials. 55 focused checks passed. [Behavior and limits](docs/product.md#categorized-settings-and-author-pictures-0450-beta).
+- [ ] **P1 — Deliver 0.45.0 Beta.** Run final routine smoke once, package/sign/publish and verify the anonymous production update download. Keep Stable at 0.39.1. [Evidence](docs/roadmap.md#categorized-settings-and-author-pictures-0450-beta).
+
 - [x] **P1 — Quiet fetch and usable workspaces (0.44.0 Beta).** One-minute default/migration, background-only logging, independent working-copy use during fetch, user action priority and repository/context-menu availability.
 - [x] **P1 — Historical-file actions and history/activity UI (0.44.0 Beta).** Screenshot context menu with real scoped actions, saved ref-label placement and visible command transcripts.
 - [x] **P1 — Deliver 0.44.0 Beta.** 55 focused checks and 26 smoke checks in 66.1 s; signed-feed installer published after verified draft-upload recovery; anonymous full-package verification passed. Stable remains 0.39.1. [Evidence and limits](docs/roadmap.md#background-fetch-and-history-actions-0440-beta).
@@ -28,6 +31,7 @@ Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [x] **P1 — Side-by-side diffs and update approval (0.39.0).** Aligned Old/New text in history and Local Changes with whole-hunk mapping; immediate discovery and one approval before download/restart.
 - [x] **P1 — Deliver 0.39.0 Beta.** 8 QOL, 11 hunk and 17 update checks; 26 smoke checks in 58.6 s; signed publication and anonymous full-package verification passed. Stable remains 0.35.0. [Evidence](docs/roadmap.md#side-by-side-comparisons-and-approved-updates-0390-beta).
 - [ ] **P2 — Desktop acceptance (owner-only).** Owner confirmed the update flow works and forbids further computer control. Physical shortcut/drag and taskbar evidence remain unverified by the agent; do not resume desktop automation without a new explicit request.
+- [ ] **P2 — Avatar provider extensions/acceptance.** Verify live provider/server behavior when authorized; authenticated private profiles, additional providers and per-repository Gitea overrides remain outside the current anonymous session-cache implementation. Failed/unavailable pictures retain initials.
 
 
 - [x] **P1 — Workspace refinements (0.38.0).** Combined Commit overview/files/diff, retained bottom tab, saved keyboard scale, title and drag feedback; explicit shortcut-matching process identity.

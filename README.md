@@ -1,6 +1,6 @@
 # Shovel
 
-**0.44.0 Beta:** quiet one-minute automatic fetch, usable workspaces during fetch, historical-file context actions, saved branch/tag label placement and command transcripts in Activity. [Behavior and limits](docs/product.md#background-fetch-and-history-actions-0440-beta). Stable remains **0.39.1**.
+**0.45.0 Beta:** categorized File → Settings, saved appearance/scale/diff/tool/update preferences, explicit global Git identity editing, and background author pictures from GitHub, configured Gitea or Gravatar with colored initials as fallback. [Setup and limits](docs/product.md#categorized-settings-and-author-pictures-0450-beta). Stable remains **0.39.1**.
 
 Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help → Shovel updates. Launch checks discover updates; opening that window checks immediately, and **Update and restart** approves the download and guarded restart. Every task delivers a signed-feed Beta installer through Build-Release; routine smoke remains 26 checks.
 
@@ -11,6 +11,8 @@ Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help 
 Operations show static phase/outcome text and retain Cancel and activity logs. Elapsed badges, animated progress and fading capsules are removed. `--check-operation-style` runs four focused outcome/static-status/offscreen layout checks without showing a window.
 
 ## Prerequisites
+
+Settings/avatar checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-settings-pages` (16 focused checks for persistence/failure, seven bound category layouts, diff resources, isolated native Git identity, provider mapping, bounded image loading and update cancellation). Uses mock HTTP and offscreen rendering, with no desktop launch or live-server authentication.
 
 History/file activity checks: `--check-history-file-actions` (11) and `--check-history-activity` (4), using the same `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- <flag>` command. Disposable fixtures cover native restore/export/filters, LFS rules, history/blame, tool cancellation, retained command output and saved label placement; no desktop launch.
 

@@ -63,10 +63,10 @@ internal static partial class Program
             {
                 AppTheme.Apply(Application.Current.Resources, false, theme);
                 var model = new SettingsViewModel(true, 10, true, custom, (_, _, _) => throw new InvalidOperationException("Rendering must not save"));
-                var window = new SettingsWindow(model); var content = (FrameworkElement)window.Content;
+                model.SelectedCategory = 5; var window = new SettingsWindow(model); var content = (FrameworkElement)window.Content;
                 try
                 {
-                    foreach (var size in new[] { (650, 700), (420, 300) })
+                    foreach (var size in new[] { (840, 650), (560, 380) })
                     {
                         model.MergeToolMode = ExternalMergeToolMode.CustomCommand;
                         Arrange(content, size.Item1, size.Item2); await Dispatcher.Yield(DispatcherPriority.ContextIdle);

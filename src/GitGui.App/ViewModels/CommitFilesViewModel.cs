@@ -33,7 +33,7 @@ public sealed partial class CommitFilesViewModel(RepositoryReader reader, GitIns
     public ParentChoice? Parent { get => _parent; set { if (Set(ref _parent, value)) Refresh(); } }
     public ChangeRow? Selected { get => _selected; set { if (Set(ref _selected, value)) LoadDiff(); } }
     public IReadOnlyList<ChangeRow> Files { get => _files; private set => Set(ref _files, value); }
-    private bool _sideBySide;
+    private bool _sideBySide = GitGui.App.Services.DiffPreferences.SideBySide;
     public bool SideBySide { get => _sideBySide; set => Set(ref _sideBySide, value); }
     public IReadOnlyList<DiffRow> Lines { get => _lines; private set => Set(ref _lines, value); }
     public string Status { get => _status; private set => Set(ref _status, value); }

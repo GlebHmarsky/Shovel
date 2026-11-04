@@ -1,5 +1,7 @@
-<ResourceDictionary xmlns:git="clr-namespace:GitGui.Core.Git;assembly=GitGui.Core" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<ResourceDictionary xmlns:sys="clr-namespace:System;assembly=System.Runtime" xmlns:git="clr-namespace:GitGui.Core.Git;assembly=GitGui.Core" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="DarkPalette.xaml"/></ResourceDictionary.MergedDictionaries>
+  <sys:Double x:Key="Diff.FontSize">12</sys:Double>
+  <sys:Double x:Key="Diff.RowHeight">22</sys:Double>
   <Style x:Key="Theme.FocusVisual"><Setter Property="Control.Template"><Setter.Value><ControlTemplate><Rectangle Margin="2" Stroke="{DynamicResource Theme.Focus}" StrokeThickness="1" StrokeDashArray="2 2"/></ControlTemplate></Setter.Value></Setter></Style>
   <Style TargetType="Button">
     <Setter Property="Padding" Value="12,5"/><Setter Property="Margin" Value="0,0,6,0"/>

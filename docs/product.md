@@ -1,5 +1,23 @@
 # Product
 
+## Categorized settings and author pictures (0.45.0 Beta)
+
+**File → Settings** has categories on the left and a scrolling form on the right. Save persists application preferences together and applies them immediately; Cancel leaves them unchanged. Opening or switching categories does no Git, network or executable discovery. Errors retain edits. The categories expose working preferences discussed during daily use:
+
+| Category | Editable preferences |
+| --- | --- |
+| Appearance | Dark/Light and 70–200% app scale in 10% steps, shared with Ctrl+Plus/Minus. Window/pane sizes and tab order continue saving automatically. |
+| History & avatars | Left/right branch and tag labels (Left default), picture source and optional Gitea website base address. |
+| Diff | Default unified/side-by-side view and 9–24 font size. Individual comparison toggles remain temporary. |
+| Git | Automatic fetch enablement and 10–3600-second interval; enabled every 60 seconds remains the default. |
+| Git identity | Explicitly load and apply global name/email using the selected Git installation. Repository-specific identity overrides remain in effect. |
+| Tools | Existing Git-default/named/custom merge tool and optional Rider, VS Code and Bash executable paths. Blank paths retain discovery when the tool is used. |
+| Updates | Stable/Beta channel and periodic checks. Launch/manual discovery and approval before download/restart retain their existing behavior. |
+
+**Apply global identity** is a separate, immediate Git action; the form states that Cancel cannot undo it. Load reads only the two identity keys. Apply rejects a changed reviewed identity and respects native Git locks. If a write only partly succeeds, the message requires loading the actual values before retrying; it does not roll back unrelated configuration.
+
+History rows and the Commit overview show a colored initial immediately. **Repository host** (default) loads GitHub pictures, or pictures from the configured Gitea address when the repository's remote matches that host. Enter the website base URL, including any subpath, in History & avatars. **Gravatar** and **Colored initials only** are alternatives. Images load asynchronously with bounded, session-only caching; scrolling and history publication never wait for them. Unavailable, rate-limited or private profiles retain initials without attention dialogs. Gitea can also use an exact public email match when commit metadata is inaccessible. No Git credentials or cookies are sent. Authenticated profile access, other providers and per-repository avatar overrides remain outside this delivery. [Implementation](architecture.md#settings-and-avatar-services-0450); [verification](roadmap.md#categorized-settings-and-author-pictures-0450-beta).
+
 ## Background fetch and history actions (0.44.0 Beta)
 
 Automatic fetch is optional background work: failures/warnings remain in Activity → Background and never open attention dialogs or flash the taskbar. User-submitted failures retain attention and logs. The default interval is **60 seconds**; the previous ten-second default migrates once, while other saved intervals remain unchanged. File → Settings continues to control enablement and interval.
@@ -12,7 +30,7 @@ The historical Changes file list exposes Open, External Diff, Show in File Explo
 
 ## External merge-tool configuration (0.43.0 Beta)
 
-**File → Settings → External merge tool** saves an application-wide choice: Git's configured default, a named Git tool with an optional absolute executable path, or a custom command. Browse selects an executable only when clicked. Opening/changing options performs no Git calls or tool discovery. Save persists the tool and auto-fetch preferences together; failure retains edits and leaves running preferences unchanged.
+**File → Settings → Tools → External merge tool** saves an application-wide choice: Git's configured default, a named Git tool with an optional absolute executable path, or a custom command. Browse selects an executable only when clicked. Opening/changing options performs no Git calls or tool discovery. Save persists the tool and auto-fetch preferences together; failure retains edits and leaves running preferences unchanged.
 
 The existing conflict pane defaults to **Saved Shovel tool** when a saved override exists. Its chooser still allows Git default or another named tool for that file. Only **External merge tool** launches it; selection and saving settings never resolve files. Custom commands use Git's shell and quoted `$BASE`, `$LOCAL`, `$REMOTE`, `$MERGED` variables. They must wait until editing finishes, write the merged result and return zero only for successful resolution; nonzero means failure/cancellation. The app verifies that Git actually removed the unmerged index entries afterward.
 

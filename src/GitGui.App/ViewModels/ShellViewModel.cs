@@ -467,15 +467,21 @@ public sealed partial class ShellViewModel : ObservableObject
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
         CommitLayout = _commitLayout,
-        ExternalMergeTool = _pendingSettings?.Tool ?? ExternalMergeTool,
-        HistoryRefsOnRight = _pendingSettings?.RefsOnRight ?? HistoryRefsOnRight,
-        AutoFetchEnabled = _pendingSettings?.Enabled ?? AutoFetchEnabled,
-        AutoFetchIntervalSeconds = _pendingSettings?.Seconds ?? AutoFetchIntervalSeconds,
+        ExternalMergeTool = _pendingSettings?.ExternalMergeTool ?? ExternalMergeTool,
+        HistoryRefsOnRight = _pendingSettings?.HistoryRefsOnRight ?? HistoryRefsOnRight,
+        AutoFetchEnabled = _pendingSettings?.AutoFetchEnabled ?? AutoFetchEnabled,
+        AutoFetchIntervalSeconds = _pendingSettings?.AutoFetchIntervalSeconds ?? AutoFetchIntervalSeconds,
 
-        CheckUpdatesPeriodically = Updates?.PeriodicChecks ?? true,
-        UpdateChannel = Updates?.Channel ?? "win-stable",
-        UiScale = Services.UiScale.Value,
-        Appearance = Appearance, RiderExecutable = _riderExecutable, CodeExecutable = _codeExecutable, BashExecutable = _bashExecutable,
+        Avatars = _pendingSettings?.Avatars ?? AvatarPreferences,
+        DiffSideBySide = _pendingSettings?.DiffSideBySide ?? Services.DiffPreferences.SideBySide,
+        DiffFontSize = _pendingSettings?.DiffFontSize ?? Services.DiffPreferences.FontSize,
+        CheckUpdatesPeriodically = _pendingSettings?.CheckUpdatesPeriodically ?? Updates?.PeriodicChecks ?? _savedPeriodicUpdates,
+        UpdateChannel = _pendingSettings?.UpdateChannel ?? Updates?.Channel ?? _savedUpdateChannel,
+        UiScale = _pendingSettings?.UiScale ?? Services.UiScale.Value,
+        Appearance = _pendingSettings?.Appearance ?? Appearance,
+        RiderExecutable = _pendingSettings is { } pending ? pending.RiderExecutable : _riderExecutable,
+        CodeExecutable = _pendingSettings is { } codePending ? codePending.CodeExecutable : _codeExecutable,
+        BashExecutable = _pendingSettings is { } bashPending ? bashPending.BashExecutable : _bashExecutable,
         RepositoryPaths = Repositories.Select(tab => tab.Directory).ToArray(), SelectedRepositoryPath = SelectedRepository?.Directory,
         RepositoryIdentities = _knownIdentities.Values.ToArray(), RepositoryPreferences = Repositories.Select(tab => new RepositoryPreference(tab.Directory, tab.History.Scope)).ToArray()
     };

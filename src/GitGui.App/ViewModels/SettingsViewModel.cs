@@ -5,13 +5,14 @@ using GitGui.Core.Git;
 
 namespace GitGui.App.ViewModels;
 
-public sealed class SettingsViewModel : ObservableObject
+public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly bool _canSave;
     public sealed record ModeOption(ExternalMergeToolMode Value, string Label);
     public IReadOnlyList<ModeOption> Modes { get; } = Enum.GetValues<ExternalMergeToolMode>()
         .Select(mode => new ModeOption(mode, UiText.Get("SettingsMergeMode" + mode))).ToArray();
-    private readonly Func<bool, int, ExternalMergeToolSettings, bool, Task<bool>> _save;
+    private readonly Func<AppSettings, Task<bool>> _save;
+    private AppSettings _snapshot = new();
     private bool _historyRefsOnRight;
     public bool HistoryRefsOnRight { get => _historyRefsOnRight; set { if (Set(ref _historyRefsOnRight, value)) { Refresh(); Changed(nameof(HistoryRefsOnLeft)); Changed(nameof(HistoryRefsRight)); } } }
     public bool HistoryRefsOnLeft { get => !_historyRefsOnRight; set { if (value) { HistoryRefsOnRight = false; Changed(nameof(HistoryRefsOnRight)); } } }
@@ -35,7 +36,7 @@ public sealed class SettingsViewModel : ObservableObject
     private bool ValidInterval => int.TryParse(IntervalSeconds, NumberStyles.Integer, CultureInfo.CurrentCulture, out var seconds) &&
         seconds >= AppSettings.MinimumAutoFetchIntervalSeconds && seconds <= AppSettings.MaximumAutoFetchIntervalSeconds;
     public string Error => !_canSave ? UiText.Get("SettingsReadOnly") : !ValidInterval ? UiText.Get("SettingsFetchIntervalInvalid") :
-        MergeToolSettings.ValidationCode is { } code ? UiText.Get(code) : _saveError;
+        MergeToolSettings.ValidationCode is { } code ? UiText.Get(code) : AdditionalError ?? _saveError;
     public string Status => _saving ? UiText.Get("SettingsSaving") : Error;
     public RelayCommand SaveCommand { get; }
     public Task SaveTask { get; private set; } = Task.CompletedTask;
@@ -55,8 +56,8 @@ public sealed class SettingsViewModel : ObservableObject
         _mergeToolMode = tool.Mode; _mergeToolName = tool.ToolName;
         _mergeToolExecutablePath = tool.ExecutablePath; _mergeToolCommand = tool.Command;
         _autoFetchEnabled = enabled; _intervalSeconds = intervalSeconds.ToString(CultureInfo.CurrentCulture);
-        _canSave = canSave; _save = save;
-        SaveCommand = new(() => SaveTask = SaveAsync(), () => _canSave && !_saving && ValidInterval && MergeToolSettings.ValidationCode is null);
+        _canSave = canSave; _save = settings => save(settings.AutoFetchEnabled, settings.AutoFetchIntervalSeconds, settings.ExternalMergeTool, settings.HistoryRefsOnRight);
+        SaveCommand = new(() => SaveTask = SaveAsync(), () => _canSave && !_saving && ValidInterval && MergeToolSettings.ValidationCode is null && AdditionalError is null && !Identity.Busy);
     }
     private void Refresh()
     {
@@ -70,7 +71,7 @@ public sealed class SettingsViewModel : ObservableObject
         var refsOnRight = HistoryRefsOnRight;
         _saving = true; Refresh(); Changed(nameof(IsSaving)); Changed(nameof(CanEdit));
         var saved = false;
-        try { saved = await _save(enabled, interval, tool, refsOnRight); }
+        try { saved = await _save(EditedSettings with { AutoFetchEnabled = enabled, AutoFetchIntervalSeconds = interval, ExternalMergeTool = tool, HistoryRefsOnRight = refsOnRight }); }
         catch (Exception) { /* Keep edits and offer retry without exposing arbitrary exceptions. */ }
         finally
         {

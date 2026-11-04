@@ -4,6 +4,8 @@ Updated 2026-10-30. **Confirmed direction:** restrained Fork-inspired dark surfa
 
 ## Palette and hierarchy (0.12.1)
 
+From 0.45.0, Settings uses a dark navigation rail with an accent border/text on the selected category and shared scrolling form surfaces. Author initials use deterministic muted colors with white text; Windows high contrast substitutes system highlight/text brushes. Downloaded pictures do not change row selection or same-author highlighting. App scale and diff font size are exposed in Settings; [product](product.md#categorized-settings-and-author-pictures-0450-beta) owns their ranges and behavior.
+
 The screenshot suggests dark chrome and inactive tabs, a charcoal history surface, lighter sidebar/details, subtle separators and an orange active lower tab. Values below are chosen approximations, not pixel-exact Fork measurements. `Resources/DarkPalette.xaml` is the implementation source; views use semantic `DynamicResource` keys instead of inline colors.
 
 | Role (`Theme.` prefix) | Color | Use |

@@ -35,6 +35,9 @@ public sealed record AppSettings
     public const int MaximumAutoFetchIntervalSeconds = 3600;
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public bool HistoryRefsOnRight { get; init; }
+    public AvatarSettings Avatars { get; init; } = new();
+    public bool DiffSideBySide { get; init; }
+    public double DiffFontSize { get; init; } = 12;
     public double UiScale { get; init; } = 1;
     public double WindowWidth { get; init; } = 1200;
     public double WindowHeight { get; init; } = 800;
@@ -64,6 +67,8 @@ public sealed record AppSettings
         UiScale = double.IsFinite(UiScale) ? Math.Clamp(Math.Round(UiScale * 10) / 10, .7, 2) : 1,
         UpdateChannel = UpdateChannel == "win-beta" ? "win-beta" : "win-stable",
         ExternalMergeTool = (ExternalMergeTool ?? new()).Normalize(),
+        Avatars = (Avatars ?? new()).Normalize(),
+        DiffFontSize = Clamp(DiffFontSize, 12, 9, 24),
         AutoFetchIntervalSeconds = Math.Clamp(AutoFetchCadenceRevision == 0 && AutoFetchIntervalSeconds == 10 ? DefaultAutoFetchIntervalSeconds : AutoFetchIntervalSeconds, MinimumAutoFetchIntervalSeconds, MaximumAutoFetchIntervalSeconds),
         AutoFetchCadenceRevision = 1,
         WindowWidth = Clamp(WindowWidth, 1200, 900, 3840),

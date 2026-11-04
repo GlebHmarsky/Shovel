@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.45.0 — 2026-11-04 (Beta)
+
+- Expand File → Settings into left-side Appearance, History & avatars, Diff, Git, Git identity, Tools and Updates categories.
+- Expose saved scale, theme, diff layout/font, ref placement, auto-fetch cadence, tool paths and update channel/check preferences; apply them after a successful profile save.
+- Read and edit global Git name/email through explicit native Git actions, with stale-value and lock failure handling.
+- Show author pictures in history and Commit details, loading GitHub/configured Gitea or Gravatar images in the background with colored initials as fallback.
+- Bound avatar requests and session caching; keep unauthenticated/private-profile failures quiet and offer initials-only mode.
+- Keep Stable at 0.39.1.
+
 ## 0.44.0 — 2026-11-04 (Beta)
 
 - Keep automatic fetch failures in Background activity without attention dialogs or taskbar flashing; change the default interval to one minute.

@@ -1007,4 +1007,49 @@ Previous HEAD: {1}</value></data>
   <data name="HistoryFileAbsent" xml:space="preserve"><value>This file does not exist in the selected commit.</value></data>
   <data name="HistoryFileTreeEntry" xml:space="preserve"><value>Historical file</value></data>
   <data name="HistoryFileFolder" xml:space="preserve"><value>Folder — double-click to open</value></data>
+  <data name="SettingsCategories" xml:space="preserve"><value>Settings categories</value></data>
+  <data name="SettingsPageAppearance" xml:space="preserve"><value>Appearance</value></data>
+  <data name="SettingsPageHistory" xml:space="preserve"><value>History &amp; avatars</value></data>
+  <data name="SettingsPageDiff" xml:space="preserve"><value>Diff</value></data>
+  <data name="SettingsPageGit" xml:space="preserve"><value>Git</value></data>
+  <data name="SettingsPageIdentity" xml:space="preserve"><value>Git identity</value></data>
+  <data name="SettingsPageTools" xml:space="preserve"><value>Tools</value></data>
+  <data name="SettingsPageUpdates" xml:space="preserve"><value>Updates</value></data>
+  <data name="SettingsTheme" xml:space="preserve"><value>Color theme</value></data>
+  <data name="SettingsScale" xml:space="preserve"><value>Application scale (%)</value></data>
+  <data name="SettingsScaleHelp" xml:space="preserve"><value>70–200%, in 10% steps. Ctrl+Plus and Ctrl+Minus also adjust scale. Your choice survives restarts.</value></data>
+  <data name="SettingsLayoutHelp" xml:space="preserve"><value>Window sizes, pane proportions, repository tab order and the selected bottom tab are remembered automatically.</value></data>
+  <data name="SettingsAvatarSource" xml:space="preserve"><value>Author pictures</value></data>
+  <data name="SettingsAvatarRepository" xml:space="preserve"><value>Repository host — GitHub or configured Gitea</value></data>
+  <data name="SettingsAvatarGravatar" xml:space="preserve"><value>Gravatar</value></data>
+  <data name="SettingsAvatarInitials" xml:space="preserve"><value>Colored initials only</value></data>
+  <data name="SettingsGiteaServer" xml:space="preserve"><value>Gitea website address (optional)</value></data>
+  <data name="SettingsAvatarHelp" xml:space="preserve"><value>Enter the website base address, including any subpath, for example https://git.example.com. Matching repositories use that server; github.com repositories use GitHub. Pictures load in the background without Git credentials. Private, missing or unavailable accounts keep their initials. Gravatar uses a hash of the author email. Pictures are cached in memory for this session.</value></data>
+  <data name="SettingsAvatarInvalid" xml:space="preserve"><value>Enter a valid HTTP(S) website address without credentials, query parameters or a fragment.</value></data>
+  <data name="SettingsDiffDefault" xml:space="preserve"><value>Open comparisons side by side by default</value></data>
+  <data name="SettingsDiffFont" xml:space="preserve"><value>Diff font size</value></data>
+  <data name="SettingsDiffHelp" xml:space="preserve"><value>Applies to text comparisons in Commit and history. The comparison toggle still lets you change a view temporarily.</value></data>
+  <data name="SettingsDisplayInvalid" xml:space="preserve"><value>Choose a scale from 70–200% in 10% steps and a diff font size from 9–24.</value></data>
+  <data name="SettingsRider" xml:space="preserve"><value>Rider executable</value></data>
+  <data name="SettingsCode" xml:space="preserve"><value>Visual Studio Code executable</value></data>
+  <data name="SettingsBash" xml:space="preserve"><value>Git Bash executable</value></data>
+  <data name="SettingsToolHelp" xml:space="preserve"><value>Leave an executable field empty to use automatic discovery when you choose Open in. Saving does not launch or discover tools.</value></data>
+  <data name="SettingsToolPathInvalid" xml:space="preserve"><value>Tool overrides must be absolute paths to .exe files, or empty for automatic discovery.</value></data>
+  <data name="SettingsUpdateChannel" xml:space="preserve"><value>Fetch new versions from</value></data>
+  <data name="SettingsPeriodicUpdates" xml:space="preserve"><value>Check periodically while Shovel is running</value></data>
+  <data name="SettingsUpdatesHelp" xml:space="preserve"><value>Launch and the update window always check immediately. Download and restart still require your approval. Beta contains the latest builds for testing; Stable contains owner-approved releases. Switching to Stable does not downgrade an installed Beta.</value></data>
+  <data name="SettingsIdentityHelp" xml:space="preserve"><value>Global Git identity is used for new commits unless a repository overrides it. Load reads your global configuration. Apply writes only user.name and user.email immediately; Cancel does not undo those explicit Git changes.</value></data>
+  <data name="SettingsIdentityLoad" xml:space="preserve"><value>Load global identity</value></data>
+  <data name="SettingsIdentityName" xml:space="preserve"><value>Name</value></data>
+  <data name="SettingsIdentityEmail" xml:space="preserve"><value>Email</value></data>
+  <data name="SettingsIdentityApply" xml:space="preserve"><value>Apply global identity</value></data>
+  <data name="SettingsIdentityNoGit" xml:space="preserve"><value>Open a repository first so Shovel can use the selected Git installation.</value></data>
+  <data name="SettingsIdentityLoadHelp" xml:space="preserve"><value>Choose Load global identity to read the existing values.</value></data>
+  <data name="SettingsIdentityWorking" xml:space="preserve"><value>Updating Git identity…</value></data>
+  <data name="SettingsIdentitySaved" xml:space="preserve"><value>Global Git identity saved. Repository-specific overrides remain in effect.</value></data>
+  <data name="SettingsIdentityLoaded" xml:space="preserve"><value>Global identity loaded. Edit the values and choose Apply.</value></data>
+  <data name="SettingsIdentitySaveFailed" xml:space="preserve"><value>Git could not save the complete identity. A partial change may remain. Load the current values before trying again.</value></data>
+  <data name="SettingsIdentityLoadFailed" xml:space="preserve"><value>Git could not read the global identity. You can retry Load.</value></data>
+  <data name="SettingsIdentityInvalid" xml:space="preserve"><value>Enter a name and email without control characters (maximum 512 characters each).</value></data>
+  <data name="SettingsIdentityChanged" xml:space="preserve"><value>Global Git identity changed since it was loaded. Load it again before applying edits.</value></data>
 </root>

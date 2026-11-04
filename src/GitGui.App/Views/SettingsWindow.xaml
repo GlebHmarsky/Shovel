@@ -1,23 +1,80 @@
 <Window x:Class="GitGui.App.Views.SettingsWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:loc="clr-namespace:GitGui.App.Localization" Title="{loc:Text Key=SettingsTitle}"
- Width="620" Height="650" MinWidth="440" MinHeight="320" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+ Width="840" Height="650" MinWidth="560" MinHeight="380" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
  FlowDirection="{x:Static loc:UiText.Direction}" FontFamily="Segoe UI" FontSize="13"
  Background="{DynamicResource Theme.Sidebar}" Foreground="{DynamicResource Theme.Text}">
- <Window.Resources><BooleanToVisibilityConverter x:Key="Visible"/></Window.Resources>
- <Border Background="{DynamicResource Theme.Sidebar}" Padding="22"><Grid>
+ <Window.Resources>
+  <BooleanToVisibilityConverter x:Key="Visible"/>
+  <Style x:Key="Heading" TargetType="TextBlock"><Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,18"/></Style>
+  <Style x:Key="Help" TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{DynamicResource Theme.Muted}"/><Setter Property="Margin" Value="0,10,0,16"/></Style>
+  <Style x:Key="Field" TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Margin" Value="0,12,0,6"/></Style>
+ </Window.Resources>
+ <Border Background="{DynamicResource Theme.Sidebar}" Padding="12"><Grid>
   <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
-   <TextBlock Text="{loc:Text Key=SettingsFetchTitle}" FontSize="22" FontWeight="SemiBold"/>
-   <CheckBox x:Name="AutoFetchEnabledInput" Content="{loc:Text Key=SettingsFetchEnabled}" IsChecked="{Binding AutoFetchEnabled}" IsEnabled="{Binding CanEdit}" Margin="0,18,0,12" AutomationProperties.Name="{loc:Text Key=SettingsFetchEnabled}"/>
-   <Label Content="{loc:Text Key=SettingsFetchInterval}" Target="{Binding ElementName=AutoFetchIntervalInput}" Padding="0,0,0,6"/>
-   <TextBox x:Name="AutoFetchIntervalInput" Text="{Binding IntervalSeconds, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" Width="110" HorizontalAlignment="Left" MaxLength="10" AutomationProperties.Name="{loc:Text Key=SettingsFetchInterval}"/>
-   <TextBlock Text="{loc:Text Key=SettingsFetchHelp}" TextWrapping="Wrap" Margin="0,12,0,0" Foreground="{DynamicResource Theme.Muted}"/>
-   <TextBlock Text="{loc:Text Key=HistoryRefsSettingsTitle}" FontSize="22" FontWeight="SemiBold" Margin="0,24,0,12"/>
-   <StackPanel Orientation="Horizontal" IsEnabled="{Binding CanEdit}">
-    <RadioButton Content="{loc:Text Key=HistoryRefsLeft}" IsChecked="{Binding HistoryRefsOnLeft}" GroupName="HistoryRefs" Margin="0,0,20,0"/>
-    <RadioButton Content="{loc:Text Key=HistoryRefsRight}" IsChecked="{Binding HistoryRefsRight}" GroupName="HistoryRefs"/>
-   </StackPanel>
+  <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+  <ListBox x:Name="CategoriesInput" Grid.RowSpan="3" ItemsSource="{Binding Categories}" SelectedValuePath="Value" DisplayMemberPath="Label" SelectedValue="{Binding SelectedCategory}" Margin="0,0,14,0" BorderThickness="0" Background="{DynamicResource Theme.Chrome}" AutomationProperties.Name="{loc:Text Key=SettingsCategories}">
+   <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+     <Border x:Name="Selection" Background="{TemplateBinding Background}" BorderThickness="3,0,0,0" BorderBrush="Transparent" Padding="10,12">
+      <ContentPresenter/>
+     </Border>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Selection" Property="Background" Value="{DynamicResource Theme.Hover}"/></Trigger>
+      <Trigger Property="IsSelected" Value="True"><Setter TargetName="Selection" Property="BorderBrush" Value="{DynamicResource Theme.Accent}"/><Setter TargetName="Selection" Property="Background" Value="{DynamicResource Theme.Sidebar}"/><Setter Property="Foreground" Value="{DynamicResource Theme.Accent}"/></Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+   </Style></ListBox.ItemContainerStyle>
+  </ListBox>
+  <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="12,10,12,0">
+   <StackPanel IsEnabled="{Binding CanEdit}">
+    <StackPanel Visibility="{Binding IsAppearance, Converter={StaticResource Visible}}">
+     <TextBlock Text="{loc:Text Key=SettingsPageAppearance}" Style="{StaticResource Heading}"/>
+     <TextBlock Text="{loc:Text Key=SettingsTheme}" Style="{StaticResource Field}"/>
+     <ComboBox ItemsSource="{Binding Themes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Appearance}" AutomationProperties.Name="{loc:Text Key=SettingsTheme}"/>
+     <TextBlock Text="{loc:Text Key=SettingsScale}" Style="{StaticResource Field}"/>
+     <ComboBox ItemsSource="{Binding ScaleChoices}" SelectedItem="{Binding ScalePercent}" Width="120" HorizontalAlignment="Left" AutomationProperties.Name="{loc:Text Key=SettingsScale}"/>
+     <TextBlock Text="{loc:Text Key=SettingsScaleHelp}" Style="{StaticResource Help}"/>
+     <TextBlock Text="{loc:Text Key=SettingsLayoutHelp}" Style="{StaticResource Help}"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding IsHistory, Converter={StaticResource Visible}}">
+     <TextBlock Text="{loc:Text Key=SettingsPageHistory}" Style="{StaticResource Heading}"/>
+     <TextBlock Text="{loc:Text Key=HistoryRefsSettingsTitle}" Style="{StaticResource Field}"/>
+     <WrapPanel><RadioButton Content="{loc:Text Key=HistoryRefsLeft}" IsChecked="{Binding HistoryRefsOnLeft}" GroupName="HistoryRefs" Margin="0,0,20,0"/><RadioButton Content="{loc:Text Key=HistoryRefsRight}" IsChecked="{Binding HistoryRefsRight}" GroupName="HistoryRefs"/></WrapPanel>
+     <TextBlock Text="{loc:Text Key=SettingsAvatarSource}" Style="{StaticResource Field}"/>
+     <ComboBox ItemsSource="{Binding AvatarProviders}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding AvatarProvider}" AutomationProperties.Name="{loc:Text Key=SettingsAvatarSource}"/>
+     <TextBlock Text="{loc:Text Key=SettingsGiteaServer}" Style="{StaticResource Field}"/>
+     <TextBox Text="{Binding GiteaServer, UpdateSourceTrigger=PropertyChanged}" MaxLength="2048" AutomationProperties.Name="{loc:Text Key=SettingsGiteaServer}"/>
+     <TextBlock Text="{loc:Text Key=SettingsAvatarHelp}" Style="{StaticResource Help}"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding IsDiff, Converter={StaticResource Visible}}">
+     <TextBlock Text="{loc:Text Key=SettingsPageDiff}" Style="{StaticResource Heading}"/>
+     <CheckBox Content="{loc:Text Key=SettingsDiffDefault}" IsChecked="{Binding DiffSideBySide}"/>
+     <TextBlock Text="{loc:Text Key=SettingsDiffFont}" Style="{StaticResource Field}"/>
+     <ComboBox ItemsSource="{Binding FontSizes}" SelectedItem="{Binding DiffFontSize}" Width="110" HorizontalAlignment="Left" AutomationProperties.Name="{loc:Text Key=SettingsDiffFont}"/>
+     <TextBlock Text="{loc:Text Key=SettingsDiffHelp}" Style="{StaticResource Help}"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding IsGit, Converter={StaticResource Visible}}">
+     <TextBlock Text="{loc:Text Key=SettingsFetchTitle}" Style="{StaticResource Heading}"/>
+     <CheckBox x:Name="AutoFetchEnabledInput" Content="{loc:Text Key=SettingsFetchEnabled}" IsChecked="{Binding AutoFetchEnabled}" Margin="0,0,0,12"/>
+     <TextBlock Text="{loc:Text Key=SettingsFetchInterval}" Style="{StaticResource Field}"/>
+     <TextBox x:Name="AutoFetchIntervalInput" Text="{Binding IntervalSeconds, UpdateSourceTrigger=PropertyChanged}" Width="110" HorizontalAlignment="Left" MaxLength="10" AutomationProperties.Name="{loc:Text Key=SettingsFetchInterval}"/>
+     <TextBlock Text="{loc:Text Key=SettingsFetchHelp}" Style="{StaticResource Help}"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding IsIdentity, Converter={StaticResource Visible}}">
+     <TextBlock Text="{loc:Text Key=SettingsPageIdentity}" Style="{StaticResource Heading}"/>
+     <TextBlock Text="{loc:Text Key=SettingsIdentityHelp}" Style="{StaticResource Help}"/>
+     <StackPanel DataContext="{Binding Identity}">
+      <Button Content="{loc:Text Key=SettingsIdentityLoad}" Command="{Binding LoadCommand}" HorizontalAlignment="Left"/>
+      <TextBlock Text="{loc:Text Key=SettingsIdentityName}" Style="{StaticResource Field}"/>
+      <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" MaxLength="512" AutomationProperties.Name="{loc:Text Key=SettingsIdentityName}"/>
+      <TextBlock Text="{loc:Text Key=SettingsIdentityEmail}" Style="{StaticResource Field}"/>
+      <TextBox Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEdit}" MaxLength="512" AutomationProperties.Name="{loc:Text Key=SettingsIdentityEmail}"/>
+      <Button Content="{loc:Text Key=SettingsIdentityApply}" Command="{Binding ApplyCommand}" HorizontalAlignment="Left" Margin="0,18,0,8"/>
+      <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+     </StackPanel>
+    </StackPanel>
+    <StackPanel Visibility="{Binding IsTools, Converter={StaticResource Visible}}">
    <TextBlock Text="{loc:Text Key=SettingsMergeTitle}" FontSize="22" FontWeight="SemiBold" Margin="0,24,0,12"/>
    <ComboBox x:Name="MergeToolModeInput" ItemsSource="{Binding Modes}" DisplayMemberPath="Label" SelectedValuePath="Value"
     SelectedValue="{Binding MergeToolMode}" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="{loc:Text Key=SettingsMergeTitle}"/>
@@ -37,13 +94,27 @@
     <TextBox x:Name="MergeToolCommandInput" Text="{Binding MergeToolCommand, UpdateSourceTrigger=PropertyChanged}" MaxLength="8192" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" MaxHeight="160" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" AutomationProperties.Name="{loc:Text Key=SettingsMergeCommand}"/>
     <TextBlock Text="{loc:Text Key=SettingsMergeCommandHelp}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Muted}" Margin="0,8,0,0"/>
    </StackPanel>
-  </StackPanel></ScrollViewer>
-  <ScrollViewer Grid.Row="1" MaxHeight="90" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,14,0,0">
-   <TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+     <TextBlock Text="{loc:Text Key=SettingsRider}" Style="{StaticResource Field}"/>
+     <DockPanel><Button DockPanel.Dock="Right" Content="{loc:Text Key=SettingsMergeBrowse}" Tag="RiderExecutable" Click="OnBrowseWorkspaceTool" Margin="8,0,0,0"/><TextBox Text="{Binding RiderExecutable, UpdateSourceTrigger=PropertyChanged}" MaxLength="32767" AutomationProperties.Name="{loc:Text Key=SettingsRider}"/></DockPanel>
+     <TextBlock Text="{loc:Text Key=SettingsCode}" Style="{StaticResource Field}"/>
+     <DockPanel><Button DockPanel.Dock="Right" Content="{loc:Text Key=SettingsMergeBrowse}" Tag="CodeExecutable" Click="OnBrowseWorkspaceTool" Margin="8,0,0,0"/><TextBox Text="{Binding CodeExecutable, UpdateSourceTrigger=PropertyChanged}" MaxLength="32767" AutomationProperties.Name="{loc:Text Key=SettingsCode}"/></DockPanel>
+     <TextBlock Text="{loc:Text Key=SettingsBash}" Style="{StaticResource Field}"/>
+     <DockPanel><Button DockPanel.Dock="Right" Content="{loc:Text Key=SettingsMergeBrowse}" Tag="BashExecutable" Click="OnBrowseWorkspaceTool" Margin="8,0,0,0"/><TextBox Text="{Binding BashExecutable, UpdateSourceTrigger=PropertyChanged}" MaxLength="32767" AutomationProperties.Name="{loc:Text Key=SettingsBash}"/></DockPanel>
+     <TextBlock Text="{loc:Text Key=SettingsToolHelp}" Style="{StaticResource Help}"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding IsUpdates, Converter={StaticResource Visible}}">
+     <TextBlock Text="{loc:Text Key=SettingsPageUpdates}" Style="{StaticResource Heading}"/>
+     <TextBlock Text="{loc:Text Key=SettingsUpdateChannel}" Style="{StaticResource Field}"/>
+     <ComboBox ItemsSource="{Binding Channels}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding UpdateChannel}" AutomationProperties.Name="{loc:Text Key=SettingsUpdateChannel}"/>
+     <CheckBox Content="{loc:Text Key=SettingsPeriodicUpdates}" IsChecked="{Binding PeriodicUpdates}" Margin="0,18,0,0"/>
+     <TextBlock Text="{loc:Text Key=SettingsUpdatesHelp}" Style="{StaticResource Help}"/>
+    </StackPanel>
+   </StackPanel>
   </ScrollViewer>
-  <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+  <ScrollViewer Grid.Column="1" Grid.Row="1" MaxHeight="80" VerticalScrollBarVisibility="Auto" Margin="12,10"><TextBlock Text="{Binding Status}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/></ScrollViewer>
+  <StackPanel Grid.Column="1" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
    <Button Content="{loc:Text Key=SettingsSave}" Command="{Binding SaveCommand}" IsDefault="True" MinWidth="90"/>
-   <Button Content="{loc:Text Key=ActionCancel}" IsCancel="True" IsEnabled="{Binding CanEdit}" MinWidth="85" Margin="8,0,0,0"/>
+   <Button Content="{loc:Text Key=ActionCancel}" IsCancel="True" IsEnabled="{Binding CanEdit}" MinWidth="85"/>
   </StackPanel>
  </Grid></Border>
 </Window>

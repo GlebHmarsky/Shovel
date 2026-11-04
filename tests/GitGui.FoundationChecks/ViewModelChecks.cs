@@ -58,6 +58,7 @@ internal static partial class Program
 
         async Task RunAsync()
         {
+            if (_settingsPagesChecks) { await RunSettingsPagesChecksAsync(); return; }
             if (_historyFileActionChecks) { await RunHistoricalFileActionChecksAsync(); return; }
             if (_historyActivityChecks) { await RunHistoryActivityChecksAsync(); return; }
             if (_mergeToolSettingsChecks) { await RunMergeToolSettingsChecksAsync(); return; }

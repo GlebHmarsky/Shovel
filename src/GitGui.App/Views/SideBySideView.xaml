@@ -9,7 +9,7 @@
    </Style.Triggers>
   </Style>
  </UserControl.Resources>
- <DataGrid x:Name="Table" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" CanUserReorderColumns="False" HeadersVisibility="Column" RowHeaderWidth="0" MinRowHeight="22" SelectionMode="Extended" SelectionUnit="FullRow" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" FontFamily="Consolas" FontSize="12" SelectionChanged="OnSelection" AutomationProperties.Name="{loc:Text Key=DiffSideBySide}">
+ <DataGrid x:Name="Table" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" CanUserReorderColumns="False" HeadersVisibility="Column" RowHeaderWidth="0" MinRowHeight="{DynamicResource Diff.RowHeight}" SelectionMode="Extended" SelectionUnit="FullRow" EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" FontFamily="Consolas" FontSize="{DynamicResource Diff.FontSize}" SelectionChanged="OnSelection" AutomationProperties.Name="{loc:Text Key=DiffSideBySide}">
  <DataGrid.Columns>
   <DataGridTextColumn Binding="{Binding Old.OldLine}" Width="45"/>
   <DataGridTemplateColumn ClipboardContentBinding="{Binding Old.Text}" Header="{loc:Text Key=DiffOldSide}" Width="*" MinWidth="180"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock DataContext="{Binding Old}" Style="{StaticResource SideCell}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>

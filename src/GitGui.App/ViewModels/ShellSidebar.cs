@@ -32,6 +32,7 @@ public sealed partial class ShellViewModel
 
     private void PublishSidebar()
     {
+        Changed(nameof(AvatarRemote));
         if (SelectedRepository is not { Snapshot: { } snapshot } tab || tab.History.Page is not { } page)
         { SidebarNodes = []; Changed(nameof(SidebarNodes)); return; }
         bool CanUse() => SelectedRepository == tab && CanAct;

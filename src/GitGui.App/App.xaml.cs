@@ -263,6 +263,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _theme?.Dispose();
+        _shell?.AvatarImages.Dispose();
         _updates?.Stop();
         _updater?.Dispose();
         _updateCancellation.Cancel();

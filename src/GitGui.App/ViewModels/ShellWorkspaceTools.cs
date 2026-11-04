@@ -34,9 +34,11 @@ public sealed partial class ShellViewModel
     private void RestoreWorkspacePreferences(AppSettings settings)
     {
         RestoreAutoFetchSettings(settings);
+        _savedUpdateChannel = settings.UpdateChannel; _savedPeriodicUpdates = settings.CheckUpdatesPeriodically;
         ExternalMergeTool = (settings.ExternalMergeTool ?? new()).Normalize();
         HistoryRefsOnRight = settings.HistoryRefsOnRight; Changed(nameof(HistoryRefsOnRight));
         UiScale.Set(settings.UiScale);
+        DiffPreferences.Apply(settings); AvatarPreferences = settings.Avatars; Changed(nameof(AvatarPreferences));
         _commitLayout = settings.CommitLayout;
         _riderExecutable = settings.RiderExecutable; _codeExecutable = settings.CodeExecutable; _bashExecutable = settings.BashExecutable;
         SetAppearance(settings.Appearance);

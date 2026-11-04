@@ -120,10 +120,10 @@ internal static partial class Program
             {
                 AppTheme.Apply(Application.Current.Resources, false, theme);
                 var model = new SettingsViewModel(false, 75, true, (_, _) => { saves++; return Task.FromResult(true); });
-                var window = new SettingsWindow(model); var content = (FrameworkElement)window.Content;
+                model.SelectedCategory = 3; var window = new SettingsWindow(model); var content = (FrameworkElement)window.Content;
                 try
                 {
-                    foreach (var size in new[] { (600, 360), (400, 260) })
+                    foreach (var size in new[] { (840, 650), (560, 380) })
                     {
                         Arrange(content, size.Item1, size.Item2); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                         Expect(((CheckBox)window.FindName("AutoFetchEnabledInput")).IsChecked == false &&

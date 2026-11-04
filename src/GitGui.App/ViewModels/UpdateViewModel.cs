@@ -35,6 +35,13 @@ public sealed class UpdateViewModel : ObservableObject
             if (_windowOpened) ActiveTask = CheckAsync();
         }
     }
+    public async Task ApplyPreferencesAsync(bool periodic, string channel)
+    {
+        PeriodicChecks = periodic;
+        if (channel == Channel) return;
+        _cancel?.Cancel(); await ActiveTask;
+        if (!_stopping) SelectedChannel = channel == "win-beta" ? 1 : 0;
+    }
     public string Notes => _snapshot.Notes;
     public bool Ready => _snapshot.Phase is UpdatePhase.Ready or UpdatePhase.Blocked;
     public bool Offered => _snapshot.Phase == UpdatePhase.Offered;
