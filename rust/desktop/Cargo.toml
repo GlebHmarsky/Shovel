@@ -1,0 +1,17 @@
+[package]
+name = "shovel-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ShovelRust"
+path = "src/main.rs"
+
+[dependencies]
+shovel-core = { path = "../core" }
+eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "system_fonts", "wgpu"] }
+rfd = "0.15"
+serde_json.workspace = true
+velopack = "=1.2.161"

@@ -8,6 +8,7 @@ Rust foundation checks (PowerShell, from this worktree):
 . ./scripts/Use-RustToolchain.ps1
 cargo test -p shovel-core --locked
 cargo clippy -p shovel-core --all-targets --locked -- -D warnings
+cargo build -p shovel-desktop --locked
 ./scripts/Test-RustReleasePolicy.ps1
 ```
 

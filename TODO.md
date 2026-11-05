@@ -11,7 +11,7 @@ Owner request 2026-11-05. Parity baseline: C# **0.47.0**, commit **2175458**. La
 #### P0 — isolation, architecture and delivery
 
 - [x] **R01** Create separate worktree on `codex/rust-rewrite`; preserve clean C# master, source, historical branches and existing releases.
-- [ ] **R02** Establish `codex/rust-beta` and `codex/rust-stable` release branches; Rust-only package/executable/profile/shortcut/update identities, Beta default and explicitly approved Stable promotion.
+- [ ] **R02** Establish `codex/rust-beta` and `codex/rust-stable` release branches; Rust-only package/executable/profile/shortcut/update identities, Beta default and explicitly approved Stable promotion. Local release branches created at foundation `01c7593`; installer/shortcut and public feed establishment remain pending.
 - [ ] **R03** Pin Rust/MSVC dependencies and lockfile; compile desktop UI and askpass as Rust executables. No .NET runtime, C# application subprocess, browser UI wrapper or runtime bridge in Rust packages. Preserve license/icon/notices.
 - [ ] **R04** Adapt Build-Release/preview/installer/publisher/probe dispatch for Rust branches with clean-source checks, source fingerprint, exact release-branch/tag commit and immutable versions. Preserve original C# scripts/feeds on master.
 - [ ] **R05** Signed Rust Beta/Stable metadata with pinned existing public key, RSA-PSS verification, size/hash/package/product/channel/architecture checks, per-channel replay floors, bounded HTTPS and no credentials. Reject C# feeds/packages and cross-channel substitution.

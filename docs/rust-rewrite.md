@@ -2,11 +2,11 @@
 
 The owner requested the entire Shovel desktop application in Rust on 2026-11-05. Baseline C# source is `2175458` (0.47.0). This branch is in progress and has no delivered Rust application yet. [TODO](../TODO.md#entire-rust-application--active-not-delivered) owns the complete parity checklist; historical C# milestones are not Rust evidence.
 
-The Rust workspace uses a pinned MSVC toolchain and separate core/UI/helper crates. The desktop must render through a native Rust UI toolkit with Windows integration; it must not wrap or start the C# application. Git for Windows remains the configured Git engine so hooks, filters, credentials and tools retain their native behavior. Existing C# source/assets/resources serve as the parity reference and are excluded from the Rust runtime package.
+The Rust workspace uses a pinned MSVC toolchain with core and desktop crates; the askpass crate remains pending. The desktop uses egui/eframe 0.37.0 with native Windows/WGPU rendering, AccessKit and system fonts. It does not use a browser or start the C# application. The internal workspace currently wires repository opening/restoration, asynchronous history paging, graph/metadata rendering and profile saving; it is not the complete application. Git for Windows remains the configured Git engine so hooks, filters, credentials and tools retain their native behavior. Existing C# source/assets/resources serve as the parity reference and are excluded from the Rust runtime package.
 
 ## Independent channels
 
-`distribution/rust-channels.json` defines `ShovelRust`, `ShovelRust.exe`, the independent `ShovelRust/Foundation` profile, `codex/rust-rewrite` development and `codex/rust-beta` / `codex/rust-stable` release branches. Beta is the initial channel. Importing C# preferences must copy into the Rust profile and translate the update preference; it must never write the C# profile or share updater trust files.
+`distribution/rust-channels.json` defines `ShovelRust`, `ShovelRust.exe`, the independent `ShovelRust/Foundation` profile, `codex/rust-rewrite` development and `codex/rust-beta` / `codex/rust-stable` release branches. All three branches exist locally; the release branches initially point to foundation commit `01c7593`. Beta is the initial channel. Importing C# preferences copies into the Rust profile and translates the update preference; it never writes the C# profile or shares updater trust files. Draft copying and complete nested preference normalization remain pending.
 
 | Identity | Rust Beta | Rust Stable |
 | --- | --- | --- |
