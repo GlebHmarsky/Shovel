@@ -304,3 +304,85 @@ fn accepted_discard_drains_native_hook_and_reconciles_after_view_closes() {
     );
     assert!(!h.editor.open);
 }
+
+#[test]
+fn selected_stash_confirms_frozen_paths_and_message_then_finishes_after_view_closes() {
+    let mut h = Harness::new();
+    let original = h.editor.git.clone();
+    let mut missing = (*original).clone();
+    missing.executable = h._temp.path().join("missing-git.exe");
+    h.editor.git = Arc::new(missing);
+    h.menu();
+    h.click(&strings::format("FileStashLabel", &["1"]));
+    assert!(!h.editor.scheduler.has_accepted_work());
+    assert!(
+        h.editor
+            .file_confirmation
+            .as_ref()
+            .is_some_and(|c| c.action == file_menu::FileAction::Stash)
+    );
+    let out = h.render(vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    assert!(nodes.iter().any(
+        |(_, n)| n.value() == Some(strings::format("FileStashTarget", &["file.txt"]).as_str())
+    ));
+    let input = nodes
+        .iter()
+        .find(|(_, n)| {
+            n.role() == egui::Role::TextInput
+                && n.bounds().is_some_and(|r| r.height() < 60.)
+                && n.labelled_by().len() == 1
+        })
+        .unwrap();
+    let bounds = input.1.bounds().unwrap();
+    let point = egui::pos2(
+        (bounds.x0 + bounds.x1) as f32 / 2.,
+        (bounds.y0 + bounds.y1) as f32 / 2.,
+    );
+    out.drop_without_applying_deltas();
+    h.click_at(point, egui::PointerButton::Primary);
+    h.render(vec![egui::Event::Text("selected שלום".into())])
+        .drop_without_applying_deltas();
+    assert_eq!(
+        h.editor.file_confirmation.as_ref().unwrap().message,
+        "selected שלום"
+    );
+    h.click(&text("ActionCancel"));
+    assert!(!h.editor.busy);
+    assert_eq!(
+        fs::read(h.editor.path.join("file.txt")).unwrap(),
+        b"worktree\n"
+    );
+    h.editor.git = original;
+    h.menu();
+    h.click(&strings::format("FileStashLabel", &["1"]));
+    h.editor.file_confirmation.as_mut().unwrap().message = "selected שלום".into();
+    h.click(&text("FileStashButton"));
+    assert!(h.editor.busy);
+    h.editor.request_leave(Leave::Close, &h.ctx);
+    assert!(!h.editor.open && h.editor.blocks_exit());
+    h.until(|e| !e.busy);
+    assert!(
+        h.editor
+            .status
+            .as_deref()
+            .unwrap()
+            .starts_with(&text("CommitSucceededStashFiles")),
+        "{:?}",
+        h.editor.status
+    );
+    assert_eq!(fs::read(h.editor.path.join("file.txt")).unwrap(), b"base\n");
+    assert_eq!(
+        fs::read(h.editor.path.join("other.txt")).unwrap(),
+        b"keep changed\n"
+    );
+    let context = h.editor.context.as_ref().unwrap();
+    let list = h
+        .editor
+        .git
+        .stashes(&context.repository, &Cancellation::default())
+        .unwrap();
+    assert_eq!(list.entries.len(), 1);
+    assert!(list.entries[0].message.ends_with("selected שלום"));
+    assert!(!h.editor.open);
+}

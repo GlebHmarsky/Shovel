@@ -12,6 +12,7 @@ pub mod conflicts;
 pub mod diff;
 #[cfg(windows)]
 pub mod drafts;
+#[cfg(windows)]
 pub mod files;
 #[cfg(windows)]
 pub mod git;
@@ -31,6 +32,8 @@ pub mod process;
 #[cfg(windows)]
 pub mod recovery;
 pub mod scheduler;
+#[cfg(windows)]
+mod selected_stash;
 pub mod settings;
 #[cfg(windows)]
 pub mod stashes;

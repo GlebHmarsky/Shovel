@@ -329,3 +329,230 @@ fn filesystem_partial_failure_retains_removed_count_and_remaining_readonly_file(
             .any(|e| e.path == "second")
     );
 }
+
+#[test]
+fn selected_stash_preserves_unrelated_index_and_restores_only_selected_index_content() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "selected staged\n").unwrap();
+    fs::write(f.root.join("other.txt"), "unrelated staged\n").unwrap();
+    f.cmd(&["add", "file.txt", "other.txt"]);
+    f.cmd(&["update-index", "--split-index"]);
+    fs::write(f.root.join("file.txt"), "selected working\n").unwrap();
+    fs::write(f.root.join("other.txt"), "unrelated working\n").unwrap();
+    fs::write(f.root.join("-new שלום[1].txt"), "selected untracked\n").unwrap();
+    fs::write(f.root.join("keep.txt"), "unrelated untracked\n").unwrap();
+    let c = f.context();
+    let mut entries = selected(&c, Group::Unstaged, &["file.txt"]);
+    entries.extend(selected(&c, Group::Untracked, &["-new שלום[1].txt"]));
+    let r = f.git.stash_files(&c, &entries, "selected שלום").unwrap();
+    assert!(r.succeeded(), "{:?} {}", r.message, r.output);
+    let saved = r.saved_stash.unwrap();
+    assert_eq!(f.cmd(&["rev-parse", "refs/stash"]), saved);
+    assert_eq!(
+        f.cmd(&["show", &format!("{saved}^2:file.txt")]),
+        "selected staged"
+    );
+    assert_eq!(f.cmd(&["show", &format!("{saved}^2:other.txt")]), "other");
+    assert_eq!(
+        f.cmd(&["show", &format!("{saved}:file.txt")]),
+        "selected working"
+    );
+    assert_eq!(f.cmd(&["show", ":other.txt"]), "unrelated staged");
+    assert_eq!(
+        fs::read(f.root.join("other.txt")).unwrap(),
+        b"unrelated working\n"
+    );
+    assert_eq!(
+        fs::read(f.root.join("keep.txt")).unwrap(),
+        b"unrelated untracked\n"
+    );
+    assert_eq!(fs::read(f.root.join("file.txt")).unwrap(), b"base\n");
+    assert_eq!(f.cmd(&["show", ":file.txt"]), "base");
+    assert!(!f.root.join("-new שלום[1].txt").exists());
+    let replay = f._temp.path().join("replay");
+    f.cmd(&[
+        "worktree",
+        "add",
+        "--detach",
+        replay.to_str().unwrap(),
+        "HEAD",
+    ]);
+    let r = process::run(
+        &f.git.request(
+            &replay,
+            ["stash", "apply", "--index", &saved],
+            Lifetime::AcceptedCommand,
+            65536,
+        ),
+        &Cancellation::default(),
+        None,
+    )
+    .unwrap();
+    assert!(r.success(), "{r:?}");
+    let state = f
+        .git
+        .working_copy(&replay, &Cancellation::default())
+        .unwrap();
+    assert!(state.entries.iter().all(|e| e.path != "other.txt"));
+    assert!(
+        state
+            .entries
+            .iter()
+            .any(|e| e.path == "file.txt" && e.group == Group::Staged)
+    );
+    assert!(
+        state
+            .entries
+            .iter()
+            .any(|e| e.path == "file.txt" && e.group == Group::Unstaged)
+    );
+    assert_eq!(
+        fs::read(replay.join("-new שלום[1].txt")).unwrap(),
+        b"selected untracked\n"
+    );
+    assert!(!replay.join("keep.txt").exists());
+    assert!(fs::read_dir(c.repository.git_directory).unwrap().all(|e| {
+        !e.unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("shovel-rust-index-")
+    }));
+}
+
+#[test]
+fn selected_stash_keeps_saved_entry_and_real_index_when_native_cleanup_is_locked() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "staged\n").unwrap();
+    f.cmd(&["add", "file.txt"]);
+    fs::write(f.root.join("file.txt"), "working\n").unwrap();
+    let c = f.context();
+    let index = fs::read(c.repository.git_directory.join("index")).unwrap();
+    fs::write(
+        c.repository.git_directory.join("index.lock"),
+        "existing lock",
+    )
+    .unwrap();
+    let r = f
+        .git
+        .stash_files(
+            &c,
+            &selected(&c, Group::Unstaged, &["file.txt"]),
+            "saved despite lock",
+        )
+        .unwrap();
+    assert!(!r.succeeded());
+    assert_eq!(r.message.as_deref(), Some("FileStashIndexRetained"));
+    let hash = r.saved_stash.unwrap();
+    assert_eq!(f.cmd(&["rev-parse", "refs/stash"]), hash);
+    assert_eq!(
+        fs::read(c.repository.git_directory.join("index")).unwrap(),
+        index
+    );
+    assert_eq!(
+        fs::read(c.repository.git_directory.join("index.lock")).unwrap(),
+        b"existing lock"
+    );
+    assert_eq!(fs::read(f.root.join("file.txt")).unwrap(), b"base\n");
+    assert!(
+        r.updated
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.group == Group::Staged && e.path == "file.txt")
+    );
+}
+
+#[test]
+fn selected_stash_rejects_stale_index_and_invalid_message_without_saving_or_cleaning() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "keep selected\n").unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Unstaged, &["file.txt"]);
+    let r = f.git.stash_files(&c, &entries, &"ש".repeat(2049));
+    assert!(matches!(
+        r,
+        Err(shovel_core::operation::Error::Code("StashMessageLimit"))
+    ));
+    fs::write(f.root.join("other.txt"), "new index\n").unwrap();
+    f.cmd(&["add", "other.txt"]);
+    let r = f.git.stash_files(&c, &entries, "stale");
+    assert!(matches!(
+        r,
+        Err(shovel_core::operation::Error::Code("CommitStale"))
+    ));
+    assert!(f.cmd(&["stash", "list"]).is_empty());
+    assert_eq!(
+        fs::read(f.root.join("file.txt")).unwrap(),
+        b"keep selected\n"
+    );
+    assert_eq!(f.cmd(&["show", ":other.txt"]), "new index");
+}
+
+#[test]
+fn selected_stash_retains_saved_rename_and_index_after_native_path_cleanup_failure() {
+    let f = Fixture::new();
+    f.base();
+    f.cmd(&["mv", "--", "file.txt", "-renamed שלום[1].txt"]);
+    fs::remove_file(f.root.join("other.txt")).unwrap();
+    f.cmd(&["add", "--all"]);
+    fs::write(f.root.join("-renamed שלום[1].txt"), "renamed working\n").unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Staged, &["-renamed שלום[1].txt", "other.txt"]);
+    let index = fs::read(c.repository.git_directory.join("index")).unwrap();
+    let r = f.git.stash_files(&c, &entries, "rename/delete").unwrap();
+    // Git 2.51.1 stores the stash, then its internal path-limited `add`
+    // rejects the now-absent staged-deletion endpoint. Preserve that native
+    // partial failure; do not retry, drop the saved entry or reset real files.
+    assert!(!r.succeeded());
+    assert!(r.output.contains("pathspec 'file.txt'"), "{}", r.output);
+    let hash = r.saved_stash.unwrap();
+    assert_eq!(f.cmd(&["rev-parse", "refs/stash"]), hash);
+    assert_eq!(
+        fs::read(c.repository.git_directory.join("index")).unwrap(),
+        index
+    );
+    assert!(!f.root.join("file.txt").exists() && !f.root.join("other.txt").exists());
+    assert_eq!(
+        fs::read(f.root.join("-renamed שלום[1].txt")).unwrap(),
+        b"renamed working\n"
+    );
+    assert_eq!(f.cmd(&["show", ":-renamed שלום[1].txt"]), "base");
+    assert_eq!(
+        f.cmd(&["show", &format!("{hash}^2:-renamed שלום[1].txt")]),
+        "base"
+    );
+    assert_eq!(
+        f.cmd(&["show", &format!("{hash}:-renamed שלום[1].txt")]),
+        "renamed working"
+    );
+    assert!(!r.updated.unwrap().entries.is_empty());
+}
+
+#[test]
+fn selected_stash_observes_real_index_changes_made_by_native_hook_after_saving() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "selected staged\n").unwrap();
+    f.cmd(&["add", "file.txt"]);
+    fs::write(f.root.join("file.txt"), "selected working\n").unwrap();
+    fs::write(f.root.join(".git/hooks/post-index-change"), "#!/bin/sh\nif test ! -e hook-mutated && git rev-parse --verify refs/stash >/dev/null 2>&1; then\n touch hook-mutated\n printf 'hook staged\\n' > other.txt\n GIT_INDEX_FILE=\"$PWD/.git/index\" git add -- other.txt\nfi\n").unwrap();
+    let c = f.context();
+    let r = f
+        .git
+        .stash_files(
+            &c,
+            &selected(&c, Group::Unstaged, &["file.txt"]),
+            "hook changed index",
+        )
+        .unwrap();
+    assert!(!r.succeeded());
+    assert_eq!(r.message.as_deref(), Some("FileStashIndexRetained"));
+    let saved = r.saved_stash.unwrap();
+    assert_eq!(f.cmd(&["rev-parse", "refs/stash"]), saved);
+    assert_eq!(f.cmd(&["show", ":file.txt"]), "selected staged");
+    assert_eq!(f.cmd(&["show", ":other.txt"]), "hook staged");
+    assert_eq!(fs::read(f.root.join("file.txt")).unwrap(), b"base\n");
+}

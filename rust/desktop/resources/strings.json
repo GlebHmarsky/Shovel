@@ -1049,5 +1049,8 @@
   "RustDiscardConflictText": "Discard unsaved editor text",
   "RustDiscardPartial": "Discard did not finish. Some reviewed files may already have changed. Review the refreshed file list and Git output before trying again.",
   "RustDiscardRemaining": "Git finished, but some reviewed paths still have changes. Review the refreshed file list.",
-  "RustFileDeleteFailed": "Windows could not remove a selected file. It may be read-only, in use, or inaccessible."
+  "RustFileDeleteFailed": "Windows could not remove a selected file. It may be read-only, in use, or inaccessible.",
+  "RustFileStashPartial": "The selected stash operation did not finish. Files or a saved entry may already have changed. Inspect Stashes and Local Changes before retrying.",
+  "RustFileStashSaved": "Saved stash: {0}",
+  "RustFileStashNotSaved": "Git did not create a new stash for the reviewed selection. Local changes have been refreshed."
 }

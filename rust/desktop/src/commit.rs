@@ -33,8 +33,11 @@ enum Event {
         Option<drafts::Text>,
     ),
     Removed,
-    FileStarted,
-    FileCompleted(Box<Result<shovel_core::files::Completed, shovel_core::operation::Error>>),
+    FileStarted(file_menu::FileAction),
+    FileCompleted(
+        file_menu::FileAction,
+        Box<Result<shovel_core::files::Completed, shovel_core::operation::Error>>,
+    ),
 }
 enum Leave {
     Close,
@@ -91,7 +94,7 @@ pub struct Editor {
     leave: Option<Leave>,
     exit_cancelled: bool,
     file_menu: Option<file_menu::Menu>,
-    file_confirmation: Option<file_menu::Selection>,
+    file_confirmation: Option<file_menu::Confirmation>,
     diff_deferred: bool,
     files_focus: Option<egui::Id>,
 }
@@ -454,8 +457,8 @@ impl Editor {
                     }
                 }
                 Event::Started => {}
-                Event::FileStarted => self.status = Some(text("CommitPhaseDiscard")),
-                Event::FileCompleted(result) => self.file_completed(*result, ctx),
+                Event::FileStarted(action) => self.status = Some(text(action.phase())),
+                Event::FileCompleted(action, result) => self.file_completed(action, *result, ctx),
                 Event::Output(stderr, bytes) => {
                     if self.output.len() < 1024 * 1024 {
                         let value = String::from_utf8_lossy(&bytes);

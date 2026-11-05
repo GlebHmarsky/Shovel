@@ -110,6 +110,13 @@ impl Transcript {
         self.run(&request)
     }
     pub(crate) fn run(&mut self, request: &process::Request) -> Result<bool, Error> {
+        self.run_capture(request)?;
+        Ok(self.commands.last().is_some_and(Command::succeeded))
+    }
+    pub(crate) fn run_capture(
+        &mut self,
+        request: &process::Request,
+    ) -> Result<process::Result, Error> {
         let result = process::run(request, &Cancellation::default(), None)?;
         let output = redact(&format!(
             "{}{}",
@@ -128,9 +135,8 @@ impl Transcript {
             exit_code: result.exit_code,
             elapsed: result.elapsed,
         };
-        let succeeded = command.succeeded();
         self.commands.push(command);
-        Ok(succeeded)
+        Ok(result)
     }
     pub(crate) fn finish(
         self,

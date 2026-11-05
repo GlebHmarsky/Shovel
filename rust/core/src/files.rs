@@ -46,6 +46,7 @@ pub struct Completed {
     pub output_truncated: bool,
     pub message: Option<String>,
     pub warning: Option<&'static str>,
+    pub saved_stash: Option<String>,
     /// Filesystem-only work is reported without inventing a Git command/exit.
     pub filesystem_changes: usize,
     pub updated: Result<Context, working::Error>,
@@ -94,6 +95,13 @@ pub fn discard_key(context: &Context, entries: &[Change]) -> String {
     }
     format!("discard:{:x}", digest.finalize())
 }
+pub fn stash_key(context: &Context, entries: &[Change], message: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(discard_key(context, entries).as_bytes());
+    digest.update([0]);
+    digest.update(message.as_bytes());
+    format!("stash-files:{:x}", digest.finalize())
+}
 pub(crate) fn regular(root: &Path, relative: &str) -> Result<PathBuf, Error> {
     let path = working::path(root, relative)?;
     if diff::has_reparse(root, &path)? {
@@ -104,7 +112,7 @@ pub(crate) fn regular(root: &Path, relative: &str) -> Result<PathBuf, Error> {
     }
     Ok(path)
 }
-fn input(paths: &[String]) -> Result<Vec<u8>, Error> {
+pub(crate) fn input(paths: &[String]) -> Result<Vec<u8>, Error> {
     let mut input = Vec::new();
     for path in paths {
         if path.len() + 1 > (1024 * 1024usize).saturating_sub(input.len()) {
@@ -269,6 +277,7 @@ impl Git {
             output_truncated,
             message: result.err().map(|e| e.code()),
             warning,
+            saved_stash: None,
             filesystem_changes,
             updated,
         })

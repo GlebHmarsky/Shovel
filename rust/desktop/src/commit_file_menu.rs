@@ -15,6 +15,45 @@ pub(super) struct Menu {
     pub position: egui::Pos2,
     pub layer: egui::LayerId,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum FileAction {
+    Discard,
+    Stash,
+}
+impl FileAction {
+    pub(super) fn phase(self) -> &'static str {
+        match self {
+            Self::Discard => "CommitPhaseDiscard",
+            Self::Stash => "CommitPhaseStashFiles",
+        }
+    }
+    fn succeeded(self) -> &'static str {
+        match self {
+            Self::Discard => "CommitSucceededDiscard",
+            Self::Stash => "CommitSucceededStashFiles",
+        }
+    }
+    fn partial(self) -> &'static str {
+        match self {
+            Self::Discard => "RustDiscardPartial",
+            Self::Stash => "RustFileStashPartial",
+        }
+    }
+}
+pub(super) struct Confirmation {
+    pub selection: Selection,
+    pub action: FileAction,
+    pub message: String,
+}
+impl Confirmation {
+    fn new(selection: Selection, action: FileAction) -> Self {
+        Self {
+            selection,
+            action,
+            message: String::new(),
+        }
+    }
+}
 impl Editor {
     fn file_selection_current(&self, selection: &Selection) -> bool {
         self.context
@@ -150,6 +189,33 @@ impl Editor {
             {
                 action = Some(4);
             }
+            let stash_reason = if !files::supported(&menu.selected.entries) {
+                "FileActionUnsupported"
+            } else if menu.selected.context.repository.head.is_none() {
+                "StashNeedsCommit"
+            } else {
+                "ActionSequence"
+            };
+            if ui
+                .add_enabled(
+                    enabled
+                        && files::supported(&menu.selected.entries)
+                        && menu.selected.context.repository.head.is_some()
+                        && menu.selected.context.repository.operations.is_empty(),
+                    egui::Button::new(strings::format(
+                        "FileStashLabel",
+                        &[&menu.selected.entries.len().to_string()],
+                    )),
+                )
+                .on_disabled_hover_text(if enabled {
+                    text(stash_reason)
+                } else {
+                    reason.clone()
+                })
+                .clicked()
+            {
+                action = Some(5);
+            }
         });
         if let Some(action) = action {
             match action {
@@ -169,7 +235,16 @@ impl Editor {
                     );
                 }
                 2 | 3 => self.copy_paths(&menu.selected, action == 3, ctx),
-                4 => self.file_confirmation = Some(menu.selected.clone()),
+                4 | 5 => {
+                    self.file_confirmation = Some(Confirmation::new(
+                        menu.selected.clone(),
+                        if action == 4 {
+                            FileAction::Discard
+                        } else {
+                            FileAction::Stash
+                        },
+                    ))
+                }
                 _ => unreachable!(),
             }
             open = false;
@@ -179,17 +254,27 @@ impl Editor {
         }
     }
     pub(super) fn show_file_confirmation(&mut self, ctx: &egui::Context) {
-        let Some(selection) = self.file_confirmation.clone() else {
+        let Some(mut confirmation) = self.file_confirmation.take() else {
             return;
         };
-        let current = self.file_selection_current(&selection);
+        let selection = &confirmation.selection;
+        let stash = confirmation.action == FileAction::Stash;
+        let current = self.file_selection_current(selection);
         let mut accept = false;
         let mut cancel = false;
         let response = egui::Modal::new(egui::Id::unique("discard-files")).show(ctx, |ui| {
             ui.set_width(620.);
-            ui.heading(text("FileDiscardTitle"));
+            ui.heading(text(if stash {
+                "FileStashTitle"
+            } else {
+                "FileDiscardTitle"
+            }));
             ui.label(strings::format(
-                "FileDiscardExplanation",
+                if stash {
+                    "FileStashExplanation"
+                } else {
+                    "FileDiscardExplanation"
+                },
                 &[
                     selection
                         .context
@@ -214,7 +299,9 @@ impl Editor {
                             .map(|old| strings::format("FileActionPath", &[&entry.path, old]))
                             .unwrap_or_else(|| entry.path.clone());
                         ui.label(strings::format(
-                            if entry.group == Group::Untracked
+                            if stash {
+                                "FileStashTarget"
+                            } else if entry.group == Group::Untracked
                                 || entry.group == Group::Staged
                                     && selection.context.repository.head.is_none()
                             {
@@ -232,24 +319,49 @@ impl Editor {
             if !current {
                 ui.label(text("FileMenuStale"));
             }
+            if stash {
+                let label = ui.label(text("StashMessage"));
+                ui.add(
+                    egui::TextEdit::singleline(&mut confirmation.message)
+                        .char_limit(4096)
+                        .hint_text(text("StashMessage")),
+                )
+                .labelled_by(label.id);
+                if confirmation.message.len() > 4096 || confirmation.message.contains('\0') {
+                    ui.label(text("StashMessageLimit"));
+                }
+            }
             ui.horizontal(|ui| {
                 accept = ui
                     .add_enabled(
-                        current && !self.action_busy() && !self.loading,
-                        egui::Button::new(text("FileDiscardButton")),
+                        current
+                            && !self.action_busy()
+                            && !self.loading
+                            && (!stash
+                                || confirmation.message.len() <= 4096
+                                    && !confirmation.message.contains('\0')),
+                        egui::Button::new(text(if stash {
+                            "FileStashButton"
+                        } else {
+                            "FileDiscardButton"
+                        })),
                     )
                     .clicked();
                 cancel = ui.button(text("ActionCancel")).clicked();
             });
         });
         if accept {
-            self.file_confirmation = None;
-            self.submit_discard(selection, ctx);
-        } else if cancel || response.should_close() {
-            self.file_confirmation = None;
+            self.submit_file_action(confirmation, ctx);
+        } else if !cancel && !response.should_close() {
+            self.file_confirmation = Some(confirmation);
         }
     }
-    fn submit_discard(&mut self, selection: Selection, ctx: &egui::Context) {
+    fn submit_file_action(&mut self, confirmation: Confirmation, ctx: &egui::Context) {
+        let Confirmation {
+            selection,
+            action,
+            message,
+        } = confirmation;
         if !self.file_selection_current(&selection) || self.action_busy() {
             self.status = Some(text("FileMenuStale"));
             return;
@@ -270,18 +382,25 @@ impl Editor {
                 .common_directory
                 .to_string_lossy()
                 .to_uppercase(),
-            files::discard_key(&context, &entries),
+            if action == FileAction::Discard {
+                files::discard_key(&context, &entries)
+            } else {
+                files::stash_key(&context, &entries, &message)
+            },
             Lane::WorkingCopy,
             move || {
-                let _ = tx.send(Event::FileStarted);
+                let _ = tx.send(Event::FileStarted(action));
                 ctx.request_repaint();
-                let result = git.discard_files(&context, &entries);
+                let result = match action {
+                    FileAction::Discard => git.discard_files(&context, &entries),
+                    FileAction::Stash => git.stash_files(&context, &entries, &message),
+                };
                 let outcome = if result.as_ref().is_ok_and(files::Completed::succeeded) {
                     Outcome::Succeeded
                 } else {
                     Outcome::Failed
                 };
-                let _ = tx.send(Event::FileCompleted(Box::new(result)));
+                let _ = tx.send(Event::FileCompleted(action, Box::new(result)));
                 ctx.request_repaint();
                 outcome
             },
@@ -299,6 +418,7 @@ impl Editor {
     }
     pub(super) fn file_completed(
         &mut self,
+        action: FileAction,
         result: Result<files::Completed, operation::Error>,
         ctx: &egui::Context,
     ) {
@@ -312,7 +432,7 @@ impl Editor {
                     if result.warning.is_some() {
                         "ActionCompletedShort"
                     } else {
-                        "CommitSucceededDiscard"
+                        action.succeeded()
                     }
                 } else {
                     result.message.as_deref().unwrap_or("ActionFailedShort")
@@ -329,7 +449,14 @@ impl Editor {
                     self.status = Some(format!(
                         "{}\n{}",
                         self.status.as_deref().unwrap_or_default(),
-                        text("RustDiscardPartial")
+                        text(action.partial())
+                    ));
+                }
+                if let Some(saved) = &result.saved_stash {
+                    self.status = Some(format!(
+                        "{}\n{}",
+                        self.status.as_deref().unwrap_or_default(),
+                        strings::format("RustFileStashSaved", &[saved])
                     ));
                 }
                 if result.output_truncated {
@@ -389,7 +516,7 @@ impl Editor {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
             && files::supported(&selection.entries)
         {
-            self.file_confirmation = Some(selection);
+            self.file_confirmation = Some(Confirmation::new(selection, FileAction::Discard));
         } else if modifiers.ctrl
             && !modifiers.alt
             && ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::C))
