@@ -1032,6 +1032,8 @@
   "RustConfirmSkip": "Confirm skip",
   "RustConfirmAbort": "Confirm abort",
   "RustRecoveryTargetUnknown": "Not recorded by Git",
+  "RustConfirmStashDrop": "Confirm stash deletion",
+  "RustCloseStashes": "Close",
   "RustConfirmReset": "Confirm reset",
   "RustConfirmDeleteBranch": "Confirm branch deletion",
   "RustDiscardCheckoutConfirmation": "Confirm discarding the tracked changes listed below in {0}, then check out {1}. Staged and unstaged edits to these tracked paths will be lost. Untracked and ignored files are retained. There is no guaranteed undo.",

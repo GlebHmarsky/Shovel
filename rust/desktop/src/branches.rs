@@ -161,6 +161,10 @@ impl Drop for Review {
     }
 }
 enum Form {
+    StashDrop {
+        target: shovel_core::stashes::Target,
+        message: String,
+    },
     Recovery(recovery::Action),
     New {
         name: String,
@@ -214,6 +218,20 @@ impl Dialogs {
     }
     pub fn checkout(&mut self, snapshot: &Snapshot, target: Checkout) {
         self.set(snapshot, Form::Checkout(Review::new(target)));
+    }
+    pub fn confirm_stash_drop(
+        &mut self,
+        snapshot: &Snapshot,
+        target: shovel_core::stashes::Target,
+        message: &str,
+    ) {
+        self.set(
+            snapshot,
+            Form::StashDrop {
+                target,
+                message: message.into(),
+            },
+        );
     }
     pub fn confirm_recovery(&mut self, snapshot: &Snapshot, action: recovery::Action) {
         self.set(snapshot, Form::Recovery(action));
@@ -375,6 +393,7 @@ impl Dialogs {
             review.poll();
         }
         let title = match &dialog.form {
+            Form::StashDrop { .. } => "ActionTitleStashDrop",
             Form::Recovery(action) => recovery_title(*action),
             Form::New { .. } => "ActionTitleNewBranch",
             Form::Manage { action, .. } => action.title(),
@@ -386,6 +405,7 @@ impl Dialogs {
         let mut submitted = None;
         let mut submitted_history = None;
         let mut submitted_recovery = None;
+        let mut submitted_stash = None;
         let mut next_review = None;
         let mut visible = false;
         let snapshot = &dialog.snapshot;
@@ -420,6 +440,22 @@ impl Dialogs {
                         .max_height((ui.available_height() - 36.).max(120.))
                         .show(ui, |ui| {
                             match &mut dialog.form {
+                                Form::StashDrop { target, message } => {
+                                    ui.label(strings::format(
+                                        "StashConfirmDrop",
+                                        &[
+                                            &snapshot.worktree.to_string_lossy(),
+                                            &target.selector,
+                                            &target.hash,
+                                            message,
+                                        ],
+                                    ));
+                                    if ui.button(text("RustConfirmStashDrop")).clicked() {
+                                        submitted_stash = Some(shovel_core::stashes::Action::Drop(
+                                            target.clone(),
+                                        ));
+                                    }
+                                }
                                 Form::Recovery(action) => {
                                     if let Some(state) = &snapshot.recovery {
                                         let key = if *action == recovery::Action::Skip {
@@ -798,6 +834,10 @@ impl Dialogs {
                 });
             },
         );
+        if let Some(action) = submitted_stash {
+            operations.submit_stash(title, action, snapshot, git.clone(), scheduler, ctx);
+            close = true;
+        }
         if let Some(action) = submitted_recovery {
             operations.submit_recovery(title, action, snapshot, git.clone(), scheduler, ctx);
             close = true;

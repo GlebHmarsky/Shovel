@@ -176,6 +176,7 @@ enum LocalAction {
     Branch(shovel_core::branches::Action),
     History(shovel_core::history_actions::Action),
     Recovery(shovel_core::recovery::Action),
+    Stash(shovel_core::stashes::Action),
 }
 impl LocalAction {
     fn key(&self) -> String {
@@ -190,6 +191,7 @@ impl LocalAction {
             }
             Self::History(action) => format!("history:{action:?}"),
             Self::Recovery(action) => format!("recovery:{action:?}"),
+            Self::Stash(action) => format!("stash:{action:?}"),
         }
     }
 }
@@ -536,6 +538,24 @@ impl Controller {
             ctx,
         );
     }
+    pub fn submit_stash(
+        &mut self,
+        label: &'static str,
+        action: shovel_core::stashes::Action,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) -> Option<u64> {
+        self.submit_local(
+            label,
+            LocalAction::Stash(action),
+            snapshot,
+            git,
+            scheduler,
+            ctx,
+        )
+    }
     fn submit_local(
         &mut self,
         label: &'static str,
@@ -544,7 +564,7 @@ impl Controller {
         git: Arc<Git>,
         scheduler: &Scheduler,
         ctx: &egui::Context,
-    ) {
+    ) -> Option<u64> {
         let sequence = self.next;
         self.next += 1;
         let captured = snapshot.clone();
@@ -582,6 +602,8 @@ impl Controller {
                     progress(shovel_core::branches::Stage::Validating);
                     let result = if let LocalAction::Recovery(action) = &action {
                         git.execute_recovery(&captured, *action, Some(progress))
+                    } else if let LocalAction::Stash(action) = &action {
+                        git.execute_stash(&captured, action, Some(progress))
                     } else {
                         let unchanged_refs = !matches!(
                             action,
@@ -597,7 +619,7 @@ impl Controller {
                             LocalAction::History(action) => {
                                 git.execute_history(&prepared, action, Some(progress))
                             }
-                            LocalAction::Recovery(_) => unreachable!(),
+                            LocalAction::Recovery(_) | LocalAction::Stash(_) => unreachable!(),
                         }
                     };
                     result
@@ -653,6 +675,7 @@ impl Controller {
                 changed: false,
             });
         }
+        accepted.then_some(request)
     }
     pub fn poll(&mut self, ctx: &egui::Context) -> Vec<PathBuf> {
         while let Ok(event) = self.receiver.try_recv() {

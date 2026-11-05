@@ -47,6 +47,7 @@ pub struct Completed {
     pub message: Option<String>,
     pub warning: Option<String>,
     pub has_conflicts: bool,
+    pub(crate) preserves_worktree: bool,
     pub updated: Result<Snapshot, Error>,
     pub authentication_failure: Option<authentication::Failure>,
 }
@@ -55,8 +56,11 @@ impl Completed {
         !self.commands.is_empty()
             && self.commands.iter().all(Command::succeeded)
             && self.message.is_none()
-            && !self.has_conflicts
-            && self.updated.as_ref().is_ok_and(|s| s.operations.is_empty())
+            && (!self.has_conflicts || self.preserves_worktree)
+            && self
+                .updated
+                .as_ref()
+                .is_ok_and(|s| self.preserves_worktree || s.operations.is_empty())
     }
 }
 
@@ -92,9 +96,11 @@ impl Transcript {
         request
             .environment
             .insert("GIT_EDITOR".into(), Some(editor.into()));
-        request
-            .environment
-            .insert("GIT_SEQUENCE_EDITOR".into(), Some("false".into()));
+        if editor == "true" {
+            request
+                .environment
+                .insert("GIT_SEQUENCE_EDITOR".into(), Some("false".into()));
+        }
         request
             .environment
             .insert("GIT_MERGE_AUTOEDIT".into(), Some("no".into()));
@@ -143,6 +149,7 @@ impl Transcript {
             message,
             warning,
             has_conflicts,
+            preserves_worktree: false,
             updated,
             authentication_failure: None,
         })

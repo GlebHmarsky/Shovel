@@ -842,9 +842,9 @@
         "R58",
         "R59"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/stashes.rs; rust/desktop/src/stashes.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-05: native stash/comparison/partial-result checks and headless inspector workflows passed. Native ownership, keyboard, appearance, persisted geometry and remaining scenarios are open; see roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellUpdates.cs",
@@ -897,9 +897,9 @@
         "R58",
         "R59"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/stashes.rs; rust/desktop/src/stashes.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-05: native stash/comparison/partial-result checks and headless inspector workflows passed. Native ownership, keyboard, appearance, persisted geometry and remaining scenarios are open; see roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/UpdateViewModel.cs",
@@ -1421,9 +1421,9 @@
         "R58",
         "R59"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/stashes.rs; rust/desktop/src/stashes.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-05: native stash/comparison/partial-result checks and headless inspector workflows passed. Native ownership, keyboard, appearance, persisted geometry and remaining scenarios are open; see roadmap."
     },
     {
       "Path": "src/GitGui.App/Views/StashWindow.xaml.cs",
@@ -1432,9 +1432,9 @@
         "R58",
         "R59"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/stashes.rs; rust/desktop/src/stashes.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-05: native stash/comparison/partial-result checks and headless inspector workflows passed. Native ownership, keyboard, appearance, persisted geometry and remaining scenarios are open; see roadmap."
     },
     {
       "Path": "src/GitGui.App/Views/UpdateWindow.xaml",
@@ -1976,9 +1976,9 @@
         "R58",
         "R59"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/stashes.rs; rust/desktop/src/stashes.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-05: native stash/comparison/partial-result checks and headless inspector workflows passed. Native ownership, keyboard, appearance, persisted geometry and remaining scenarios are open; see roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/UnmergedFiles.cs",

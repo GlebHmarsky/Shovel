@@ -678,7 +678,7 @@ pub fn require(result: process::Result) -> Result<process::Result, Error> {
         })
     }
 }
-fn log_options() -> Vec<String> {
+pub(crate) fn log_options() -> Vec<String> {
     [
         "--no-color",
         "--no-decorate",

@@ -27,6 +27,8 @@ pub mod process;
 pub mod recovery;
 pub mod scheduler;
 pub mod settings;
+#[cfg(windows)]
+pub mod stashes;
 pub mod updates;
 #[cfg(windows)]
 pub mod working;
