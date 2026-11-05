@@ -34,6 +34,15 @@ enum Event {
     ),
     Removed,
 }
+enum Leave {
+    Close,
+    Exit,
+    Select {
+        entry: Box<Change>,
+        selection: BTreeSet<(Group, String)>,
+        stage: bool,
+    },
+}
 pub struct Editor {
     pub path: PathBuf,
     pub open: bool,
@@ -43,6 +52,7 @@ pub struct Editor {
     pub output: String,
     pub busy: bool,
     pub size: egui::Vec2,
+    pub external_merge_tool: shovel_core::conflicts::ToolSettings,
     git: Arc<Git>,
     scheduler: Scheduler,
     store: drafts::Store,
@@ -73,6 +83,10 @@ pub struct Editor {
     amend: bool,
     confirm_amend: bool,
     refresh_history: bool,
+    conflict: Option<crate::conflict::Pane>,
+    conflict_output: String,
+    leave: Option<Leave>,
+    exit_cancelled: bool,
 }
 impl Editor {
     pub fn new(path: PathBuf, git: Arc<Git>, scheduler: Scheduler, store: drafts::Store) -> Self {
@@ -86,6 +100,7 @@ impl Editor {
             output: String::new(),
             busy: false,
             size: egui::vec2(1100., 760.),
+            external_merge_tool: Default::default(),
             git,
             scheduler,
             store,
@@ -116,6 +131,10 @@ impl Editor {
             amend: false,
             confirm_amend: false,
             refresh_history: false,
+            conflict: None,
+            conflict_output: String::new(),
+            leave: None,
+            exit_cancelled: false,
         }
     }
     pub fn activate(&mut self) {
@@ -125,7 +144,116 @@ impl Editor {
         self.refresh_pending = true;
     }
     pub fn blocks_exit(&self) -> bool {
-        self.draft_dirty || self.draft_saving || self.busy
+        self.draft_dirty || self.draft_saving || self.action_busy() || self.unsaved_conflict()
+    }
+    fn action_busy(&self) -> bool {
+        self.busy || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
+    }
+    pub fn unsaved_conflict(&self) -> bool {
+        self.conflict
+            .as_ref()
+            .is_some_and(crate::conflict::Pane::unsaved)
+    }
+    pub fn confirm_exit(&mut self, ctx: &egui::Context) {
+        self.open = true;
+        self.request_leave(Leave::Exit, ctx);
+    }
+    pub fn take_exit_cancelled(&mut self) -> bool {
+        std::mem::take(&mut self.exit_cancelled)
+    }
+    pub fn exit_prompt_open(&self) -> bool {
+        matches!(self.leave, Some(Leave::Exit))
+    }
+    fn answer_leave(&mut self, discard: bool, ctx: &egui::Context) {
+        if let Some(next) = self.leave.take() {
+            if discard {
+                self.conflict = None;
+                self.finish_leave(next, ctx);
+            } else if matches!(next, Leave::Exit) {
+                self.exit_cancelled = true;
+            }
+        }
+    }
+    fn request_leave(&mut self, next: Leave, ctx: &egui::Context) {
+        if matches!(next, Leave::Select { .. }) && self.action_busy() {
+            return;
+        }
+        let leaving = match &next {
+            Leave::Select { entry, .. } => self
+                .conflict
+                .as_ref()
+                .is_some_and(|p| p.path != entry.path || entry.group != Group::Conflicted),
+            _ => true,
+        };
+        if leaving && self.unsaved_conflict() {
+            self.leave = Some(next);
+        } else {
+            self.finish_leave(next, ctx);
+        }
+    }
+    fn finish_leave(&mut self, next: Leave, ctx: &egui::Context) {
+        match next {
+            Leave::Close | Leave::Exit => {
+                if let Some(pane) = &mut self.conflict {
+                    pane.pause();
+                }
+                self.open = false;
+                self.refresh_pending = true;
+                self.flush(ctx);
+            }
+            Leave::Select {
+                entry,
+                selection,
+                stage,
+            } => {
+                if self
+                    .conflict
+                    .as_ref()
+                    .is_some_and(|p| p.path != entry.path || entry.group != Group::Conflicted)
+                {
+                    self.conflict = None;
+                }
+                self.selection = selection;
+                let staged = entry.group == Group::Staged;
+                self.show_diff(*entry, ctx);
+                if stage {
+                    self.stage(staged, false, ctx);
+                }
+            }
+        }
+    }
+    fn open_conflict(&mut self) {
+        if self.action_busy() || self.loading {
+            return;
+        }
+        let Some(context) = self.context.clone() else {
+            return;
+        };
+        let Some(change) = self
+            .focused
+            .clone()
+            .filter(|c| c.group == Group::Conflicted)
+        else {
+            return;
+        };
+        if self
+            .conflict
+            .as_ref()
+            .is_some_and(|p| p.path == change.path && !p.resolved)
+        {
+            return;
+        }
+        self.diff_cancel.cancel();
+        self.diff_generation += 1;
+        self.diff = None;
+        self.diff_error = None;
+        self.conflict = Some(crate::conflict::Pane::new(
+            context,
+            change,
+            self.git.clone(),
+            self.scheduler.clone(),
+            self.external_merge_tool.clone(),
+        ));
     }
     pub fn draft_problem(&self) -> Option<&str> {
         self.draft_error.as_deref()
@@ -150,7 +278,7 @@ impl Editor {
         });
     }
     pub fn refresh(&mut self, ctx: &egui::Context) {
-        if self.loading || self.busy {
+        if self.loading || self.action_busy() {
             self.refresh_pending = true;
             return;
         }
@@ -179,6 +307,13 @@ impl Editor {
         self.diff = None;
         self.diff_view.reset();
         self.diff_error = None;
+        if self
+            .conflict
+            .as_ref()
+            .is_some_and(|p| p.path == entry.path && !p.resolved)
+        {
+            return;
+        }
         let generation = self.diff_generation;
         let cancel = self.diff_cancel.clone();
         let git = self.git.clone();
@@ -359,18 +494,48 @@ impl Editor {
                 _ => {}
             }
         }
+        if let Some(refresh) = self.conflict.as_mut().and_then(|pane| pane.poll(ctx)) {
+            self.status = Some(refresh.status);
+            self.output = refresh.output;
+            self.conflict_output = self.output.clone();
+            self.refresh_history = true;
+            if let Some(result) = refresh.context {
+                match result {
+                    Ok(context) => self.apply(context, ctx),
+                    Err(error) => {
+                        self.status = Some(format!(
+                            "{}\n{error}",
+                            self.status.as_deref().unwrap_or_default()
+                        ))
+                    }
+                }
+            }
+        }
         if self.draft_dirty {
             ctx.request_repaint_after(Duration::from_millis(400));
             if self.draft_saved_at.elapsed() >= Duration::from_millis(400) {
                 self.flush(ctx);
             }
         }
-        if self.refresh_pending && self.open && self.initialized && !self.loading && !self.busy {
+        if self.refresh_pending
+            && self.open
+            && self.initialized
+            && !self.loading
+            && !self.action_busy()
+        {
             self.refresh(ctx);
         }
         std::mem::take(&mut self.refresh_history)
     }
     fn apply(&mut self, context: Context, ctx: &egui::Context) {
+        let resolved_path = self
+            .conflict
+            .as_ref()
+            .filter(|p| p.resolved)
+            .map(|p| p.path.clone());
+        if resolved_path.is_some() {
+            self.conflict = None;
+        }
         self.selection.retain(|(group, path)| {
             context
                 .entries
@@ -381,14 +546,23 @@ impl Editor {
             .focused
             .as_ref()
             .and_then(|old| {
-                context
-                    .entries
-                    .iter()
-                    .find(|e| e.group == old.group && e.path == old.path)
+                context.entries.iter().find(|e| {
+                    e.path == old.path
+                        && (e.group == old.group || resolved_path.as_ref() == Some(&e.path))
+                })
             })
             .cloned();
         self.context = Some(Arc::new(context));
+        // Keep edited text even when an external operation removes this conflict.
+        // The captured preview cannot execute against the changed index/state.
+        if let Some(pane) = &mut self.conflict {
+            pane.observe(self.context.as_ref().unwrap());
+            return;
+        }
         if let Some(focus) = focus {
+            if resolved_path.as_ref() == Some(&focus.path) {
+                self.selection.insert((focus.group, focus.path.clone()));
+            }
             self.show_diff(focus, ctx);
         } else {
             self.focused = None;
@@ -397,7 +571,7 @@ impl Editor {
         }
     }
     fn submit(&mut self, action: Action, ctx: &egui::Context) {
-        if self.busy {
+        if self.action_busy() {
             return;
         }
         let Some(context) = self.context.clone() else {
@@ -509,7 +683,7 @@ impl Editor {
         let Some(context) = &self.context else {
             return Some("CommitWaitForRead");
         };
-        if self.busy || self.loading {
+        if self.action_busy() || self.loading {
             Some("CommitWaitForRead")
         } else if self.draft.subject.trim().is_empty() {
             Some("CommitMessageRequired")
@@ -555,6 +729,7 @@ impl Editor {
             text("LocalChanges"),
             self.path.file_name().unwrap_or_default().to_string_lossy()
         );
+        let mut visible = false;
         ctx.show_viewport_immediate(
             id,
             egui::ViewportBuilder::default()
@@ -564,37 +739,41 @@ impl Editor {
                 .with_minimize_button(false)
                 .with_maximize_button(false),
             |ui, _| {
+                visible = ui.is_visible();
                 let ctx = ui.ctx().clone();
                 if !enabled {
                     ui.disable();
                 }
                 if ctx.input(|i| i.viewport().close_requested()) {
-                    self.open = false;
-                    self.flush(&ctx);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                    self.request_leave(Leave::Close, &ctx);
                 }
                 if let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
                     self.size = rect.size();
                 }
-                if enabled && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
+                if enabled && self.leave.is_none() && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
                     self.refresh(&ctx);
                 }
                 if enabled
+                    && self.leave.is_none()
                     && ctx.input(|i| {
                         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Enter)
                     })
                 {
                     self.request_commit(&ctx);
                 }
-                if enabled && ctx.input(|i| i.key_pressed(egui::Key::Escape)) && !self.confirm_amend
+                if enabled
+                    && !self.confirm_amend
+                    && self.leave.is_none()
+                    && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
                 {
-                    self.open = false;
-                    self.flush(&ctx);
+                    self.request_leave(Leave::Close, &ctx);
                 }
                 egui::Panel::top("commit_controls").show(ui, |ui| {
                     ui.horizontal(|ui| {
                         if ui
                             .add_enabled(
-                                !self.loading && !self.busy,
+                                !self.loading && !self.action_busy(),
                                 egui::Button::new(text("CommitRefresh")),
                             )
                             .clicked()
@@ -640,7 +819,7 @@ impl Editor {
                             });
                             if ui
                                 .add_enabled(
-                                    allow_amend && !self.busy,
+                                    allow_amend && !self.action_busy(),
                                     egui::Checkbox::new(&mut self.amend, text("CommitAmend")),
                                 )
                                 .changed()
@@ -671,6 +850,20 @@ impl Editor {
                             }
                         });
                     });
+                if !self.conflict_output.is_empty() {
+                    egui::Panel::bottom("conflict-output").show(ui, |ui| {
+                        egui::CollapsingHeader::new(text("ActionOutput")).show(ui, |ui| {
+                            egui::ScrollArea::both().max_height(150.).show(ui, |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(&self.conflict_output).monospace(),
+                                    )
+                                    .selectable(true),
+                                );
+                            });
+                        });
+                    });
+                }
                 egui::Panel::left("commit_files")
                     .default_size(370.)
                     .min_size(220.)
@@ -707,7 +900,7 @@ impl Editor {
                                 let all = ui.input(|i| i.modifiers.shift);
                                 if ui
                                     .add_enabled(
-                                        !self.busy
+                                        !self.action_busy()
                                             && !self.loading
                                             && (selected || all && !rows.is_empty()),
                                         egui::Button::new(text(if staged {
@@ -722,7 +915,7 @@ impl Editor {
                                 }
                                 if ui
                                     .add_enabled(
-                                        !self.busy && !self.loading && !rows.is_empty(),
+                                        !self.action_busy() && !self.loading && !rows.is_empty(),
                                         egui::Button::new(text(if staged {
                                             "CommitUnstageAll"
                                         } else {
@@ -746,38 +939,65 @@ impl Editor {
                                         let entry = &rows[index];
                                         let key = (entry.group, entry.path.clone());
                                         let selected = self.selection.contains(&key);
-                                        let response = ui.selectable_label(
-                                            selected,
-                                            format!("{}  {}", entry.code, entry.path),
+                                        let response = ui.add_enabled(
+                                            !self.action_busy(),
+                                            egui::Button::selectable(
+                                                selected,
+                                                format!("{}  {}", entry.code, entry.path),
+                                            ),
                                         );
                                         if response.clicked() {
+                                            let mut selection = self.selection.clone();
                                             if !ui.input(|i| i.modifiers.ctrl) {
-                                                self.selection.clear();
+                                                selection.clear();
                                             }
                                             if selected && ui.input(|i| i.modifiers.ctrl) {
-                                                self.selection.remove(&key);
+                                                selection.remove(&key);
                                             } else {
-                                                self.selection.insert(key);
+                                                selection.insert(key);
                                             }
-                                            chosen = Some(entry.clone());
+                                            chosen = Some(Leave::Select {
+                                                entry: Box::new(entry.clone()),
+                                                selection,
+                                                stage: false,
+                                            });
                                         }
                                         if response.double_clicked() {
-                                            self.selection.clear();
-                                            self.selection
-                                                .insert((entry.group, entry.path.clone()));
-                                            self.stage(staged, false, &ctx);
+                                            chosen = Some(Leave::Select {
+                                                entry: Box::new(entry.clone()),
+                                                selection: BTreeSet::from([(
+                                                    entry.group,
+                                                    entry.path.clone(),
+                                                )]),
+                                                stage: true,
+                                            });
                                         }
                                     }
                                 });
                             ui.separator();
                         }
-                        if let Some(entry) = chosen {
-                            self.show_diff(entry, &ctx);
+                        if let Some(next) = chosen {
+                            self.request_leave(next, &ctx);
                         }
                     });
                 egui::CentralPanel::default().show(ui, |ui| {
+                    if let Some(pane) = &mut self.conflict {
+                        ui.add_enabled_ui(!self.busy && !self.loading, |ui| pane.show(ui));
+                        return;
+                    }
                     if let Some(entry) = &self.focused {
                         ui.strong(&entry.path);
+                        if entry.group == Group::Conflicted
+                            && ui
+                                .add_enabled(
+                                    !self.action_busy() && !self.loading,
+                                    egui::Button::new(text("ConflictOpen")),
+                                )
+                                .clicked()
+                        {
+                            self.open_conflict();
+                            return;
+                        }
                     }
                     let mut options_changed = false;
                     ui.horizontal(|ui| {
@@ -839,14 +1059,43 @@ impl Editor {
                         });
                     });
                 }
+                if self.leave.is_some() {
+                    let mut answer = None;
+                    let response =
+                        egui::Modal::new(egui::Id::unique("conflict_leave")).show(&ctx, |ui| {
+                            ui.heading(text("ConflictResolve"));
+                            if let Some(pane) = &self.conflict {
+                                ui.label(strings::format("ConflictCloseEdits", &[&pane.path]));
+                            }
+                            ui.horizontal(|ui| {
+                                if ui.button(text("RustDiscardConflictText")).clicked() {
+                                    answer = Some(true);
+                                }
+                                if ui.button(text("ActionCancel")).clicked() {
+                                    answer = Some(false);
+                                }
+                            });
+                        });
+                    if response.should_close() && answer.is_none() {
+                        answer = Some(false);
+                    }
+                    if let Some(discard) = answer {
+                        self.answer_leave(discard, &ctx);
+                    }
+                }
             },
         );
-        // Schedule work after the first window layout, so opening never prepares Git.
-        if !self.initialized {
+        // An embedded viewport's first sizing pass is invisible; only a displayed
+        // editor may begin its requested reads.
+        if visible && !self.initialized {
             self.initialize(ctx);
         }
     }
 }
+
+#[cfg(test)]
+#[path = "commit_conflict_tests.rs"]
+mod conflict_tests;
 fn error_text(error: working::Error) -> String {
     match error {
         working::Error::Git(shovel_core::git::Error::Command { output, .. }) => {

@@ -368,9 +368,9 @@
         "R63",
         "R64"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/commit.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/CommitDraftCoordinator.cs",
@@ -438,9 +438,9 @@
         "R63",
         "R64"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/conflict.rs",
+      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/FileHistoryViewModel.cs",
@@ -1092,9 +1092,9 @@
         "R63",
         "R64"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/conflict.rs (native layout/accessibility parity remains pending)",
+      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/Views/ConflictView.xaml.cs",
@@ -1104,9 +1104,9 @@
         "R63",
         "R64"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/conflict.rs (split resizing implemented; persisted fraction remains pending)",
+      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/Views/FileActionWindow.xaml",
@@ -1638,9 +1638,9 @@
         "R63",
         "R64"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/conflicts.rs",
+      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/ConflictTextCodec.cs",
@@ -1650,9 +1650,9 @@
         "R63",
         "R64"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/conflict_text.rs",
+      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/DefaultNetwork.cs",
@@ -1693,9 +1693,9 @@
         "R17",
         "R20"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/conflicts.rs; rust/desktop/src/conflict.rs (full preferences UI remains pending)",
+      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/FileDiff.cs",

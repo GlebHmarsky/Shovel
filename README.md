@@ -13,6 +13,8 @@ cargo test -p shovel-core --test network --locked
 cargo test -p shovel-core --test branches --locked
 cargo test -p shovel-core --test history_actions --locked
 cargo test -p shovel-core --test stashes --locked
+cargo test -p shovel-core --test conflicts --locked
+cargo test -p shovel-core conflict_text::tests --lib --locked
 cargo test -p shovel-core recovery::tests --lib --locked
 cargo test -p shovel-core authentication::tests --lib --locked
 cargo test -p shovel-askpass --test git_helper --locked
@@ -21,6 +23,7 @@ cargo build -p shovel-askpass --locked
 cargo test -p shovel-desktop operations::tests --locked
 cargo test -p shovel-desktop branches::tests --locked
 cargo test -p shovel-desktop stashes::tests --locked
+cargo test -p shovel-desktop commit::conflict_tests --locked
 cargo clippy -p shovel-core -p shovel-askpass -p shovel-desktop --all-targets --locked -- -D warnings
 cargo build -p shovel-desktop -p shovel-askpass --locked
 ./scripts/Test-RustReleasePolicy.ps1

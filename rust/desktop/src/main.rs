@@ -2,6 +2,7 @@
 mod branches;
 mod commit;
 mod comparison;
+mod conflict;
 mod diff_view;
 mod operations;
 mod stashes;
@@ -86,6 +87,7 @@ struct Workspace {
     saving: bool,
     preferences_dirty: bool,
     closing: bool,
+    pending_exit: bool,
     exit_ready: bool,
     confirm_exit_without_save: bool,
     scheduler: shovel_core::scheduler::Scheduler,
@@ -144,6 +146,7 @@ impl Workspace {
             saving: false,
             preferences_dirty: false,
             closing: false,
+            pending_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             scheduler: Default::default(),
@@ -430,6 +433,16 @@ impl Workspace {
         if self.preferences_dirty && !self.saving {
             self.save_preferences(ctx);
         }
+        if self
+            .editors
+            .iter_mut()
+            .any(commit::Editor::take_exit_cancelled)
+        {
+            self.pending_exit = false;
+        }
+        if self.pending_exit && !self.editors.iter().any(commit::Editor::exit_prompt_open) {
+            self.close(ctx);
+        }
     }
     fn open_stashes(&mut self) {
         let Some(git) = self.git.clone() else {
@@ -473,12 +486,18 @@ impl Workspace {
             return;
         }
         if let (Some(git), Some(store)) = (&self.git, &self.draft_store) {
-            self.editors.push(commit::Editor::new(
+            let mut editor = commit::Editor::new(
                 tab.path.clone(),
                 git.clone(),
                 self.scheduler.clone(),
                 store.clone(),
-            ));
+            );
+            editor.external_merge_tool = self
+                .settings
+                .get("ExternalMergeTool")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            self.editors.push(editor);
         }
     }
     fn close(&mut self, ctx: &egui::Context) {
@@ -487,7 +506,13 @@ impl Workspace {
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         if self.scheduler.has_accepted_work() {
+            self.pending_exit = false;
             self.notice = Some(strings::text("AppCommandRunningClose"));
+            return;
+        }
+        if let Some(editor) = self.editors.iter_mut().find(|e| e.unsaved_conflict()) {
+            self.pending_exit = true;
+            editor.confirm_exit(ctx);
             return;
         }
         for editor in &mut self.editors {
@@ -531,6 +556,7 @@ impl Workspace {
                 .set("WindowHeight", serde_json::json!(rect.height()));
         }
         self.closing = true;
+        self.pending_exit = false;
         self.preferences_dirty = true;
         self.save_preferences(ctx);
     }
@@ -1189,17 +1215,18 @@ impl eframe::App for Workspace {
                 },
             );
         });
-        let stash_input = !self.operations.modal_open() && !self.branches.is_open();
+        let stash_input =
+            !self.closing && !self.operations.modal_open() && !self.branches.is_open();
         for view in &mut self.stash_views {
             view.show(&ctx, &mut self.operations, &self.scheduler, stash_input);
         }
         for editor in &mut self.editors {
             editor.show(
                 &ctx,
-                !self.operations.modal_open() && !self.branches.is_open(),
+                !self.closing && !self.operations.modal_open() && !self.branches.is_open(),
             );
         }
-        let allow_branch_input = !self.operations.modal_open();
+        let allow_branch_input = !self.closing && !self.operations.modal_open();
         self.branches.show(
             &ctx,
             self.git.as_ref(),
@@ -1235,6 +1262,7 @@ mod tests {
             saving: false,
             preferences_dirty: false,
             closing: false,
+            pending_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             scheduler: Default::default(),
@@ -1306,6 +1334,7 @@ mod tests {
             saving: false,
             preferences_dirty: false,
             closing: false,
+            pending_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             scheduler: Default::default(),

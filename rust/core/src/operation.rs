@@ -104,7 +104,10 @@ impl Transcript {
         request
             .environment
             .insert("GIT_MERGE_AUTOEDIT".into(), Some("no".into()));
-        let result = process::run(&request, &Cancellation::default(), None)?;
+        self.run(&request)
+    }
+    pub(crate) fn run(&mut self, request: &process::Request) -> Result<bool, Error> {
+        let result = process::run(request, &Cancellation::default(), None)?;
         let output = redact(&format!(
             "{}{}",
             String::from_utf8_lossy(&result.stdout),

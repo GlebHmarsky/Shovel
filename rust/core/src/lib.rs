@@ -5,6 +5,10 @@ pub mod authentication;
 #[cfg(windows)]
 pub mod branches;
 #[cfg(windows)]
+pub mod conflict_text;
+#[cfg(windows)]
+pub mod conflicts;
+#[cfg(windows)]
 pub mod diff;
 #[cfg(windows)]
 pub mod drafts;
