@@ -1046,5 +1046,8 @@
   "RustAuthUnavailable": "The authentication connection failed or returned an invalid reply. Review Git's result and refreshed repository state before retrying.",
   "RustAuthTimedOut": "The authentication request expired. No reply was supplied. Review Git's result and refreshed repository state before retrying.",
   "RustAuthPromptLimit": "The operation exceeded 16 authentication requests. No further replies were supplied. Review Git's result and authentication configuration.",
-  "RustDiscardConflictText": "Discard unsaved editor text"
+  "RustDiscardConflictText": "Discard unsaved editor text",
+  "RustDiscardPartial": "Discard did not finish. Some reviewed files may already have changed. Review the refreshed file list and Git output before trying again.",
+  "RustDiscardRemaining": "Git finished, but some reviewed paths still have changes. Review the refreshed file list.",
+  "RustFileDeleteFailed": "Windows could not remove a selected file. It may be read-only, in use, or inaccessible."
 }

@@ -47,6 +47,7 @@ pub struct Context {
     pub head_message: String,
     pub merge_message: String,
     pub(crate) filters: Vec<OsString>,
+    pub(crate) standard_lfs: bool,
 }
 #[derive(Clone, Debug)]
 pub enum Action {
@@ -467,6 +468,7 @@ impl Git {
             head_message,
             merge_message,
             filters,
+            standard_lfs,
         })
     }
     pub fn execute_working(

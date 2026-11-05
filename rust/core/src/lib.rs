@@ -12,6 +12,7 @@ pub mod conflicts;
 pub mod diff;
 #[cfg(windows)]
 pub mod drafts;
+pub mod files;
 #[cfg(windows)]
 pub mod git;
 pub mod graph;

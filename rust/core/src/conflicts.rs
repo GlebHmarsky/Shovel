@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
     ffi::OsString,
-    fs::{self, File},
+    fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::Arc,
@@ -520,10 +520,10 @@ impl Git {
                         2
                     };
                     if preview.sides[index].is_none() {
-                        match fs::remove_file(&file) {
+                        match crate::files::remove_file(&file) {
                             Ok(()) => {}
                             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                            Err(e) => return Err(e.into()),
+                            Err(_) => return Err(Error::Code("RustFileDeleteFailed")),
                         }
                     } else if !write(
                         [

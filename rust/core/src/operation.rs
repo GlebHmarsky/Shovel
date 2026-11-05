@@ -71,6 +71,9 @@ pub(crate) struct Transcript {
     truncated: bool,
 }
 impl Transcript {
+    pub(crate) fn into_parts(self) -> (Vec<Command>, String, bool) {
+        (self.commands, self.output, self.truncated)
+    }
     pub(crate) fn write(
         &mut self,
         git: &Git,

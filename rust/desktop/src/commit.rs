@@ -33,10 +33,13 @@ enum Event {
         Option<drafts::Text>,
     ),
     Removed,
+    FileStarted,
+    FileCompleted(Box<Result<shovel_core::files::Completed, shovel_core::operation::Error>>),
 }
 enum Leave {
     Close,
     Exit,
+    Menu(Box<file_menu::Menu>),
     Select {
         entry: Box<Change>,
         selection: BTreeSet<(Group, String)>,
@@ -84,9 +87,13 @@ pub struct Editor {
     confirm_amend: bool,
     refresh_history: bool,
     conflict: Option<crate::conflict::Pane>,
-    conflict_output: String,
+    operation_output: String,
     leave: Option<Leave>,
     exit_cancelled: bool,
+    file_menu: Option<file_menu::Menu>,
+    file_confirmation: Option<file_menu::Selection>,
+    diff_deferred: bool,
+    files_focus: Option<egui::Id>,
 }
 impl Editor {
     pub fn new(path: PathBuf, git: Arc<Git>, scheduler: Scheduler, store: drafts::Store) -> Self {
@@ -132,9 +139,13 @@ impl Editor {
             confirm_amend: false,
             refresh_history: false,
             conflict: None,
-            conflict_output: String::new(),
+            operation_output: String::new(),
             leave: None,
             exit_cancelled: false,
+            file_menu: None,
+            file_confirmation: None,
+            diff_deferred: false,
+            files_focus: None,
         }
     }
     pub fn activate(&mut self) {
@@ -155,6 +166,8 @@ impl Editor {
             .is_some_and(crate::conflict::Pane::unsaved)
     }
     pub fn confirm_exit(&mut self, ctx: &egui::Context) {
+        self.file_menu = None;
+        self.file_confirmation = None;
         self.open = true;
         self.request_leave(Leave::Exit, ctx);
     }
@@ -175,10 +188,13 @@ impl Editor {
         }
     }
     fn request_leave(&mut self, next: Leave, ctx: &egui::Context) {
-        if matches!(next, Leave::Select { .. }) && self.action_busy() {
+        if matches!(next, Leave::Select { .. } | Leave::Menu(_)) && self.action_busy() {
             return;
         }
         let leaving = match &next {
+            Leave::Menu(menu) => self.conflict.as_ref().is_some_and(|p| {
+                p.path != menu.entry.path || menu.entry.group != Group::Conflicted
+            }),
             Leave::Select { entry, .. } => self
                 .conflict
                 .as_ref()
@@ -193,7 +209,10 @@ impl Editor {
     }
     fn finish_leave(&mut self, next: Leave, ctx: &egui::Context) {
         match next {
+            Leave::Menu(menu) => self.begin_file_menu(*menu),
             Leave::Close | Leave::Exit => {
+                self.file_menu = None;
+                self.file_confirmation = None;
                 if let Some(pane) = &mut self.conflict {
                     pane.pause();
                 }
@@ -307,6 +326,11 @@ impl Editor {
         self.diff = None;
         self.diff_view.reset();
         self.diff_error = None;
+        if self.file_menu.is_some() || self.file_confirmation.is_some() {
+            self.diff_deferred = true;
+            return;
+        }
+        self.diff_deferred = false;
         if self
             .conflict
             .as_ref()
@@ -430,6 +454,8 @@ impl Editor {
                     }
                 }
                 Event::Started => {}
+                Event::FileStarted => self.status = Some(text("CommitPhaseDiscard")),
+                Event::FileCompleted(result) => self.file_completed(*result, ctx),
                 Event::Output(stderr, bytes) => {
                     if self.output.len() < 1024 * 1024 {
                         let value = String::from_utf8_lossy(&bytes);
@@ -497,7 +523,7 @@ impl Editor {
         if let Some(refresh) = self.conflict.as_mut().and_then(|pane| pane.poll(ctx)) {
             self.status = Some(refresh.status);
             self.output = refresh.output;
-            self.conflict_output = self.output.clone();
+            self.operation_output = self.output.clone();
             self.refresh_history = true;
             if let Some(result) = refresh.context {
                 match result {
@@ -524,6 +550,17 @@ impl Editor {
             && !self.action_busy()
         {
             self.refresh(ctx);
+        }
+        if self.diff_deferred
+            && self.open
+            && self.file_menu.is_none()
+            && self.file_confirmation.is_none()
+            && self.leave.is_none()
+            && !self.action_busy()
+            && !self.loading
+            && let Some(entry) = self.focused.clone()
+        {
+            self.show_diff(entry, ctx);
         }
         std::mem::take(&mut self.refresh_history)
     }
@@ -705,6 +742,9 @@ impl Editor {
         }
     }
     fn request_commit(&mut self, ctx: &egui::Context) {
+        if self.file_menu.is_some() || self.file_confirmation.is_some() || self.leave.is_some() {
+            return;
+        }
         if self.commit_reason().is_none() {
             if self.amend {
                 self.confirm_amend = true;
@@ -765,6 +805,8 @@ impl Editor {
                 if enabled
                     && !self.confirm_amend
                     && self.leave.is_none()
+                    && self.file_menu.is_none()
+                    && self.file_confirmation.is_none()
                     && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
                 {
                     self.request_leave(Leave::Close, &ctx);
@@ -850,13 +892,13 @@ impl Editor {
                             }
                         });
                     });
-                if !self.conflict_output.is_empty() {
-                    egui::Panel::bottom("conflict-output").show(ui, |ui| {
+                if !self.operation_output.is_empty() {
+                    egui::Panel::bottom("commit-output").show(ui, |ui| {
                         egui::CollapsingHeader::new(text("ActionOutput")).show(ui, |ui| {
                             egui::ScrollArea::both().max_height(150.).show(ui, |ui| {
                                 ui.add(
                                     egui::Label::new(
-                                        egui::RichText::new(&self.conflict_output).monospace(),
+                                        egui::RichText::new(&self.operation_output).monospace(),
                                     )
                                     .selectable(true),
                                 );
@@ -947,6 +989,8 @@ impl Editor {
                                             ),
                                         );
                                         if response.clicked() {
+                                            response.request_focus();
+                                            self.files_focus = Some(response.id);
                                             let mut selection = self.selection.clone();
                                             if !ui.input(|i| i.modifiers.ctrl) {
                                                 selection.clear();
@@ -971,6 +1015,38 @@ impl Editor {
                                                 )]),
                                                 stage: true,
                                             });
+                                        }
+                                        if response.secondary_clicked() && !self.action_busy() {
+                                            response.request_focus();
+                                            self.files_focus = Some(response.id);
+                                            if let Some(context) = self.context.clone() {
+                                                let entries = if selected {
+                                                    rows.iter()
+                                                        .filter(|e| {
+                                                            self.selection.contains(&(
+                                                                e.group,
+                                                                e.path.clone(),
+                                                            ))
+                                                        })
+                                                        .cloned()
+                                                        .collect()
+                                                } else {
+                                                    vec![entry.clone()]
+                                                };
+                                                chosen =
+                                                    Some(Leave::Menu(Box::new(file_menu::Menu {
+                                                        selected: file_menu::Selection {
+                                                            context,
+                                                            entries,
+                                                        },
+                                                        all: rows.clone(),
+                                                        entry: entry.clone(),
+                                                        position: response
+                                                            .interact_pointer_pos()
+                                                            .unwrap_or(response.rect.left_bottom()),
+                                                        layer: ui.layer_id(),
+                                                    })));
+                                            }
                                         }
                                     }
                                 });
@@ -1059,6 +1135,11 @@ impl Editor {
                         });
                     });
                 }
+                self.show_file_menu(&ctx);
+                self.show_file_confirmation(&ctx);
+                if enabled {
+                    self.file_shortcuts(&ctx);
+                }
                 if self.leave.is_some() {
                     let mut answer = None;
                     let response =
@@ -1096,6 +1177,11 @@ impl Editor {
 #[cfg(test)]
 #[path = "commit_conflict_tests.rs"]
 mod conflict_tests;
+#[path = "commit_file_menu.rs"]
+mod file_menu;
+#[cfg(test)]
+#[path = "commit_file_menu_tests.rs"]
+mod file_menu_tests;
 fn error_text(error: working::Error) -> String {
     match error {
         working::Error::Git(shovel_core::git::Error::Command { output, .. }) => {
