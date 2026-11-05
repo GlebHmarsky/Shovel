@@ -8,7 +8,7 @@ Updated 2026-11-05. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 Owner request 2026-11-05. Parity baseline: C# **0.47.0**, commit **2175458**. Later sections describe C# deliveries, not completed Rust work. Current product/requirements supersede historical behavior (especially command lifetimes, quiet feedback, remembered network flags and approved updates). Every unchecked item below remains required before claiming parity; backend-only tests do not complete UI rows. C# deferred/unimplemented extensions remain deferred rather than being misrepresented as existing functionality.
 
-Current partial implementation adds Rust askpass, native network commands and wired Fetch/Pull/Push menus to the earlier history/comparison/Commit foundation. Focused evidence and queue/authentication limits are in [roadmap](docs/roadmap.md#independent-rust-rewrite--active-2026-11-05); R03/R51–R56 remain unchecked. Continue branch/checkout/recovery workflows and the remaining parity rows before packaging/publication.
+Current partial implementation adds Rust askpass, native network commands, wired Fetch/Pull/Push menus, local branch/upstream management and reviewed branch/detached checkout to the earlier history/comparison/Commit foundation. Focused evidence and queue/authentication/UI limits are in [roadmap](docs/roadmap.md#independent-rust-rewrite--active-2026-11-05); R03/R47–R56 remain unchecked. Continue history Reset/Revert, stash/sequence/conflict workflows and the remaining parity rows before packaging/publication.
 
 #### P0 — isolation, architecture and delivery
 

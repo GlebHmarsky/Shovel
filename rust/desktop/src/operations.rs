@@ -15,7 +15,7 @@ use std::{
         Arc,
         mpsc::{self, Receiver, Sender},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 use zeroize::{Zeroize, Zeroizing};
 
@@ -174,6 +174,7 @@ impl Options {
 }
 enum Event {
     Stage(u64, network::Stage),
+    BranchStage(u64, shovel_core::branches::Stage),
     Prompt(u64, authentication::Prompt),
     Completed(u64, Box<Result<network::Completed, String>>),
     Removed(u64, Outcome),
@@ -182,8 +183,7 @@ struct Run {
     sequence: u64,
     request: u64,
     path: PathBuf,
-    kind: Kind,
-    started: Instant,
+    label: &'static str,
     status: String,
     output: String,
     done: bool,
@@ -445,8 +445,7 @@ impl Controller {
                 sequence,
                 request,
                 path: snapshot.worktree.clone(),
-                kind,
-                started: Instant::now(),
+                label: kind.key(),
                 status: text("OperationWaiting"),
                 output: String::new(),
                 done: false,
@@ -461,9 +460,109 @@ impl Controller {
             }
         }
     }
+    pub fn submit_branch(
+        &mut self,
+        label: &'static str,
+        action: shovel_core::branches::Action,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        let sequence = self.next;
+        self.next += 1;
+        let captured = snapshot.clone();
+        let sender = self.sender.clone();
+        let discarded = sender.clone();
+        let ctx = ctx.clone();
+        let discarded_ctx = ctx.clone();
+        // Do not format the working-copy review or repository data into a key.
+        let key = match &action {
+            shovel_core::branches::Action::Create { name, start } => {
+                format!("create:{name}:{}", start.hash)
+            }
+            shovel_core::branches::Action::Checkout {
+                target, changes, ..
+            } => format!("checkout:{target:?}:{changes:?}"),
+            shovel_core::branches::Action::Manage { branch, action } => {
+                format!("manage:{}:{action:?}", branch.name)
+            }
+        };
+        let (request, accepted) = scheduler.submit(
+            captured.identity.fingerprint.clone(),
+            captured.common_directory.to_string_lossy().to_uppercase(),
+            key,
+            Lane::Exclusive,
+            move || {
+                let progress_sender = sender.clone();
+                let progress_ctx = ctx.clone();
+                let progress = Arc::new(move |stage| {
+                    let _ = progress_sender.send(Event::BranchStage(sequence, stage));
+                    progress_ctx.request_repaint();
+                });
+                let result = (|| {
+                    progress(shovel_core::branches::Stage::Validating);
+                    let unchanged_refs =
+                        !matches!(action, shovel_core::branches::Action::Checkout { .. });
+                    let prepared = git
+                        .prepare_local(&captured, unchanged_refs, &Cancellation::default())
+                        .map_err(|e| text(&e.code()))?;
+                    git.execute_branch(&prepared, &action, Some(progress))
+                        .map_err(|e| text(&e.code()))
+                })();
+                let outcome = match &result {
+                    Ok(result) if result.succeeded() => Outcome::Succeeded,
+                    Ok(result)
+                        if result.has_conflicts
+                            || result
+                                .updated
+                                .as_ref()
+                                .is_ok_and(|s| !s.operations.is_empty()) =>
+                    {
+                        Outcome::Conflict
+                    }
+                    _ => Outcome::Failed,
+                };
+                let _ = sender.send(Event::Completed(sequence, Box::new(result)));
+                ctx.request_repaint();
+                outcome
+            },
+            move |outcome| {
+                let _ = discarded.send(Event::Removed(sequence, outcome));
+                discarded_ctx.request_repaint();
+            },
+        );
+        if accepted {
+            self.runs.push(Run {
+                sequence,
+                request,
+                path: snapshot.worktree.clone(),
+                label,
+                status: text("OperationWaiting"),
+                output: String::new(),
+                done: false,
+                changed: false,
+            });
+        }
+    }
     pub fn poll(&mut self, ctx: &egui::Context) -> Vec<PathBuf> {
         while let Ok(event) = self.receiver.try_recv() {
             match event {
+                Event::BranchStage(id, stage) => {
+                    use shovel_core::branches::Stage;
+                    if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
+                        run.status = text(match stage {
+                            Stage::Validating => "ActionStageValidating",
+                            Stage::Stashing => "ActionTitleStashCreate",
+                            Stage::Discarding => "CheckoutDiscard",
+                            Stage::Switching => "ActionTitleSwitchBranch",
+                            Stage::Reapplying => "ActionTitleStashApply",
+                            Stage::DroppingStash => "ActionTitleStashDrop",
+                            Stage::UpdatingBranch => "ActionStageUpdatingBranch",
+                            Stage::Reconciling => "ActionReinspecting",
+                        });
+                    }
+                }
                 Event::Prompt(id, prompt) => {
                     if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
                         run.status = text("ActionWaitingShort");
@@ -494,23 +593,29 @@ impl Controller {
                         run.changed = true;
                         match *result {
                             Ok(result) => {
-                                run.status = text(if result.succeeded() {
-                                    "ActionCompletedShort"
-                                } else if result.has_conflicts {
-                                    "ActionConflictShort"
-                                } else if result.updated.is_err()
-                                    && result.message.is_none()
-                                    && result.commands.iter().all(network::Command::succeeded)
-                                {
-                                    "ActionRefreshFailedShort"
-                                } else {
-                                    "ActionFailedShort"
-                                });
+                                run.status =
+                                    text(if result.succeeded() && result.warning.is_some() {
+                                        "RustActionWarning"
+                                    } else if result.succeeded() {
+                                        "ActionCompletedShort"
+                                    } else if result.has_conflicts {
+                                        "ActionConflictShort"
+                                    } else if result.updated.is_err()
+                                        && result.message.is_none()
+                                        && result.commands.iter().all(network::Command::succeeded)
+                                    {
+                                        "ActionRefreshFailedShort"
+                                    } else {
+                                        "ActionFailedShort"
+                                    });
                                 run.output = result.output;
-                                for message in
-                                    [result.message, result.updated.err().map(|e| e.code())]
-                                        .into_iter()
-                                        .flatten()
+                                for message in [
+                                    result.message,
+                                    result.warning,
+                                    result.updated.err().map(|e| e.code()),
+                                ]
+                                .into_iter()
+                                .flatten()
                                 {
                                     run.output.push_str(&format!("\n{}", text(&message)));
                                 }
@@ -551,7 +656,14 @@ impl Controller {
             }
         }
         self.prompts.retain(|q| !q.prompt.closed.is_cancelled());
-        if !self.prompts.is_empty() || self.runs.iter().any(|r| !r.done) {
+        while self.runs.len() > 128 {
+            if let Some(index) = self.runs.iter().position(|run| run.done) {
+                self.runs.remove(index);
+            } else {
+                break;
+            }
+        }
+        if !self.prompts.is_empty() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         self.runs
@@ -563,19 +675,14 @@ impl Controller {
         let records = scheduler.records();
         for run in self.runs.iter().filter(|r| &r.path == path).rev().take(8) {
             ui.horizontal(|ui| {
-                ui.label(format!("{} · {}", text(run.kind.key()), run.status));
-                if !run.done {
-                    ui.label(strings::format(
-                        "RustOperationDuration",
-                        &[&format!("{:.1}", run.started.elapsed().as_secs_f32())],
-                    ));
-                    if records
+                ui.label(format!("{} · {}", text(run.label), run.status));
+                if !run.done
+                    && records
                         .iter()
                         .any(|r| r.id == run.request && !r.running && r.outcome.is_none())
-                        && ui.button(text("CancelWaitingRequest")).clicked()
-                    {
-                        scheduler.remove_waiting(run.request);
-                    }
+                    && ui.button(text("CancelWaitingRequest")).clicked()
+                {
+                    scheduler.remove_waiting(run.request);
                 }
                 if !run.output.is_empty() {
                     egui::CollapsingHeader::new(text("ActionOutput"))
@@ -603,7 +710,7 @@ impl Controller {
             if let Some(run) = self.runs.iter().find(|r| r.sequence == question.run) {
                 ui.label(strings::format(
                     "AuthContext",
-                    &[&run.path.to_string_lossy(), &text(run.kind.key())],
+                    &[&run.path.to_string_lossy(), &text(run.label)],
                 ));
             }
             ui.label(text("AuthPromptSource"));
@@ -658,7 +765,7 @@ impl Controller {
 mod tests {
     use super::*;
     use shovel_core::process::{self, Lifetime};
-    use std::{fs, path::Path, thread};
+    use std::{fs, path::Path, thread, time::Instant};
     fn command(git: &Git, path: &Path, args: &[&str]) -> String {
         let output = process::run(
             &git.request(path, args.iter().copied(), Lifetime::AcceptedCommand, 65536),

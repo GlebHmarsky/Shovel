@@ -10,11 +10,13 @@ cargo test -p shovel-core --test working_copy --locked
 cargo test -p shovel-core --test drafts --locked
 cargo test -p shovel-core --test hunks --locked
 cargo test -p shovel-core --test network --locked
+cargo test -p shovel-core --test branches --locked
 cargo test -p shovel-core authentication::tests --lib --locked
 cargo test -p shovel-askpass --test git_helper --locked
 cargo test -p shovel-core scheduler::tests --lib --locked
 cargo build -p shovel-askpass --locked
-cargo test -p shovel-desktop network::tests --locked
+cargo test -p shovel-desktop operations::tests --locked
+cargo test -p shovel-desktop branches::tests --locked
 cargo clippy -p shovel-core -p shovel-askpass -p shovel-desktop --all-targets --locked -- -D warnings
 cargo build -p shovel-desktop -p shovel-askpass --locked
 ./scripts/Test-RustReleasePolicy.ps1
@@ -24,7 +26,7 @@ Toolchain: Rust 1.99.1 MSVC, pinned by `rust-toolchain.toml`; Visual Studio C++ 
 
 The development executable accepts `--data-directory <absolute-profile-folder>` for an isolated profile. Rust defaults to `%LOCALAPPDATA%/ShovelRust/Foundation`; C# settings/drafts are copied on demand and never written. Use disposable repositories for mutation verification. The native Commit presentation-state check uses a real held hook and isolated Git configuration without showing a desktop window. Live UI verification remains incomplete; see [dated evidence](docs/roadmap.md#independent-rust-rewrite--active-2026-11-05).
 
-Keep `ShovelRustAskPass.exe` beside `ShovelRust.exe`; explicit network commands require that Rust helper. The focused desktop network check also requires `cargo build -p shovel-askpass` first. Network fixtures use isolated local bare remotes; credential-fill fixtures invoke the compiled helper without contacting a server. These checks do not validate live GCM/SSH accounts or installed distribution.
+Keep `ShovelRustAskPass.exe` beside `ShovelRust.exe`; explicit network commands require that Rust helper. The focused desktop operations check also requires `cargo build -p shovel-askpass` first. Network fixtures use isolated local bare remotes; credential-fill fixtures invoke the compiled helper without contacting a server. Branch/checkout checks use disposable repositories and headless pointer input; they never delete a user's branch. These checks do not validate live GCM/SSH accounts, desktop ownership/appearance or installed distribution. The optional branch-management fixture exceeds 30 seconds and is not routine smoke coverage.
 
 **0.47.0 Beta:** compact stash topology, checkout choices, remembered network options, persistent window/pane/sidebar state and shared-state refactoring. [Behavior and limits](docs/product.md#checkout-and-remembered-workspace-state-0470-beta). Stable remains **0.39.1**.
 

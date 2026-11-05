@@ -50,6 +50,7 @@ pub struct Editor {
     receiver: Receiver<Event>,
     initialized: bool,
     loading: bool,
+    refresh_pending: bool,
     generation: u64,
     diff_generation: u64,
     diff_cancel: Cancellation,
@@ -92,6 +93,7 @@ impl Editor {
             receiver,
             initialized: false,
             loading: false,
+            refresh_pending: false,
             generation: 0,
             diff_generation: 0,
             diff_cancel: Cancellation::default(),
@@ -118,6 +120,9 @@ impl Editor {
     }
     pub fn activate(&mut self) {
         self.open = true;
+    }
+    pub fn external_changed(&mut self) {
+        self.refresh_pending = true;
     }
     pub fn blocks_exit(&self) -> bool {
         self.draft_dirty || self.draft_saving || self.busy
@@ -146,8 +151,10 @@ impl Editor {
     }
     pub fn refresh(&mut self, ctx: &egui::Context) {
         if self.loading || self.busy {
+            self.refresh_pending = true;
             return;
         }
+        self.refresh_pending = false;
         self.loading = true;
         self.generation += 1;
         let generation = self.generation;
@@ -357,6 +364,9 @@ impl Editor {
             if self.draft_saved_at.elapsed() >= Duration::from_millis(400) {
                 self.flush(ctx);
             }
+        }
+        if self.refresh_pending && self.open && self.initialized && !self.loading && !self.busy {
+            self.refresh(ctx);
         }
         std::mem::take(&mut self.refresh_history)
     }
@@ -878,6 +888,67 @@ mod tests {
             );
             thread::sleep(Duration::from_millis(15));
         }
+    }
+    #[test]
+    fn branch_changes_refresh_attached_and_reopened_views_without_replacing_drafts() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().join("repo");
+        std::fs::create_dir(&root).unwrap();
+        let config = temporary.path().join("isolated.config");
+        std::fs::write(
+            &config,
+            "[user]\nname=Fixture\nemail=fixture@example.invalid\n[commit]\ngpgsign=false\n",
+        )
+        .unwrap();
+        let mut git = Git::discover(None, &Cancellation::default()).unwrap();
+        git.environment
+            .insert("GIT_CONFIG_GLOBAL".into(), Some(config.into_os_string()));
+        git.environment
+            .insert("GIT_CONFIG_NOSYSTEM".into(), Some("1".into()));
+        command(&git, &root, &["init", "--initial-branch=main"]);
+        command(&git, &root, &["commit", "--allow-empty", "-m", "base"]);
+        command(&git, &root, &["branch", "target"]);
+        let mut editor = Editor::new(
+            root.clone(),
+            Arc::new(git),
+            Scheduler::default(),
+            drafts::Store {
+                directory: temporary.path().join("drafts"),
+                legacy_directory: None,
+            },
+        );
+        let ctx = egui::Context::default();
+        editor.initialize(&ctx);
+        settle(&mut editor, &ctx, |e| !e.loading && e.draft_loaded);
+        editor.draft.subject = "retained text".into();
+        editor.draft.description = "retained body".into();
+        editor.edited();
+        command(&editor.git, &root, &["switch", "target"]);
+        editor.external_changed();
+        settle(&mut editor, &ctx, |e| {
+            !e.loading
+                && e.context
+                    .as_ref()
+                    .is_some_and(|c| c.repository.branch.as_deref() == Some("target"))
+        });
+        assert_eq!(editor.draft.subject, "retained text");
+        assert_eq!(editor.draft.description, "retained body");
+        editor.open = false;
+        command(&editor.git, &root, &["switch", "main"]);
+        editor.external_changed();
+        editor.poll(&ctx);
+        assert!(!editor.loading);
+        assert!(editor.refresh_pending);
+        editor.activate();
+        settle(&mut editor, &ctx, |e| {
+            !e.loading
+                && !e.refresh_pending
+                && e.context
+                    .as_ref()
+                    .is_some_and(|c| c.repository.branch.as_deref() == Some("main"))
+        });
+        assert_eq!(editor.draft.subject, "retained text");
+        settle(&mut editor, &ctx, |e| !e.draft_dirty && !e.draft_saving);
     }
     #[test]
     fn accepted_commit_closes_window_preserves_new_typing_and_reopens_failed_draft() {

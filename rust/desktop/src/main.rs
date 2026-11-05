@@ -1,8 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod branches;
 mod commit;
 mod comparison;
 mod diff_view;
-mod network;
+mod operations;
 mod strings;
 
 fn main() -> eframe::Result {
@@ -60,6 +61,16 @@ struct Tab {
     error: Option<String>,
     comparison: Option<comparison::Pane>,
 }
+struct HistoryMenu {
+    owner: u64,
+    snapshot: shovel_core::git::Snapshot,
+    commit: shovel_core::git::Commit,
+}
+struct ReferenceMenu {
+    owner: u64,
+    snapshot: shovel_core::git::Snapshot,
+    reference: shovel_core::git::Reference,
+}
 struct Workspace {
     settings: Settings,
     store: Option<SettingsStore>,
@@ -79,7 +90,10 @@ struct Workspace {
     scheduler: shovel_core::scheduler::Scheduler,
     editors: Vec<commit::Editor>,
     draft_store: Option<shovel_core::drafts::Store>,
-    network: network::Controller,
+    operations: operations::Controller,
+    branches: branches::Dialogs,
+    history_menu: Option<HistoryMenu>,
+    reference_menu: Option<ReferenceMenu>,
 }
 impl Workspace {
     fn new(context: &eframe::CreationContext<'_>) -> Self {
@@ -133,7 +147,10 @@ impl Workspace {
             scheduler: Default::default(),
             editors: vec![],
             draft_store: None,
-            network: Default::default(),
+            operations: Default::default(),
+            branches: Default::default(),
+            history_menu: None,
+            reference_menu: None,
         }
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
@@ -297,6 +314,11 @@ impl Workspace {
                 }
                 Event::Open(path) => self.open(path, ctx),
                 Event::Loaded(id, history, page) => {
+                    if self.tabs.get(self.selected).is_some_and(|tab| tab.id == id) {
+                        egui::Popup::close_all(ctx);
+                        self.history_menu = None;
+                        self.reference_menu = None;
+                    }
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
                         if !page
                             .entries
@@ -312,6 +334,11 @@ impl Workspace {
                     }
                 }
                 Event::Page(id, page, older) => {
+                    if self.tabs.get(self.selected).is_some_and(|tab| tab.id == id) {
+                        egui::Popup::close_all(ctx);
+                        self.history_menu = None;
+                        self.reference_menu = None;
+                    }
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
                         if older {
                             if let Some(current) = &tab.page {
@@ -356,8 +383,11 @@ impl Workspace {
                 }
             }
         }
-        let mut changed = self.network.poll(ctx);
+        let mut changed = self.operations.poll(ctx);
         for editor in &mut self.editors {
+            if changed.iter().any(|path| path == &editor.path) {
+                editor.external_changed();
+            }
             if editor.poll(ctx) {
                 changed.push(editor.path.clone());
             }
@@ -512,7 +542,9 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let modal_open = self.editors.iter().any(|editor| editor.open) || self.network.modal_open();
+        let modal_open = self.editors.iter().any(|editor| editor.open)
+            || self.operations.modal_open()
+            || self.branches.is_open();
         if modal_open || self.closing {
             ui.disable();
         }
@@ -579,7 +611,14 @@ impl eframe::App for Workspace {
                 if ui.button(strings::text("RefreshRepository")).clicked() {
                     self.refresh(&ctx);
                 }
-                self.preferences_dirty |= self.network.toolbar(
+                self.branches.toolbar(
+                    ui,
+                    self.tabs
+                        .get(self.selected)
+                        .and_then(|t| t.history.as_ref())
+                        .map(|h| &h.snapshot),
+                );
+                self.preferences_dirty |= self.operations.toolbar(
                     ui,
                     &mut self.settings,
                     self.tabs
@@ -610,7 +649,7 @@ impl eframe::App for Workspace {
                 }
             });
             if let Some(tab) = self.tabs.get(self.selected) {
-                self.network.status(ui, &tab.path, &self.scheduler);
+                self.operations.status(ui, &tab.path, &self.scheduler);
             }
             if let Some(tab) = self.tabs.get(self.selected)
                 && let Some(editor) = self
@@ -663,6 +702,9 @@ impl eframe::App for Workspace {
                 }
             });
             if let Some(index) = selected {
+                egui::Popup::close_all(&ctx);
+                self.history_menu = None;
+                self.reference_menu = None;
                 self.selected = index;
                 if self.tabs[index].history.is_none() {
                     self.refresh(&ctx);
@@ -692,17 +734,35 @@ impl eframe::App for Workspace {
                                         .iter()
                                         .filter(|r| r.name.starts_with(prefix))
                                     {
-                                        if ui
-                                            .selectable_label(
-                                                tab.selected.as_deref() == Some(&reference.hash),
-                                                reference
-                                                    .name
-                                                    .strip_prefix(prefix)
-                                                    .unwrap_or(&reference.name),
-                                            )
-                                            .clicked()
-                                        {
+                                        let response = ui.selectable_label(
+                                            tab.selected.as_deref() == Some(&reference.hash),
+                                            reference
+                                                .name
+                                                .strip_prefix(prefix)
+                                                .unwrap_or(&reference.name),
+                                        );
+                                        if response.clicked() {
                                             tab.selected = Some(reference.hash.clone());
+                                        }
+                                        if reference.name.starts_with("refs/heads/") {
+                                            if response.secondary_clicked() {
+                                                self.reference_menu = Some(ReferenceMenu {
+                                                    owner: tab.id,
+                                                    snapshot: history.snapshot.clone(),
+                                                    reference: reference.clone(),
+                                                });
+                                            }
+                                            response.context_menu(|ui| {
+                                                if let Some(menu) = &self.reference_menu
+                                                    && menu.owner == tab.id
+                                                {
+                                                    self.branches.ref_menu(
+                                                        ui,
+                                                        &menu.snapshot,
+                                                        &menu.reference,
+                                                    );
+                                                }
+                                            });
                                         }
                                     }
                                 });
@@ -829,6 +889,37 @@ impl eframe::App for Workspace {
                             if response.clicked() {
                                 tab.selected = Some(entry.commit.hash.clone());
                             }
+                            if response.secondary_clicked()
+                                && let Some(history) = &tab.history
+                            {
+                                self.history_menu = Some(HistoryMenu {
+                                    owner: tab.id,
+                                    snapshot: history.snapshot.clone(),
+                                    commit: entry.commit.clone(),
+                                });
+                            }
+                            response.context_menu(|ui| {
+                                if let Some(menu) = &self.history_menu
+                                    && menu.owner == tab.id
+                                {
+                                    if ui
+                                        .button(strings::text("HistoryMenuCheckoutCommit"))
+                                        .clicked()
+                                    {
+                                        self.branches.checkout(
+                                            &menu.snapshot,
+                                            shovel_core::branches::Checkout::Detached(
+                                                menu.commit.hash.clone(),
+                                            ),
+                                        );
+                                        ui.close();
+                                    }
+                                    if ui.button(strings::text("HistoryCopySha")).clicked() {
+                                        ctx.copy_text(menu.commit.hash.clone());
+                                        ui.close();
+                                    }
+                                }
+                            });
                             response.on_hover_text(&entry.commit.message);
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -846,9 +937,20 @@ impl eframe::App for Workspace {
             );
         });
         for editor in &mut self.editors {
-            editor.show(&ctx, !self.network.modal_open());
+            editor.show(
+                &ctx,
+                !self.operations.modal_open() && !self.branches.is_open(),
+            );
         }
-        self.network.show_prompt(&ctx);
+        let allow_branch_input = !self.operations.modal_open();
+        self.branches.show(
+            &ctx,
+            self.git.as_ref(),
+            &mut self.operations,
+            &self.scheduler,
+            allow_branch_input,
+        );
+        self.operations.show_prompt(&ctx);
     }
 }
 
@@ -881,7 +983,10 @@ mod tests {
             scheduler: Default::default(),
             editors: vec![],
             draft_store: None,
-            network: Default::default(),
+            operations: Default::default(),
+            branches: Default::default(),
+            history_menu: None,
+            reference_menu: None,
         };
         let ctx = egui::Context::default();
         workspace
@@ -951,7 +1056,10 @@ mod tests {
                 directory: temporary.path().join("drafts"),
                 legacy_directory: None,
             }),
-            network: Default::default(),
+            operations: Default::default(),
+            branches: Default::default(),
+            history_menu: None,
+            reference_menu: None,
         };
         let mut frame = eframe::Frame::_new_kittest();
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200., 800.));

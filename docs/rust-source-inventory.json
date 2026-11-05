@@ -323,9 +323,9 @@
       "ParityIds": [
         "R49"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ChangeFileMenu.cs",
@@ -346,9 +346,9 @@
       "ParityIds": [
         "R48"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/CommandTranscript.cs",
@@ -655,9 +655,9 @@
       "ParityIds": [
         "R49"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellChanges.cs",
@@ -678,9 +678,9 @@
       "ParityIds": [
         "R48"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellClone.cs",
@@ -746,7 +746,7 @@
         "R55"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
@@ -988,9 +988,9 @@
       "ParityIds": [
         "R49"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/Views/BranchManagementWindow.xaml.cs",
@@ -1008,9 +1008,9 @@
       "ParityIds": [
         "R48"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/Views/CheckoutWindow.xaml.cs",
@@ -1544,7 +1544,7 @@
         "R56"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {
@@ -1577,9 +1577,9 @@
       "ParityIds": [
         "R49"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/Checkout.cs",
@@ -1587,9 +1587,9 @@
       "ParityIds": [
         "R48"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/CommitFiles.cs",
@@ -1666,7 +1666,7 @@
         "R55"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
@@ -1681,7 +1681,7 @@
         "R55"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
@@ -1743,7 +1743,7 @@
         "R55"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
@@ -1785,9 +1785,9 @@
       "ParityIds": [
         "R60"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/HistoryCacheStore.cs",
@@ -2070,7 +2070,7 @@
         "R55"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
@@ -2106,7 +2106,7 @@
         "R56"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {
@@ -2116,7 +2116,7 @@
         "R56"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {
@@ -2126,7 +2126,7 @@
         "R56"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/operations.rs",
       "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {

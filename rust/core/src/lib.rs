@@ -3,6 +3,8 @@
 #[cfg(windows)]
 pub mod authentication;
 #[cfg(windows)]
+pub mod branches;
+#[cfg(windows)]
 pub mod diff;
 #[cfg(windows)]
 pub mod drafts;
@@ -15,6 +17,8 @@ pub mod identity;
 mod lfs;
 #[cfg(windows)]
 pub mod network;
+#[cfg(windows)]
+pub mod operation;
 #[cfg(windows)]
 pub mod process;
 pub mod scheduler;

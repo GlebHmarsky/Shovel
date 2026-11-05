@@ -2,17 +2,16 @@
 //! repository worker; menus use cached snapshots and never call these methods.
 use crate::{
     authentication,
-    git::{self, Git, Snapshot},
+    git::{Git, Snapshot},
     identity,
     process::{self, Cancellation, Lifetime},
-    working::{self, MutationGate},
+    working::MutationGate,
 };
 use std::{
     collections::{BTreeMap, HashSet},
     ffi::OsString,
     path::Path,
     sync::Arc,
-    time::Duration,
 };
 
 const LIMIT: usize = 1024 * 1024;
@@ -71,55 +70,7 @@ pub enum Stage {
     Reconciling,
 }
 pub type Progress = Arc<dyn Fn(Stage) + Send + Sync>;
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("{0}")]
-    Code(&'static str),
-    #[error("ActionReadFailed")]
-    Git(#[from] git::Error),
-    #[error("{0}")]
-    Working(#[from] working::Error),
-    #[error("ActionReadFailed")]
-    Io(#[from] std::io::Error),
-}
-impl Error {
-    pub fn code(&self) -> String {
-        self.to_string()
-    }
-}
-#[derive(Debug)]
-pub struct Command {
-    pub outcome: process::Outcome,
-    pub exit_code: u32,
-    pub elapsed: Duration,
-}
-impl Command {
-    pub fn succeeded(&self) -> bool {
-        self.exit_code == 0
-            && matches!(
-                self.outcome,
-                process::Outcome::Exited | process::Outcome::OutputLimit
-            )
-    }
-}
-pub struct Completed {
-    pub commands: Vec<Command>,
-    pub output: String,
-    pub output_truncated: bool,
-    pub message: Option<String>,
-    pub has_conflicts: bool,
-    pub updated: Result<Snapshot, Error>,
-    pub authentication_failure: Option<authentication::Failure>,
-}
-impl Completed {
-    pub fn succeeded(&self) -> bool {
-        !self.commands.is_empty()
-            && self.commands.iter().all(Command::succeeded)
-            && self.message.is_none()
-            && !self.has_conflicts
-            && self.updated.as_ref().is_ok_and(|s| s.operations.is_empty())
-    }
-}
+pub use crate::operation::{Command, Completed, Error};
 fn decode(bytes: &[u8]) -> Result<String, Error> {
     String::from_utf8(bytes.to_vec()).map_err(|_| Error::Code("GitErrorInvalidOutput"))
 }
@@ -823,6 +774,7 @@ impl Git {
             output,
             output_truncated,
             message,
+            warning: None,
             has_conflicts,
             updated,
             authentication_failure: auth.and_then(authentication::Session::failure),
