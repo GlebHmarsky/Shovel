@@ -386,3 +386,67 @@ fn selected_stash_confirms_frozen_paths_and_message_then_finishes_after_view_clo
     assert!(list.entries[0].message.ends_with("selected שלום"));
     assert!(!h.editor.open);
 }
+
+#[test]
+fn configured_external_diff_menu_submits_directly_and_tool_survives_closed_view() {
+    let mut h = Harness::new();
+    let old = h.editor.context.as_ref().unwrap().config_stamp.clone();
+    for args in [
+        vec!["config", "diff.guitool", "fixture"],
+        vec![
+            "config",
+            "difftool.fixture.cmd",
+            "cat \"$LOCAL\" > tool-old; cat \"$REMOTE\" > tool-new; touch tool-started; while test ! -e tool-release; do sleep .05; done; printf 'tool edited\\n' > \"$REMOTE\"; echo tool-finished",
+        ],
+    ] {
+        let r = process::run(
+            &h.editor
+                .git
+                .request(&h.editor.path, args, Lifetime::AcceptedCommand, 65536),
+            &Cancellation::default(),
+            None,
+        )
+        .unwrap();
+        assert!(r.success(), "{r:?}");
+    }
+    h.editor.refresh(&h.ctx);
+    h.until(|e| !e.loading && e.context.as_ref().is_some_and(|c| c.config_stamp != old));
+    let original = h.editor.git.clone();
+    let mut missing = (*original).clone();
+    missing.executable = h._temp.path().join("missing-git.exe");
+    h.editor.git = Arc::new(missing);
+    h.menu();
+    assert!(!h.editor.scheduler.has_accepted_work() && !h.editor.loading);
+    h.editor.git = original;
+    h.click(&text("FileExternalDiff"));
+    assert!(h.editor.busy && h.editor.file_confirmation.is_none());
+    h.until(|e| e.path.join("tool-started").exists());
+    assert_eq!(
+        fs::read(h.editor.path.join("tool-old")).unwrap(),
+        b"staged\n"
+    );
+    assert_eq!(
+        fs::read(h.editor.path.join("tool-new")).unwrap(),
+        b"worktree\n"
+    );
+    h.editor.request_leave(Leave::Close, &h.ctx);
+    assert!(!h.editor.open && h.editor.blocks_exit() && h.editor.scheduler.has_accepted_work());
+    fs::write(h.editor.path.join("tool-release"), "").unwrap();
+    h.until(|e| !e.busy);
+    assert_eq!(h.editor.status, Some(text("CommitSucceededExternalDiff")));
+    assert!(h.editor.operation_output.contains("tool-finished"));
+    assert_eq!(
+        fs::read(h.editor.path.join("file.txt")).unwrap(),
+        b"tool edited\n"
+    );
+    assert!(!h.editor.open);
+    assert!(
+        h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.group == Group::Unstaged && e.path == "file.txt")
+    );
+}

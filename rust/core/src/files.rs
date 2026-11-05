@@ -4,16 +4,50 @@ use crate::{
     diff,
     git::Git,
     operation::{Command, Error, Transcript},
-    process::{Cancellation, Lifetime},
+    process::{Cancellation, Lifetime, Request},
     working::{self, Change, Context, Group, MutationGate},
 };
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
     ffi::OsString,
+    fs,
     os::windows::ffi::OsStrExt,
     path::{Path, PathBuf},
 };
+pub(crate) struct PrivateIndex(pub tempfile::TempPath);
+impl Drop for PrivateIndex {
+    fn drop(&mut self) {
+        // This random sibling and its own native lock belong to this attempt.
+        // Never touch the repository's index.lock or recursively remove a path.
+        let mut lock = self.0.as_os_str().to_owned();
+        lock.push(".lock");
+        let _ = fs::remove_file(lock);
+    }
+}
+pub(crate) fn file_request(
+    git: &Git,
+    root: &Path,
+    args: impl IntoIterator<Item = impl Into<OsString>>,
+) -> Request {
+    let mut r = git.request(
+        root,
+        [
+            "--literal-pathspecs",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "submodule.recurse=false",
+        ],
+        Lifetime::AcceptedCommand,
+        1024 * 1024,
+    );
+    r.arguments.extend(args.into_iter().map(Into::into));
+    r.environment
+        .insert("GIT_EDITOR".into(), Some("false".into()));
+    r
+}
+
 /// Match the baseline's Windows File.Delete behavior: a read-only attribute or
 /// denied sharing mode is a real failure, not permission to clear attributes.
 pub(crate) fn remove_file(path: &Path) -> std::io::Result<()> {
@@ -124,6 +158,29 @@ pub(crate) fn input(paths: &[String]) -> Result<Vec<u8>, Error> {
     Ok(input)
 }
 impl Git {
+    pub(crate) fn validate_file_selection(
+        &self,
+        context: &Context,
+        entries: &[Change],
+        cancel: &Cancellation,
+    ) -> Result<(), Error> {
+        let fresh = self.working_copy(&context.repository.worktree, cancel)?;
+        if fresh.repository.identity != context.repository.identity
+            || fresh.repository.head != context.repository.head
+            || fresh.repository.branch != context.repository.branch
+            || fresh.repository.operations != context.repository.operations
+            || fresh.index_stamp != context.index_stamp
+            || fresh.config_stamp != context.config_stamp
+            || entries.iter().any(|e| !fresh.entries.contains(e))
+        {
+            return Err(Error::Code("CommitStale"));
+        }
+        for path in paths(entries) {
+            regular(&context.repository.worktree, &path)?;
+        }
+        Ok(())
+    }
+
     fn discard_context(
         &self,
         previous: &Context,

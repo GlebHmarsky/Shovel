@@ -19,24 +19,28 @@ pub(super) struct Menu {
 pub(super) enum FileAction {
     Discard,
     Stash,
+    ExternalDiff,
 }
 impl FileAction {
     pub(super) fn phase(self) -> &'static str {
         match self {
             Self::Discard => "CommitPhaseDiscard",
             Self::Stash => "CommitPhaseStashFiles",
+            Self::ExternalDiff => "CommitPhaseExternalDiff",
         }
     }
     fn succeeded(self) -> &'static str {
         match self {
             Self::Discard => "CommitSucceededDiscard",
             Self::Stash => "CommitSucceededStashFiles",
+            Self::ExternalDiff => "CommitSucceededExternalDiff",
         }
     }
     fn partial(self) -> &'static str {
         match self {
             Self::Discard => "RustDiscardPartial",
             Self::Stash => "RustFileStashPartial",
+            Self::ExternalDiff => "RustFileDiffPartial",
         }
     }
 }
@@ -216,6 +220,25 @@ impl Editor {
             {
                 action = Some(5);
             }
+            if ui
+                .add_enabled(
+                    enabled
+                        && menu.selected.entries.len() == 1
+                        && files::supported(&menu.selected.entries),
+                    egui::Button::new(text("FileExternalDiff")),
+                )
+                .on_hover_text(text("FileDiffToolHelp"))
+                .on_disabled_hover_text(if !enabled {
+                    reason.clone()
+                } else if menu.selected.entries.len() != 1 {
+                    text("FileMenuSingle")
+                } else {
+                    text("FileActionUnsupported")
+                })
+                .clicked()
+            {
+                action = Some(6);
+            }
         });
         if let Some(action) = action {
             match action {
@@ -245,6 +268,10 @@ impl Editor {
                         },
                     ))
                 }
+                6 => self.submit_file_action(
+                    Confirmation::new(menu.selected.clone(), FileAction::ExternalDiff),
+                    ctx,
+                ),
                 _ => unreachable!(),
             }
             open = false;
@@ -382,10 +409,12 @@ impl Editor {
                 .common_directory
                 .to_string_lossy()
                 .to_uppercase(),
-            if action == FileAction::Discard {
-                files::discard_key(&context, &entries)
-            } else {
-                files::stash_key(&context, &entries, &message)
+            match action {
+                FileAction::Discard => files::discard_key(&context, &entries),
+                FileAction::Stash => files::stash_key(&context, &entries, &message),
+                FileAction::ExternalDiff => {
+                    format!("diff-tool:{}", files::discard_key(&context, &entries))
+                }
             },
             Lane::WorkingCopy,
             move || {
@@ -394,6 +423,7 @@ impl Editor {
                 let result = match action {
                     FileAction::Discard => git.discard_files(&context, &entries),
                     FileAction::Stash => git.stash_files(&context, &entries, &message),
+                    FileAction::ExternalDiff => git.external_file_diff(&context, &entries),
                 };
                 let outcome = if result.as_ref().is_ok_and(files::Completed::succeeded) {
                     Outcome::Succeeded

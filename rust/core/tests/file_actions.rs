@@ -556,3 +556,108 @@ fn selected_stash_observes_real_index_changes_made_by_native_hook_after_saving()
     assert_eq!(f.cmd(&["show", ":other.txt"]), "hook staged");
     assert_eq!(fs::read(f.root.join("file.txt")).unwrap(), b"base\n");
 }
+
+#[test]
+fn external_diff_uses_native_staged_unstaged_and_untracked_sides_without_real_index_writes() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "staged\n").unwrap();
+    f.cmd(&["add", "file.txt"]);
+    fs::write(f.root.join("file.txt"), "working\n").unwrap();
+    fs::write(f.root.join("-new שלום[1].txt"), "untracked\n").unwrap();
+    f.cmd(&["config", "diff.tool", "wrong"]);
+    f.cmd(&["config", "difftool.wrong.cmd", "exit 42"]);
+    f.cmd(&["config", "merge.guitool", "fixture"]);
+    f.cmd(&[
+        "config",
+        "difftool.fixture.cmd",
+        "cat -- \"$LOCAL\" > old-side; cat -- \"$REMOTE\" > new-side",
+    ]);
+    let config = fs::read(f.root.join(".git/config")).unwrap();
+    let index = fs::read(f.root.join(".git/index")).unwrap();
+    for (group, path, old, new) in [
+        (Group::Staged, "file.txt", "base\n", "staged\n"),
+        (Group::Unstaged, "file.txt", "staged\n", "working\n"),
+        (Group::Untracked, "-new שלום[1].txt", "", "untracked\n"),
+    ] {
+        let c = f.context();
+        let r = f
+            .git
+            .external_file_diff(&c, &selected(&c, group, &[path]))
+            .unwrap();
+        assert!(r.succeeded(), "{:?} {}", r.message, r.output);
+        assert_eq!(fs::read(f.root.join("old-side")).unwrap(), old.as_bytes());
+        assert_eq!(fs::read(f.root.join("new-side")).unwrap(), new.as_bytes());
+        assert_eq!(fs::read(f.root.join(".git/index")).unwrap(), index);
+        assert_eq!(fs::read(f.root.join(".git/config")).unwrap(), config);
+    }
+    assert!(fs::read_dir(f.root.join(".git")).unwrap().all(|e| {
+        !e.unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("shovel-rust-index-")
+    }));
+}
+
+#[test]
+fn external_diff_untracked_exit_one_is_failure_and_stale_configuration_never_launches() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("new.txt"), "untracked\n").unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Untracked, &["new.txt"]);
+    assert!(matches!(
+        f.git.external_file_diff(&c, &entries),
+        Err(shovel_core::operation::Error::Code("FileDiffToolMissing"))
+    ));
+    f.cmd(&["config", "diff.guitool", "fixture"]);
+    f.cmd(&[
+        "config",
+        "difftool.fixture.cmd",
+        "touch invoked; echo tool-failure >&2; exit 1",
+    ]);
+    assert!(matches!(
+        f.git.external_file_diff(&c, &entries),
+        Err(shovel_core::operation::Error::Code("CommitStale"))
+    ));
+    assert!(!f.root.join("invoked").exists());
+    let c = f.context();
+    let index = fs::read(f.root.join(".git/index")).unwrap();
+    let r = f.git.external_file_diff(&c, &entries).unwrap();
+    assert!(!r.succeeded());
+    // This Git version wraps an external-tool exit 1 as Git exit 128.
+    assert_ne!(r.commands.last().unwrap().exit_code, 0);
+    assert!(r.output.contains("tool-failure"));
+    assert!(f.root.join("invoked").exists());
+    assert_eq!(fs::read(f.root.join(".git/index")).unwrap(), index);
+    assert_eq!(fs::read(f.root.join("new.txt")).unwrap(), b"untracked\n");
+}
+
+#[test]
+fn external_diff_unborn_staged_file_compares_empty_to_index_and_preserves_working_edits() {
+    let f = Fixture::new();
+    fs::write(f.root.join("first.txt"), "first staged\n").unwrap();
+    f.cmd(&["add", "first.txt"]);
+    fs::write(f.root.join("first.txt"), "later working\n").unwrap();
+    f.cmd(&["config", "diff.guitool", "fixture"]);
+    f.cmd(&[
+        "config",
+        "difftool.fixture.cmd",
+        "cat -- \"$LOCAL\" > old-side; cat -- \"$REMOTE\" > new-side",
+    ]);
+    let c = f.context();
+    let r = f
+        .git
+        .external_file_diff(&c, &selected(&c, Group::Staged, &["first.txt"]))
+        .unwrap();
+    assert!(r.succeeded(), "{:?} {}", r.message, r.output);
+    assert_eq!(fs::read(f.root.join("old-side")).unwrap(), b"");
+    assert_eq!(
+        fs::read(f.root.join("new-side")).unwrap(),
+        b"first staged\n"
+    );
+    assert_eq!(
+        fs::read(f.root.join("first.txt")).unwrap(),
+        b"later working\n"
+    );
+}

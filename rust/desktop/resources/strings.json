@@ -554,10 +554,10 @@
   "FileStashTitle": "Stash selected files",
   "FileStashButton": "Create stash",
   "FileStashTarget": "{0} — stash staged and unstaged content for this path.",
-  "FileStashExplanation": "Repository: {1}\nSave these selected paths, including selected untracked files, in a new stash and return their index/worktree state to HEAD ({0}). Unrelated working files stay in place. Inspect or restore the entry from Stashes. A failed or cancelled command may have partially changed state; inspect the result before retrying.",
+  "FileStashExplanation": "Repository: {1}\nSave these selected paths, including selected untracked files, in a new stash and return their index/worktree state to HEAD ({0}). Unrelated working files stay in place. Inspect or restore the entry from Stashes. A failed command may have partially changed state; inspect the result before retrying.",
   "FileStashHelp": "Save both staged and unstaged changes for selected paths, plus selected untracked files. Unrelated working files are left in place.",
   "FileExternalDiff": "External Diff",
-  "FileDiffToolHelp": "Open one file in the configured Git GUI diff tool (diff.guitool, merge.guitool, diff.tool or merge.tool). Uses this list's comparison. Cancel stops owned tool processes; a tool that detaches itself is not tracked.",
+  "FileDiffToolHelp": "Open one file in the configured Git GUI diff tool (diff.guitool, merge.guitool, diff.tool or merge.tool), using this list's comparison. Started tools finish even if this view closes. A tool that detaches itself may outlive Git.",
   "FileDiffToolMissing": "No Git diff tool is configured. Set diff.guitool or diff.tool using your Git configuration, then refresh. Shovel does not choose an arbitrary installed tool or change global settings.",
   "FileIgnoreMenu": "Ignore",
   "FileIgnorePaths": "Selected paths",
@@ -617,7 +617,7 @@
   "CommitSucceededLfsTrack": "Selected LFS tracking rules written. Stage .gitattributes and affected files to convert them; existing commits and index content were not rewritten.",
   "CommitPhaseLfsUntrack": "Removing selected LFS attributes",
   "CommitSucceededLfsUntrack": "Selected LFS attributes reset. Stage .gitattributes and affected files when ready; stored LFS objects and commits were not removed.",
-  "CommitPhaseExternalDiff": "External diff tool is running — close the tool to finish, or Cancel",
+  "CommitPhaseExternalDiff": "External diff tool is running — close the tool to finish",
   "CommitSucceededExternalDiff": "External diff finished. Working files have been checked again.",
   "FileStashIndexRetained": "The selected stash was saved, but the real index changed or could not be reset. Inspect Stashes and Local Changes before continuing; do not blindly repeat or apply the stash.",
   "FileHistoryFirst": "Newest",
@@ -1052,5 +1052,6 @@
   "RustFileDeleteFailed": "Windows could not remove a selected file. It may be read-only, in use, or inaccessible.",
   "RustFileStashPartial": "The selected stash operation did not finish. Files or a saved entry may already have changed. Inspect Stashes and Local Changes before retrying.",
   "RustFileStashSaved": "Saved stash: {0}",
-  "RustFileStashNotSaved": "Git did not create a new stash for the reviewed selection. Local changes have been refreshed."
+  "RustFileStashNotSaved": "Git did not create a new stash for the reviewed selection. Local changes have been refreshed.",
+  "RustFileDiffPartial": "External diff did not finish successfully. The tool may have changed working files. Review the refreshed file list and tool output."
 }

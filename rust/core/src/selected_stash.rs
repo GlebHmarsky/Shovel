@@ -1,42 +1,14 @@
 //! Selected stashes use a private index so the saved index parent cannot replay
 //! unrelated staged changes. Only after saving do we reset reviewed real entries.
 use crate::{
-    files::{self, Completed},
+    files::{self, Completed, PrivateIndex, file_request as request},
     git::Git,
     operation::{Error, Transcript},
-    process::{Cancellation, Lifetime, Request},
+    process::Cancellation,
     working::{Change, Context, Group, MutationGate},
 };
-use std::{ffi::OsString, fs, io::Write, path::Path};
+use std::{fs, io::Write};
 
-struct PrivateIndex(tempfile::TempPath);
-impl Drop for PrivateIndex {
-    fn drop(&mut self) {
-        // This random sibling and its own native lock belong to this attempt.
-        // Never touch the repository's index.lock or recursively remove a path.
-        let mut lock = self.0.as_os_str().to_owned();
-        lock.push(".lock");
-        let _ = fs::remove_file(lock);
-    }
-}
-fn request(git: &Git, root: &Path, args: impl IntoIterator<Item = impl Into<OsString>>) -> Request {
-    let mut r = git.request(
-        root,
-        [
-            "--literal-pathspecs",
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "submodule.recurse=false",
-        ],
-        Lifetime::AcceptedCommand,
-        1024 * 1024,
-    );
-    r.arguments.extend(args.into_iter().map(Into::into));
-    r.environment
-        .insert("GIT_EDITOR".into(), Some("false".into()));
-    r
-}
 fn oid(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
@@ -63,28 +35,6 @@ impl Git {
             Err(Error::Code("GitErrorInvalidOutput"))
         }
     }
-    fn validate_selected_stash(
-        &self,
-        context: &Context,
-        entries: &[Change],
-        cancel: &Cancellation,
-    ) -> Result<(), Error> {
-        let fresh = self.working_copy(&context.repository.worktree, cancel)?;
-        if fresh.repository.identity != context.repository.identity
-            || fresh.repository.head != context.repository.head
-            || fresh.repository.branch != context.repository.branch
-            || fresh.repository.operations != context.repository.operations
-            || fresh.index_stamp != context.index_stamp
-            || fresh.config_stamp != context.config_stamp
-            || entries.iter().any(|e| !fresh.entries.contains(e))
-        {
-            return Err(Error::Code("CommitStale"));
-        }
-        for path in files::paths(entries) {
-            files::regular(&context.repository.worktree, &path)?;
-        }
-        Ok(())
-    }
     pub fn stash_files(
         &self,
         context: &Context,
@@ -110,7 +60,7 @@ impl Git {
         }
         let _gate = MutationGate::acquire(&context.repository.common_directory, false)?;
         let cancel = Cancellation::default();
-        self.validate_selected_stash(context, entries, &cancel)?;
+        self.validate_file_selection(context, entries, &cancel)?;
         let root = &context.repository.worktree;
         let tracked = files::paths(
             &entries
@@ -185,7 +135,7 @@ impl Git {
             }
             // Private preparation may run hooks. Revalidate real state before
             // the first command that saves and changes selected working files.
-            self.validate_selected_stash(context, entries, &cancel)?;
+            self.validate_file_selection(context, entries, &cancel)?;
             let mut r = request(
                 &git,
                 root,
