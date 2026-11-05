@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust/core", "rust/desktop"]
+members = ["rust/core", "rust/desktop", "rust/askpass"]
 resolver = "3"
 
 [workspace.package]

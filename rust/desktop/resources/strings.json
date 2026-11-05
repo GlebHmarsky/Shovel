@@ -1023,5 +1023,14 @@
   "NetworkRememberOptions": "Choices are remembered for the main button. Explicit destinations apply to this branch.",
   "CheckoutStashMessage": "Shovel checkout",
   "RustExitWithoutSaving": "Exit without saving",
-  "RustStayOpen": "Stay open"
+  "RustStayOpen": "Stay open",
+  "RustOperationDuration": "{0} s",
+  "RustNetworkConfigured": "The main button resolves the destination from current Git configuration. Editing a destination makes it explicit.",
+  "RustNetworkUseConfigured": "Use current Git configuration",
+  "RustNetworkOptions": "{0} options",
+  "RustAuthDecline": "Decline request",
+  "RustAuthExplanation": "Replies are hidden and are not saved by Shovel. Verify a new SSH host fingerprint before approving it. This request expires after two minutes. Declining supplies no answer; Git determines the outcome and any changes already applied remain.",
+  "RustAuthUnavailable": "The authentication connection failed or returned an invalid reply. Review Git's result and refreshed repository state before retrying.",
+  "RustAuthTimedOut": "The authentication request expired. No reply was supplied. Review Git's result and refreshed repository state before retrying.",
+  "RustAuthPromptLimit": "The operation exceeded 16 authentication requests. No further replies were supplied. Review Git's result and authentication configuration."
 }

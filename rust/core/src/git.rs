@@ -203,11 +203,14 @@ impl Git {
         request.lifetime = lifetime;
         for (name, _) in std::env::vars_os() {
             let key = name.to_string_lossy().to_uppercase();
-            if key.starts_with("GIT_")
+            if (key.starts_with("GIT_")
                 && !matches!(
                     key.as_str(),
                     "GIT_CONFIG_GLOBAL" | "GIT_CONFIG_SYSTEM" | "GIT_CONFIG_NOSYSTEM"
-                )
+                ))
+                || key.starts_with("GCM_TRACE")
+                || key.starts_with("SHOVEL_ASKPASS_")
+                || key.starts_with("SHOVEL_RUST_ASKPASS_")
             {
                 request.environment.insert(name, None);
             }
@@ -215,7 +218,24 @@ impl Git {
         request
             .environment
             .insert("GIT_NO_LAZY_FETCH".into(), Some("1".into()));
-        if lifetime != Lifetime::AcceptedCommand {
+        for key in ["GIT_ASKPASS", "SSH_ASKPASS"] {
+            request.environment.insert(key.into(), Some("".into()));
+        }
+        request
+            .environment
+            .insert("SSH_ASKPASS_REQUIRE".into(), Some("never".into()));
+        request
+            .environment
+            .insert("SSH_ASKPASS_PROMPT".into(), None);
+        for key in [
+            "GCM_DEBUG",
+            "GCM_TRACE",
+            "GCM_TRACE_SECRETS",
+            "GCM_TRACE_MSAUTH",
+        ] {
+            request.environment.insert(key.into(), Some("0".into()));
+        }
+        {
             request
                 .environment
                 .insert("GIT_TERMINAL_PROMPT".into(), Some("0".into()));

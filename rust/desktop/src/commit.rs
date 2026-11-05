@@ -535,7 +535,7 @@ impl Editor {
             }
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context) {
+    pub fn show(&mut self, ctx: &egui::Context, enabled: bool) {
         if !self.open {
             return;
         }
@@ -555,6 +555,9 @@ impl Editor {
                 .with_maximize_button(false),
             |ui, _| {
                 let ctx = ui.ctx().clone();
+                if !enabled {
+                    ui.disable();
+                }
                 if ctx.input(|i| i.viewport().close_requested()) {
                     self.open = false;
                     self.flush(&ctx);
@@ -562,15 +565,18 @@ impl Editor {
                 if let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
                     self.size = rect.size();
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
+                if enabled && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
                     self.refresh(&ctx);
                 }
-                if ctx.input(|i| {
-                    i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Enter)
-                }) {
+                if enabled
+                    && ctx.input(|i| {
+                        i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Enter)
+                    })
+                {
                     self.request_commit(&ctx);
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && !self.confirm_amend {
+                if enabled && ctx.input(|i| i.key_pressed(egui::Key::Escape)) && !self.confirm_amend
+                {
                     self.open = false;
                     self.flush(&ctx);
                 }

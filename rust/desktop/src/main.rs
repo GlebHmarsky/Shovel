@@ -2,6 +2,7 @@
 mod commit;
 mod comparison;
 mod diff_view;
+mod network;
 mod strings;
 
 fn main() -> eframe::Result {
@@ -55,6 +56,7 @@ struct Tab {
     selected: Option<String>,
     previous: Vec<Cursor>,
     loading: bool,
+    refresh_again: bool,
     error: Option<String>,
     comparison: Option<comparison::Pane>,
 }
@@ -70,11 +72,14 @@ struct Workspace {
     notice: Option<String>,
     initialized: bool,
     saving: bool,
+    preferences_dirty: bool,
+    closing: bool,
     exit_ready: bool,
     confirm_exit_without_save: bool,
     scheduler: shovel_core::scheduler::Scheduler,
     editors: Vec<commit::Editor>,
     draft_store: Option<shovel_core::drafts::Store>,
+    network: network::Controller,
 }
 impl Workspace {
     fn new(context: &eframe::CreationContext<'_>) -> Self {
@@ -121,11 +126,14 @@ impl Workspace {
             notice: None,
             initialized: false,
             saving: false,
+            preferences_dirty: false,
+            closing: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             scheduler: Default::default(),
             editors: vec![],
             draft_store: None,
+            network: Default::default(),
         }
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
@@ -143,6 +151,7 @@ impl Workspace {
             selected: None,
             previous: vec![],
             loading: false,
+            refresh_again: false,
             error: None,
             comparison: None,
         });
@@ -160,6 +169,7 @@ impl Workspace {
             return;
         };
         if tab.loading {
+            tab.refresh_again = true;
             return;
         }
         tab.loading = true;
@@ -272,6 +282,7 @@ impl Workspace {
                             selected: None,
                             previous: vec![],
                             loading: false,
+                            refresh_again: false,
                             error: None,
                             comparison: None,
                         });
@@ -331,18 +342,21 @@ impl Workspace {
                     self.saving = false;
                     match result {
                         Ok(()) => {
-                            self.exit_ready = true;
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            if self.closing && !self.preferences_dirty {
+                                self.exit_ready = true;
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
                         }
                         Err(error) => {
                             self.notice = Some(error);
-                            self.confirm_exit_without_save = true;
+                            self.confirm_exit_without_save = self.closing;
+                            self.closing = false;
                         }
                     }
                 }
             }
         }
-        let mut changed = vec![];
+        let mut changed = self.network.poll(ctx);
         for editor in &mut self.editors {
             if editor.poll(ctx) {
                 changed.push(editor.path.clone());
@@ -357,6 +371,20 @@ impl Workspace {
             if let Some(pane) = &mut tab.comparison {
                 pane.poll(ctx);
             }
+        }
+        let pending = self
+            .tabs
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(index, tab)| {
+                (!tab.loading && std::mem::take(&mut tab.refresh_again)).then_some(index)
+            })
+            .collect::<Vec<_>>();
+        for index in pending {
+            self.refresh_at(index, ctx);
+        }
+        if self.preferences_dirty && !self.saving {
+            self.save_preferences(ctx);
         }
     }
     fn open_commit(&mut self) {
@@ -401,12 +429,9 @@ impl Workspace {
             );
             return;
         }
-        if self.saving || !self.initialized {
+        if !self.initialized {
             return;
         }
-        let Some(mut store) = self.store.take() else {
-            return;
-        };
         self.settings.set(
             "RepositoryPaths",
             serde_json::json!(
@@ -432,6 +457,15 @@ impl Workspace {
             self.settings
                 .set("WindowHeight", serde_json::json!(rect.height()));
         }
+        self.closing = true;
+        self.preferences_dirty = true;
+        self.save_preferences(ctx);
+    }
+    fn save_preferences(&mut self, ctx: &egui::Context) {
+        let Some(mut store) = self.store.take() else {
+            return;
+        };
+        self.preferences_dirty = false;
         let settings = self.settings.clone();
         self.saving = true;
         let sender = self.sender.clone();
@@ -478,8 +512,8 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let modal_open = self.editors.iter().any(|editor| editor.open);
-        if modal_open || self.saving {
+        let modal_open = self.editors.iter().any(|editor| editor.open) || self.network.modal_open();
+        if modal_open || self.closing {
             ui.disable();
         }
         if self.confirm_exit_without_save {
@@ -545,6 +579,16 @@ impl eframe::App for Workspace {
                 if ui.button(strings::text("RefreshRepository")).clicked() {
                     self.refresh(&ctx);
                 }
+                self.preferences_dirty |= self.network.toolbar(
+                    ui,
+                    &mut self.settings,
+                    self.tabs
+                        .get(self.selected)
+                        .and_then(|t| t.history.as_ref())
+                        .map(|h| &h.snapshot),
+                    self.git.as_ref(),
+                    &self.scheduler,
+                );
                 let commit_response = ui.add_enabled(
                     self.git.is_some() && !self.tabs.is_empty(),
                     egui::Button::new(strings::text("Commit")),
@@ -565,6 +609,9 @@ impl eframe::App for Workspace {
                     ui.colored_label(Color32::LIGHT_RED, notice);
                 }
             });
+            if let Some(tab) = self.tabs.get(self.selected) {
+                self.network.status(ui, &tab.path, &self.scheduler);
+            }
             if let Some(tab) = self.tabs.get(self.selected)
                 && let Some(editor) = self
                     .editors
@@ -799,8 +846,9 @@ impl eframe::App for Workspace {
             );
         });
         for editor in &mut self.editors {
-            editor.show(&ctx);
+            editor.show(&ctx, !self.network.modal_open());
         }
+        self.network.show_prompt(&ctx);
     }
 }
 
@@ -808,6 +856,58 @@ impl eframe::App for Workspace {
 mod tests {
     use super::*;
     use eframe::App;
+    #[test]
+    fn option_saves_coalesce_without_closing_or_losing_later_edits() {
+        let temporary = tempfile::tempdir().unwrap();
+        let mut store = SettingsStore::new(temporary.path().into());
+        let settings = store.load().unwrap();
+        let (sender, receiver) = mpsc::channel();
+        let mut workspace = Workspace {
+            settings,
+            store: Some(store),
+            git: None,
+            tabs: vec![],
+            selected: 0,
+            next_id: 1,
+            sender,
+            receiver,
+            notice: None,
+            initialized: true,
+            saving: false,
+            preferences_dirty: false,
+            closing: false,
+            exit_ready: false,
+            confirm_exit_without_save: false,
+            scheduler: Default::default(),
+            editors: vec![],
+            draft_store: None,
+            network: Default::default(),
+        };
+        let ctx = egui::Context::default();
+        workspace
+            .settings
+            .set("Fixture", serde_json::json!("first"));
+        workspace.save_preferences(&ctx);
+        workspace
+            .settings
+            .set("Fixture", serde_json::json!("later"));
+        workspace.preferences_dirty = true;
+        workspace.save_preferences(&ctx);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while workspace.saving || workspace.preferences_dirty {
+            assert!(std::time::Instant::now() < deadline);
+            workspace.receive(&ctx);
+            thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(!workspace.exit_ready);
+        assert!(!workspace.closing);
+        assert!(workspace.notice.is_none());
+        let reloaded = SettingsStore::new(temporary.path().into()).load().unwrap();
+        assert_eq!(
+            reloaded.get("Fixture").and_then(serde_json::Value::as_str),
+            Some("later")
+        );
+    }
     #[test]
     fn pointer_activation_opens_the_real_commit_view_without_waiting_for_history() {
         let temporary = tempfile::tempdir().unwrap();
@@ -830,6 +930,7 @@ mod tests {
                 selected: None,
                 previous: vec![],
                 loading: true,
+                refresh_again: false,
                 error: None,
                 comparison: None,
             }],
@@ -840,6 +941,8 @@ mod tests {
             notice: None,
             initialized: true,
             saving: false,
+            preferences_dirty: false,
+            closing: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             scheduler: Default::default(),
@@ -848,6 +951,7 @@ mod tests {
                 directory: temporary.path().join("drafts"),
                 legacy_directory: None,
             }),
+            network: Default::default(),
         };
         let mut frame = eframe::Frame::_new_kittest();
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200., 800.));

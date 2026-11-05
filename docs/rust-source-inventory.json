@@ -745,9 +745,9 @@
         "R54",
         "R55"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellOperationActivity.cs",
@@ -1543,9 +1543,9 @@
       "ParityIds": [
         "R56"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/BinaryMetadata.cs",
@@ -1665,9 +1665,9 @@
         "R54",
         "R55"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/DefaultPull.cs",
@@ -1680,9 +1680,9 @@
         "R54",
         "R55"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/ExternalMergeToolSettings.cs",
@@ -1742,9 +1742,9 @@
         "R54",
         "R55"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/GitCommandLog.cs",
@@ -2069,9 +2069,9 @@
         "R54",
         "R55"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/network.rs; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: four disposable native network fixtures and desktop toolbar/preferences checks; branch/checkout/automatic fetch and remaining queue/UI parity open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Settings/SettingsStore.cs",
@@ -2105,9 +2105,9 @@
       "ParityIds": [
         "R56"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {
       "Path": "src/GitGui.ProcessHost/AskPassProtocol.cs",
@@ -2115,9 +2115,9 @@
       "ParityIds": [
         "R56"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {
       "Path": "src/GitGui.ProcessHost/AskPassSession.cs",
@@ -2125,9 +2125,9 @@
       "ParityIds": [
         "R56"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/authentication.rs; rust/askpass; rust/desktop/src/network.rs",
+      "Evidence": "2026-11-05: three protected-pipe checks, two compiled-helper checks including Git credential fill, masked headless prompt check; live account/SSH and native ownership acceptance open. See roadmap."
     },
     {
       "Path": "src/GitGui.ProcessHost/GitGui.ProcessHost.csproj",
