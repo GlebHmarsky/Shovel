@@ -178,11 +178,13 @@
       "Path": "src/GitGui.App/Services/FileShellActions.cs",
       "GitBlob": "a77743ccfa66f1c0e604e9e8e48f0156b6818d7b",
       "ParityIds": [
+        "R42",
+        "R46",
         "R57"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/patches.rs",
+      "Evidence": "2026-11-05: Reviewed selected-patch destination validation and temporary replacement; native exports apply successfully and locked/read-only destinations retain original bytes. Shell Open/Explorer and historical saves remain pending."
     },
     {
       "Path": "src/GitGui.App/Services/OperationAttention.cs",
@@ -267,11 +269,12 @@
       "ParityIds": [
         "R03",
         "R13",
-        "R24"
+        "R24",
+        "R46"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/file_picker.rs; rust/desktop/src/commit_patch.rs",
+      "Evidence": "2026-11-05: Reviewed patch-save chooser options and ownership. Native rfd save picker wired with asynchronous result and owner lifetime guard; headless injected-picker checks passed. Actual native picker behavior and remaining dialogs are unverified."
     },
     {
       "Path": "src/GitGui.App/Services/WindowCaption.cs",
@@ -1712,11 +1715,12 @@
       "Path": "src/GitGui.Core/Git/FileInspection.cs",
       "GitBlob": "ccc0c947546bcad87792cb9b06de5dbecba3bea5",
       "ParityIds": [
+        "R46",
         "R66"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/patches.rs",
+      "Evidence": "2026-11-05: Reviewed selected-patch generation, literal binary flags, helper suppression, bounds and before/after stale checks. Native staged/unstaged/untracked/unborn patch application verified; History/Blame reads remain pending."
     },
     {
       "Path": "src/GitGui.Core/Git/FileMenuActions.cs",

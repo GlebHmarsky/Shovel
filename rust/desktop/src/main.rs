@@ -4,6 +4,7 @@ mod commit;
 mod comparison;
 mod conflict;
 mod diff_view;
+mod file_picker;
 mod operations;
 mod stashes;
 mod strings;
@@ -505,6 +506,11 @@ impl Workspace {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if self.editors.iter().any(commit::Editor::native_picker_open) {
+            self.pending_exit = false;
+            self.notice = Some(strings::text("RustPatchChooserOpen"));
+            return;
+        }
         if self.scheduler.has_accepted_work() {
             self.pending_exit = false;
             self.notice = Some(strings::text("AppCommandRunningClose"));

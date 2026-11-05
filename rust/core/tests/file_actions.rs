@@ -5,6 +5,208 @@ use shovel_core::{
     working::{Change, Context, Group},
 };
 use std::{fs, path::PathBuf};
+fn apply_export(
+    f: &Fixture,
+    patch: &std::path::Path,
+    prepare: impl FnOnce(&std::path::Path),
+) -> PathBuf {
+    let target = f._temp.path().join("apply");
+    f.cmd(&["clone", "--no-hardlinks", ".", target.to_str().unwrap()]);
+    prepare(&target);
+    let r = process::run(
+        &f.git.request(
+            &target,
+            ["apply", "--binary", patch.to_str().unwrap()],
+            Lifetime::AcceptedCommand,
+            65536,
+        ),
+        &Cancellation::default(),
+        None,
+    )
+    .unwrap();
+    assert!(r.success(), "{r:?}");
+    target
+}
+
+#[test]
+fn patch_unstaged_binary_and_literal_untracked_additions_apply_without_staging() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("binary.dat"), [0, 1, 2, 3, 4, 5]).unwrap();
+    f.cmd(&["add", "binary.dat"]);
+    f.cmd(&["commit", "-m", "binary"]);
+    fs::write(f.root.join("file.txt"), "staged\n").unwrap();
+    f.cmd(&["add", "file.txt"]);
+    fs::write(f.root.join("file.txt"), "worktree\n").unwrap();
+    fs::write(f.root.join("binary.dat"), [0, 7, 8, 9, 3, 2, 1, 0]).unwrap();
+    fs::write(f.root.join("-literal[1] שלום.txt"), "literal addition\n").unwrap();
+    fs::write(f.root.join("other.txt"), "unrelated\n").unwrap();
+    let c = f.context();
+    let mut entries = selected(&c, Group::Unstaged, &["file.txt", "binary.dat"]);
+    entries.extend(selected(&c, Group::Untracked, &["-literal[1] שלום.txt"]));
+    let output = f._temp.path().join("selected.patch");
+    fs::write(&output, "replace this only on success").unwrap();
+    let index = fs::read(f.root.join(".git/index")).unwrap();
+    let size = f.git.export_selected_patch(&c, &entries, &output).unwrap();
+    assert_eq!(size, fs::metadata(&output).unwrap().len() as usize);
+    assert_eq!(fs::read(f.root.join(".git/index")).unwrap(), index);
+    let bytes = fs::read(&output).unwrap();
+    assert!(String::from_utf8_lossy(&bytes).contains("GIT binary patch"));
+    let applied = apply_export(&f, &output, |root| {
+        fs::write(root.join("file.txt"), "staged\n").unwrap()
+    });
+    assert_eq!(fs::read(applied.join("file.txt")).unwrap(), b"worktree\n");
+    assert_eq!(
+        fs::read(applied.join("binary.dat")).unwrap(),
+        [0, 7, 8, 9, 3, 2, 1, 0]
+    );
+    assert_eq!(
+        fs::read(applied.join("-literal[1] שלום.txt")).unwrap(),
+        b"literal addition\n"
+    );
+    assert_eq!(fs::read(applied.join("other.txt")).unwrap(), b"other\n");
+    assert_eq!(fs::read(f.root.join("other.txt")).unwrap(), b"unrelated\n");
+    assert_eq!(f.cmd(&["show", ":file.txt"]), "staged");
+}
+
+#[test]
+fn patch_staged_rename_delete_and_addition_ignore_later_worktree_edits() {
+    let f = Fixture::new();
+    f.base();
+    f.cmd(&["mv", "file.txt", "renamed.txt"]);
+    f.cmd(&["rm", "other.txt"]);
+    fs::write(f.root.join("new.txt"), "staged addition\n").unwrap();
+    f.cmd(&["add", "new.txt"]);
+    fs::write(f.root.join("renamed.txt"), "later edit\n").unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Staged, &["renamed.txt", "other.txt", "new.txt"]);
+    let output = f._temp.path().join("staged.patch");
+    f.git.export_selected_patch(&c, &entries, &output).unwrap();
+    let applied = apply_export(&f, &output, |_| {});
+    assert!(!applied.join("file.txt").exists() && !applied.join("other.txt").exists());
+    assert_eq!(fs::read(applied.join("renamed.txt")).unwrap(), b"base\n");
+    assert_eq!(
+        fs::read(applied.join("new.txt")).unwrap(),
+        b"staged addition\n"
+    );
+    assert_eq!(
+        fs::read(f.root.join("renamed.txt")).unwrap(),
+        b"later edit\n"
+    );
+    assert_eq!(f.context().index_stamp, c.index_stamp);
+}
+
+#[test]
+fn patch_unborn_staged_export_applies_to_an_empty_worktree() {
+    let f = Fixture::new();
+    fs::write(f.root.join("new.txt"), "first addition\n").unwrap();
+    f.cmd(&["add", "new.txt"]);
+    let c = f.context();
+    let entries = selected(&c, Group::Staged, &["new.txt"]);
+    let output = f._temp.path().join("unborn.patch");
+    f.git.export_selected_patch(&c, &entries, &output).unwrap();
+    let applied = apply_export(&f, &output, |_| {});
+    assert_eq!(
+        fs::read(applied.join("new.txt")).unwrap(),
+        b"first addition\n"
+    );
+    assert!(f.context().repository.head.is_none());
+}
+
+#[test]
+fn patch_rejects_metadata_sources_mixed_lists_and_stale_state_preserving_output() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "staged\n").unwrap();
+    f.cmd(&["add", "file.txt"]);
+    fs::write(f.root.join("file.txt"), "worktree\n").unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Unstaged, &["file.txt"]);
+    for target in [
+        PathBuf::from("relative.patch"),
+        f.root.join(".git/config"),
+        f.root.join("file.txt"),
+    ] {
+        assert_eq!(
+            f.git
+                .export_selected_patch(&c, &entries, &target)
+                .unwrap_err()
+                .code(),
+            "FilePatchDestination"
+        );
+    }
+    let output = f._temp.path().join("keep.patch");
+    fs::write(&output, "keep existing").unwrap();
+    let mut mixed = entries.clone();
+    mixed.extend(selected(&c, Group::Staged, &["file.txt"]));
+    assert_eq!(
+        f.git
+            .export_selected_patch(&c, &mixed, &output)
+            .unwrap_err()
+            .code(),
+        "CommitStale"
+    );
+    f.cmd(&["add", "file.txt"]);
+    assert!(f.git.export_selected_patch(&c, &entries, &output).is_err());
+    assert_eq!(fs::read(&output).unwrap(), b"keep existing");
+    assert!(!fs::read_dir(f._temp.path()).unwrap().any(|e| {
+        e.unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".shovel-patch-")
+    }));
+}
+
+#[test]
+fn patch_output_limit_preserves_destination_without_running_configured_diff_helpers() {
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "changed\n").unwrap();
+    fs::write(
+        f.root.join(".gitattributes"),
+        "file.txt diff=spy filter=spy\n",
+    )
+    .unwrap();
+    f.cmd(&[
+        "config",
+        "diff.external",
+        "sh -c 'echo wrong > external-ran; exit 1'",
+    ]);
+    f.cmd(&[
+        "config",
+        "diff.spy.textconv",
+        "sh -c 'echo wrong > textconv-ran; exit 1'",
+    ]);
+    f.cmd(&[
+        "config",
+        "filter.spy.clean",
+        "sh -c 'echo wrong > clean-ran; cat'",
+    ]);
+    let c = f.context();
+    let entries = selected(&c, Group::Unstaged, &["file.txt"]);
+    let patch = f.git.selected_patch(&c, &entries).unwrap();
+    assert!(String::from_utf8_lossy(&patch).contains("+changed"));
+    for marker in ["external-ran", "textconv-ran", "clean-ran"] {
+        assert!(!f.root.join(marker).exists());
+    }
+    fs::write(
+        f.root.join("large.txt"),
+        vec![b'x'; shovel_core::patches::MAX_BYTES + 1],
+    )
+    .unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Untracked, &["large.txt"]);
+    let output = f._temp.path().join("keep.patch");
+    fs::write(&output, "keep existing").unwrap();
+    assert_eq!(
+        f.git
+            .export_selected_patch(&c, &entries, &output)
+            .unwrap_err()
+            .code(),
+        "GitErrorOutputLimit"
+    );
+    assert_eq!(fs::read(&output).unwrap(), b"keep existing");
+}
 struct Fixture {
     _temp: tempfile::TempDir,
     root: PathBuf,

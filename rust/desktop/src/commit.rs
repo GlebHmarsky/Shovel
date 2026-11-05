@@ -34,6 +34,9 @@ enum Event {
     ),
     Removed,
     FileStarted(file_menu::FileAction),
+    PatchPicked(file_menu::Selection, Option<PathBuf>),
+    PatchStarted,
+    PatchCompleted(Result<usize, shovel_core::operation::Error>),
     FileCompleted(
         file_menu::FileAction,
         Box<Result<shovel_core::files::Completed, shovel_core::operation::Error>>,
@@ -97,6 +100,8 @@ pub struct Editor {
     file_confirmation: Option<file_menu::Confirmation>,
     diff_deferred: bool,
     files_focus: Option<egui::Id>,
+    patch_picking: bool,
+    patch_picker: Arc<dyn Fn(rfd::FileDialog) -> Option<PathBuf> + Send + Sync>,
 }
 impl Editor {
     pub fn new(path: PathBuf, git: Arc<Git>, scheduler: Scheduler, store: drafts::Store) -> Self {
@@ -149,6 +154,8 @@ impl Editor {
             file_confirmation: None,
             diff_deferred: false,
             files_focus: None,
+            patch_picking: false,
+            patch_picker: Arc::new(|dialog| dialog.save_file()),
         }
     }
     pub fn activate(&mut self) {
@@ -160,8 +167,13 @@ impl Editor {
     pub fn blocks_exit(&self) -> bool {
         self.draft_dirty || self.draft_saving || self.action_busy() || self.unsaved_conflict()
     }
+    pub fn native_picker_open(&self) -> bool {
+        self.patch_picking
+    }
     fn action_busy(&self) -> bool {
-        self.busy || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
+        self.busy
+            || self.patch_picking
+            || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
     }
     pub fn unsaved_conflict(&self) -> bool {
         self.conflict
@@ -191,6 +203,13 @@ impl Editor {
         }
     }
     fn request_leave(&mut self, next: Leave, ctx: &egui::Context) {
+        if self.patch_picking {
+            self.status = Some(text("RustPatchChooserOpen"));
+            if matches!(next, Leave::Exit) {
+                self.exit_cancelled = true;
+            }
+            return;
+        }
         if matches!(next, Leave::Select { .. } | Leave::Menu(_)) && self.action_busy() {
             return;
         }
@@ -329,7 +348,7 @@ impl Editor {
         self.diff = None;
         self.diff_view.reset();
         self.diff_error = None;
-        if self.file_menu.is_some() || self.file_confirmation.is_some() {
+        if self.file_menu.is_some() || self.file_confirmation.is_some() || self.patch_picking {
             self.diff_deferred = true;
             return;
         }
@@ -459,6 +478,9 @@ impl Editor {
                 Event::Started => {}
                 Event::FileStarted(action) => self.status = Some(text(action.phase())),
                 Event::FileCompleted(action, result) => self.file_completed(action, *result, ctx),
+                Event::PatchPicked(selected, target) => self.patch_picked(selected, target, ctx),
+                Event::PatchStarted => self.status = Some(text("FilePatchWriting")),
+                Event::PatchCompleted(result) => self.patch_completed(result, ctx),
                 Event::Output(stderr, bytes) => {
                     if self.output.len() < 1024 * 1024 {
                         let value = String::from_utf8_lossy(&bytes);
@@ -1182,6 +1204,8 @@ impl Editor {
 mod conflict_tests;
 #[path = "commit_file_menu.rs"]
 mod file_menu;
+#[path = "commit_patch.rs"]
+mod patch;
 #[cfg(test)]
 #[path = "commit_file_menu_tests.rs"]
 mod file_menu_tests;

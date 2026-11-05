@@ -7,6 +7,98 @@ struct Harness {
     editor: Editor,
     copied: Vec<String>,
 }
+
+#[test]
+fn patch_picker_cancellation_reads_nothing_and_keeps_owner_alive() {
+    let mut h = Harness::new();
+    let index = fs::read(h.editor.path.join(".git/index")).unwrap();
+    let original = h.editor.git.clone();
+    let mut missing = (*original).clone();
+    missing.executable = h._temp.path().join("missing-git.exe");
+    h.editor.git = Arc::new(missing);
+    let (answer, receive) = mpsc::channel::<Option<PathBuf>>();
+    let receive = std::sync::Mutex::new(receive);
+    h.editor.patch_picker = Arc::new(move |_| {
+        receive
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(20))
+            .ok()
+            .flatten()
+    });
+    h.menu();
+    h.click(&text("FilePatchMenu"));
+    assert!(h.editor.patch_picking && h.editor.action_busy() && h.editor.blocks_exit());
+    assert!(!h.editor.scheduler.has_accepted_work());
+    h.editor.request_leave(Leave::Close, &h.ctx);
+    assert!(h.editor.open && h.editor.native_picker_open());
+    assert_eq!(h.editor.status, Some(text("RustPatchChooserOpen")));
+    h.editor.request_leave(Leave::Exit, &h.ctx);
+    assert!(h.editor.open && h.editor.take_exit_cancelled());
+    h.editor.git = original;
+    answer.send(None).unwrap();
+    h.until(|e| !e.patch_picking);
+    assert_eq!(h.editor.status, Some(text("RustPatchNotSaved")));
+    assert!(!h.editor.busy && !h.editor.scheduler.has_accepted_work());
+    assert_eq!(fs::read(h.editor.path.join(".git/index")).unwrap(), index);
+}
+
+#[test]
+fn patch_menu_saves_native_export_after_view_closes_without_changing_index() {
+    let mut h = Harness::new();
+    let output = h._temp.path().join("selected.patch");
+    let destination = output.clone();
+    h.editor.patch_picker = Arc::new(move |_| Some(destination.clone()));
+    let index = fs::read(h.editor.path.join(".git/index")).unwrap();
+    h.menu();
+    h.click(&text("FilePatchMenu"));
+    h.until(|e| e.busy);
+    assert!(!h.editor.patch_picking && h.editor.scheduler.has_accepted_work());
+    h.editor.request_leave(Leave::Close, &h.ctx);
+    assert!(!h.editor.open);
+    h.until(|e| !e.busy && !e.scheduler.has_accepted_work());
+    assert_eq!(h.editor.status, Some(text("FilePatchSaved")));
+    let patch = fs::read_to_string(output).unwrap();
+    assert!(
+        patch.contains("-staged") && patch.contains("+worktree") && !patch.contains("other.txt")
+    );
+    assert_eq!(fs::read(h.editor.path.join(".git/index")).unwrap(), index);
+    assert_eq!(
+        fs::read(h.editor.path.join("file.txt")).unwrap(),
+        b"worktree\n"
+    );
+}
+
+#[test]
+fn patch_picker_return_rejects_a_replaced_selection_before_saving() {
+    let mut h = Harness::new();
+    let output = h._temp.path().join("keep.patch");
+    fs::write(&output, "keep existing").unwrap();
+    let (answer, receive) = mpsc::channel::<Option<PathBuf>>();
+    let receive = std::sync::Mutex::new(receive);
+    h.editor.patch_picker = Arc::new(move |_| {
+        receive
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(20))
+            .ok()
+            .flatten()
+    });
+    h.menu();
+    h.click(&text("FilePatchMenu"));
+    assert!(h.editor.patch_picking);
+    h.editor.context = Some(Arc::new(
+        h.editor
+            .git
+            .working_copy(&h.editor.path, &Cancellation::default())
+            .unwrap(),
+    ));
+    answer.send(Some(output.clone())).unwrap();
+    h.until(|e| !e.patch_picking);
+    assert_eq!(h.editor.status, Some(text("FileMenuStale")));
+    assert!(!h.editor.busy && !h.editor.scheduler.has_accepted_work());
+    assert_eq!(fs::read(output).unwrap(), b"keep existing");
+}
 impl Harness {
     fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();

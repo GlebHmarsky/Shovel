@@ -1055,5 +1055,11 @@
   "RustFileStashNotSaved": "Git did not create a new stash for the reviewed selection. Local changes have been refreshed.",
   "RustFileDiffPartial": "External diff did not finish successfully. The tool may have changed working files. Review the refreshed file list and tool output.",
   "RustFileRulesPartial": "The rule edit did not finish. The root rule file may already contain changes. Review it and the refreshed file list before retrying.",
-  "RustFileRulesWriteFailed": "Windows could not update the root rule file. It may be read-only, in use, or inaccessible."
+  "RustFileRulesWriteFailed": "Windows could not update the root rule file. It may be read-only, in use, or inaccessible.",
+  "RustPatchFilter": "Git patch (*.patch)",
+  "RustAllFilesFilter": "All files (*.*)",
+  "RustPatchChoosing": "Choose where to save the selected patch…",
+  "RustPatchNotSaved": "Patch export cancelled.",
+  "RustPatchChooserOpen": "Finish or cancel the patch save dialog before closing this window.",
+  "RustPatchWriteFailed": "The patch could not be saved. The existing destination has been preserved."
 }

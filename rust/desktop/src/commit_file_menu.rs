@@ -258,6 +258,18 @@ impl Editor {
             }
             ui.separator();
             let supported = files::supported(&menu.selected.entries);
+            if ui
+                .add_enabled(enabled && supported, egui::Button::new(text("FilePatchMenu")))
+                .on_hover_text(text("FilePatchHelp"))
+                .on_disabled_hover_text(if !enabled {
+                    reason.clone()
+                } else {
+                    text("FileActionUnsupported")
+                })
+                .clicked()
+            {
+                action = Some(11);
+            }
             let untracked = menu
                 .selected
                 .entries
@@ -364,6 +376,7 @@ impl Editor {
                     ),
                     ctx,
                 ),
+                11 => self.begin_patch(menu.selected.clone(), ctx),
                 _ => unreachable!(),
             }
             open = false;

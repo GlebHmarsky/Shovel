@@ -3341,12 +3341,14 @@ name = "shovel-desktop"
 version = "0.48.0"
 dependencies = [
  "eframe",
+ "raw-window-handle",
  "rfd",
  "serde_json",
  "shovel-core",
  "tempfile",
  "uuid",
  "velopack",
+ "windows-sys 0.61.2",
  "zeroize",
 ]
 

@@ -15,6 +15,8 @@ cargo test -p shovel-core --test history_actions --locked
 cargo test -p shovel-core --test stashes --locked
 cargo test -p shovel-core --test conflicts --locked
 cargo test -p shovel-core --test file_actions --locked
+cargo test -p shovel-core --test file_actions patch_ --locked
+cargo test -p shovel-core patches::tests --lib --locked
 cargo test -p shovel-core file_rules::tests --lib --locked
 cargo test -p shovel-core conflict_text::tests --lib --locked
 cargo test -p shovel-core recovery::tests --lib --locked
@@ -28,7 +30,7 @@ cargo test -p shovel-desktop stashes::tests --locked
 cargo test -p shovel-desktop commit::conflict_tests --locked
 cargo test -p shovel-desktop commit::file_menu_tests --locked
 cargo clippy -p shovel-core -p shovel-askpass -p shovel-desktop --all-targets --locked -- -D warnings
-cargo build -p shovel-desktop -p shovel-askpass --locked
+cargo build -j 1 -p shovel-desktop -p shovel-askpass --locked
 ./scripts/Test-RustReleasePolicy.ps1
 ```
 

@@ -32,6 +32,8 @@ pub mod network;
 #[cfg(windows)]
 pub mod operation;
 #[cfg(windows)]
+pub mod patches;
+#[cfg(windows)]
 pub mod process;
 #[cfg(windows)]
 pub mod recovery;
