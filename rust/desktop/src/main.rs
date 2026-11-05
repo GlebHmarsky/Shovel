@@ -6,6 +6,7 @@ mod conflict;
 mod diff_view;
 mod file_picker;
 mod file_shell;
+mod file_history;
 mod operations;
 mod stashes;
 mod strings;

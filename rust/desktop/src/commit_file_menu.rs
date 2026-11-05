@@ -283,6 +283,24 @@ impl Editor {
             }
             ui.separator();
             let supported = files::supported(&menu.selected.entries);
+            for (id, key, available) in [
+                (14, "FileHistoryMenu", true),
+                (15, "FileBlameMenu", menu.selected.context.repository.head.is_some()),
+            ] {
+                if ui.add_enabled(enabled && single && available, egui::Button::new(text(key)))
+                    .on_hover_text(text("FileHistoryHelp"))
+                    .on_disabled_hover_text(if !enabled {
+                        reason.clone()
+                    } else if !single {
+                        text("FileMenuSingle")
+                    } else {
+                        text("FileBlameNoHead")
+                    })
+                    .clicked()
+                {
+                    action = Some(id);
+                }
+            }
             if ui
                 .add_enabled(enabled && supported, egui::Button::new(text("FilePatchMenu")))
                 .on_hover_text(text("FilePatchHelp"))
@@ -403,6 +421,15 @@ impl Editor {
                 ),
                 11 => self.begin_patch(menu.selected.clone(), ctx),
                 12 | 13 => self.begin_shell(menu.selected.clone(), action == 13, ctx),
+                14 | 15 => {
+                    self.inspector = Some(crate::file_history::Inspector::new(
+                        menu.selected.context.clone(),
+                        menu.selected.entries[0].clone(),
+                        self.git.clone(),
+                        action == 15,
+                    ));
+                    ctx.request_repaint();
+                }
                 _ => unreachable!(),
             }
             open = false;

@@ -103,6 +103,7 @@ pub struct Editor {
     files_focus: Option<egui::Id>,
     patch_picking: bool,
     shell_launcher: crate::file_shell::Launcher,
+    inspector: Option<crate::file_history::Inspector>,
     patch_picker: Arc<dyn Fn(rfd::FileDialog) -> Option<PathBuf> + Send + Sync>,
 }
 impl Editor {
@@ -158,6 +159,7 @@ impl Editor {
             files_focus: None,
             patch_picking: false,
             shell_launcher: Arc::new(crate::file_shell::launch),
+            inspector: None,
             patch_picker: Arc::new(|dialog| dialog.save_file()),
         }
     }
@@ -789,6 +791,9 @@ impl Editor {
         }
     }
     pub fn show(&mut self, ctx: &egui::Context, enabled: bool) {
+        if let Some(inspector) = &mut self.inspector {
+            inspector.show(ctx);
+        }
         if !self.open {
             return;
         }

@@ -4,6 +4,58 @@ use std::fs;
 // These two simulated applications exercise the process-wide shell admission
 // guard; keep their injected handoffs separate even in the optional full suite.
 static SHELL_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
+#[test]
+fn file_inspection_menu_constructs_without_reads_and_opens_real_history_and_blame() {
+    let mut h = Harness::new();
+    let original = h.editor.git.clone();
+    let mut missing = (*original).clone();
+    missing.executable = h._temp.path().join("missing-git.exe");
+    h.editor.git = Arc::new(missing);
+    h.menu();
+    assert!(!h.editor.busy && !h.editor.scheduler.has_accepted_work());
+    h.editor.git = original;
+    h.click(&text("FileHistoryMenu"));
+    assert!(
+        h.editor
+            .inspector
+            .as_ref()
+            .is_some_and(|v| !v.busy && v.page.is_none())
+    );
+    h.until(|e| {
+        e.inspector
+            .as_ref()
+            .is_some_and(|v| !v.busy && v.page.is_some())
+    });
+    assert_eq!(
+        h.editor
+            .inspector
+            .as_ref()
+            .unwrap()
+            .page
+            .as_ref()
+            .unwrap()
+            .entries
+            .len(),
+        1
+    );
+    h.editor.inspector.as_mut().unwrap().close();
+    h.render(vec![]).drop_without_applying_deltas();
+    h.menu();
+    h.click(&text("FileBlameMenu"));
+    assert!(
+        h.editor
+            .inspector
+            .as_ref()
+            .is_some_and(|v| !v.busy && v.blame.is_empty())
+    );
+    h.until(|e| {
+        e.inspector
+            .as_ref()
+            .is_some_and(|v| !v.busy && !v.blame.is_empty())
+    });
+    assert_eq!(h.editor.inspector.as_ref().unwrap().blame[0].text, "base");
+}
+
 struct Harness {
     _temp: tempfile::TempDir,
     ctx: egui::Context,

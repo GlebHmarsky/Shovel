@@ -15,6 +15,7 @@ cargo test -p shovel-core --test history_actions --locked
 cargo test -p shovel-core --test stashes --locked
 cargo test -p shovel-core --test conflicts --locked
 cargo test -p shovel-core --test file_actions --locked
+cargo test -p shovel-core --test file_history --locked
 cargo test -p shovel-core --test file_actions patch_ --locked
 cargo test -p shovel-core patches::tests --lib --locked
 cargo test -p shovel-core file_rules::tests --lib --locked
@@ -28,6 +29,8 @@ cargo test -p shovel-desktop operations::tests --locked
 cargo test -p shovel-desktop branches::tests --locked
 cargo test -p shovel-desktop stashes::tests --locked
 cargo test -p shovel-desktop commit::conflict_tests --locked
+cargo test -p shovel-desktop file_history::tests --locked
+cargo test -p shovel-desktop file_inspection_menu --locked
 cargo test -p shovel-desktop commit::file_menu_tests --locked
 cargo test -p shovel-desktop commit::file_menu_tests::shell_ --locked -- --test-threads=1
 cargo clippy -p shovel-core -p shovel-askpass -p shovel-desktop --all-targets --locked -- -D warnings

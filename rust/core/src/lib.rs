@@ -15,6 +15,8 @@ pub mod drafts;
 #[cfg(windows)]
 pub mod file_rules;
 #[cfg(windows)]
+pub mod file_history;
+#[cfg(windows)]
 mod file_tools;
 #[cfg(windows)]
 pub mod files;

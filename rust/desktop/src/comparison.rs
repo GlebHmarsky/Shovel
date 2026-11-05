@@ -77,6 +77,27 @@ impl Pane {
         self.parent = 0;
         self.load_files(ctx);
     }
+    pub fn select_file(&mut self, commit: &Commit, path: &str, ctx: &egui::Context) {
+        let same = self.selected.as_ref().is_some_and(|old| old.hash == commit.hash && old.parents == commit.parents);
+        let changed = self.selected_file.as_deref() != Some(path);
+        self.selected_file = Some(path.to_owned());
+        if same && (changed || self.error.is_some()) {
+            self.load_files(ctx);
+        } else {
+            self.select(commit, ctx);
+        }
+    }
+    pub fn cancel(&mut self) {
+        self.cancel.cancel();
+        self.generation += 1;
+        if self.loading {
+            self.error = Some(text("ActionResultCancelled"));
+        }
+        self.loading = false;
+    }
+    pub fn is_loading(&self) -> bool {
+        self.loading
+    }
     fn begin(&mut self) -> (u64, Cancellation) {
         self.cancel.cancel();
         self.cancel = Cancellation::default();
