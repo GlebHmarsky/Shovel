@@ -709,9 +709,9 @@
       "ParityIds": [
         "R60"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/history_actions.rs; rust/core/src/recovery.rs; rust/core/src/operation.rs; rust/desktop/src/main.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: native history/recovery and headless confirmation checks passed. Native menu/keyboard/appearance, stash history actions, inline conflict editing and remaining scenario acceptance are open. See roadmap."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellHistoryFileLifetime.cs",
@@ -1786,8 +1786,8 @@
         "R60"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/branches.rs; rust/core/src/operation.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
-      "Evidence": "2026-11-05: disposable branch/checkout and headless confirmation checks. Detached checkout implemented; history reset/revert, native appearance/ownership and remaining scenario coverage still open. See roadmap."
+      "RustImplementation": "rust/core/src/history_actions.rs; rust/core/src/recovery.rs; rust/core/src/operation.rs; rust/desktop/src/main.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: native history/recovery and headless confirmation checks passed. Native menu/keyboard/appearance, stash history actions, inline conflict editing and remaining scenario acceptance are open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/HistoryCacheStore.cs",
@@ -1954,9 +1954,9 @@
       "ParityIds": [
         "R61"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/history_actions.rs; rust/core/src/recovery.rs; rust/core/src/operation.rs; rust/desktop/src/main.rs; rust/desktop/src/branches.rs; rust/desktop/src/operations.rs",
+      "Evidence": "2026-11-05: native history/recovery and headless confirmation checks passed. Native menu/keyboard/appearance, stash history actions, inline conflict editing and remaining scenario acceptance are open. See roadmap."
     },
     {
       "Path": "src/GitGui.Core/Git/StashHistory.cs",

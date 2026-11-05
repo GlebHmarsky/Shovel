@@ -6,7 +6,9 @@ use eframe::egui::{self, Color32};
 use shovel_core::{
     branches::{Action, Changes, Checkout, Manage},
     git::{Git, Reference, Snapshot},
+    history_actions::{self, Reset},
     process::Cancellation,
+    recovery,
     scheduler::Scheduler,
     working,
 };
@@ -18,6 +20,29 @@ use std::{
     },
     thread,
 };
+
+pub fn recovery_title(action: recovery::Action) -> &'static str {
+    match action {
+        recovery::Action::Continue => "ActionTitleContinue",
+        recovery::Action::Skip => "ActionTitleSkip",
+        recovery::Action::Abort => "ActionTitleAbort",
+    }
+}
+pub fn recovery_name(kind: recovery::Kind) -> String {
+    text(match kind {
+        recovery::Kind::Merge => "OperationMerge",
+        recovery::Kind::Rebase => "OperationRebase",
+        recovery::Kind::CherryPick => "OperationCherryPick",
+        recovery::Kind::Revert => "OperationRevert",
+    })
+}
+pub fn reset_title(mode: Reset) -> &'static str {
+    match mode {
+        Reset::Soft => "ActionTitleResetSoft",
+        Reset::Mixed => "ActionTitleResetMixed",
+        Reset::Hard => "ActionTitleResetHard",
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Management {
@@ -136,6 +161,7 @@ impl Drop for Review {
     }
 }
 enum Form {
+    Recovery(recovery::Action),
     New {
         name: String,
         start: String,
@@ -151,6 +177,10 @@ enum Form {
         branch: Reference,
     },
     Checkout(Review),
+    Reset {
+        target: String,
+        mode: Reset,
+    },
 }
 struct Dialog {
     snapshot: Snapshot,
@@ -184,6 +214,18 @@ impl Dialogs {
     }
     pub fn checkout(&mut self, snapshot: &Snapshot, target: Checkout) {
         self.set(snapshot, Form::Checkout(Review::new(target)));
+    }
+    pub fn confirm_recovery(&mut self, snapshot: &Snapshot, action: recovery::Action) {
+        self.set(snapshot, Form::Recovery(action));
+    }
+    pub fn reset(&mut self, snapshot: &Snapshot, target: &str, mode: Reset) {
+        self.set(
+            snapshot,
+            Form::Reset {
+                target: target.into(),
+                mode,
+            },
+        );
     }
     pub fn confirm_delete(&mut self, snapshot: &Snapshot, branch: &Reference) {
         self.set(
@@ -239,7 +281,7 @@ impl Dialogs {
         });
     }
     pub fn toolbar(&mut self, ui: &mut egui::Ui, snapshot: Option<&Snapshot>) {
-        ui.add_enabled_ui(snapshot.is_some(), |ui| {
+        ui.add_enabled_ui(snapshot.is_some_and(|s| s.operations.is_empty()), |ui| {
             ui.menu_button(text("BranchToolbar"), |ui| {
                 let Some(snapshot) = snapshot else {
                     return;
@@ -287,7 +329,15 @@ impl Dialogs {
             })
             .response
             .on_disabled_hover_text(text("ActionInspectionNeeded"));
-        });
+        })
+        .response
+        .on_disabled_hover_text(text(
+            if snapshot.is_some_and(|s| !s.operations.is_empty()) {
+                "ActionSequence"
+            } else {
+                "ActionInspectionNeeded"
+            },
+        ));
     }
     pub fn ref_menu(&mut self, ui: &mut egui::Ui, snapshot: &Snapshot, reference: &Reference) {
         if reference.name.starts_with("refs/heads/") {
@@ -325,13 +375,17 @@ impl Dialogs {
             review.poll();
         }
         let title = match &dialog.form {
+            Form::Recovery(action) => recovery_title(*action),
             Form::New { .. } => "ActionTitleNewBranch",
             Form::Manage { action, .. } => action.title(),
             Form::ConfirmDelete { .. } => "BranchManageTitleDeleteBranch",
             Form::Checkout(review) => review.title(),
+            Form::Reset { mode, .. } => reset_title(*mode),
         };
         let mut close = false;
         let mut submitted = None;
+        let mut submitted_history = None;
+        let mut submitted_recovery = None;
         let mut next_review = None;
         let mut visible = false;
         let snapshot = &dialog.snapshot;
@@ -366,6 +420,79 @@ impl Dialogs {
                         .max_height((ui.available_height() - 36.).max(120.))
                         .show(ui, |ui| {
                             match &mut dialog.form {
+                                Form::Recovery(action) => {
+                                    if let Some(state) = &snapshot.recovery {
+                                        let key = if *action == recovery::Action::Skip {
+                                            "RecoveryConfirmSkip"
+                                        } else {
+                                            "RecoveryConfirmAbort"
+                                        };
+                                        let unknown = text("RustRecoveryTargetUnknown");
+                                        ui.label(strings::format(
+                                            key,
+                                            &[
+                                                &snapshot.worktree.to_string_lossy(),
+                                                &recovery_name(state.kind),
+                                                snapshot.branch.as_deref().unwrap_or(&state.branch),
+                                                if state.target.is_empty() {
+                                                    &unknown
+                                                } else {
+                                                    &state.target
+                                                },
+                                                &state.current,
+                                            ],
+                                        ));
+                                        ui.add_space(12.);
+                                        let submit = if *action == recovery::Action::Skip {
+                                            "RustConfirmSkip"
+                                        } else {
+                                            "RustConfirmAbort"
+                                        };
+                                        if ui
+                                            .add_enabled(
+                                                *action != recovery::Action::Skip
+                                                    || state.can_skip(),
+                                                egui::Button::new(text(submit)),
+                                            )
+                                            .clicked()
+                                        {
+                                            submitted_recovery = Some(*action);
+                                        }
+                                    } else {
+                                        ui.label(text("RecoveryUnavailable"));
+                                    }
+                                }
+                                Form::Reset { target, mode } => {
+                                    let effect = text(match mode {
+                                        Reset::Soft => "HistoryEffectResetSoft",
+                                        Reset::Mixed => "HistoryEffectResetMixed",
+                                        Reset::Hard => "HistoryEffectResetHard",
+                                    });
+                                    ui.label(strings::format(
+                                        "HistoryResetConfirm",
+                                        &[
+                                            &snapshot.worktree.to_string_lossy(),
+                                            snapshot.branch.as_deref().unwrap_or_default(),
+                                            snapshot.head.as_deref().unwrap_or_default(),
+                                            target,
+                                            &effect,
+                                        ],
+                                    ));
+                                    ui.add_space(12.);
+                                    if ui
+                                        .add_enabled(
+                                            snapshot.branch.is_some() && snapshot.head.is_some(),
+                                            egui::Button::new(text("RustConfirmReset")),
+                                        )
+                                        .on_disabled_hover_text(text("HistoryResetNeedsBranch"))
+                                        .clicked()
+                                    {
+                                        submitted_history = Some(history_actions::Action::Reset {
+                                            target: target.clone(),
+                                            mode: *mode,
+                                        });
+                                    }
+                                }
                                 Form::New {
                                     name,
                                     start,
@@ -671,6 +798,14 @@ impl Dialogs {
                 });
             },
         );
+        if let Some(action) = submitted_recovery {
+            operations.submit_recovery(title, action, snapshot, git.clone(), scheduler, ctx);
+            close = true;
+        }
+        if let Some(action) = submitted_history {
+            operations.submit_history(title, action, snapshot, git.clone(), scheduler, ctx);
+            close = true;
+        }
         if let Some(action) = submitted {
             operations.submit_branch(title, action, snapshot, git.clone(), scheduler, ctx);
             close = true;
@@ -852,6 +987,127 @@ mod tests {
                     .all(|r| r.outcome == Some(shovel_core::scheduler::Outcome::Succeeded))
             );
         }
+    }
+    #[test]
+    fn hard_reset_confirms_actual_targets_and_cancel_keeps_repository_unchanged() {
+        let (temp, git, base) = fixture();
+        let root = temp.path();
+        fs::write(root.join("tracked.txt"), "second\n").unwrap();
+        command(&git, root, &["commit", "-am", "second"]);
+        let snapshot = git.inspect(root, &Cancellation::default()).unwrap();
+        fs::write(
+            root.join("tracked.txt"),
+            "discarded only after confirmation\n",
+        )
+        .unwrap();
+        let target = base.head.as_ref().unwrap();
+        let mut h = Harness::new(git.clone());
+        h.dialogs.reset(&snapshot, target, Reset::Hard);
+        let output = h.visible();
+        let labels = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter_map(|(_, n)| n.value().or(n.label()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for required in [
+            snapshot.worktree.to_string_lossy().as_ref(),
+            "main",
+            snapshot.head.as_ref().unwrap(),
+            target,
+            &text("HistoryEffectResetHard"),
+        ] {
+            assert!(
+                labels.contains(required),
+                "missing confirmation detail {required}"
+            );
+        }
+        output.drop_without_applying_deltas();
+        assert!(!h.scheduler.has_accepted_work());
+        h.click(&text("ActionCancel"));
+        assert_eq!(
+            command(&git, root, &["rev-parse", "HEAD"]),
+            *snapshot.head.as_ref().unwrap()
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("tracked.txt")).unwrap(),
+            "discarded only after confirmation\n"
+        );
+        h.dialogs.reset(&snapshot, target, Reset::Hard);
+        h.click(&text("RustConfirmReset"));
+        assert!(!h.dialogs.is_open());
+        h.settled();
+        assert_eq!(command(&git, root, &["rev-parse", "HEAD"]), *target);
+        assert_eq!(
+            fs::read_to_string(root.join("tracked.txt")).unwrap(),
+            "base\n"
+        );
+    }
+    #[test]
+    fn recovery_abort_requires_fixed_sequence_confirmation_and_runs_native_recovery() {
+        let (temp, git, base) = fixture();
+        let root = temp.path();
+        fs::write(root.join("tracked.txt"), "second\n").unwrap();
+        command(&git, root, &["commit", "-am", "second"]);
+        command(
+            &git,
+            root,
+            &["switch", "--create", "side", base.head.as_ref().unwrap()],
+        );
+        fs::write(root.join("tracked.txt"), "side\n").unwrap();
+        command(&git, root, &["commit", "-am", "side"]);
+        let merge = process::run(
+            &git.request(
+                root,
+                ["merge", "--no-edit", "main"],
+                Lifetime::AcceptedCommand,
+                65536,
+            ),
+            &Cancellation::default(),
+            None,
+        )
+        .unwrap();
+        assert_ne!(merge.exit_code, 0);
+        let snapshot = git.inspect(root, &Cancellation::default()).unwrap();
+        let mut h = Harness::new(git.clone());
+        h.dialogs
+            .confirm_recovery(&snapshot, recovery::Action::Abort);
+        let output = h.visible();
+        let labels = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter_map(|(_, n)| n.value().or(n.label()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for required in [
+            snapshot.worktree.to_string_lossy().as_ref(),
+            "side",
+            &snapshot.recovery.as_ref().unwrap().target,
+        ] {
+            assert!(labels.contains(required));
+        }
+        output.drop_without_applying_deltas();
+        assert!(!h.scheduler.has_accepted_work());
+        h.click(&text("ActionCancel"));
+        assert!(root.join(".git/MERGE_HEAD").exists());
+        h.dialogs
+            .confirm_recovery(&snapshot, recovery::Action::Abort);
+        h.click(&text("RustConfirmAbort"));
+        assert!(!h.dialogs.is_open());
+        h.settled();
+        assert!(!root.join(".git/MERGE_HEAD").exists());
+        assert_eq!(
+            fs::read_to_string(root.join("tracked.txt")).unwrap(),
+            "side\n"
+        );
     }
     #[test]
     fn checkout_displays_before_scanning_and_submitted_stash_work_outlives_its_view() {

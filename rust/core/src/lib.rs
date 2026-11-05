@@ -12,6 +12,8 @@ pub mod drafts;
 pub mod git;
 pub mod graph;
 #[cfg(windows)]
+pub mod history_actions;
+#[cfg(windows)]
 pub mod identity;
 #[cfg(windows)]
 mod lfs;
@@ -21,6 +23,8 @@ pub mod network;
 pub mod operation;
 #[cfg(windows)]
 pub mod process;
+#[cfg(windows)]
+pub mod recovery;
 pub mod scheduler;
 pub mod settings;
 pub mod updates;

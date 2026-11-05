@@ -172,6 +172,28 @@ impl Options {
         }
     }
 }
+enum LocalAction {
+    Branch(shovel_core::branches::Action),
+    History(shovel_core::history_actions::Action),
+    Recovery(shovel_core::recovery::Action),
+}
+impl LocalAction {
+    fn key(&self) -> String {
+        use shovel_core::branches::Action;
+        match self {
+            Self::Branch(Action::Create { name, start }) => format!("create:{name}:{}", start.hash),
+            Self::Branch(Action::Checkout {
+                target, changes, ..
+            }) => format!("checkout:{target:?}:{changes:?}"),
+            Self::Branch(Action::Manage { branch, action }) => {
+                format!("manage:{}:{action:?}", branch.name)
+            }
+            Self::History(action) => format!("history:{action:?}"),
+            Self::Recovery(action) => format!("recovery:{action:?}"),
+        }
+    }
+}
+
 enum Event {
     Stage(u64, network::Stage),
     BranchStage(u64, shovel_core::branches::Stage),
@@ -469,6 +491,60 @@ impl Controller {
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) {
+        self.submit_local(
+            label,
+            LocalAction::Branch(action),
+            snapshot,
+            git,
+            scheduler,
+            ctx,
+        );
+    }
+    pub fn submit_history(
+        &mut self,
+        label: &'static str,
+        action: shovel_core::history_actions::Action,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        self.submit_local(
+            label,
+            LocalAction::History(action),
+            snapshot,
+            git,
+            scheduler,
+            ctx,
+        );
+    }
+    pub fn submit_recovery(
+        &mut self,
+        label: &'static str,
+        action: shovel_core::recovery::Action,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        self.submit_local(
+            label,
+            LocalAction::Recovery(action),
+            snapshot,
+            git,
+            scheduler,
+            ctx,
+        );
+    }
+    fn submit_local(
+        &mut self,
+        label: &'static str,
+        action: LocalAction,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
         let sequence = self.next;
         self.next += 1;
         let captured = snapshot.clone();
@@ -476,17 +552,19 @@ impl Controller {
         let discarded = sender.clone();
         let ctx = ctx.clone();
         let discarded_ctx = ctx.clone();
-        // Do not format the working-copy review or repository data into a key.
-        let key = match &action {
-            shovel_core::branches::Action::Create { name, start } => {
-                format!("create:{name}:{}", start.hash)
-            }
-            shovel_core::branches::Action::Checkout {
-                target, changes, ..
-            } => format!("checkout:{target:?}:{changes:?}"),
-            shovel_core::branches::Action::Manage { branch, action } => {
-                format!("manage:{}:{action:?}", branch.name)
-            }
+        // Keys remain in memory and omit working-copy review content.
+        let key = if matches!(action, LocalAction::Recovery(_)) {
+            format!(
+                "{}:{}",
+                action.key(),
+                captured
+                    .recovery
+                    .as_ref()
+                    .map(|r| r.stamp.as_str())
+                    .unwrap_or_default()
+            )
+        } else {
+            action.key()
         };
         let (request, accepted) = scheduler.submit(
             captured.identity.fingerprint.clone(),
@@ -502,12 +580,43 @@ impl Controller {
                 });
                 let result = (|| {
                     progress(shovel_core::branches::Stage::Validating);
-                    let unchanged_refs =
-                        !matches!(action, shovel_core::branches::Action::Checkout { .. });
-                    let prepared = git
-                        .prepare_local(&captured, unchanged_refs, &Cancellation::default())
-                        .map_err(|e| text(&e.code()))?;
-                    git.execute_branch(&prepared, &action, Some(progress))
+                    let result = if let LocalAction::Recovery(action) = &action {
+                        git.execute_recovery(&captured, *action, Some(progress))
+                    } else {
+                        let unchanged_refs = !matches!(
+                            action,
+                            LocalAction::Branch(shovel_core::branches::Action::Checkout { .. })
+                        );
+                        let prepared = git
+                            .prepare_local(&captured, unchanged_refs, &Cancellation::default())
+                            .map_err(|e| text(&e.code()))?;
+                        match &action {
+                            LocalAction::Branch(action) => {
+                                git.execute_branch(&prepared, action, Some(progress))
+                            }
+                            LocalAction::History(action) => {
+                                git.execute_history(&prepared, action, Some(progress))
+                            }
+                            LocalAction::Recovery(_) => unreachable!(),
+                        }
+                    };
+                    result
+                        .map(|mut result| {
+                            if let LocalAction::History(action) = &action {
+                                result.output = format!(
+                                    "{}\n{}",
+                                    strings::format(
+                                        "HistoryActionTarget",
+                                        &[
+                                            action.target(),
+                                            captured.head.as_deref().unwrap_or_default()
+                                        ]
+                                    ),
+                                    result.output
+                                );
+                            }
+                            result
+                        })
                         .map_err(|e| text(&e.code()))
                 })();
                 let outcome = match &result {
@@ -559,6 +668,9 @@ impl Controller {
                             Stage::Reapplying => "ActionTitleStashApply",
                             Stage::DroppingStash => "ActionTitleStashDrop",
                             Stage::UpdatingBranch => "ActionStageUpdatingBranch",
+                            Stage::Resetting => "ActionStageResetting",
+                            Stage::Reverting => "ActionStageReverting",
+                            Stage::Recovering => "ActionStageRecovering",
                             Stage::Reconciling => "ActionReinspecting",
                         });
                     }
@@ -593,6 +705,10 @@ impl Controller {
                         run.changed = true;
                         match *result {
                             Ok(result) => {
+                                let pending = result
+                                    .updated
+                                    .as_ref()
+                                    .is_ok_and(|s| !s.operations.is_empty());
                                 run.status =
                                     text(if result.succeeded() && result.warning.is_some() {
                                         "RustActionWarning"
@@ -600,6 +716,11 @@ impl Controller {
                                         "ActionCompletedShort"
                                     } else if result.has_conflicts {
                                         "ActionConflictShort"
+                                    } else if pending
+                                        && result.message.is_none()
+                                        && result.commands.iter().all(network::Command::succeeded)
+                                    {
+                                        "RecoveryPending"
                                     } else if result.updated.is_err()
                                         && result.message.is_none()
                                         && result.commands.iter().all(network::Command::succeeded)
@@ -618,6 +739,10 @@ impl Controller {
                                 .flatten()
                                 {
                                     run.output.push_str(&format!("\n{}", text(&message)));
+                                }
+                                if pending {
+                                    run.output
+                                        .push_str(&format!("\n{}", text("RecoveryPending")));
                                 }
                                 if result.output_truncated {
                                     run.output

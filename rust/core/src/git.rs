@@ -62,6 +62,8 @@ pub struct Snapshot {
     pub upstream: Option<String>,
     pub remotes: Vec<String>,
     pub operations: Vec<String>,
+    #[serde(default)]
+    pub recovery: Option<crate::recovery::State>,
     pub shallow: bool,
     pub fingerprint: String,
     pub references: Vec<Reference>,
@@ -305,6 +307,7 @@ impl Git {
             upstream: None,
             remotes: vec![],
             operations: vec![],
+            recovery: None,
             shallow: false,
             fingerprint: String::new(),
             references: vec![],
@@ -463,6 +466,7 @@ impl Git {
             .find(|r| Some(&r.name) == target.as_ref())
             .and_then(|r| r.upstream.clone());
         snapshot.references = references;
+        snapshot.recovery = crate::recovery::read(&snapshot.git_directory, &operations)?;
         snapshot.operations = operations;
         Ok(())
     }
@@ -704,7 +708,7 @@ fn bounded_file(path: &Path, limit: usize) -> Result<Vec<u8>, Error> {
     }
     Ok(bytes)
 }
-fn operation_markers(root: &Path) -> Vec<String> {
+pub(crate) fn operation_markers(root: &Path) -> Vec<String> {
     [
         ("MERGE_HEAD", "merge"),
         ("rebase-merge", "rebase"),
