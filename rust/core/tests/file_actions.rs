@@ -661,3 +661,225 @@ fn external_diff_unborn_staged_file_compares_empty_to_index_and_preserves_workin
         b"later working\n"
     );
 }
+
+#[test]
+fn ignore_literal_paths_preserves_rule_bytes_index_and_files_without_matching_globs() {
+    use shovel_core::file_rules::Action;
+    let f = Fixture::new();
+    f.base();
+    let target = "space [literal] שלום.dat";
+    fs::write(f.root.join(target), "keep selected").unwrap();
+    fs::write(f.root.join("space l שלום.dat"), "keep unrelated").unwrap();
+    let original = b"\xef\xbb\xbf# original\r\n*.dat\r\n!*.dat";
+    fs::write(f.root.join(".gitignore"), original).unwrap();
+    let c = f.context();
+    let index = fs::read(f.root.join(".git/index")).unwrap();
+    let r = f
+        .git
+        .edit_file_rules(
+            &c,
+            &selected(&c, Group::Untracked, &[target]),
+            Action::IgnorePaths,
+        )
+        .unwrap();
+    assert!(r.succeeded(), "{:?} {}", r.message, r.output);
+    assert_eq!(r.warning, None);
+    assert!(r.commands.is_empty());
+    assert_eq!(r.filesystem_changes, 1);
+    let bytes = fs::read(f.root.join(".gitignore")).unwrap();
+    assert!(bytes.starts_with(original));
+    assert_eq!(
+        &bytes[original.len()..],
+        "\r\n/space\\ \\[literal\\]\\ שלום.dat\r\n".as_bytes()
+    );
+    assert_eq!(fs::read(f.root.join(".git/index")).unwrap(), index);
+    assert_eq!(fs::read(f.root.join(target)).unwrap(), b"keep selected");
+    let updated = r.updated.unwrap();
+    assert!(!updated.entries.iter().any(|e| e.path == target));
+    assert!(updated.entries.iter().any(|e| e.path == "space l שלום.dat"));
+}
+
+#[test]
+fn ignore_extensions_apply_repository_wide_and_nested_override_is_reported() {
+    use shovel_core::file_rules::Action;
+    let f = Fixture::new();
+    f.base();
+    fs::create_dir(f.root.join("sub")).unwrap();
+    fs::write(f.root.join("first.asset"), "first").unwrap();
+    fs::write(f.root.join("sub/second.asset"), "second").unwrap();
+    fs::write(f.root.join("sub/keep.tmp"), "keep").unwrap();
+    fs::write(f.root.join("sub/.gitignore"), "!keep.tmp\n").unwrap();
+    let c = f.context();
+    let r = f
+        .git
+        .edit_file_rules(
+            &c,
+            &selected(&c, Group::Untracked, &["first.asset"]),
+            Action::IgnoreExtensions,
+        )
+        .unwrap();
+    assert!(r.succeeded());
+    assert_eq!(r.warning, None);
+    assert_eq!(fs::read(f.root.join(".gitignore")).unwrap(), b"*.asset\n");
+    let c = r.updated.unwrap();
+    assert!(!c.entries.iter().any(|e| e.path.ends_with(".asset")));
+    let r = f
+        .git
+        .edit_file_rules(
+            &c,
+            &selected(&c, Group::Untracked, &["sub/keep.tmp"]),
+            Action::IgnorePaths,
+        )
+        .unwrap();
+    assert!(r.succeeded());
+    assert_eq!(r.warning, Some("FileIgnoreInherited"));
+    assert!(
+        r.updated
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.path == "sub/keep.tmp")
+    );
+    assert_eq!(fs::read(f.root.join("sub/keep.tmp")).unwrap(), b"keep");
+}
+
+#[test]
+fn rule_edit_rejects_locked_invalid_encoding_and_oversized_files_without_rewrite() {
+    use shovel_core::file_rules::Action;
+    use std::os::windows::fs::OpenOptionsExt;
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("new.tmp"), "keep").unwrap();
+    fs::write(f.root.join(".gitignore"), b"# original\n").unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Untracked, &["new.tmp"]);
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(f.root.join(".gitignore"))
+        .unwrap();
+    let r = f.git.edit_file_rules(&c, &entries, Action::IgnorePaths);
+    assert!(r.is_err() || r.as_ref().is_ok_and(|r| !r.succeeded()));
+    drop(lock);
+    assert_eq!(
+        fs::read(f.root.join(".gitignore")).unwrap(),
+        b"# original\n"
+    );
+    for (bytes, code) in [
+        (vec![0xff, 0xfe, 0x41], "FileRulesEncoding"),
+        (vec![b'#'; 1024 * 1024 + 1], "FileRulesTooLarge"),
+    ] {
+        fs::write(f.root.join(".gitignore"), &bytes).unwrap();
+        let c = f.context();
+        let r = f
+            .git
+            .edit_file_rules(&c, &entries, Action::IgnorePaths)
+            .unwrap();
+        assert!(!r.succeeded());
+        assert_eq!(r.message.as_deref(), Some(code));
+        assert_eq!(r.filesystem_changes, 0);
+        assert!(fs::read(f.root.join(".gitignore")).unwrap() == bytes);
+    }
+}
+
+#[test]
+fn lfs_rule_edit_checks_setup_preserves_bytes_and_reports_nested_override() {
+    use shovel_core::file_rules::Action;
+    let f = Fixture::new();
+    f.base();
+    let target = "space [literal] שלום.dat";
+    fs::write(f.root.join(target), [0, 1, 2, 3, 0, 255]).unwrap();
+    fs::write(
+        f.root.join(".gitattributes"),
+        "# existing\r\n*.txt text\r\n",
+    )
+    .unwrap();
+    let c = f.context();
+    let entries = selected(&c, Group::Untracked, &[target]);
+    let missing = f.git.edit_file_rules(&c, &entries, Action::LfsTrack);
+    assert!(matches!(
+        missing,
+        Err(shovel_core::operation::Error::Code("FileLfsSetup"))
+    ));
+    f.cmd(&["config", "filter.lfs.clean", "git-lfs clean -- %f"]);
+    f.cmd(&["config", "filter.lfs.process", "git-lfs filter-process"]);
+    let c = f.context();
+    let index = fs::read(f.root.join(".git/index")).unwrap();
+    let config = fs::read(f.root.join(".git/config")).unwrap();
+    let r = f
+        .git
+        .edit_file_rules(&c, &entries, Action::LfsTrack)
+        .unwrap();
+    assert!(r.succeeded(), "{:?} {}", r.message, r.output);
+    assert_eq!(r.warning, None);
+    assert!(
+        f.cmd(&["check-attr", "filter", "--", target])
+            .ends_with(": lfs")
+    );
+    assert_eq!(fs::read(f.root.join(target)).unwrap(), [0, 1, 2, 3, 0, 255]);
+    let c = r.updated.unwrap();
+    let r = f
+        .git
+        .edit_file_rules(&c, &entries, Action::LfsUntrack)
+        .unwrap();
+    assert!(r.succeeded());
+    assert_eq!(r.warning, None);
+    assert!(
+        f.cmd(&["check-attr", "filter", "--", target])
+            .ends_with(": unspecified")
+    );
+    assert!(
+        fs::read(f.root.join(".gitattributes"))
+            .unwrap()
+            .starts_with(b"# existing\r\n*.txt text\r\n")
+    );
+    fs::create_dir(f.root.join("sub")).unwrap();
+    fs::write(f.root.join("sub/file.dat"), "nested").unwrap();
+    fs::write(f.root.join("sub/.gitattributes"), "file.dat !filter\n").unwrap();
+    let c = f.context();
+    let r = f
+        .git
+        .edit_file_rules(
+            &c,
+            &selected(&c, Group::Untracked, &["sub/file.dat"]),
+            Action::LfsTrack,
+        )
+        .unwrap();
+    assert!(r.succeeded());
+    assert_eq!(r.warning, Some("FileLfsInherited"));
+    assert_eq!(fs::read(f.root.join(".git/index")).unwrap(), index);
+    assert_eq!(fs::read(f.root.join(".git/config")).unwrap(), config);
+    assert!(!f.root.join(".git/hooks/pre-push").exists());
+}
+
+#[test]
+fn rule_edits_reject_tracked_ignore_missing_extensions_and_stale_index_before_writing() {
+    use shovel_core::{file_rules::Action, operation::Error};
+    let f = Fixture::new();
+    f.base();
+    fs::write(f.root.join("file.txt"), "tracked edit\n").unwrap();
+    fs::write(f.root.join("no-extension"), "untracked\n").unwrap();
+    let c = f.context();
+    assert!(matches!(
+        f.git.edit_file_rules(
+            &c,
+            &selected(&c, Group::Unstaged, &["file.txt"]),
+            Action::IgnorePaths
+        ),
+        Err(Error::Code("FileIgnoreTracked"))
+    ));
+    let selected = selected(&c, Group::Untracked, &["no-extension"]);
+    assert!(matches!(
+        f.git
+            .edit_file_rules(&c, &selected, Action::IgnoreExtensions),
+        Err(Error::Code("FileIgnoreNoExtension"))
+    ));
+    f.cmd(&["add", "file.txt"]);
+    assert!(matches!(
+        f.git.edit_file_rules(&c, &selected, Action::IgnorePaths),
+        Err(Error::Code("CommitStale"))
+    ));
+    assert!(!f.root.join(".gitignore").exists());
+    assert!(!f.root.join(".gitattributes").exists());
+    assert_eq!(f.cmd(&["show", ":file.txt"]), "tracked edit");
+}

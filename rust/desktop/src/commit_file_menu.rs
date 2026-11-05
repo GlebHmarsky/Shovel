@@ -1,7 +1,10 @@
 //! A file menu owns one immutable selection. Opening/confirming it uses only the
 //! displayed snapshot; execution and required validation belong to the worker.
 use super::*;
-use shovel_core::{files, operation};
+use shovel_core::{
+    file_rules::{self, Action as RuleAction},
+    files, operation,
+};
 
 #[derive(Clone)]
 pub(super) struct Selection {
@@ -20,6 +23,7 @@ pub(super) enum FileAction {
     Discard,
     Stash,
     ExternalDiff,
+    Rules(RuleAction),
 }
 impl FileAction {
     pub(super) fn phase(self) -> &'static str {
@@ -27,6 +31,12 @@ impl FileAction {
             Self::Discard => "CommitPhaseDiscard",
             Self::Stash => "CommitPhaseStashFiles",
             Self::ExternalDiff => "CommitPhaseExternalDiff",
+            Self::Rules(action) => match action {
+                RuleAction::IgnorePaths => "CommitPhaseIgnoreFiles",
+                RuleAction::IgnoreExtensions => "CommitPhaseIgnoreExtension",
+                RuleAction::LfsTrack => "CommitPhaseLfsTrack",
+                RuleAction::LfsUntrack => "CommitPhaseLfsUntrack",
+            },
         }
     }
     fn succeeded(self) -> &'static str {
@@ -34,6 +44,12 @@ impl FileAction {
             Self::Discard => "CommitSucceededDiscard",
             Self::Stash => "CommitSucceededStashFiles",
             Self::ExternalDiff => "CommitSucceededExternalDiff",
+            Self::Rules(action) => match action {
+                RuleAction::IgnorePaths => "CommitSucceededIgnoreFiles",
+                RuleAction::IgnoreExtensions => "CommitSucceededIgnoreExtension",
+                RuleAction::LfsTrack => "CommitSucceededLfsTrack",
+                RuleAction::LfsUntrack => "CommitSucceededLfsUntrack",
+            },
         }
     }
     fn partial(self) -> &'static str {
@@ -41,6 +57,7 @@ impl FileAction {
             Self::Discard => "RustDiscardPartial",
             Self::Stash => "RustFileStashPartial",
             Self::ExternalDiff => "RustFileDiffPartial",
+            Self::Rules(_) => "RustFileRulesPartial",
         }
     }
 }
@@ -239,6 +256,69 @@ impl Editor {
             {
                 action = Some(6);
             }
+            ui.separator();
+            let supported = files::supported(&menu.selected.entries);
+            let untracked = menu
+                .selected
+                .entries
+                .iter()
+                .all(|e| e.group == Group::Untracked);
+            ui.add_enabled_ui(enabled && supported && untracked, |ui| {
+                ui.menu_button(text("FileIgnoreMenu"), |ui| {
+                    if ui
+                        .button(text("FileIgnorePaths"))
+                        .on_hover_text(text("FileIgnoreHelp"))
+                        .clicked()
+                    {
+                        action = Some(7);
+                    }
+                    let extensions = menu
+                        .selected
+                        .entries
+                        .iter()
+                        .all(|e| file_rules::extension(&e.path).is_some());
+                    if ui
+                        .add_enabled(extensions, egui::Button::new(text("FileIgnoreExtensions")))
+                        .on_hover_text(text("FileIgnoreExtensionHelp"))
+                        .on_disabled_hover_text(text("FileIgnoreNoExtension"))
+                        .clicked()
+                    {
+                        action = Some(8);
+                    }
+                });
+            })
+            .response
+            .on_disabled_hover_text(if !enabled {
+                reason.clone()
+            } else if !supported {
+                text("FileActionUnsupported")
+            } else {
+                text("FileIgnoreTracked")
+            });
+            ui.add_enabled_ui(enabled && supported, |ui| {
+                ui.menu_button(text("FileLfsMenu"), |ui| {
+                    if ui
+                        .button(text("FileLfsTrack"))
+                        .on_hover_text(text("FileLfsHelp"))
+                        .clicked()
+                    {
+                        action = Some(9);
+                    }
+                    if ui
+                        .button(text("FileLfsUntrack"))
+                        .on_hover_text(text("FileLfsHelp"))
+                        .clicked()
+                    {
+                        action = Some(10);
+                    }
+                });
+            })
+            .response
+            .on_disabled_hover_text(if !enabled {
+                reason.clone()
+            } else {
+                text("FileActionUnsupported")
+            });
         });
         if let Some(action) = action {
             match action {
@@ -270,6 +350,18 @@ impl Editor {
                 }
                 6 => self.submit_file_action(
                     Confirmation::new(menu.selected.clone(), FileAction::ExternalDiff),
+                    ctx,
+                ),
+                7..=10 => self.submit_file_action(
+                    Confirmation::new(
+                        menu.selected.clone(),
+                        FileAction::Rules(match action {
+                            7 => RuleAction::IgnorePaths,
+                            8 => RuleAction::IgnoreExtensions,
+                            9 => RuleAction::LfsTrack,
+                            _ => RuleAction::LfsUntrack,
+                        }),
+                    ),
                     ctx,
                 ),
                 _ => unreachable!(),
@@ -415,6 +507,10 @@ impl Editor {
                 FileAction::ExternalDiff => {
                     format!("diff-tool:{}", files::discard_key(&context, &entries))
                 }
+                FileAction::Rules(action) => format!(
+                    "file-rules:{action:?}:{}",
+                    files::discard_key(&context, &entries)
+                ),
             },
             Lane::WorkingCopy,
             move || {
@@ -424,6 +520,7 @@ impl Editor {
                     FileAction::Discard => git.discard_files(&context, &entries),
                     FileAction::Stash => git.stash_files(&context, &entries, &message),
                     FileAction::ExternalDiff => git.external_file_diff(&context, &entries),
+                    FileAction::Rules(action) => git.edit_file_rules(&context, &entries, action),
                 };
                 let outcome = if result.as_ref().is_ok_and(files::Completed::succeeded) {
                     Outcome::Succeeded

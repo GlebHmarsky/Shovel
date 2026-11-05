@@ -15,6 +15,7 @@ cargo test -p shovel-core --test history_actions --locked
 cargo test -p shovel-core --test stashes --locked
 cargo test -p shovel-core --test conflicts --locked
 cargo test -p shovel-core --test file_actions --locked
+cargo test -p shovel-core file_rules::tests --lib --locked
 cargo test -p shovel-core conflict_text::tests --lib --locked
 cargo test -p shovel-core recovery::tests --lib --locked
 cargo test -p shovel-core authentication::tests --lib --locked

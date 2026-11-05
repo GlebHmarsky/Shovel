@@ -450,3 +450,97 @@ fn configured_external_diff_menu_submits_directly_and_tool_survives_closed_view(
             .any(|e| e.group == Group::Unstaged && e.path == "file.txt")
     );
 }
+
+#[test]
+fn ignore_submenu_reads_nothing_and_writes_only_the_selected_root_rule() {
+    let mut h = Harness::new();
+    fs::write(h.editor.path.join("new [literal].tmp"), "keep selected").unwrap();
+    fs::write(h.editor.path.join("keep.tmp"), "keep unrelated").unwrap();
+    h.editor.refresh(&h.ctx);
+    h.until(|e| {
+        !e.loading
+            && e.context
+                .as_ref()
+                .is_some_and(|c| c.entries.iter().any(|e| e.path == "new [literal].tmp"))
+    });
+    let original = h.editor.git.clone();
+    let mut missing = (*original).clone();
+    missing.executable = h._temp.path().join("missing-git.exe");
+    h.editor.git = Arc::new(missing);
+    let point = h.point("?  new [literal].tmp");
+    h.click_at(point, egui::PointerButton::Secondary);
+    h.click(&text("FileIgnoreMenu"));
+    assert!(!h.editor.loading && !h.editor.scheduler.has_accepted_work());
+    assert!(!h.editor.path.join(".gitignore").exists());
+    h.editor.git = original;
+    h.click(&text("FileIgnorePaths"));
+    assert!(h.editor.busy && h.editor.file_confirmation.is_none());
+    h.until(|e| !e.busy);
+    assert_eq!(h.editor.status, Some(text("CommitSucceededIgnoreFiles")));
+    assert_eq!(
+        fs::read(h.editor.path.join(".gitignore")).unwrap(),
+        b"/new\\ \\[literal\\].tmp\n"
+    );
+    assert_eq!(
+        fs::read(h.editor.path.join("new [literal].tmp")).unwrap(),
+        b"keep selected"
+    );
+    assert!(
+        h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.path == "keep.tmp")
+    );
+    assert!(
+        !h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.path == "new [literal].tmp")
+    );
+}
+
+#[test]
+fn lfs_submenu_applies_attribute_reset_and_tracked_ignore_is_disabled() {
+    let mut h = Harness::new();
+    h.menu();
+    let out = h.render(vec![]);
+    assert!(
+        out.platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, n)| n.label() == Some(text("FileIgnoreMenu").as_str()) && n.is_disabled())
+    );
+    out.drop_without_applying_deltas();
+    h.click(&text("FileLfsMenu"));
+    assert!(!h.editor.scheduler.has_accepted_work());
+    h.click(&text("FileLfsUntrack"));
+    assert!(h.editor.busy && h.editor.file_confirmation.is_none());
+    h.until(|e| !e.busy);
+    assert_eq!(h.editor.status, Some(text("CommitSucceededLfsUntrack")));
+    assert_eq!(
+        fs::read(h.editor.path.join(".gitattributes")).unwrap(),
+        b"\"/file.txt\" !filter !diff !merge !text\n"
+    );
+    assert_eq!(
+        fs::read(h.editor.path.join("file.txt")).unwrap(),
+        b"worktree\n"
+    );
+    assert!(
+        h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.path == "file.txt" && e.group == Group::Staged)
+    );
+}

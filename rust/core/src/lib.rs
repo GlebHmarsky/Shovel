@@ -13,6 +13,8 @@ pub mod diff;
 #[cfg(windows)]
 pub mod drafts;
 #[cfg(windows)]
+pub mod file_rules;
+#[cfg(windows)]
 mod file_tools;
 #[cfg(windows)]
 pub mod files;

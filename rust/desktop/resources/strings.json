@@ -1053,5 +1053,7 @@
   "RustFileStashPartial": "The selected stash operation did not finish. Files or a saved entry may already have changed. Inspect Stashes and Local Changes before retrying.",
   "RustFileStashSaved": "Saved stash: {0}",
   "RustFileStashNotSaved": "Git did not create a new stash for the reviewed selection. Local changes have been refreshed.",
-  "RustFileDiffPartial": "External diff did not finish successfully. The tool may have changed working files. Review the refreshed file list and tool output."
+  "RustFileDiffPartial": "External diff did not finish successfully. The tool may have changed working files. Review the refreshed file list and tool output.",
+  "RustFileRulesPartial": "The rule edit did not finish. The root rule file may already contain changes. Review it and the refreshed file list before retrying.",
+  "RustFileRulesWriteFailed": "Windows could not update the root rule file. It may be read-only, in use, or inaccessible."
 }
