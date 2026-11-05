@@ -1,7 +1,7 @@
 //! Repository-owned Local Changes state. The native window is only a view;
 //! closing it never drops accepted work, draft saves, or reconciliation.
 use crate::strings::{self, text};
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, Color32};
 use shovel_core::{
     drafts,
     git::Git,
@@ -23,7 +23,7 @@ use std::{
 
 enum Event {
     Loaded(u64, Result<Context, working::Error>),
-    Diff(u64, Result<String, working::Error>),
+    Diff(u64, Result<shovel_core::diff::FileDiff, working::Error>),
     DraftLoaded(Result<(Identity, Result<drafts::Snapshot, drafts::Error>), drafts::Error>),
     DraftSaved(u64, Result<drafts::Snapshot, String>),
     Started,
@@ -55,7 +55,9 @@ pub struct Editor {
     diff_cancel: Cancellation,
     selection: BTreeSet<(Group, String)>,
     focused: Option<Change>,
-    diff: Option<String>,
+    diff: Option<shovel_core::diff::FileDiff>,
+    diff_view: crate::diff_view::View,
+    diff_options: shovel_core::diff::Options,
     diff_error: Option<String>,
     draft: drafts::Text,
     identity: Option<Identity>,
@@ -96,6 +98,8 @@ impl Editor {
             selection: BTreeSet::new(),
             focused: None,
             diff: None,
+            diff_view: crate::diff_view::View::default(),
+            diff_options: shovel_core::diff::Options::default(),
             diff_error: None,
             draft: drafts::Text::default(),
             identity: None,
@@ -166,14 +170,16 @@ impl Editor {
         self.diff_generation += 1;
         self.focused = Some(entry.clone());
         self.diff = None;
+        self.diff_view.reset();
         self.diff_error = None;
         let generation = self.diff_generation;
         let cancel = self.diff_cancel.clone();
         let git = self.git.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let options = self.diff_options;
         thread::spawn(move || {
-            let result = git.working_diff(&context, &entry, &cancel);
+            let result = git.file_diff(&context, &entry, options, &cancel);
             let _ = tx.send(Event::Diff(generation, result));
             ctx.request_repaint();
         });
@@ -392,6 +398,13 @@ impl Editor {
             Action::Stage(_) => "CommitPhaseStage",
             Action::Unstage(_) => "CommitPhaseUnstage",
             Action::Commit { .. } => "CommitPhaseCommit",
+            Action::Hunks { preview, .. } => {
+                if preview.staged() {
+                    "CommitPhaseUnstage"
+                } else {
+                    "CommitPhaseStage"
+                }
+            }
         }));
         self.output.clear();
         let committing = matches!(action, Action::Commit { .. });
@@ -405,6 +418,7 @@ impl Editor {
             Action::Stage(_) => "stage",
             Action::Unstage(_) => "unstage",
             Action::Commit { .. } => "commit",
+            Action::Hunks { .. } => "hunks",
         }
         .to_owned();
         let git = self.git.clone();
@@ -749,10 +763,30 @@ impl Editor {
                     if let Some(entry) = &self.focused {
                         ui.strong(&entry.path);
                     }
+                    let mut options_changed = false;
+                    ui.horizontal(|ui| {
+                        options_changed |= ui
+                            .checkbox(
+                                &mut self.diff_options.ignore_whitespace,
+                                text("DiffIgnoreWhitespace"),
+                            )
+                            .changed();
+                        options_changed |= ui
+                            .checkbox(&mut self.diff_options.whole_file, text("DiffWholeFile"))
+                            .changed();
+                    });
+                    if options_changed && let Some(entry) = self.focused.clone() {
+                        self.show_diff(entry, &ctx);
+                    }
                     if let Some(error) = &self.diff_error {
                         ui.colored_label(Color32::LIGHT_RED, error);
-                    } else if let Some(patch) = &self.diff {
-                        draw_diff(ui, patch);
+                    } else if let Some(diff) = &self.diff {
+                        if let Some(ids) =
+                            self.diff_view.show(ui, diff, !self.busy && !self.loading)
+                            && let Some(preview) = diff.hunks.clone()
+                        {
+                            self.submit(Action::Hunks { preview, ids }, &ctx);
+                        }
                     } else {
                         ui.label(text(if self.focused.is_some() {
                             "DiffLoading"
@@ -796,24 +830,6 @@ impl Editor {
             self.initialize(ctx);
         }
     }
-}
-fn draw_diff(ui: &mut egui::Ui, patch: &str) {
-    let lines = patch.lines().collect::<Vec<_>>();
-    egui::ScrollArea::both().show_rows(ui, 18., lines.len(), |ui, range| {
-        for i in range {
-            let line = lines[i];
-            let color = if line.starts_with('+') && !line.starts_with("+++") {
-                Color32::from_rgb(135, 207, 150)
-            } else if line.starts_with('-') && !line.starts_with("---") {
-                Color32::from_rgb(235, 152, 152)
-            } else if line.starts_with("@@") {
-                Color32::from_rgb(139, 178, 225)
-            } else {
-                ui.visuals().text_color()
-            };
-            ui.label(RichText::new(line).monospace().color(color));
-        }
-    });
 }
 fn error_text(error: working::Error) -> String {
     match error {

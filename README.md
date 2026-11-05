@@ -8,6 +8,7 @@ Rust focused development commands (PowerShell, from this worktree; select the re
 . ./scripts/Use-RustToolchain.ps1
 cargo test -p shovel-core --test working_copy --locked
 cargo test -p shovel-core --test drafts --locked
+cargo test -p shovel-core --test hunks --locked
 cargo test -p shovel-core scheduler::tests --lib --locked
 cargo test -p shovel-desktop --bin ShovelRust --locked
 cargo clippy -p shovel-core -p shovel-desktop --all-targets --locked -- -D warnings

@@ -46,13 +46,20 @@ pub struct Context {
     pub config_stamp: String,
     pub head_message: String,
     pub merge_message: String,
-    filters: Vec<OsString>,
+    pub(crate) filters: Vec<OsString>,
 }
 #[derive(Clone, Debug)]
 pub enum Action {
     Stage(Vec<Change>),
     Unstage(Vec<Change>),
-    Commit { message: String, amend: bool },
+    Commit {
+        message: String,
+        amend: bool,
+    },
+    Hunks {
+        preview: std::sync::Arc<crate::diff::HunkPreview>,
+        ids: Vec<usize>,
+    },
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -72,6 +79,12 @@ pub enum Error {
     Invalid,
     #[error("GitErrorOutputLimit")]
     Limit,
+    #[error("HunkStale")]
+    HunkStale,
+    #[error("HunkSelectChange")]
+    HunkSelection,
+    #[error("HunkUnsupportedPath")]
+    HunkPath,
     #[error("ActionReadFailed")]
     Io(#[from] std::io::Error),
     #[error("ActionReadFailed")]
@@ -221,7 +234,13 @@ pub fn parse_status(bytes: &[u8]) -> Result<Vec<Change>, Error> {
                 worktree_mode: fields[5].into(),
             };
             if count == 11 {
-                entries.push(entry(Group::Conflicted, 'U'));
+                let mut conflict = entry(Group::Conflicted, 'U');
+                conflict.head_object.clear();
+                conflict.index_object.clear();
+                conflict.head_mode.clear();
+                conflict.index_mode.clear();
+                conflict.worktree_mode.clear();
+                entries.push(conflict);
             } else {
                 let xy = fields[1].as_bytes();
                 if xy[0] != b'.' {
@@ -471,6 +490,69 @@ impl Git {
         }
         let mut input = Vec::new();
         let args: Vec<OsString> = match action {
+            Action::Hunks { preview, ids } => {
+                if preview.context.repository.identity != context.repository.identity
+                    || preview.context.index_stamp != context.index_stamp
+                    || preview.context.repository.head != context.repository.head
+                    || !context.entries.contains(&preview.change)
+                {
+                    return Err(Error::HunkStale);
+                }
+                let current = self.file_diff(
+                    context,
+                    &preview.change,
+                    crate::diff::Options::default(),
+                    &cancel,
+                )?;
+                let verified = current.hunks.ok_or(Error::HunkStale)?;
+                if verified.patch != preview.patch
+                    || verified.content_stamp != preview.content_stamp
+                    || verified.attribute_stamp != preview.attribute_stamp
+                {
+                    return Err(Error::HunkStale);
+                }
+                input = verified.select(ids)?;
+                let mut args = [
+                    "-c",
+                    "apply.ignoreWhitespace=false",
+                    "apply",
+                    "--cached",
+                    "--whitespace=nowarn",
+                ]
+                .map(OsString::from)
+                .to_vec();
+                if preview.staged() {
+                    args.push("--reverse".into());
+                }
+                let mut check = args.clone();
+                check.extend(["--check", "--", "-"].map(OsString::from));
+                let mut request = self.request(root, check, Lifetime::Read, 1024 * 1024);
+                request.input = input.clone();
+                let checked = process::run(&request, &cancel, output.clone())?;
+                if !checked.success() {
+                    return Ok(Completed {
+                        command: checked,
+                        commit: None,
+                        updated: self.working_copy(root, &cancel),
+                    });
+                }
+                let latest = self.inspect(root, &cancel)?;
+                if self.semantic_index(&latest, &cancel)? != context.index_stamp
+                    || crate::diff::content_stamp(root, &preview.change.path, &cancel)?
+                        != preview.content_stamp
+                    || self.hunk_attributes(root, &preview.change.path, &cancel)?.1
+                        != preview.attribute_stamp
+                    || self.config_stamp(root, &cancel)? != context.config_stamp
+                    || latest.identity != fresh.identity
+                    || latest.head != fresh.head
+                    || latest.branch != fresh.branch
+                    || latest.operations != fresh.operations
+                {
+                    return Err(Error::HunkStale);
+                }
+                args.extend(["--", "-"].map(OsString::from));
+                args
+            }
             Action::Stage(entries) | Action::Unstage(entries) => {
                 let unstage = matches!(action, Action::Unstage(_));
                 if entries.is_empty()
@@ -586,78 +668,8 @@ impl Git {
         entry: &Change,
         cancel: &Cancellation,
     ) -> Result<String, Error> {
-        if !context.entries.contains(entry)
-            || self.semantic_index(&context.repository, cancel)? != context.index_stamp
-        {
-            return Err(Error::Stale);
-        }
-        path(&context.repository.worktree, &entry.path)?;
-        let mut args = context.filters.clone();
-        args.extend(
-            [
-                "--literal-pathspecs",
-                "-c",
-                "core.quotepath=false",
-                "diff",
-                "--no-ext-diff",
-                "--no-textconv",
-                "--no-color",
-                "--find-renames",
-                "--submodule=short",
-                "--ignore-submodules=dirty",
-                "--src-prefix=a/",
-                "--dst-prefix=b/",
-                "--no-relative",
-                "--inter-hunk-context=0",
-                "--output-indicator-new=+",
-                "--output-indicator-old=-",
-                "--output-indicator-context= ",
-                "--patch",
-                "--unified=3",
-            ]
-            .map(OsString::from),
-        );
-        if entry.group == Group::Untracked {
-            args.push("--no-index".into());
-        } else if entry.group == Group::Staged {
-            args.push("--cached".into());
-            args.extend(context.repository.head.iter().map(OsString::from));
-        }
-        args.push("--".into());
-        if entry.group == Group::Untracked {
-            args.push("/dev/null".into());
-        }
-        args.push(entry.path.clone().into());
-        if entry.group == Group::Staged
-            && let Some(old) = &entry.original
-        {
-            args.push(old.into());
-        }
-        let result = process::run(
-            &self.request(
-                &context.repository.worktree,
-                args,
-                Lifetime::Read,
-                2 * 1024 * 1024,
-            ),
-            cancel,
-            None,
-        )?;
-        if !(result.success()
-            || entry.group == Group::Untracked
-                && result.outcome == process::Outcome::Exited
-                && result.exit_code == 1)
-        {
-            git::require(result)?;
-            return Err(Error::Invalid);
-        }
-        if self.semantic_index(&context.repository, cancel)? != context.index_stamp {
-            return Err(Error::Stale);
-        }
-        let patch = String::from_utf8(result.stdout).map_err(|_| Error::Invalid)?;
-        if patch.lines().take(20001).count() > 20000 || patch.lines().any(|l| l.len() > 16384) {
-            return Err(Error::Limit);
-        }
-        Ok(patch)
+        Ok(self
+            .file_diff(context, entry, crate::diff::Options::default(), cancel)?
+            .patch)
     }
 }

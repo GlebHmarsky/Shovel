@@ -1,6 +1,8 @@
 //! Application contracts shared by the Rust desktop UI, helper and verifier.
 //! This crate does not load or invoke the C# application.
 #[cfg(windows)]
+pub mod diff;
+#[cfg(windows)]
 pub mod drafts;
 #[cfg(windows)]
 pub mod git;

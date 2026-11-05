@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod commit;
+mod comparison;
+mod diff_view;
 mod strings;
 
 fn main() -> eframe::Result {
@@ -41,7 +43,7 @@ enum Event {
     ),
     Open(PathBuf),
     Loaded(u64, Box<History>, Box<Page>),
-    Page(u64, Box<Page>),
+    Page(u64, Box<Page>, bool),
     Failed(u64, String),
     Saved(Box<SettingsStore>, Result<(), String>),
 }
@@ -54,6 +56,7 @@ struct Tab {
     previous: Vec<Cursor>,
     loading: bool,
     error: Option<String>,
+    comparison: Option<comparison::Pane>,
 }
 struct Workspace {
     settings: Settings,
@@ -141,6 +144,7 @@ impl Workspace {
             previous: vec![],
             loading: false,
             error: None,
+            comparison: None,
         });
         self.selected = self.tabs.len() - 1;
         self.refresh(ctx);
@@ -198,10 +202,9 @@ impl Workspace {
             let Some(next) = page.next.clone() else {
                 return;
             };
-            tab.previous.push(page.cursor.clone());
             next
         } else {
-            let Some(previous) = tab.previous.pop() else {
+            let Some(previous) = tab.previous.last().cloned() else {
                 return;
             };
             previous
@@ -214,7 +217,7 @@ impl Workspace {
         thread::spawn(move || {
             let result = git.page(&history, &cursor, &Cancellation::default());
             let _ = sender.send(match result {
-                Ok(page) => Event::Page(id, Box::new(page)),
+                Ok(page) => Event::Page(id, Box::new(page), older),
                 Err(error) => Event::Failed(id, error_text(error)),
             });
             ctx.request_repaint();
@@ -270,6 +273,7 @@ impl Workspace {
                             previous: vec![],
                             loading: false,
                             error: None,
+                            comparison: None,
                         });
                     }
                     self.selected = self
@@ -283,14 +287,35 @@ impl Workspace {
                 Event::Open(path) => self.open(path, ctx),
                 Event::Loaded(id, history, page) => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+                        if !page
+                            .entries
+                            .iter()
+                            .any(|e| Some(&e.commit.hash) == tab.selected.as_ref())
+                        {
+                            tab.selected = page.entries.first().map(|e| e.commit.hash.clone());
+                        }
                         tab.history = Some(*history);
                         tab.page = Some(*page);
                         tab.previous.clear();
                         tab.loading = false;
                     }
                 }
-                Event::Page(id, page) => {
+                Event::Page(id, page, older) => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+                        if older {
+                            if let Some(current) = &tab.page {
+                                tab.previous.push(current.cursor.clone());
+                            }
+                        } else {
+                            tab.previous.pop();
+                        }
+                        if !page
+                            .entries
+                            .iter()
+                            .any(|e| Some(&e.commit.hash) == tab.selected.as_ref())
+                        {
+                            tab.selected = page.entries.first().map(|e| e.commit.hash.clone());
+                        }
                         tab.page = Some(*page);
                         tab.loading = false;
                     }
@@ -326,6 +351,11 @@ impl Workspace {
         for path in changed {
             if let Some(index) = self.tabs.iter().position(|tab| tab.path == path) {
                 self.refresh_at(index, ctx);
+            }
+        }
+        for tab in &mut self.tabs {
+            if let Some(pane) = &mut tab.comparison {
+                pane.poll(ctx);
             }
         }
     }
@@ -515,13 +545,11 @@ impl eframe::App for Workspace {
                 if ui.button(strings::text("RefreshRepository")).clicked() {
                     self.refresh(&ctx);
                 }
-                if ui
-                    .add_enabled(
-                        self.git.is_some() && !self.tabs.is_empty(),
-                        egui::Button::new(strings::text("Commit")),
-                    )
-                    .clicked()
-                {
+                let commit_response = ui.add_enabled(
+                    self.git.is_some() && !self.tabs.is_empty(),
+                    egui::Button::new(strings::text("Commit")),
+                );
+                if commit_response.clicked() {
                     self.open_commit();
                 }
                 if let Some(tab) = self.tabs.get(self.selected) {
@@ -637,29 +665,40 @@ impl eframe::App for Workspace {
             });
         egui::Panel::bottom("details")
             .resizable(true)
-            .default_size(180.)
-            .min_size(80.)
+            .default_size(320.)
+            .min_size(200.)
             .show(ui, |ui| {
-                if let Some(tab) = self.tabs.get(self.selected)
-                    && let Some(entry) = tab.page.as_ref().and_then(|p| {
-                        p.entries
-                            .iter()
-                            .find(|e| Some(&e.commit.hash) == tab.selected.as_ref())
-                    })
+                if let Some(tab) = self.tabs.get_mut(self.selected)
+                    && let Some(commit) = tab
+                        .page
+                        .as_ref()
+                        .and_then(|p| {
+                            p.entries
+                                .iter()
+                                .find(|e| Some(&e.commit.hash) == tab.selected.as_ref())
+                        })
+                        .map(|e| e.commit.clone())
                 {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.strong(&entry.commit.author);
-                            ui.label(entry.commit.authored.to_rfc3339());
-                        });
-                        ui.horizontal(|ui| {
-                            ui.monospace(&entry.commit.hash);
-                            if ui.button(strings::text("HistoryCopySha")).clicked() {
-                                ctx.copy_text(entry.commit.hash.clone());
-                            }
-                        });
-                        ui.label(&entry.commit.message);
-                    });
+                    if tab.comparison.is_none()
+                        && let Some(git) = &self.git
+                    {
+                        let mut pane = comparison::Pane::new(tab.path.clone(), git.clone());
+                        pane.view.side_by_side = self
+                            .settings
+                            .get("DiffSideBySide")
+                            .and_then(serde_json::Value::as_bool)
+                            .unwrap_or(false);
+                        pane.view.font_size = self
+                            .settings
+                            .get("DiffFontSize")
+                            .and_then(serde_json::Value::as_f64)
+                            .unwrap_or(12.) as f32;
+                        tab.comparison = Some(pane);
+                    }
+                    if let Some(pane) = &mut tab.comparison {
+                        pane.select(&commit, &ctx);
+                        pane.show(ui);
+                    }
                 }
             });
         egui::CentralPanel::default().show(ui, |ui| {
@@ -762,5 +801,102 @@ impl eframe::App for Workspace {
         for editor in &mut self.editors {
             editor.show(&ctx);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eframe::App;
+    #[test]
+    fn pointer_activation_opens_the_real_commit_view_without_waiting_for_history() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("repo");
+        std::fs::create_dir_all(path.join(".git")).unwrap();
+        let git = Git::discover(None, &Cancellation::default()).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        ctx.set_embed_viewports(true);
+        let (sender, receiver) = mpsc::channel();
+        let mut workspace = Workspace {
+            settings: Settings::default(),
+            store: None,
+            git: Some(Arc::new(git)),
+            tabs: vec![Tab {
+                id: 1,
+                path: path.clone(),
+                history: None,
+                page: None,
+                selected: None,
+                previous: vec![],
+                loading: true,
+                error: None,
+                comparison: None,
+            }],
+            selected: 0,
+            next_id: 2,
+            sender,
+            receiver,
+            notice: None,
+            initialized: true,
+            saving: false,
+            exit_ready: false,
+            confirm_exit_without_save: false,
+            scheduler: Default::default(),
+            editors: vec![],
+            draft_store: Some(shovel_core::drafts::Store {
+                directory: temporary.path().join("drafts"),
+                legacy_directory: None,
+            }),
+        };
+        let mut frame = eframe::Frame::_new_kittest();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200., 800.));
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            ..Default::default()
+        };
+        let output = ctx.run_ui(input, |ui| workspace.ui(ui, &mut frame));
+        let update = output.platform_output.accesskit_update.as_ref().unwrap();
+        let node = update
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("Commit"))
+            .expect("Commit accessibility control");
+        let bounds = node.1.bounds().unwrap();
+        let position = egui::pos2(
+            (bounds.x0 + bounds.x1) as f32 / 2.,
+            (bounds.y0 + bounds.y1) as f32 / 2.,
+        );
+        output.drop_without_applying_deltas();
+        ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                events: vec![egui::Event::PointerMoved(position)],
+                ..Default::default()
+            },
+            |ui| workspace.ui(ui, &mut frame),
+        )
+        .drop_without_applying_deltas();
+        for pressed in [true, false] {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                events: vec![egui::Event::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            };
+            ctx.run_ui(input, |ui| workspace.ui(ui, &mut frame))
+                .drop_without_applying_deltas();
+        }
+        assert_eq!(workspace.editors.len(), 1);
+        assert!(workspace.editors[0].open);
+        assert_eq!(workspace.editors[0].path, path);
+        assert!(
+            workspace.tabs[0].loading,
+            "Commit must not cancel history initialization"
+        );
     }
 }

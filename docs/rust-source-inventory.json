@@ -3,7 +3,7 @@
   "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
   "BaselineVersion": "0.47.0",
   "FileCount": 194,
-  "Note": "Initial source-to-parity routing only. Each file still requires semantic review; no parity is implied.",
+  "Note": "Baseline Git blob identities are immutable. Partial records identify reviewed source and current Rust work, not completed feature parity; TODO acceptance rows remain authoritative.",
   "Files": [
     {
       "Path": "src/GitGui.App/App.xaml",
@@ -399,9 +399,9 @@
         "R34",
         "R35"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/comparison.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/CommitRow.cs",
@@ -886,9 +886,9 @@
         "R34",
         "R35"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/diff_view.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/StashViewModel.cs",
@@ -1533,9 +1533,9 @@
       "ParityIds": [
         "R18"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/drafts.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/AuthenticationPrompt.cs",
@@ -1553,9 +1553,9 @@
       "ParityIds": [
         "R36"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/diff.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/BranchDivergence.cs",
@@ -1598,9 +1598,9 @@
         "R34",
         "R35"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/diff.rs; rust/desktop/src/comparison.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/CommitGraph.cs",
@@ -1704,9 +1704,9 @@
         "R34",
         "R35"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/diff.rs; rust/desktop/src/diff_view.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/FileInspection.cs",
@@ -1819,9 +1819,9 @@
       "ParityIds": [
         "R39"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/diff.rs; rust/core/src/working.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/IndexSnapshot.cs",
@@ -1863,9 +1863,9 @@
         "R40",
         "R41"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/working.rs; rust/core/src/lfs.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/MutationGate.cs",
@@ -1999,9 +1999,9 @@
         "R38",
         "R41"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/working.rs; rust/core/src/scheduler.rs",
+      "Evidence": "2026-11-05: source reviewed and partially ported; focused working-copy/draft/hunk/history/presentation checks recorded in docs/roadmap.md. Full owning TODO rows and live UI parity remain open."
     },
     {
       "Path": "src/GitGui.Core/GitGui.Core.csproj",
