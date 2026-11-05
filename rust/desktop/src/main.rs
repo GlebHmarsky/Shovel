@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod commit;
 mod strings;
 
 fn main() -> eframe::Result {
@@ -68,6 +69,9 @@ struct Workspace {
     saving: bool,
     exit_ready: bool,
     confirm_exit_without_save: bool,
+    scheduler: shovel_core::scheduler::Scheduler,
+    editors: Vec<commit::Editor>,
+    draft_store: Option<shovel_core::drafts::Store>,
 }
 impl Workspace {
     fn new(context: &eframe::CreationContext<'_>) -> Self {
@@ -116,6 +120,9 @@ impl Workspace {
             saving: false,
             exit_ready: false,
             confirm_exit_without_save: false,
+            scheduler: Default::default(),
+            editors: vec![],
+            draft_store: None,
         }
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
@@ -139,10 +146,13 @@ impl Workspace {
         self.refresh(ctx);
     }
     fn refresh(&mut self, ctx: &egui::Context) {
+        self.refresh_at(self.selected, ctx);
+    }
+    fn refresh_at(&mut self, index: usize, ctx: &egui::Context) {
         let Some(git) = self.git.clone() else {
             return;
         };
-        let Some(tab) = self.tabs.get_mut(self.selected) else {
+        let Some(tab) = self.tabs.get_mut(index) else {
             return;
         };
         if tab.loading {
@@ -225,6 +235,13 @@ impl Workspace {
             match event {
                 Event::Initialized(settings, store, git, notice) => {
                     self.settings = *settings;
+                    let local = std::env::var_os("LOCALAPPDATA")
+                        .map(PathBuf::from)
+                        .unwrap_or_default();
+                    self.draft_store = Some(shovel_core::drafts::Store {
+                        directory: store.path().parent().unwrap().join("CommitDrafts"),
+                        legacy_directory: Some(local.join("GitGui/CommitDrafts")),
+                    });
                     self.store = Some(*store);
                     self.initialized = true;
                     self.notice = notice;
@@ -300,12 +317,60 @@ impl Workspace {
                 }
             }
         }
+        let mut changed = vec![];
+        for editor in &mut self.editors {
+            if editor.poll(ctx) {
+                changed.push(editor.path.clone());
+            }
+        }
+        for path in changed {
+            if let Some(index) = self.tabs.iter().position(|tab| tab.path == path) {
+                self.refresh_at(index, ctx);
+            }
+        }
+    }
+    fn open_commit(&mut self) {
+        let Some(tab) = self.tabs.get(self.selected) else {
+            return;
+        };
+        if let Some(editor) = self
+            .editors
+            .iter_mut()
+            .find(|editor| editor.path == tab.path)
+        {
+            editor.activate();
+            return;
+        }
+        if let (Some(git), Some(store)) = (&self.git, &self.draft_store) {
+            self.editors.push(commit::Editor::new(
+                tab.path.clone(),
+                git.clone(),
+                self.scheduler.clone(),
+                store.clone(),
+            ));
+        }
     }
     fn close(&mut self, ctx: &egui::Context) {
         if self.exit_ready {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if self.scheduler.has_accepted_work() {
+            self.notice = Some(strings::text("AppCommandRunningClose"));
+            return;
+        }
+        for editor in &mut self.editors {
+            editor.flush(ctx);
+        }
+        if self.editors.iter().any(commit::Editor::blocks_exit) {
+            self.notice = Some(
+                self.editors
+                    .iter()
+                    .find_map(|editor| editor.draft_problem().map(str::to_owned))
+                    .unwrap_or_else(|| strings::text("CommitDraftSaving")),
+            );
+            return;
+        }
         if self.saving || !self.initialized {
             return;
         }
@@ -383,6 +448,10 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let modal_open = self.editors.iter().any(|editor| editor.open);
+        if modal_open || self.saving {
+            ui.disable();
+        }
         if self.confirm_exit_without_save {
             egui::Window::new(strings::text("SettingsSaveFailedStatus"))
                 .collapsible(false)
@@ -404,13 +473,13 @@ impl eframe::App for Workspace {
         if ctx.input(|i| i.viewport().close_requested()) {
             self.close(&ctx);
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
+        if !modal_open && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
             self.refresh(&ctx);
         }
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageDown)) {
+        if !modal_open && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageDown)) {
             self.page(true, &ctx);
         }
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageUp)) {
+        if !modal_open && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageUp)) {
             self.page(false, &ctx);
         }
         egui::Panel::top("toolbar").show(ui, |ui| {
@@ -446,6 +515,15 @@ impl eframe::App for Workspace {
                 if ui.button(strings::text("RefreshRepository")).clicked() {
                     self.refresh(&ctx);
                 }
+                if ui
+                    .add_enabled(
+                        self.git.is_some() && !self.tabs.is_empty(),
+                        egui::Button::new(strings::text("Commit")),
+                    )
+                    .clicked()
+                {
+                    self.open_commit();
+                }
                 if let Some(tab) = self.tabs.get(self.selected) {
                     ui.label(tab.path.file_name().unwrap_or_default().to_string_lossy());
                     if let Some(history) = &tab.history {
@@ -459,6 +537,35 @@ impl eframe::App for Workspace {
                     ui.colored_label(Color32::LIGHT_RED, notice);
                 }
             });
+            if let Some(tab) = self.tabs.get(self.selected)
+                && let Some(editor) = self
+                    .editors
+                    .iter_mut()
+                    .find(|editor| editor.path == tab.path)
+                && (editor.status.is_some() || !editor.output.is_empty())
+            {
+                ui.horizontal(|ui| {
+                    if let Some(status) = &editor.status {
+                        ui.label(status);
+                    }
+                    if editor.failed_commit && ui.button(strings::text("ReopenCommit")).clicked() {
+                        editor.activate();
+                    }
+                    if !editor.output.is_empty() {
+                        egui::CollapsingHeader::new(strings::text("OperationAttentionLogs")).show(
+                            ui,
+                            |ui| {
+                                egui::ScrollArea::both().max_height(170.).show(ui, |ui| {
+                                    ui.add(
+                                        egui::Label::new(RichText::new(&editor.output).monospace())
+                                            .selectable(true),
+                                    );
+                                });
+                            },
+                        );
+                    }
+                });
+            }
             let count = self.tabs.len();
             let width = if count == 0 {
                 0.
@@ -652,5 +759,8 @@ impl eframe::App for Workspace {
                 },
             );
         });
+        for editor in &mut self.editors {
+            editor.show(&ctx);
+        }
     }
 }

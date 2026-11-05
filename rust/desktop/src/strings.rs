@@ -11,3 +11,10 @@ pub fn text(key: &str) -> String {
         .unwrap_or_else(|| key.to_owned())
         .replace('_', "")
 }
+pub fn format(key: &str, values: &[&str]) -> String {
+    let mut result = text(key);
+    for (index, value) in values.iter().enumerate() {
+        result = result.replace(&format!("{{{index}}}"), value);
+    }
+    result
+}

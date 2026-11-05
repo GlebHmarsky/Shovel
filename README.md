@@ -2,17 +2,22 @@
 
 **Rust rewrite worktree — in progress.** This branch preserves C# 0.47.0 as the parity reference and is not a delivered Rust application yet. [Rust design/channel identities](docs/rust-rewrite.md) and the [active parity checklist](TODO.md#entire-rust-application--active-not-delivered) describe the independent implementation. Existing C# release channels and master remain unchanged.
 
-Rust foundation checks (PowerShell, from this worktree):
+Rust focused development commands (PowerShell, from this worktree; select the relevant check):
 
 ```powershell
 . ./scripts/Use-RustToolchain.ps1
-cargo test -p shovel-core --locked
-cargo clippy -p shovel-core --all-targets --locked -- -D warnings
+cargo test -p shovel-core --test working_copy --locked
+cargo test -p shovel-core --test drafts --locked
+cargo test -p shovel-core scheduler::tests --lib --locked
+cargo test -p shovel-desktop --bin ShovelRust --locked
+cargo clippy -p shovel-core -p shovel-desktop --all-targets --locked -- -D warnings
 cargo build -p shovel-desktop --locked
 ./scripts/Test-RustReleasePolicy.ps1
 ```
 
 Toolchain: Rust 1.99.1 MSVC, pinned by `rust-toolchain.toml`; Visual Studio C++ tools and Windows SDK. These are focused development checks, not full parity or installer acceptance. The C# commands and release evidence below are the baseline reference.
+
+The development executable accepts `--data-directory <absolute-profile-folder>` for an isolated profile. Rust defaults to `%LOCALAPPDATA%/ShovelRust/Foundation`; C# settings/drafts are copied on demand and never written. Use disposable repositories for mutation verification. The native Commit presentation-state check uses a real held hook and isolated Git configuration without showing a desktop window. Live UI verification remains incomplete; see [dated evidence](docs/roadmap.md#independent-rust-rewrite--active-2026-11-05).
 
 **0.47.0 Beta:** compact stash topology, checkout choices, remembered network options, persistent window/pane/sidebar state and shared-state refactoring. [Behavior and limits](docs/product.md#checkout-and-remembered-workspace-state-0470-beta). Stable remains **0.39.1**.
 

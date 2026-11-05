@@ -3323,6 +3323,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.21",
+ "uuid",
  "windows-sys 0.61.2",
 ]
 
@@ -3334,6 +3335,8 @@ dependencies = [
  "rfd",
  "serde_json",
  "shovel-core",
+ "tempfile",
+ "uuid",
  "velopack",
 ]
 

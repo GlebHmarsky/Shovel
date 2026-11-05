@@ -13,7 +13,7 @@ use std::{
     },
     path::PathBuf,
     sync::{
-        Arc,
+        Arc, Condvar, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     thread,
@@ -33,6 +33,53 @@ impl Cancellation {
     }
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Acquire)
+    }
+}
+
+// Background reads cannot exhaust capacity reserved for accepted user work.
+// A permit covers the entire process tree and both output drains.
+struct Admission {
+    count: Mutex<usize>,
+    changed: Condvar,
+    limit: usize,
+}
+static READS: Admission = Admission {
+    count: Mutex::new(0),
+    changed: Condvar::new(),
+    limit: 2,
+};
+static COMMANDS: Admission = Admission {
+    count: Mutex::new(0),
+    changed: Condvar::new(),
+    limit: 4,
+};
+struct Permit(&'static Admission);
+impl Drop for Permit {
+    fn drop(&mut self) {
+        *self.0.count.lock().unwrap() -= 1;
+        self.0.changed.notify_one();
+    }
+}
+fn admit(lifetime: Lifetime, cancel: &Cancellation) -> Option<Permit> {
+    let lane = if lifetime == Lifetime::AcceptedCommand {
+        &COMMANDS
+    } else {
+        &READS
+    };
+    let mut count = lane.count.lock().unwrap();
+    loop {
+        if cancel.is_cancelled() {
+            return None;
+        }
+        if *count < lane.limit {
+            *count += 1;
+            return Some(Permit(lane));
+        }
+        count = lane
+            .changed
+            .wait_timeout(count, Duration::from_millis(50))
+            .unwrap()
+            .0;
     }
 }
 
@@ -294,7 +341,8 @@ pub fn run(
     {
         return Err(invalid());
     }
-    if cancel.is_cancelled() {
+    let permit = admit(request.lifetime, cancel);
+    if permit.is_none() {
         return Ok(Result {
             outcome: Outcome::Cancelled,
             exit_code: 0,
@@ -303,6 +351,7 @@ pub fn run(
             elapsed: start.elapsed(),
         });
     }
+    let _permit = permit;
     let executable = wide(request.executable.as_os_str())?;
     let directory = wide(request.directory.as_os_str())?;
     let mut command = quote(request.executable.as_os_str())?;
