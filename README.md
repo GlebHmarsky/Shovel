@@ -1,5 +1,18 @@
 # Shovel
 
+**Rust rewrite worktree — in progress.** This branch preserves C# 0.47.0 as the parity reference and is not a delivered Rust application yet. [Rust design/channel identities](docs/rust-rewrite.md) and the [active parity checklist](TODO.md#entire-rust-application--active-not-delivered) describe the independent implementation. Existing C# release channels and master remain unchanged.
+
+Rust foundation checks (PowerShell, from this worktree):
+
+```powershell
+. ./scripts/Use-RustToolchain.ps1
+cargo test -p shovel-core --locked
+cargo clippy -p shovel-core --all-targets --locked -- -D warnings
+./scripts/Test-RustReleasePolicy.ps1
+```
+
+Toolchain: Rust 1.99.1 MSVC, pinned by `rust-toolchain.toml`; Visual Studio C++ tools and Windows SDK. These are focused development checks, not full parity or installer acceptance. The C# commands and release evidence below are the baseline reference.
+
 **0.47.0 Beta:** compact stash topology, checkout choices, remembered network options, persistent window/pane/sidebar state and shared-state refactoring. [Behavior and limits](docs/product.md#checkout-and-remembered-workspace-state-0470-beta). Stable remains **0.39.1**.
 
 Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help → Shovel updates. Launch checks discover updates; opening that window checks immediately, and **Update and restart** approves the download and guarded restart. Every task delivers a signed-feed Beta installer through Build-Release; routine smoke remains 26 checks.

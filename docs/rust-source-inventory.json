@@ -1,0 +1,2183 @@
+{
+  "SchemaVersion": 1,
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "BaselineVersion": "0.47.0",
+  "FileCount": 194,
+  "Note": "Initial source-to-parity routing only. Each file still requires semantic review; no parity is implied.",
+  "Files": [
+    {
+      "Path": "src/GitGui.App/App.xaml",
+      "GitBlob": "bd62e6745a960dbbde2fff1934eb6e06ed8fb06c",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/App.xaml.cs",
+      "GitBlob": "13e075b7076dfbd28becaf409a1ef86b219b20e9",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Assets/Shovel.ico",
+      "GitBlob": "67f13b15dcf5725b12c49d015b50b8f55304e393",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Assets/Shovel.png",
+      "GitBlob": "580d3dfed5c094d1bbbc884f85727b0182f9b101",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/GitGui.App.csproj",
+      "GitBlob": "34c02ac8b3a9e90b7f4eb9f1e6ee83366c0944f4",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Localization/UiText.cs",
+      "GitBlob": "e55f31414392a1aff75ed7ddb17ebdb3965d87cd",
+      "ParityIds": [
+        "R12"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Program.cs",
+      "GitBlob": "e2f5f7a0754003905fef13d82422b378cc231769",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Resources/AppStyles.xaml",
+      "GitBlob": "caaf026f63a88305f427df21d8a8dd1bd500e046",
+      "ParityIds": [
+        "R13",
+        "R14"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Resources/DarkPalette.xaml",
+      "GitBlob": "e2dbab330edf1ed9a903bc59ecb071a7c5a9837f",
+      "ParityIds": [
+        "R13",
+        "R14"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Resources/LightPalette.xaml",
+      "GitBlob": "dd5426a3ad2a6640b2239b2aa4bdd9865b820cb4",
+      "ParityIds": [
+        "R13",
+        "R14"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Resources/Strings.resx",
+      "GitBlob": "43bf128b324271d796f8a9ca1edd009e496feb42",
+      "ParityIds": [
+        "R12"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/AppTheme.cs",
+      "GitBlob": "31c0aa5c8df1cee32283c2c93ef5815a9fd9af8a",
+      "ParityIds": [
+        "R13",
+        "R14"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/AppUpdater.cs",
+      "GitBlob": "5c27b4f1f388b850428923f3d5b128e1be43628e",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/AvatarService.cs",
+      "GitBlob": "4c8fe05180618443a61843a50b69207aeb3a785d",
+      "ParityIds": [
+        "R22"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/DiffPreferences.cs",
+      "GitBlob": "0264a5712bd9f748f609f4b8b30ab5e68a6f02c2",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/FileShellActions.cs",
+      "GitBlob": "a77743ccfa66f1c0e604e9e8e48f0156b6818d7b",
+      "ParityIds": [
+        "R57"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/OperationAttention.cs",
+      "GitBlob": "79df560aca0feedf6efc12f269d46f727019ea50",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/QuietUpdateLogger.cs",
+      "GitBlob": "186ad8625ca18f05d9277d268cfa5919af71579b",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/RepositoryTools.cs",
+      "GitBlob": "d5a2bd1f1c53c2b2937116f69349e832994255bd",
+      "ParityIds": [
+        "R57"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/ShovelUpdateLocator.cs",
+      "GitBlob": "4ef16043295b9c2182cb00ce4008b14453d5dde6",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/SignedReleaseSource.cs",
+      "GitBlob": "e9fdd8e593035293390d9246367e66aa96916766",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/TitleBarTheme.cs",
+      "GitBlob": "bde4ef96e0f730e7da3a6e9acf3bdb791626c4ee",
+      "ParityIds": [
+        "R13",
+        "R14"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/UiScale.cs",
+      "GitBlob": "e2327c68120d21f674fd5d973f7159035be98389",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/UserInteraction.cs",
+      "GitBlob": "148d1f08889f63e878b3a8b566cbe1473a2652f9",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/WindowCaption.cs",
+      "GitBlob": "62924114657f666e7111218bc4000e1b1e31e9c7",
+      "ParityIds": [
+        "R13",
+        "R14"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Services/WindowLayouts.cs",
+      "GitBlob": "046635934ad94c6a443b607c92e58acb62696c6e",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ActivityJournal.cs",
+      "GitBlob": "5012fc9c97eb3d6428c1bf8b35ec7a47040b8748",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/BinaryComparison.cs",
+      "GitBlob": "f260f465748981c95dd4258a67b76c9b7d2071f6",
+      "ParityIds": [
+        "R36"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/BranchManagementViewModel.cs",
+      "GitBlob": "561455a6b078d62098df56b4d984e792dc13a931",
+      "ParityIds": [
+        "R49"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ChangeFileMenu.cs",
+      "GitBlob": "ee80ca9e1edb8dc18652bce4b429739627bae50b",
+      "ParityIds": [
+        "R42",
+        "R43",
+        "R45",
+        "R46"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CheckoutViewModel.cs",
+      "GitBlob": "4240c23673b897019665c68fe17d094f9ac15a08",
+      "ParityIds": [
+        "R48"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CommandTranscript.cs",
+      "GitBlob": "0657d25bb145ef545f8acf38517dc55d73618009",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CommitConflicts.cs",
+      "GitBlob": "11d90c0bc66ce8d54d48cfa4ef7147b90c766b82",
+      "ParityIds": [
+        "R62",
+        "R63",
+        "R64"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CommitDraftCoordinator.cs",
+      "GitBlob": "246ac3264919b78bcf9e080e7ba531c9da056ca8",
+      "ParityIds": [
+        "R18"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CommitDraftPersistence.cs",
+      "GitBlob": "73de1fb3f09a107b760d4a15da6644874e06dd43",
+      "ParityIds": [
+        "R18"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CommitFilesViewModel.cs",
+      "GitBlob": "513a90e9080b68cd9044cb19aee8785b2f398499",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CommitRow.cs",
+      "GitBlob": "08bdf84653f5732d4c41d8c5732c2794a2ba614a",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/CommitViewModel.cs",
+      "GitBlob": "ef2fc9c5e2710e3175b4fa63e20816d2cf2055b4",
+      "ParityIds": [
+        "R37",
+        "R38",
+        "R40",
+        "R41"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ConflictViewModel.cs",
+      "GitBlob": "36a05ac96d76484d5b31b4a241c72b0a49c689bf",
+      "ParityIds": [
+        "R62",
+        "R63",
+        "R64"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/FileHistoryViewModel.cs",
+      "GitBlob": "769cbf0d2e30df0bedbfa3ecffcb935a876177ae",
+      "ParityIds": [
+        "R66"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/GitActionViewModel.cs",
+      "GitBlob": "875b09a5dfdc46de9bebede1c1702e7250058372",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/GlobalIdentityViewModel.cs",
+      "GitBlob": "283dece7c3997b1fd4a27b7ed3ae1b2afe4a5fd7",
+      "ParityIds": [
+        "R11"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/HistoryFileMenu.cs",
+      "GitBlob": "d23574de30f20c81754ec6a7f863673773a3f974",
+      "ParityIds": [
+        "R65",
+        "R66"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ObservableObject.cs",
+      "GitBlob": "369d8a3303b279250c50d7137604aba2f4fe909b",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/OperationActivity.cs",
+      "GitBlob": "db8baffaa4c2f55f880a171f6f6d27852fe7057e",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/RefBadge.cs",
+      "GitBlob": "9306f8c9889dff787ad9a41e85d0840d513c71bc",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/RelayCommand.cs",
+      "GitBlob": "b42bcaeec460cfec59ac6c3b051e96b5a36811df",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/RemoteManagementViewModel.cs",
+      "GitBlob": "3ca98e175d10a9f269d57568392e1bbc29dc0574",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/RemoteSetupViewModel.cs",
+      "GitBlob": "c8696018d1de907a742e3b3ea4e31a85690aaf50",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/RepositoryCloneViewModel.cs",
+      "GitBlob": "9337d520cdbd0f399eb7a9b35823ccfc85dde46f",
+      "ParityIds": [
+        "R27"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/RepositoryInitViewModel.cs",
+      "GitBlob": "f76fa578a0da9a9c8484695c528a48378bcc9818",
+      "ParityIds": [
+        "R26"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/RepositoryTab.cs",
+      "GitBlob": "d975bb76c133a568ec121afa62e834e0c26f100e",
+      "ParityIds": [
+        "R13",
+        "R15"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/SettingsPages.cs",
+      "GitBlob": "f41db6f863aff15660351da715d7184c2592b022",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/SettingsViewModel.cs",
+      "GitBlob": "61204951197c39995fb5f7f0e9ecbe4fda7101e7",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellActionQueue.cs",
+      "GitBlob": "2804e9218320060d2c2729f9301b07411a8180cd",
+      "ParityIds": [
+        "R09",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellActions.cs",
+      "GitBlob": "342d68e1926c9052eb0a5f50df1666f5b5ab4918",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellAutoFetchSettings.cs",
+      "GitBlob": "652273bbff834ef20de1cdcbc8fd8cd22a97212d",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellBranchManagement.cs",
+      "GitBlob": "c8b7fdd1b1c9aca2f804ca1c468cc831f2474b2b",
+      "ParityIds": [
+        "R49"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellChanges.cs",
+      "GitBlob": "cbd60dc37b292284bf77230fbf9beb6273f923a6",
+      "ParityIds": [
+        "R37",
+        "R38",
+        "R40",
+        "R41"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellCheckout.cs",
+      "GitBlob": "39e768c6b9a1800bf4aa1974d477c10e2e66d96c",
+      "ParityIds": [
+        "R48"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellClone.cs",
+      "GitBlob": "f3ae4df4be7a1e4b2a2ca6e9a8f2a3885629ff94",
+      "ParityIds": [
+        "R27"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellCommitFiles.cs",
+      "GitBlob": "eff4d49b4c793de840e999412d77828baab03798",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellHistoryActions.cs",
+      "GitBlob": "2b1fcde7111f54bd43f88d377efb540696bed256",
+      "ParityIds": [
+        "R60"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellHistoryFileLifetime.cs",
+      "GitBlob": "1d96b7cb01523f052d7a38a4e69f64d058875007",
+      "ParityIds": [
+        "R09",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellInitialization.cs",
+      "GitBlob": "55bdf785b084a532f2a01f21e19bc1866191c6d8",
+      "ParityIds": [
+        "R26"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellNetworkPreferences.cs",
+      "GitBlob": "d8adc5c6d25e63c17b7fa281622a96b6afa9a2fa",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellOperationActivity.cs",
+      "GitBlob": "b991916367547c0473f5ea60b57cc7091c4c42a0",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellRemoteManagement.cs",
+      "GitBlob": "0be79ec749668a2637843546d45ebd03e8dfe6bc",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellRemoteSetup.cs",
+      "GitBlob": "eaaee534a6f7db957bbee71a52584db7208d1a44",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellRepositoryLifetime.cs",
+      "GitBlob": "e79e17c228827e4c06fb5658f241f0e3c00b7ee8",
+      "ParityIds": [
+        "R09",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellRepositoryOperations.cs",
+      "GitBlob": "7a921817edef74eaa8300c8d3c68b31a342a80d4",
+      "ParityIds": [
+        "R09",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellSettings.cs",
+      "GitBlob": "8277738ecade2f85eeb053610be6b1cff6a7f0e9",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellSidebar.cs",
+      "GitBlob": "3ca47ee0149895fec52acc7be0dd4fb83788115e",
+      "ParityIds": [
+        "R33",
+        "R67"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellStartupCache.cs",
+      "GitBlob": "3b12f48cf3d164eb3b4df9eadf9357d14249723a",
+      "ParityIds": [
+        "R19"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellStashes.cs",
+      "GitBlob": "71633da741347fbf16ed6cf56a86b1c54f21e808",
+      "ParityIds": [
+        "R58",
+        "R59"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellUpdates.cs",
+      "GitBlob": "f6bce869d645a966400eff0ab1edaf0756b88fc3",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellViewModel.cs",
+      "GitBlob": "e4828d72a4ea148c19104b98b87598e99adfde68",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/ShellWorkspaceTools.cs",
+      "GitBlob": "7d524504fe13f9d6ce297b32d90a170b0bd262de",
+      "ParityIds": [
+        "R57"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/SideBySideRow.cs",
+      "GitBlob": "72bc77f59b7f680991af04ca6ec53daa2c06e679",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/StashViewModel.cs",
+      "GitBlob": "9fa544ec3573c992d804a495f25983b5bcbe3cff",
+      "ParityIds": [
+        "R58",
+        "R59"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/ViewModels/UpdateViewModel.cs",
+      "GitBlob": "26d4c7d687d25d83d0929177d6d3bf5451abf341",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/ActivityLogView.xaml",
+      "GitBlob": "5d0f4c71722def7f44ccaa58c0de90e6b3cd11d9",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/ActivityLogView.xaml.cs",
+      "GitBlob": "eb7e349fc648501e78d220b55f8e6711173ed021",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/AuthenticationWindow.xaml",
+      "GitBlob": "71d3953490726c9718bd8a478bac974997f7a42b",
+      "ParityIds": [
+        "R56"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/AuthenticationWindow.xaml.cs",
+      "GitBlob": "63d92d20c25f271431e80e25e58c09023a347261",
+      "ParityIds": [
+        "R56"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/AuthorAvatar.cs",
+      "GitBlob": "134a2eb38f1fc758762f37fe801e9a155bcf6323",
+      "ParityIds": [
+        "R22"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/BinaryComparisonView.xaml",
+      "GitBlob": "c97b2f3f12951d04149f1b00f951f1cea1634811",
+      "ParityIds": [
+        "R36"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/BinaryComparisonView.xaml.cs",
+      "GitBlob": "58349c311583a723d5ab66596160e8f73ac560d0",
+      "ParityIds": [
+        "R36"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/BranchManagementWindow.xaml",
+      "GitBlob": "f1844f04a5f6201a274fa463689946d95e8636c8",
+      "ParityIds": [
+        "R49"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/BranchManagementWindow.xaml.cs",
+      "GitBlob": "0798a7b540b478f42b15c04d0d0db86352c1b32e",
+      "ParityIds": [
+        "R49"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/CheckoutWindow.xaml",
+      "GitBlob": "a7153d39f88c105640455d010f5a9b31ce347519",
+      "ParityIds": [
+        "R48"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/CheckoutWindow.xaml.cs",
+      "GitBlob": "005dd3e47c3fc5432b8c87182274bab0859bb4de",
+      "ParityIds": [
+        "R48"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/CommitFilesView.xaml",
+      "GitBlob": "72b5dcad47b7698e2947fab583b6144a59cac85d",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/CommitFilesView.xaml.cs",
+      "GitBlob": "74401c8a77a70a188f7e90de3b8275c00047e031",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/CommitGraphCell.cs",
+      "GitBlob": "cdc36e94690c8674f320f7b6b89ed422a2c0bf17",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/CommitWindow.xaml",
+      "GitBlob": "17cd51ce8fa9721cb75794d0d3a7881643ad95e8",
+      "ParityIds": [
+        "R37",
+        "R38",
+        "R40",
+        "R41"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/CommitWindow.xaml.cs",
+      "GitBlob": "434ec53de2a6eaf32b6ca2a770bc73d7626ef605",
+      "ParityIds": [
+        "R37",
+        "R38",
+        "R40",
+        "R41"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/ConflictView.xaml",
+      "GitBlob": "54f198e3115efe6c06542b57e7a18fddb15f14fd",
+      "ParityIds": [
+        "R62",
+        "R63",
+        "R64"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/ConflictView.xaml.cs",
+      "GitBlob": "2ef49c4f1686ac0ca4056507c212bebb519fdd1c",
+      "ParityIds": [
+        "R62",
+        "R63",
+        "R64"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/FileActionWindow.xaml",
+      "GitBlob": "75e0008be80d94aeb953c124a3f76d167282a91e",
+      "ParityIds": [
+        "R42",
+        "R43",
+        "R45",
+        "R46"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/FileActionWindow.xaml.cs",
+      "GitBlob": "ff1a0f2f61d5ea0b2657414bfc57f4d5d00ec0bb",
+      "ParityIds": [
+        "R42",
+        "R43",
+        "R45",
+        "R46"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/FileHistoryWindow.xaml",
+      "GitBlob": "d4545535f6e6b597af88357a0d1deafcdd6f7803",
+      "ParityIds": [
+        "R66"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/FileHistoryWindow.xaml.cs",
+      "GitBlob": "03ca46ddf529b668fa04832ee9d668abaf3a3b71",
+      "ParityIds": [
+        "R66"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/GitActionWindow.xaml",
+      "GitBlob": "1076d279240a3219de8ca3f1882a099ae5e9d8e6",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/GitActionWindow.xaml.cs",
+      "GitBlob": "8f7d7eb6a364c01aa6b78b260d5e56ad7326e040",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/MainWindow.HistoryMenu.cs",
+      "GitBlob": "dbe810081f61e4338ccb91b74435e7aa87acb7f8",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/MainWindow.TabDrag.cs",
+      "GitBlob": "30d5da3a72c133e654ba8477e4391d1317e50b9d",
+      "ParityIds": [
+        "R13",
+        "R15"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/MainWindow.xaml",
+      "GitBlob": "7ca355157512066b66241d6273b1bb14c874ccfd",
+      "ParityIds": [
+        "R13",
+        "R15"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/MainWindow.xaml.cs",
+      "GitBlob": "ebf4f8aff60f0aa7c54018b886dbcbd316fdedb7",
+      "ParityIds": [
+        "R13",
+        "R15"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/OperationProblemWindow.xaml",
+      "GitBlob": "4988adbd9b1acbd55d51eb1c9750f4f03eee6df4",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/OperationProblemWindow.xaml.cs",
+      "GitBlob": "37408b6afed0b38a75a164c76504e8bd4fedefd8",
+      "ParityIds": [
+        "R23"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/ProportionalPanes.cs",
+      "GitBlob": "918cb5632dc064594f82c03140e9922173edf4fc",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RemoteManagementWindow.xaml",
+      "GitBlob": "e408c2c10b3ac90283a0832188e0ce42f6b636bc",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RemoteManagementWindow.xaml.cs",
+      "GitBlob": "cec3d3af1e56cd856985260b8b411d07801abb5d",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RemoteSetupWindow.xaml",
+      "GitBlob": "9772c73ecdcb9a1e487131d02386b83e5b9b6995",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RemoteSetupWindow.xaml.cs",
+      "GitBlob": "fadf722e00a40abd5028605c0a212eb911738bd5",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RepositoryCloneWindow.xaml",
+      "GitBlob": "a5ad36461b4c269fc326c4916fd77fbc674db04f",
+      "ParityIds": [
+        "R27"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RepositoryCloneWindow.xaml.cs",
+      "GitBlob": "72748f6117171493d09f560c75ba4f6a543be916",
+      "ParityIds": [
+        "R27"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RepositoryInitWindow.xaml",
+      "GitBlob": "c0cf0a17867cab4b3f4aa26f9111ca69ab67f1ff",
+      "ParityIds": [
+        "R26"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RepositoryInitWindow.xaml.cs",
+      "GitBlob": "461dd5d427d7fc504e1885566d8e62a5057e3476",
+      "ParityIds": [
+        "R26"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RepositorySidebarView.xaml",
+      "GitBlob": "3c5295be5176a2457f00c45853681e8c84ea5afe",
+      "ParityIds": [
+        "R33",
+        "R67"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/RepositorySidebarView.xaml.cs",
+      "GitBlob": "78b7f8084617956d2ddb843355e9af8650525d6e",
+      "ParityIds": [
+        "R33",
+        "R67"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/SettingsWindow.xaml",
+      "GitBlob": "138b17e41c219c9a3e682130b7de4e5bb2b77507",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/SettingsWindow.xaml.cs",
+      "GitBlob": "9142ce9dedf0b7fbd2cb8aabbc6672734c86cafe",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/SideBySideView.xaml",
+      "GitBlob": "2c88dce82868fcec7569e33ba129e8eb38b5f2f4",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/SideBySideView.xaml.cs",
+      "GitBlob": "f0d2c65288507ea5a98825d1fb96f5c902175e2c",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/StashWindow.xaml",
+      "GitBlob": "0502219aa64fc2672ba88a2224d81ef57681c919",
+      "ParityIds": [
+        "R58",
+        "R59"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/StashWindow.xaml.cs",
+      "GitBlob": "148d4d737dd3c2ae92131312da347ba2094993c8",
+      "ParityIds": [
+        "R58",
+        "R59"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/UpdateWindow.xaml",
+      "GitBlob": "e3f5009a64b6264aea4b794459a0b89567348cce",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/Views/UpdateWindow.xaml.cs",
+      "GitBlob": "8f7f3a14ee5efb0f9eda436375caa356aef295d2",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/app.manifest",
+      "GitBlob": "ef2599a6f23731ccc59a69c5067db6f2d65dfe8d",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.App/updates.json",
+      "GitBlob": "60a11be3ff825bd58e178758ffd8402186da1962",
+      "ParityIds": [
+        "R05",
+        "R08"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.AskPass/GitGui.AskPass.csproj",
+      "GitBlob": "5472b6f8112152e355f1962bfd54f25c7fc037de",
+      "ParityIds": [
+        "R56"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.AskPass/Program.cs",
+      "GitBlob": "cd5a611a2cb02cd8408d7ffc74d3fb365f23ac48",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Diagnostics/DiagnosticLog.cs",
+      "GitBlob": "cebfebfd3a57f233ba922dae53a59e8d3cc152c4",
+      "ParityIds": [
+        "R12",
+        "R23",
+        "R72"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Diagnostics/PerformanceTrace.cs",
+      "GitBlob": "a724df2aacaaf391367c5c251cdfb9e2741e6536",
+      "ParityIds": [
+        "R12",
+        "R23",
+        "R72"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Drafts/CommitDraftStore.cs",
+      "GitBlob": "1b85fc23d1a88df8cb396468f46f8180bfc54acb",
+      "ParityIds": [
+        "R18"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/AuthenticationPrompt.cs",
+      "GitBlob": "748af6d382fcb03ad9616ea6aa24fc913a8077b7",
+      "ParityIds": [
+        "R56"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/BinaryMetadata.cs",
+      "GitBlob": "5d801e2ddd23d955df591c9590ef3acd25957075",
+      "ParityIds": [
+        "R36"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/BranchDivergence.cs",
+      "GitBlob": "0601cf0360fd540a5a4c1c68ed16d92840e41c30",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/BranchManagement.cs",
+      "GitBlob": "f2bd7cec91982602281736df5cfe7b9047420e2c",
+      "ParityIds": [
+        "R49"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/Checkout.cs",
+      "GitBlob": "5c529f8b478aecb9d6173c4f2fa5cc87dbc8cb4a",
+      "ParityIds": [
+        "R48"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/CommitFiles.cs",
+      "GitBlob": "4b551a0f2a34ed83c0840e669daf2912116fd02f",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/CommitGraph.cs",
+      "GitBlob": "17aaec9b01b21e59230bd982a4eff824ac4116f2",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/CommitHistory.cs",
+      "GitBlob": "69fa5f2ec1adcaac382ff9c11a48418d6b373bff",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/ConflictResolution.cs",
+      "GitBlob": "1c5e0918773631b49470b8dca119a1b783a760dd",
+      "ParityIds": [
+        "R62",
+        "R63",
+        "R64"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/ConflictTextCodec.cs",
+      "GitBlob": "b99b84192a2e2a1ba2b41fe60bcc7fc8c4cb7611",
+      "ParityIds": [
+        "R62",
+        "R63",
+        "R64"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/DefaultNetwork.cs",
+      "GitBlob": "a506e32f5dc6d834c8e2dbd130cfe63ef465111c",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/DefaultPull.cs",
+      "GitBlob": "7a620afe5602648876fab5de0451dbea1f8eeb48",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/ExternalMergeToolSettings.cs",
+      "GitBlob": "037e4cf11cdfba4bb52c12bef077be1197b06ab7",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/FileDiff.cs",
+      "GitBlob": "aae1d98589ef0684b01e4564cf53a1c9abccd9d8",
+      "ParityIds": [
+        "R34",
+        "R35"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/FileInspection.cs",
+      "GitBlob": "ccc0c947546bcad87792cb9b06de5dbecba3bea5",
+      "ParityIds": [
+        "R66"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/FileMenuActions.cs",
+      "GitBlob": "7c2c624d59f3c1d47606271d424a6ea009abb4ab",
+      "ParityIds": [
+        "R42",
+        "R43",
+        "R45",
+        "R46"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/GitActions.cs",
+      "GitBlob": "728dd663e7f6a7fdf9546ebb19c9b5a69c02bcb3",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/GitCommandLog.cs",
+      "GitBlob": "69a6940723fcff4504d3a2e0bf9f7948e3398978",
+      "ParityIds": [
+        "R12",
+        "R23",
+        "R72"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/GlobalGitIdentity.cs",
+      "GitBlob": "36dd67bce1af8249193982aaa69d8a124db9de9c",
+      "ParityIds": [
+        "R11"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/HistoricalFileActions.cs",
+      "GitBlob": "06ab5b1a1e0540a372c3b9b28d48fad41f163bcd",
+      "ParityIds": [
+        "R65",
+        "R66"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/HistoryActions.cs",
+      "GitBlob": "515298e696b06312c6e616952fde67753309009b",
+      "ParityIds": [
+        "R60"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/HistoryCacheStore.cs",
+      "GitBlob": "ce9b95a0484912c371a5029212d80139d6c048a3",
+      "ParityIds": [
+        "R19"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/HistoryProjection.cs",
+      "GitBlob": "41fac0e732729ba2bdc6679e50fc5f8f0c6d7776",
+      "ParityIds": [
+        "R28",
+        "R29",
+        "R30",
+        "R31",
+        "R32"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/HunkPatch.cs",
+      "GitBlob": "297a3e2bc1dc5a54ed6c0ea8c2eceb7ce7485355",
+      "ParityIds": [
+        "R39"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/IndexSnapshot.cs",
+      "GitBlob": "328cec0a0b2f59465701255e99738606ed90a35f",
+      "ParityIds": [
+        "R38",
+        "R41"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/LfsDiscardStatus.cs",
+      "GitBlob": "ccb04394d00142683a2b6147accbabbf4a8a0fcf",
+      "ParityIds": [
+        "R44"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/LfsStatus.cs",
+      "GitBlob": "02b7bed8bdbd9a4c9e8a8d7cc036787266723b0f",
+      "ParityIds": [
+        "R44"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/LocalChanges.cs",
+      "GitBlob": "a98cc944d0880886fa62a2cf0feee4cc181d479d",
+      "ParityIds": [
+        "R37",
+        "R38",
+        "R40",
+        "R41"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/MutationGate.cs",
+      "GitBlob": "520fa33ea98acf63fc7b1af9790c879604ac12e2",
+      "ParityIds": [
+        "R11"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/RemoteManagement.cs",
+      "GitBlob": "5b3dfa89799e58c92b709c2e5b82891eb9ab5974",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/RemoteSetup.cs",
+      "GitBlob": "8c1f0f5900da5ac152ae4a4dce134692c8162705",
+      "ParityIds": [
+        "R50"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/RepositoryClone.cs",
+      "GitBlob": "5279d1e211ba45f91aced6f7765a1fcdb62f9b07",
+      "ParityIds": [
+        "R27"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/RepositoryIdentity.cs",
+      "GitBlob": "c41a97da728b4872b9049be42aeee99cbb2f12ab",
+      "ParityIds": [
+        "R11"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/RepositoryInitialization.cs",
+      "GitBlob": "e8dc9a7219a44a0214af27f6a364a71db91cb3d0",
+      "ParityIds": [
+        "R26"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/RepositoryReader.cs",
+      "GitBlob": "0af5b76b6ffad2699f3846056646d588aa0ee050",
+      "ParityIds": [
+        "R25"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/RepositorySidebar.cs",
+      "GitBlob": "0a1f1a572359b99c5e819c5e2d595c54aebcdaab",
+      "ParityIds": [
+        "R33",
+        "R67"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/SequenceRecovery.cs",
+      "GitBlob": "805bd2f32249324a401d01f6491f04551da34c5a",
+      "ParityIds": [
+        "R61"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/StashHistory.cs",
+      "GitBlob": "859d4f87e1168100ba3832d6b6cf7386ccae4197",
+      "ParityIds": [
+        "R58",
+        "R59"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/Stashes.cs",
+      "GitBlob": "9ac43144d378589ffc5d2e30aeb06a8bf6fcb2ef",
+      "ParityIds": [
+        "R58",
+        "R59"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/UnmergedFiles.cs",
+      "GitBlob": "788865a64910a295cf02fc59afcb176fd00cb243",
+      "ParityIds": [
+        "R62",
+        "R63",
+        "R64"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Git/WorkingCopyActions.cs",
+      "GitBlob": "362c1a2ead345ebf257443590b131188e90d99df",
+      "ParityIds": [
+        "R38",
+        "R41"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/GitGui.Core.csproj",
+      "GitBlob": "555ae434a707e35c0891048590fbdb775d7e6e36",
+      "ParityIds": [
+        "R03",
+        "R13",
+        "R24"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Processes/ProcessLifetime.cs",
+      "GitBlob": "5c79dc2c204a89d7731c54b09e3f71278b0be312",
+      "ParityIds": [
+        "R10"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Processes/ProcessRequest.cs",
+      "GitBlob": "fd6772d4e483c3a89b8a1c262cb0fd6c19d5ea7d",
+      "ParityIds": [
+        "R10"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Settings/AppSettings.cs",
+      "GitBlob": "58f2aac54cf16b7db4ff4be91187cee20c80a2f4",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Settings/AvatarSettings.cs",
+      "GitBlob": "68cce585bc27adca35857d93c6639613240103bb",
+      "ParityIds": [
+        "R22"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Settings/NetworkActionPreference.cs",
+      "GitBlob": "687e55a825d858de6e600749255af4def08babe6",
+      "ParityIds": [
+        "R47",
+        "R51",
+        "R52",
+        "R53",
+        "R54",
+        "R55"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Settings/SettingsStore.cs",
+      "GitBlob": "41aa0977d39b8abe239ece81a0035ba3fe4b7897",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.Core/Settings/WindowLayout.cs",
+      "GitBlob": "855f0a782754cc8802018638df1757525dc6128d",
+      "ParityIds": [
+        "R14",
+        "R16",
+        "R17",
+        "R20"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/AskPassClient.cs",
+      "GitBlob": "1ef77edd5bd83e992d86896c10958825108aaaef",
+      "ParityIds": [
+        "R56"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/AskPassProtocol.cs",
+      "GitBlob": "8d01a440b34b710191f6a02fac25068f69f41669",
+      "ParityIds": [
+        "R56"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/AskPassSession.cs",
+      "GitBlob": "0eb41305c718519336df6bf21a20ebeebd64aa22",
+      "ParityIds": [
+        "R56"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/GitGui.ProcessHost.csproj",
+      "GitBlob": "5056f4446ff4ba0fd8e1d59927ebb7ed9854905d",
+      "ParityIds": [
+        "R10"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/NativeChildProcess.cs",
+      "GitBlob": "e48270dee992de05a75c578783709cfaf86e5ebf",
+      "ParityIds": [
+        "R10"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/ProcessJob.cs",
+      "GitBlob": "3adb84fee28b17aec4b43099ba2d3db920ce344d",
+      "ParityIds": [
+        "R10"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/WindowsProcessRunner.cs",
+      "GitBlob": "c8b01811cfd9f8595f68355657fafe46f638aae6",
+      "ParityIds": [
+        "R10"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    },
+    {
+      "Path": "src/GitGui.ProcessHost/WindowsRepositoryIdentity.cs",
+      "GitBlob": "3325576f0db8f550ff8061f7dec123b931ddbaa2",
+      "ParityIds": [
+        "R11"
+      ],
+      "ReviewState": "Pending",
+      "RustImplementation": null,
+      "Evidence": null
+    }
+  ]
+}

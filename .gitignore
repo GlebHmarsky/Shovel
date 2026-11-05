@@ -10,6 +10,7 @@
 TestResults/
 artifacts/
 /Build/
+/target/
 # Local credentials / signing material must never be committed
 *.pfx
 *.p12

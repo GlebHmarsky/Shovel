@@ -1,0 +1,32 @@
+{
+  "SchemaVersion": 1,
+  "Product": "ShovelRust",
+  "Repository": "GlebHmarsky/Shovel",
+  "DevelopmentBranch": "codex/rust-rewrite",
+  "BaselineCommit": "2175458",
+  "DefaultChannel": "win-rust-beta",
+  "Executable": "ShovelRust.exe",
+  "ProfileDirectory": "ShovelRust/Foundation",
+  "Channels": [
+    {
+      "Name": "Rust Beta",
+      "Channel": "win-rust-beta",
+      "Branch": "codex/rust-beta",
+      "FeedTag": "rust-beta",
+      "Feed": "releases.win-rust-beta.json",
+      "RequiresOwnerApproval": false,
+      "GitHubPrerelease": true,
+      "MakeLatest": false
+    },
+    {
+      "Name": "Rust Stable",
+      "Channel": "win-rust-stable",
+      "Branch": "codex/rust-stable",
+      "FeedTag": "rust-stable",
+      "Feed": "releases.win-rust-stable.json",
+      "RequiresOwnerApproval": true,
+      "GitHubPrerelease": true,
+      "MakeLatest": false
+    }
+  ]
+}

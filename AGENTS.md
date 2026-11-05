@@ -1,5 +1,13 @@
 # Project guidance
 
+## Rust rewrite branch policy — confirmed 2026-11-05
+
+This worktree is the independent Rust rewrite requested by the owner. The pinned C# parity baseline is `2175458` (0.47.0). The entire application, desktop UI and askpass helper must be Rust; no C# host, WebView wrapper or omitted delivered feature. Existing C# source remains reference material and is never packaged with Rust. Work on `codex/rust-rewrite`; release branches are `codex/rust-beta` and `codex/rust-stable`. Do not merge into C# master or alter its release feeds.
+
+For this branch, Rust/Cargo replaces the C#/WPF stack instruction. `Cargo.toml` owns Rust versions; leave C# `Directory.Build.props` unchanged. `scripts/Build-Release.ps1` must dispatch Rust delivery to the independent workflow. Rust Beta is authorized; Rust Stable requires explicit owner approval. Both use product/package identity `ShovelRust`, separate profile storage and signed `win-rust-beta` / `win-rust-stable` feeds. GitHub latest and the existing `beta`, `win-beta`, `win-stable`, `Shovel` identities belong exclusively to C#. Even Rust Stable must never replace GitHub latest. Preserve the signing key outside Git.
+
+The Rust parity checklist at the top of TODO is the active prioritized task list. An unchecked parity item prevents claiming the rewrite complete. Verify an actual isolated installed Rust Beta update and equivalent C#/Rust startup, memory and operation measurements before completion; keep limits explicit. The owner request authorizes the isolated Rust installer/update exercise and measurement; do not install over the running C# app or mutate user repositories. Other current behavior, safety, operation-lifetime and verification rules below still apply. No parallel agents are authorized.
+
 Read [product](docs/product.md), [requirements](docs/requirements.md), [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), then [TODO](TODO.md). They own UX, acceptance, implementation, evidence/decisions and the single prioritized task list. [README](README.md) owns commands. Read nested instructions before editing.
 
 ## Delivery policy — confirmed 2026-10-27
