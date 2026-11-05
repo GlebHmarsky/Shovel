@@ -1,6 +1,6 @@
 <Window x:Class="GitGui.App.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:layout="clr-namespace:GitGui.App.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:GitGui.App.Localization"
         xmlns:views="clr-namespace:GitGui.App.Views" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="{loc:Text Key=AppTitle}" Width="1200" Height="800" MinWidth="900" MinHeight="620"
@@ -262,7 +262,7 @@
         </Button>
       </StackPanel>
     </Grid>
-    <Grid Grid.Row="3" Background="{DynamicResource Theme.Sidebar}">
+    <Grid Grid.Row="3" Background="{DynamicResource Theme.Sidebar}" layout:WindowLayouts.PaneKey="MainWindow.Sidebar">
       <Grid.ColumnDefinitions>
         <ColumnDefinition x:Name="SidebarColumn" Width="210" MinWidth="160" />
         <ColumnDefinition Width="5" />
@@ -284,7 +284,7 @@
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" ResizeDirection="Columns"
                     Background="{DynamicResource Theme.Border}"
                     AutomationProperties.Name="{loc:Text Key=ResizeSidebar}" AutomationProperties.AutomationId="SidebarSplitter" />
-      <Grid Background="{DynamicResource Theme.Panel}" x:Name="WorkspacePanel" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}" Grid.Column="2" SizeChanged="OnWorkspaceSizeChanged">
+      <Grid Background="{DynamicResource Theme.Panel}" x:Name="WorkspacePanel" Visibility="{Binding IsHistory, Converter={StaticResource BoolToVisibility}}" Grid.Column="2" SizeChanged="OnWorkspaceSizeChanged" layout:WindowLayouts.PaneKey="MainWindow.History">
         <Grid.RowDefinitions>
           <RowDefinition x:Name="HistoryRow" Height="*" MinHeight="300" />
           <RowDefinition Height="5" />

@@ -113,14 +113,14 @@ internal static partial class Program
         });
         await Check("Conflict rejects external edits and residual markers; cancelled writes retain index", async () =>
         {
-            var repo = await Conflict("stale"); var p = await Preview(repo); var index = p.Context.IndexStamp;
+            var repo = await Conflict("stale"); var p = await Preview(repo); var index = await RepositoryReader.IndexFileStampAsync(p.Context.Repository, default);
             await Reject("ConflictMarkersRemain", () => Resolve(p, ConflictChoice.Edited, p.WorkingText!));
             await File.WriteAllTextAsync(Path.Combine(repo, "file.txt"), "external edit\n");
             await Reject("ConflictEditedOutside", () => Resolve(p, ConflictChoice.Current));
             using var cancel = new CancellationTokenSource(); cancel.Cancel();
             await ExpectException<OperationCanceledException>(() => actions.ExecuteWorkingCopyAsync(p.Context,
                 new(WorkingCopyAction.ResolveConflict, [p.Change], Resolution: new(p, ConflictChoice.Incoming)), cancel.Token));
-            Expect(await GitActions.IndexStampAsync(p.Context.Repository, default) == index, "Unmerged index preserved");
+            Expect(await RepositoryReader.IndexFileStampAsync(p.Context.Repository, default) == index, "Unmerged index preserved");
         });
         await Check("Stash conflicts label unknown provenance and resolve with no fake sequence", async () =>
         {

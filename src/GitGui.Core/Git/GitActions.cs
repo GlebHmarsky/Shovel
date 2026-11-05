@@ -13,7 +13,13 @@ public sealed record ActionContext(GitInstallation Git, RepositoryIdentity Ident
     HistorySession History, IReadOnlyList<GitRemote> Remotes, string ConfigStamp);
 public sealed record ActionOptions(GitAction Action, string Branch = "", string StartRef = "HEAD",
     string Remote = "", string RemoteBranch = "", bool Checkout = true, bool AllRemotes = false,
-    bool AllTags = false, bool SetUpstream = false, PullStrategy PullStrategy = PullStrategy.Rebase, bool AutoStash = false, int Mainline = 0);
+    bool AllTags = false, bool SetUpstream = false, PullStrategy PullStrategy = PullStrategy.Rebase, bool AutoStash = false, int Mainline = 0)
+{
+    public string CheckoutStashMessage { get; init; } = "";
+    public CheckoutChanges CheckoutChanges { get; init; }
+    public CommitRef? CheckoutReference { get; init; }
+    public WorkingCopyContext? CheckoutReview { get; init; }
+}
 public sealed class GitActionException(string code) : Exception(code) { public string Code { get; } = code; }
 public sealed record ActionResult(ProcessOutcome Outcome, int? ExitCode, string Output)
 {
@@ -95,10 +101,14 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                 throw new GitActionException("ActionIdentityChanged");
             var fresh = await reader.InspectAsync(git, path, token);
             var history = await reader.OpenInspectedHistoryAsync(git, fresh, HistoryScope.AllCommits, token);
-            if (!SamePaths(context.Identity, fresh) || history.Fingerprint != context.History.Fingerprint ||
+            if (!SamePaths(context.Identity, fresh) || !IsCheckout(options) && history.Fingerprint != context.History.Fingerprint ||
                 fresh.Branch != context.Repository.Branch || fresh.Commit != context.Repository.Commit ||
                 await ConfigStamp(git, path, token) != context.ConfigStamp)
                 throw new GitActionException("ActionChanged");
+            if (options.CheckoutReference is { } reviewedRef && !history.References.Any(reference => reference.Name == reviewedRef.Name && reference.Hash == reviewedRef.Hash))
+                throw new GitActionException("CheckoutChanged");
+            if (options.Action == GitAction.SwitchBranch && context.History.References.FirstOrDefault(reference => reference.Name == "refs/heads/" + options.Branch)?.Hash !=
+                history.References.FirstOrDefault(reference => reference.Name == "refs/heads/" + options.Branch)?.Hash) throw new GitActionException("CheckoutChanged");
             if (fresh.Operation != RepositoryOperation.None) throw new GitActionException("ActionSequence");
             if (options.Action == GitAction.Pull && !Enum.IsDefined(options.PullStrategy)) throw new GitActionException("ActionReadFailed");
             if (options.Action == GitAction.SwitchBranch || options.Action == GitAction.NewBranch && options.Checkout)
@@ -106,8 +116,6 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
                 // Branch switching has not yet been validated for these worktree modes.
                 if (File.Exists(Path.Combine(fresh.GitDirectory, "info", "sparse-checkout")))
                     throw new GitActionException("ActionWorktreeUnsupported");
-                var status = await Read(git, path, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], token);
-                if (status.StandardOutput.Length != 0) throw new GitActionException("ActionDirty");
             }
             var commands = new List<string[]>();
             if (IsHistoryAction(options.Action))
@@ -165,6 +173,12 @@ public sealed partial class GitActions(IProcessRunner runner, RepositoryReader r
             }
             var output = new StringBuilder();
             ActionResult? last = null;
+            if (IsCheckout(options))
+            {
+                stage?.Invoke(GitActionStage.UpdatingBranch);
+                var result = await ExecuteCheckoutAsync(context, options, commands.Single(), Write, token);
+                return result with { Output = output.ToString() };
+            }
             foreach (var command in commands)
             {
                 stage?.Invoke(options.Action switch

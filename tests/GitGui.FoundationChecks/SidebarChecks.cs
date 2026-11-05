@@ -111,6 +111,7 @@ internal static partial class Program
     }
     private sealed class SidebarInteraction : IUserInteraction
     {
+        public bool ConfirmCheckout(CheckoutViewModel model) => ConfirmCheckoutForCheck(model);
         public int Confirmations;
         public string? ChooseRepository() => null;
         public string? ChooseGit() => null;

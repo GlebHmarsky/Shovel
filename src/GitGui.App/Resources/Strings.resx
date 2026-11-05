@@ -241,7 +241,6 @@ Choose only an installation you trust. This choice is not saved.</value><comment
   <data name="ActionSetUpstream" xml:space="preserve"><value>Set this destination as the local branch&apos;s upstream</value></data>
   <data name="ActionAuthLimits" xml:space="preserve"><value>Uses existing credential helpers and SSH agents. Git credential and bundled OpenSSH prompts open in Shovel. Verify host fingerprints independently before accepting; OpenSSH may save accepted hosts. Browser sign-in through Credential Manager, interactive hooks and signing prompts still require your terminal. Shovel does not save credentials; configured Git helpers may store them.</value></data>
   <data name="ActionReady" xml:space="preserve"><value>Review the targets and options, then start this operation.</value></data>
-  <data name="ActionDuration" xml:space="preserve"><value>Elapsed: {0:N1} s</value></data>
   <data name="ActionOutput" xml:space="preserve"><value>Git output (in memory; URL credentials redacted)</value></data>
   <data name="ActionAuthentication" xml:space="preserve"><value>Authentication requirements</value></data>
   <data name="ActionCancel" xml:space="preserve"><value>Cancel</value></data>
@@ -760,7 +759,6 @@ Requested upstream: {2}</value></data>
   <data name="WorkspacePreferenceSaveFailed" xml:space="preserve"><value>The preference works for this session but could not be saved. Settings remain available for recovery.</value></data>
 <data name="WorkspaceBashShortcut" xml:space="preserve"><value>Ctrl+Alt+T</value></data><data name="WorkspaceExplorerShortcut" xml:space="preserve"><value>Ctrl+Alt+O</value></data>
   <data name="OperationCaption" xml:space="preserve"><value>{0} · {1}</value><comment>{0} operation title; {1} current phase or outcome. Duration occupies a separate fixed slot.</comment></data>
-  <data name="OperationSeconds" xml:space="preserve"><value>{0:N1} s</value><comment>{0} elapsed seconds; keep the unit short for the duration capsule.</comment></data>
   <data name="OperationTimingHelp" xml:space="preserve"><value>{0} · {1} · {2:N1} s</value></data>
   <data name="OperationReadingCounts" xml:space="preserve"><value>Reading ahead/behind…</value></data>
   <data name="OperationReadingHistory" xml:space="preserve"><value>Reading history…</value></data>
@@ -780,13 +778,13 @@ Requested upstream: {2}</value></data>
   <data name="ActionTitleAddRemote" xml:space="preserve"><value>Add remote</value></data>
   <data name="ActionExplainAddRemote" xml:space="preserve"><value>Save a remote in this repository. Fetch separately to download branches.</value></data>
   <data name="PullOptions" xml:space="preserve"><value>Pull options…</value></data>
-  <data name="PullDefaultHelp" xml:space="preserve"><value>Pull upstream with Rebase; auto-stash off.</value></data>
+  <data name="PullDefaultHelp" xml:space="preserve"><value>Pull using remembered options. Use the arrow to choose the target, strategy and automatic stashing.</value></data>
   <data name="PullDefaultNeedsUpstream" xml:space="preserve"><value>Set an upstream or choose a target in Pull options.</value></data>
   <data name="PullDefaultTargetChanged" xml:space="preserve"><value>The upstream changed or uses a custom mapping. Refresh or choose the remote and branch in Pull options.</value></data>
   <data name="FetchOptions" xml:space="preserve"><value>Fetch options…</value></data>
   <data name="PushOptions" xml:space="preserve"><value>Push options…</value></data>
-  <data name="DefaultFetchHelp" xml:space="preserve"><value>Fetch the default remote.</value></data>
-  <data name="DefaultPushHelp" xml:space="preserve"><value>Push this branch to its configured push destination.</value></data>
+  <data name="DefaultFetchHelp" xml:space="preserve"><value>Fetch using remembered options. Use the arrow to choose a remote or all remotes.</value></data>
+  <data name="DefaultPushHelp" xml:space="preserve"><value>Push using remembered options. Use the arrow to choose the destination, tags and upstream setting.</value></data>
   <data name="DefaultFetchNeedsTarget" xml:space="preserve"><value>No unambiguous remote is configured. Choose a remote in Fetch options.</value></data>
   <data name="DefaultPushNeedsTarget" xml:space="preserve"><value>No single branch push destination could be resolved. Choose a target in Push options.</value></data>
   <data name="HistoryMenuCheckoutCommit" xml:space="preserve"><value>Checkout (Detached HEAD)</value></data>
@@ -1060,4 +1058,19 @@ Previous HEAD: {1}</value></data>
   <data name="ReopenCommit" xml:space="preserve"><value>Reopen Commit for this repository</value></data>
   <data name="ActivityAllRepositories" xml:space="preserve"><value>All repositories</value></data>
   <data name="CommitCloseBeforeReopen" xml:space="preserve"><value>Close the current Commit window first, then use Reopen Commit in Activity for the failed repository.</value></data>
+  <data name="CheckoutReading" xml:space="preserve"><value>Checking local changes…</value></data>
+  <data name="CheckoutDetachedHelp" xml:space="preserve"><value>Check out this commit. The repository will be in detached HEAD state.</value></data>
+  <data name="CheckoutBranchHelp" xml:space="preserve"><value>Switch to the selected branch.</value></data>
+  <data name="CheckoutLocalChanges" xml:space="preserve"><value>Local changes:</value></data>
+  <data name="CheckoutKeep" xml:space="preserve"><value>Don’t change</value></data>
+  <data name="CheckoutStash" xml:space="preserve"><value>Stash and reapply (including staged state and untracked files)</value></data>
+  <data name="CheckoutDiscard" xml:space="preserve"><value>Discard tracked changes (keep untracked files)</value></data>
+  <data name="CheckoutDirtyHelp" xml:space="preserve"><value>Git protects files that would be overwritten. Submodule worktrees are left unchanged.</value></data>
+  <data name="CheckoutClean" xml:space="preserve"><value>The working tree is clean.</value></data>
+  <data name="CheckoutReadFailed" xml:space="preserve"><value>Could not read local changes. Close this window and retry.</value></data>
+  <data name="CheckoutChanged" xml:space="preserve"><value>Local changes changed after confirmation. Review them before trying checkout again.</value></data>
+  <data name="CheckoutStashUnavailable" xml:space="preserve"><value>Could not verify the saved checkout stash. Inspect Stashes and Local Changes before retrying.</value></data>
+  <data name="CheckoutStashRetained" xml:space="preserve"><value>The checkout stash was retained. Inspect Local Changes and Stashes; resolve any conflicts before continuing.</value></data>
+  <data name="NetworkRememberOptions" xml:space="preserve"><value>Choices are remembered for the main button. Explicit destinations apply to this branch.</value></data>
+  <data name="CheckoutStashMessage" xml:space="preserve"><value>Shovel checkout</value></data>
 </root>

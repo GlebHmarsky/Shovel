@@ -144,7 +144,7 @@ internal static partial class Program
                 shell.ShowChangesCommand.Execute(null); var editor = await opened.Task; await editor.StartLoading(); editor.Subject = "preserve waiting draft";
                 editor.Select(false, [editor.Unstaged.Single(row => row.Path == "waiting.txt")]); runner.Hold(b, "add"); editor.StageCommand.Execute(null);
                 await runner.Entered.Task.WaitAsync(TimeSpan.FromSeconds(8)); editor.CommitCommand.Execute(null); await shell.CommitDialogTask;
-                shell.Journal.Entries.First(entry => entry.CanRemoveWaiting && entry.Title == GitGui.App.Localization.UiText.Get("CommitPhaseCommit")).CancelWaiting!.Execute(null);
+                shell.Journal.Entries.First(entry => entry.CanRemoveWaiting && entry.Title == GitGui.App.Localization.UiText.Get("Commit")).CancelWaiting!.Execute(null);
                 runner.Release.SetResult(); await editor.OperationTask; await shell.WaitForIdleAsync();
                 Expect(await Git(b, "rev-parse", "HEAD") == head && await Git(b, "show", ":waiting.txt") == "preserve staged" && editor.Subject == "preserve waiting draft", "Waiting cancellation changes neither HEAD, completed staging nor message");
                 ui.CommitHandler = null;

@@ -46,10 +46,7 @@ public sealed partial class GitActions
     public Task<ActionResult> ExecuteStashAsync(ActionContext context, StashOptions options, CancellationToken token,
         Action<ProcessOutput>? progress = null) => Task.Run(() =>
     {
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context.Identity.CommonDirectory.ToUpperInvariant())));
-        using var gate = new Mutex(false, @"Local\Shovel.GitAction." + key);
-        bool owned; try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
-        if (!owned) throw new GitActionException("ActionOtherInstance");
+        using var gate = EnterMutationGate(context.Identity);
         try { return ExecuteLocked().GetAwaiter().GetResult(); } finally { gate.ReleaseMutex(); }
         async Task<ActionResult> ExecuteLocked()
         {
@@ -64,10 +61,10 @@ public sealed partial class GitActions
                 throw new GitActionException("StashChanged");
             if (options.Action != StashAction.Drop)
             {
-                var index = await IndexStampAsync(fresh, token);
+                var index = await IndexStampAsync(git, fresh, token);
                 if ((await Read(git, path, ["ls-files", "--unmerged", "-z"], token)).StandardOutput.Length != 0)
                     throw new GitActionException("CommitUnresolved");
-                if (index != await IndexStampAsync(fresh, token)) throw new GitActionException("CommitStale");
+                if (index != await IndexStampAsync(git, fresh, token)) throw new GitActionException("CommitStale");
             }
             if (options.Message.Contains('\0') || Encoding.UTF8.GetByteCount(options.Message) > 4096) throw new GitActionException("StashMessageLimit");
             string[] args = options.Action switch

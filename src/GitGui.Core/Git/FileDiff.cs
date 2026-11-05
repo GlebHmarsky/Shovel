@@ -37,7 +37,7 @@ public sealed partial class RepositoryReader
         var before = FileStamp(file);
         var hunkCandidate = CanPreviewHunks(entry) && !options.IgnoreWhitespace && !options.WholeFile;
         var contentStamp = "";
-        if (await GitActions.IndexStampAsync(context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
+        if (await ReadIndexStampAsync(git, context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
         var oldSummary = submodule ? Task.FromResult(new BlobSummary(null)) : isNew ? Task.FromResult(new BlobSummary(0)) : ReadBlobSummaryAsync(git, path, oldHash, token);
         var newSummary = submodule ? Task.FromResult(new BlobSummary(null)) : isIndex ? ReadBlobSummaryAsync(git, path, entry.IndexObject, token) : ReadWorktreeSummaryAsync(file, token);
         await Task.WhenAll(oldSummary, newSummary);
@@ -45,7 +45,7 @@ public sealed partial class RepositoryReader
         var oldBytes = oldInfo.Bytes; var newBytes = newInfo.Bytes;
         if (entry.Group != ChangeGroup.Conflicted && (oldInfo.Binary || newInfo.Binary))
         {
-            if (await GitActions.IndexStampAsync(context.Repository, token) != context.IndexStamp || !isIndex && FileStamp(file) != before)
+            if (await ReadIndexStampAsync(git, context.Repository, token) != context.IndexStamp || !isIndex && FileStamp(file) != before)
                 throw new GitActionException("CommitStale");
             return new FileDiff(FileDiffKind.Binary, [], oldBytes, newBytes, 0, 0, "")
             { OldLfs = oldInfo.Lfs, NewLfs = newInfo.Lfs || !isIndex && oldInfo.Lfs && File.Exists(file) };
@@ -77,7 +77,7 @@ public sealed partial class RepositoryReader
                 catch (GitReadException exception) when (exception.Failure == GitFailure.OutputLimit) { kind = FileDiffKind.TooLarge; patch = ""; }
             }
         }
-        if (await GitActions.IndexStampAsync(context.Repository, token) != context.IndexStamp || !isIndex && FileStamp(file) != before)
+        if (await ReadIndexStampAsync(git, context.Repository, token) != context.IndexStamp || !isIndex && FileStamp(file) != before)
             throw new GitActionException("CommitStale");
         HunkPreview? preview = null;
         var availability = kind != FileDiffKind.Text ? HunkAvailability.ContentType : !CanPreviewHunks(entry) ? HunkAvailability.ChangeType :

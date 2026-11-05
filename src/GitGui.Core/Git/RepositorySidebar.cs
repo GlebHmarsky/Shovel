@@ -31,14 +31,14 @@ public sealed partial class RepositoryReader
     public Task<CommitHistory> LocateHistoryAsync(GitInstallation git, HistorySession session, string hash, CancellationToken token) => Task.Run(async () =>
     {
         if (!IsObjectId(hash)) throw new GitReadException(GitFailure.InvalidOutput);
-        var result = await RunAsync(git.Executable, session.Repository.Worktree, ReadArguments(["rev-list", "--topo-order", "--branches", "--remotes", "--tags",
-            .. session.References.Where(r => r.Name == "HEAD" || r.Name.StartsWith("stash@{", StringComparison.Ordinal)).Select(r => r.Hash), "--"]), token, 16 * 1024 * 1024);
+        var result = await RunAsync(git.Executable, session.Repository.Worktree, ReadArguments(["rev-list", "--topo-order", .. HistoryRoots(session), "--"]), token, 16 * 1024 * 1024);
         RequireSuccess(result);
         var raw = Text(result.StandardOutput).Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var hashes = raw.Where(id => !session.HiddenStashCommits.Contains(id)).ToArray();
+        var projected = ProjectHistory(session, raw).ToArray();
+        var hashes = projected.Select(item => item.Hash).ToArray();
         var index = Array.IndexOf(hashes, hash); if (index < 0) throw new GitReadException(GitFailure.ChangedDuringRead);
         var offset = index / HistoryPageSize * HistoryPageSize;
-        return await ReadHistoryPageAsync(git, session, new(offset, GraphCursor.Start, hashes[offset], Array.IndexOf(raw, hashes[offset])), token);
+        return await ReadHistoryPageAsync(git, session, new(offset, GraphCursor.Start, hashes[offset], projected[offset].Raw, projected[offset].Inserted), token);
     }, token);
 }
 

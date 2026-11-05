@@ -32,9 +32,9 @@ internal static partial class Program
         await Check("LFS read-only status verifies hydrated bytes and preserves index/custom filters", async () =>
         {
             File.SetLastWriteTimeUtc(asset, DateTime.UtcNow.AddSeconds(10));
-            var snapshot = await reader.InspectAsync(git, repo, default, includeHistory: false); var stamp = await GitActions.IndexStampAsync(snapshot, default);
+            var snapshot = await reader.InspectAsync(git, repo, default, includeHistory: false); var stamp = await RepositoryReader.IndexFileStampAsync(snapshot, default);
             var changes = await reader.ReadLocalChangesAsync(git, repo, false, default);
-            Expect(changes.Entries.Count == 0 && stamp == await GitActions.IndexStampAsync(snapshot, default), "Touched clean LFS asset stays clean; index untouched");
+            Expect(changes.Entries.Count == 0 && stamp == await RepositoryReader.IndexFileStampAsync(snapshot, default), "Touched clean LFS asset stays clean; index untouched");
             bytes[20] ^= 1; await File.WriteAllBytesAsync(asset, bytes);
             changes = await reader.ReadLocalChangesAsync(git, repo, false, default);
             Expect(changes.Entries.Single().Path == "test.uasset", "Real changed asset remains visible");
@@ -60,27 +60,31 @@ internal static partial class Program
             var result = await actions.ExecuteWorkingCopyAsync(context, new(WorkingCopyAction.ResolveConflict, [entry], Resolution: new(preview, ConflictChoice.Incoming)), default);
             Expect(result.Result.Success && (await File.ReadAllBytesAsync(asset)).SequenceEqual(incoming) && await Git("ls-files", "-u") == "", "Actual incoming LFS bytes and resolved index");
         });
-        await Check("Discard stays responsive and cancellable while a native asset restore is delayed", async () =>
+        await Check("Discard stays responsive and finishes its accepted restore after Refresh", async () =>
         {
-            await Git("merge", "--abort"); bytes[50] ^= 1; await File.WriteAllBytesAsync(asset, bytes);
+            await Git("merge", "--abort"); var expected = await File.ReadAllBytesAsync(asset); bytes[50] ^= 1; await File.WriteAllBytesAsync(asset, bytes);
             var gate = new DiscardDelayRunner(runner); var observed = new RepositoryReader(gate);
             var model = new CommitViewModel(repo, git, observed, new(gate, observed, new WindowsRepositoryIdentity()), new FileActionInteraction { Response = "" });
             await model.StartLoading(); model.Select(false, [model.Unstaged.Single(e => e.Change.Path == "test.uasset")]); await model.DiffTask;
             using var menu = model.CreateFileMenu(false); menu.DiscardCommand.Execute(null); await gate.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             var watch = Stopwatch.StartNew(); await Dispatcher.Yield(DispatcherPriority.Input);
             Console.WriteLine($"Input-priority dispatcher response while discard is held: {watch.Elapsed.TotalMilliseconds:F1} ms");
-            Expect(watch.Elapsed < TimeSpan.FromSeconds(1) && model.IsMutating && !model.Ready, "Dispatcher remains available; no competing writes");
-            model.RefreshCommand.Execute(null); await model.OperationTask.WaitAsync(TimeSpan.FromSeconds(10));
-            Expect((await File.ReadAllBytesAsync(asset)).SequenceEqual(bytes) && !model.IsMutating, "Cancel before native restore preserves modified asset");
+            Expect(watch.Elapsed < TimeSpan.FromSeconds(1) && model.IsMutating && model.Ready, "Dispatcher and cached file interactions remain available");
+            model.RefreshCommand.Execute(null);
+            Expect(model.IsMutating && !gate.Release.Task.IsCompleted, "Refresh does not cancel an accepted restore");
+            gate.Release.SetResult(); await model.OperationTask.WaitAsync(TimeSpan.FromSeconds(10));
+            Expect((await File.ReadAllBytesAsync(asset)).SequenceEqual(expected) && !model.IsMutating && model.Unstaged.Count == 0,
+                "Native restore finishes with hydrated bytes and reconciled rows");
             await model.CloseAsync();
         });
     }
     private sealed class DiscardDelayRunner(IProcessRunner inner) : IProcessRunner
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
-            if (request.Arguments.Contains("checkout-index")) { Started.TrySetResult(); await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+            if (request.Arguments.Contains("checkout-index")) { Started.TrySetResult(); await Release.Task.WaitAsync(token); }
             return await inner.RunAsync(request, token, output);
         }
     }

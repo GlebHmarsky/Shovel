@@ -9,8 +9,8 @@ public sealed record BranchManagementOptions(BranchManagementAction Action, Comm
 public sealed partial class GitActions
 {
     // No remote URL resolution: these commands operate on existing local refs/configuration only.
-    public Task<ActionContext> PrepareBranchManagementAsync(GitInstallation git, RepositoryIdentity expected,
-        RepositorySnapshot snapshot, HistorySession history, CancellationToken token) => Task.Run(async () =>
+    public Task<ActionContext> PrepareLocalActionAsync(GitInstallation git, RepositoryIdentity expected,
+        RepositorySnapshot snapshot, HistorySession history, CancellationToken token, bool requireUnchangedReferences = true) => Task.Run(async () =>
     {
         await CheckIdentity();
         var config = await ConfigStamp(git, expected.Worktree, token);
@@ -18,7 +18,7 @@ public sealed partial class GitActions
         if (fresh.Operation != RepositoryOperation.None) throw new GitActionException("ActionSequence");
         var refs = await reader.OpenInspectedHistoryAsync(git, fresh, HistoryScope.AllCommits, token);
         if (!SamePaths(expected, fresh) || fresh.Commit != snapshot.Commit || fresh.Branch != snapshot.Branch ||
-            refs.Fingerprint != history.Fingerprint || config != await ConfigStamp(git, expected.Worktree, token))
+            requireUnchangedReferences && refs.Fingerprint != history.Fingerprint || config != await ConfigStamp(git, expected.Worktree, token))
             throw new GitActionException("BranchManageChanged");
         await CheckIdentity();
         return new ActionContext(git, expected, fresh, refs, [], config);
@@ -121,14 +121,4 @@ public sealed partial class GitActions
         }
     }, token);
 
-    // Same common-directory name and acquisition semantics as all existing mutations.
-    private static Mutex EnterMutationGate(RepositoryIdentity identity, string category = "GitAction")
-    {
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(identity.CommonDirectory.ToUpperInvariant())));
-        var gate = new Mutex(false, @"Local\Shovel." + category + "." + key);
-        bool owned;
-        try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
-        if (owned) return gate;
-        gate.Dispose(); throw new GitActionException("ActionOtherInstance");
-    }
 }

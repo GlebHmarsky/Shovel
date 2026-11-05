@@ -66,7 +66,9 @@ internal static partial class Program
         await Check("Dirty/sequence/stale identity/config gates preserve repository state", async () =>
         {
             await File.WriteAllTextAsync(Path.Combine(repo, "untracked.txt"), "preserve");
-            await Reject("ActionDirty", async () => await Run(await Prepare(), new(GitAction.SwitchBranch, "feature/日本語")));
+            var previousBranch = (await reader.InspectAsync(git, repo, default)).Branch!;
+            Expect((await Run(await Prepare(), new(GitAction.SwitchBranch, "feature/日本語"))).Success && File.Exists(Path.Combine(repo, "untracked.txt")), "Keep preserves nonconflicting untracked work");
+            await Git(repo, "switch", previousBranch);
             File.Delete(Path.Combine(repo, "untracked.txt"));
             var context = await Prepare();
             await Git(repo, "branch", "external-change");

@@ -28,7 +28,7 @@ internal static partial class Program
             var first = CommitGraph.BuildPage(isolated[..1], GraphCursor.Start, stashTips: tips);
             var rest = CommitGraph.BuildPage(isolated[1..], first.Next, stashTips: tips);
             Expect(rest.Rows[0].NodeColor != first.Rows[0].NodeColor && rest.Rows[0].NodeLane != first.Rows[0].NodeLane, "Stash connection terminates at distinct ordinary lane");
-            Expect(rest.Rows[0].Lines.Any(l => l.FromLane == first.Rows[0].NodeLane && l.ToLane == rest.Rows[0].NodeLane && l.ToY == .5), "Actual base connection retained");
+            Expect(first.Rows[0].Lines.Any(l => l.FromLane == first.Rows[0].NodeLane && l.ToLane == rest.Rows[0].NodeLane && l.ToY == 1), "Actual base connection retained");
             Expect(JsonSerializer.Serialize(first.Rows.Concat(rest.Rows)) == JsonSerializer.Serialize(CommitGraph.BuildPage(isolated, GraphCursor.Start, stashTips: tips).Rows), "Cursor carries stash semantics across pages");
             return Task.CompletedTask;
         });
@@ -314,6 +314,7 @@ internal static partial class Program
     }
     private sealed class RepositoryWorkflowInteraction : IUserInteraction
     {
+        public bool ConfirmCheckout(CheckoutViewModel model) => ConfirmCheckoutForCheck(model);
         public List<OperationProblem> Problems { get; } = [];
         public int AuthPrompts { get; private set; }
         public string? RepositoryChoice { get; set; }

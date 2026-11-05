@@ -19,7 +19,7 @@
    <TreeView.ItemContainerStyle>
     <Style TargetType="TreeViewItem">
      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-     <Setter Property="IsExpanded" Value="True"/>
+     <Setter Property="IsExpanded" Value="{Binding Expansion.IsExpanded, Mode=TwoWay}"/>
      <Setter Property="Foreground" Value="{DynamicResource Theme.Text}"/>
      <Setter Property="Padding" Value="2,4"/>
      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TreeViewItem">

@@ -1,5 +1,14 @@
 # Requirements and acceptance
 
+## Checkout and workspace-state acceptance (0.47.0)
+
+Old-base stashes must stay adjacent to their base regardless of timestamp, retain ordinary branch lanes and paginate/navigate without duplicates or gaps. Many same-base stashes must not exhaust lane capacity. Verify native stash metadata and separately reachable internal objects.
+
+Checkout confirms the immutable commit or named branch target; hide dirty choices for a clean tree. Keep preserves Git’s overwrite protection; stash/reapply restores staged, unstaged and untracked state or retains explicit recovery data on failure. Discard preserves unrelated untracked/ignored paths and submodule worktrees. Reject newly staged work after review. Unrelated fetched refs must not invalidate an otherwise unchanged checkout target. Configured checkout hooks and LFS behavior remain native.
+
+Persist sidebar expansion, resizable-window geometry and pane proportions through real settings-file reload. Commit retains native resizing with no minimize/maximize controls. Empty-log notifications show a compact message, and real staged-content edits still reject stale Commit while cache-only index rewrites do not. Confirm Pull/Fetch/Push remembered flags reach actual disposable-remote commands; implicit destinations continue to follow Git configuration and explicit destinations stay branch-bound. Use headless/offscreen checks; native caption input, monitor placement and installed desktop persistence remain owner acceptance.
+
+
 ## Operation lifetime acceptance (0.46.0)
 
 Confirmed 2026-11-04; supersedes older view-close/current-command cancellation expectations. Open Commit during held initialization: show available content, finish initialization, and publish both history and local changes. Switch/close/reopen tabs during work: retain original repository ownership, accepted requests and results. Submit Commit: close immediately and finish in the background; failed hooks preserve draft/index and offer explicit repository-specific reopening.

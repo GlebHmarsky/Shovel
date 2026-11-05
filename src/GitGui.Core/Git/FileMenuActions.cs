@@ -20,7 +20,7 @@ public sealed partial class GitActions
         foreach (var relative in paths) ValidateRegularTarget(path, relative);
         var scoped = paths.Length <= 128 && paths.Sum(item => item.Length + 3) < 16000;
         var current = reviewedPaths ?? await reader.ReadLocalChangesAsync(git, path, false, token, scoped ? paths : null, context.FilterOverrides);
-        if (entries.Any(entry => !current.Entries.Contains(entry)) || await IndexStampAsync(fresh, token) != context.IndexStamp)
+        if (entries.Any(entry => !current.Entries.Contains(entry)) || await IndexStampAsync(git, fresh, token) != context.IndexStamp)
             throw new GitActionException("CommitStale");
         if (options.Action is WorkingCopyAction.StashFiles && (fresh.Commit is null || fresh.Operation != RepositoryOperation.None))
             throw new GitActionException(fresh.Commit is null ? "StashNeedsCommit" : "ActionSequence");
@@ -90,7 +90,7 @@ public sealed partial class GitActions
                 var treeResult = await Write(["write-tree"], privateIndex);
                 if (!treeResult.Success) return await Finish(treeResult);
                 var tree = treeResult.Output.Trim();
-                if (!ObjectId(tree) || await IndexStampAsync(fresh, token) != context.IndexStamp) throw new GitActionException("CommitStale");
+                if (!ObjectId(tree) || await IndexStampAsync(git, fresh, token) != context.IndexStamp) throw new GitActionException("CommitStale");
                 result = await Write(["read-tree", fresh.Commit!], privateIndex);
                 if (!result.Success) return await Finish(result);
                 var tracked = FileActionPaths(entries.Where(entry => entry.Group != ChangeGroup.Untracked).ToArray());
@@ -103,14 +103,14 @@ public sealed partial class GitActions
                 await WritePaths(paths);
                 var beforeStash = await reader.ReadWorkingCopyHeadAsync(git, fresh, token);
                 if (beforeStash.Commit != fresh.Commit || beforeStash.Branch != fresh.Branch || beforeStash.Operation != fresh.Operation ||
-                    await IndexStampAsync(fresh, token) != context.IndexStamp || await ConfigStamp(git, path, token) != context.ConfigStamp) throw new GitActionException("CommitStale");
+                    await IndexStampAsync(git, fresh, token) != context.IndexStamp || await ConfigStamp(git, path, token) != context.ConfigStamp) throw new GitActionException("CommitStale");
                 result = await Write(["stash", "push", "--no-keep-index", "--include-untracked", "--message=" + options.Message,
                     "--pathspec-from-file=" + pathFile, "--pathspec-file-nul"], privateIndex);
                 if (result.Success && tracked.Length > 0)
                 {
                     try
                     {
-                        if (await IndexStampAsync(fresh, token) != context.IndexStamp)
+                        if (await IndexStampAsync(git, fresh, token) != context.IndexStamp)
                             return await Finish(result with { MessageCode = "FileStashIndexRetained" });
                         await WritePaths(tracked);
                         var reset = await Write(["restore", "--staged", "--source=" + fresh.Commit, "--pathspec-from-file=" + pathFile, "--pathspec-file-nul"]);
@@ -219,11 +219,11 @@ public sealed partial class GitActions
                 using var observe = new CancellationTokenSource(TimeSpan.FromSeconds(20));
                 try
                 {
-                    var stamp = await IndexStampAsync(fresh, observe.Token);
+                    var stamp = await IndexStampAsync(git, fresh, observe.Token);
                     var changed = options.Action == WorkingCopyAction.Discard
                         ? await reader.TryReadLfsDiscardChangesAsync(context, entries, observe.Token) : null;
                     changed ??= await reader.ReadLocalChangesAsync(git, path, false, observe.Token, paths, context.FilterOverrides);
-                    if (stamp == await IndexStampAsync(fresh, observe.Token))
+                    if (stamp == await IndexStampAsync(git, fresh, observe.Token))
                     {
                         var targets = paths.ToHashSet(StringComparer.Ordinal);
                         var rows = context.Changes.Entries.Where(entry => !targets.Contains(entry.Path) && (entry.OriginalPath is null || !targets.Contains(entry.OriginalPath)))

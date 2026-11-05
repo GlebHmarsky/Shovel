@@ -1,8 +1,11 @@
 # Implementation checklist
 
-Updated 2026-11-04. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-11-05. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
+
+- [x] **P1 - Workspace corrections and refactor (0.47.0 Beta).** Compact topological stashes, reviewed checkout choices, remembered network options, persistent sidebar/window/pane state, close-only Commit, semantic index validation and compact attention. Shared state/locks and obsolete timer cleanup; 51 focused checks plus disposable LFS measurements. [Evidence and limits](docs/roadmap.md#workspace-corrections-and-shared-state-0470-beta).
+- [ ] **P1 - Verify and deliver 0.47.0 Beta.** Focused Git/headless checks, final smoke, signed installer/feed and anonymous production download. Stable stays 0.39.1. No desktop control or installation.
 
 - [x] **P1 - Repository-owned operations (0.46.0 Beta).** Independent initialization, retained tab/view owners, ordered conflicting requests, individual waiting removal, background Commit and failed-draft reopening. [Behavior and limits](docs/product.md#repository-owned-work-0460-beta).
 - [x] **P1 - Deliver 0.46.0 Beta.** 58 focused checks and 26 smoke checks in 68.8 s; matching installer/signed feed, all ten public asset digests and anonymous production download verified. Stable stays 0.39.1. [Evidence](docs/roadmap.md#repository-owned-operations-0460-beta).

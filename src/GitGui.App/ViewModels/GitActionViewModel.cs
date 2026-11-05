@@ -80,6 +80,7 @@ public sealed class GitActionViewModel : ObservableObject
         ChooseBranch && !Branches.Contains(Branch) ? "ActionChooseBranch" :
         ChooseRemoteBranch && string.IsNullOrWhiteSpace(RemoteBranch) ? "ActionChooseRemoteBranch" : "ActionReady");
     public event EventHandler? ExecutionStarting;
+    public Func<ActionOptions, ActionOptions?>? ReviewOptions { get; set; }
     private bool _reconciling, _gitFinished, _cancelled, _needsResolution, _refreshFailed;
     public OperationActivity? Activity => !HasAttempt ? null : new(this, Title, Phase, _elapsed.Elapsed.TotalSeconds,
         IsRunning ? OperationOutcome.Running : _refreshFailed ? OperationOutcome.RefreshFailed : _needsResolution ? OperationOutcome.Conflict :
@@ -94,7 +95,6 @@ public sealed class GitActionViewModel : ObservableObject
     private string _status = UiText.Get("ActionReady"), _rawOutput = "";
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string RawOutput { get => _rawOutput; private set => Set(ref _rawOutput, value); }
-    public string Duration => UiText.Format("ActionDuration", _elapsed.Elapsed.TotalSeconds);
     public RelayCommand RunCommand { get; }
     public Task RunningTask { get; private set; } = Task.CompletedTask;
 
@@ -164,12 +164,20 @@ public sealed class GitActionViewModel : ObservableObject
         });
         if (text is not null) RawOutput = text;
     }
+    public ActionOptions CaptureOptions() => new ActionOptions(Action, IsNew ? NewName : Branch, StartRef,
+            Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream, Strategy, AutoStash);
+
     private async Task RunAsync()
     {
         using var lifetime = GitGui.Core.Processes.ProcessLifetime.CompleteStartedCommands(!IsBackground);
         // Freeze the reviewed options before the view closes or any asynchronous work starts.
-        var options = new ActionOptions(Action, IsNew ? NewName : Branch, StartRef,
-            Remote?.Name ?? "", RemoteBranch, Checkout, AllRemotes, AllTags, SetUpstream, Strategy, AutoStash);
+        var options = CaptureOptions();
+        if (ReviewOptions is not null)
+        {
+            var reviewed = ReviewOptions(options);
+            if (reviewed is null) return;
+            options = reviewed;
+        }
         _attempted = true; Changed(nameof(HasAttempt)); IsRunning = true; _elapsed.Restart(); _timer.Start(); Status = UiText.Get("ActionRunning");
         try
         {
@@ -246,7 +254,7 @@ public sealed class GitActionViewModel : ObservableObject
             {
                 _timer.Stop(); _elapsed.Stop(); _refreshFailed = !refreshed;
                 Phase = UiText.Get(!refreshed ? "ActionRefreshFailedShort" : _needsResolution ? "ActionConflictShort" : Succeeded ? "ActionCompletedShort" : _cancelled ? "ActionStoppedShort" : "ActionFailedShort");
-                IsReconciling = false; IsRunning = false; Changed(nameof(Duration)); Changed(nameof(Summary)); _cancel.Dispose();
+                IsReconciling = false; IsRunning = false; Changed(nameof(Summary)); _cancel.Dispose();
             }
         }
     }

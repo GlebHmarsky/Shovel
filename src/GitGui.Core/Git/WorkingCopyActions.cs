@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Diagnostics;
 using System.Text;
 using GitGui.Core.Processes;
@@ -28,7 +27,7 @@ public sealed partial class GitActions
         var identity = await identities.ReadAsync(path, token);
         var repository = await reader.InspectAsync(git, path, token, includeHistory: false);
         if (!SamePaths(identity, repository)) throw new GitActionException("ActionIdentityChanged");
-        var stamp = await IndexStampAsync(repository, token);
+        var stamp = await IndexStampAsync(git, repository, token);
         var filterOverrides = await reader.StatusFiltersAsync(git, path, token);
         var changesTask = reader.ReadLocalChangesAsync(git, path, false, token, filterOverrides: filterOverrides);
         var configTask = ConfigStamp(git, path, token);
@@ -46,34 +45,19 @@ public sealed partial class GitActions
             if (File.Exists(mergePath) && new FileInfo(mergePath).Length <= 65536)
                 mergeMessage = await File.ReadAllTextAsync(mergePath, token);
         }
-        if (stamp != await IndexStampAsync(repository, token) || (await identities.ReadAsync(path, token)).Fingerprint != identity.Fingerprint)
+        if (stamp != await IndexStampAsync(git, repository, token) || (await identities.ReadAsync(path, token)).Fingerprint != identity.Fingerprint)
             throw new GitActionException("CommitStale");
         return new WorkingCopyContext(git, identity, repository, changes, stamp, await configTask, message, mergeMessage) { FilterOverrides = filterOverrides };
     }, token);
 
-    // Content hash also catches index-only edits with unchanged file names/status codes. Split-index
-    // shared files are immutable by name; the worktree index contains their reference. No index writes.
-    public static async Task<string> IndexStampAsync(RepositorySnapshot repository, CancellationToken token)
-    {
-        var file = Path.Combine(repository.GitDirectory, "index");
-        try
-        {
-            await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
-                65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
-            return Convert.ToHexString(await SHA256.HashDataAsync(stream, token));
-        }
-        catch (FileNotFoundException) { return "missing"; }
-    }
+    public Task<string> IndexStampAsync(GitInstallation git, RepositorySnapshot repository, CancellationToken token)
+        => reader.ReadIndexStampAsync(git, repository, token);
 
     public Task<WorkingCopyResult> ExecuteWorkingCopyAsync(WorkingCopyContext context, WorkingCopyOptions options,
         CancellationToken token, Action<ProcessOutput>? progress = null) => Task.Run(() =>
     {
         // Same common-directory key as branch/network actions; hold ownership on one worker thread.
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context.Identity.CommonDirectory.ToUpperInvariant())));
-        using var gate = new Mutex(false, @"Local\Shovel.GitAction." + key);
-        bool owned;
-        try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
-        if (!owned) throw new GitActionException("ActionOtherInstance");
+        using var gate = EnterMutationGate(context.Identity);
         try { return ExecuteLocked().GetAwaiter().GetResult(); }
         finally { gate.ReleaseMutex(); }
 
@@ -100,7 +84,7 @@ public sealed partial class GitActions
             await Task.WhenAll(inspection, configuration, reviewedPaths ?? Task.CompletedTask);
             var fresh = await inspection;
             if (!SamePaths(context.Identity, fresh) || fresh.Branch != context.Repository.Branch || fresh.Commit != context.Repository.Commit ||
-                fresh.Operation != context.Repository.Operation || await IndexStampAsync(fresh, token) != context.IndexStamp ||
+                fresh.Operation != context.Repository.Operation || await IndexStampAsync(git, fresh, token) != context.IndexStamp ||
                 await configuration != context.ConfigStamp) throw new GitActionException("CommitStale");
             if (!Enum.IsDefined(options.Action)) throw new GitActionException("ActionReadFailed");
             if (options.Action == WorkingCopyAction.ResolveConflict)
@@ -133,7 +117,7 @@ public sealed partial class GitActions
                         .. options.Action == WorkingCopyAction.UnstageHunks ? new[] { "--reverse" } : [], "--", patchFile], token);
                     if (check.Outcome != ProcessOutcome.Exited || check.ExitCode != 0)
                         return new(new(check.Outcome, check.ExitCode, Redact(Decode(check) + Encoding.UTF8.GetString(check.StandardError))));
-                    if (await IndexStampAsync(fresh, token) != context.IndexStamp ||
+                    if (await IndexStampAsync(git, fresh, token) != context.IndexStamp ||
                         await RepositoryReader.WorktreeContentStampAsync(path, preview.Change.Path, token) != preview.WorktreeStamp ||
                         await ConfigStamp(git, path, token) != context.ConfigStamp ||
                         (await reader.ReadHunkAttributesAsync(git, path, preview.Change.Path, token)).Stamp != preview.AttributeStamp)
@@ -174,7 +158,8 @@ public sealed partial class GitActions
                 }
                 var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null;
                 // Supplied message removes the editor dependency; hooks/signing are still Git's configured tools.
-                // Terminal stdin is closed by the runner. Visible progress/cancel/timeout cover owned work.
+                // Terminal stdin is closed; accepted user work runs under ProcessLifetime,
+                // so closing a view or reaching the normal read deadline cannot terminate it.
                 environment["GIT_EDITOR"] = "false";
                 var validationMilliseconds = timing.Elapsed.TotalMilliseconds;
                 var result = await RunLoggedAsync(new(git.Executable, path,
@@ -199,9 +184,9 @@ public sealed partial class GitActions
                     using var reconcile = new CancellationTokenSource(TimeSpan.FromSeconds(20));
                     try
                     {
-                        var stamp = await IndexStampAsync(fresh, reconcile.Token);
+                        var stamp = await IndexStampAsync(git, fresh, reconcile.Token);
                         var changed = await reader.ReadLocalChangesAsync(git, path, false, reconcile.Token, affectedPaths, context.FilterOverrides);
-                        if (stamp == await IndexStampAsync(fresh, reconcile.Token))
+                        if (stamp == await IndexStampAsync(git, fresh, reconcile.Token))
                         {
                             var selected = affectedPaths.ToHashSet(StringComparer.Ordinal);
                             var entries = context.Changes.Entries.Where(entry => !selected.Contains(entry.Path) &&

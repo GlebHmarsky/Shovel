@@ -40,6 +40,10 @@ public sealed partial class ShellViewModel
         UiScale.Set(settings.UiScale);
         DiffPreferences.Apply(settings); AvatarPreferences = settings.Avatars; Changed(nameof(AvatarPreferences));
         _commitLayout = settings.CommitLayout;
+        _networkActions = settings.NetworkActions;
+        WindowLayouts.Load(settings.WindowLayouts);
+        WindowLayouts.Changed = () => { if (IsReady && !_stopping) PreferenceTask = SavePreferencesAsync(); };
+        _collapsedSidebarGroups = settings.CollapsedSidebarGroups.ToHashSet(StringComparer.Ordinal);
         _riderExecutable = settings.RiderExecutable; _codeExecutable = settings.CodeExecutable; _bashExecutable = settings.BashExecutable;
         SetAppearance(settings.Appearance);
     }

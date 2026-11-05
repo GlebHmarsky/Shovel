@@ -34,10 +34,24 @@ public static class CommitGraph
             if (commit.Parents.Count > MaximumLanes) throw new GitReadException(GitFailure.HistoryTooWide);
             if (!seen.Add(commit.Hash) || commit.Parents.Any(seen.Contains)) throw new GitReadException(GitFailure.InvalidOutput);
             var isStash = stashTips?.Contains(commit.Hash) == true;
-            // Stash tracks end at their base; they never become an ordinary commit's lane.
-            var node = lanes.FindIndex(lane => lane.Hash == commit.Hash && lane.IsStash == isStash);
+            if (isStash && commit.Parents.Count == 1)
+            {
+                // A stash is a leaf annotation, never the owner of its base's branch lane.
+                // Reusing the base track also bounds width when many stashes share a base.
+                var bulbLines = lanes.Select((lane, index) => (lane, index)).Where(item => item.lane.Hash.Length > 0)
+                    .Select(item => new GraphLine(item.index, 0, item.index, 1, item.lane.Color)).ToList();
+                var target = lanes.FindIndex(lane => lane.Hash == commit.Parents[0] && !lane.IsStash);
+                if (target < 0) target = Allocate(new(commit.Parents[0], nextColor++));
+                var bulb = lanes.Count;
+                if (bulb >= MaximumLanes) throw new GitReadException(GitFailure.HistoryTooWide);
+                var bulbColor = nextColor++;
+                bulbLines.Add(new(bulb, .5, target, 1, bulbColor));
+                rows.Add(new(bulb, bulbColor, bulb + 1, false, bulbLines.ToArray()) { IsStash = true });
+                continue;
+            }
+            var node = lanes.FindIndex(lane => lane.Hash == commit.Hash && !lane.IsStash);
             var incoming = node >= 0;
-            if (!incoming) node = Allocate(new(commit.Hash, nextColor++, isStash));
+            if (!incoming) node = Allocate(new(commit.Hash, nextColor++));
             var before = lanes.ToArray(); var color = before[node].Color;
             for (var i = 0; i < lanes.Count; i++)
                 if (lanes[i].Hash == commit.Hash) lanes[i] = new("", lanes[i].Color);

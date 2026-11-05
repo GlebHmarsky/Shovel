@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     public MainWindow(ShellViewModel viewModel)
     {
         InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
+        GitGui.App.Services.WindowLayouts.SetStore(this, viewModel.WindowLayouts);
         DataContext = ViewModel = viewModel;
         Loaded += (_, _) =>
         {
@@ -139,6 +140,7 @@ public partial class MainWindow : Window
     // Read WPF geometry here; the settings model stores only plain values.
     public void RestoreLayout(AppSettings settings)
     {
+        ViewModel.WindowLayouts.Load(settings.WindowLayouts);
         var area = SystemParameters.WorkArea;
         Width = Math.Min(settings.WindowWidth, area.Width);
         Height = Math.Min(settings.WindowHeight, area.Height);
@@ -153,15 +155,17 @@ public partial class MainWindow : Window
             ProportionalPanes.Rows(HistoryRow, DetailsRow);
             ProportionalPanes.Columns(HistoryFiles.FilesColumn, HistoryFiles.DiffColumn);
         }
+        ViewModel.WindowLayouts.Restore(this);
     }
 
     public AppSettings CaptureLayout()
     {
+        ViewModel.WindowLayouts.Capture(this);
         CaptureHistoryScroll(null, EventArgs.Empty);
         return (ViewModel.LoadedSettings?.Settings ?? new AppSettings()) with
     {
-        WindowWidth = RestoreBounds.Width,
-        WindowHeight = RestoreBounds.Height,
+        WindowWidth = WindowState == WindowState.Normal ? Width : RestoreBounds.Width,
+        WindowHeight = WindowState == WindowState.Normal ? Height : RestoreBounds.Height,
         IsMaximized = WindowState == WindowState.Maximized,
         SidebarWidth = SidebarColumn.ActualWidth,
         DetailsHeight = DetailsRow.ActualHeight,

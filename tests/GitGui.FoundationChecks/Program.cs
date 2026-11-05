@@ -28,8 +28,9 @@ internal static partial class Program
             File.Copy(args[^1], args[output + 1], true); return 0;
         }
         if (args is ["--check-updates"]) return RunUpdateChecks();
-        if (args is ["--check-network-workflows"] or ["--check-repository-workflows"] or ["--check-auto-fetch-settings"] or ["--check-merge-tool-settings"] or ["--check-history-activity"] or ["--check-history-file-actions"] or ["--check-settings-pages"] or ["--check-operation-lifetimes"])
+        if (args is ["--check-workspace-state"] or ["--check-network-workflows"] or ["--check-repository-workflows"] or ["--check-auto-fetch-settings"] or ["--check-merge-tool-settings"] or ["--check-history-activity"] or ["--check-history-file-actions"] or ["--check-settings-pages"] or ["--check-operation-lifetimes"])
         {
+            _workspaceStateChecks = args[0] == "--check-workspace-state";
             _operationLifetimeChecks = args[0] == "--check-operation-lifetimes";
             _settingsPagesChecks = args[0] == "--check-settings-pages";
             _historyFileActionChecks = args[0] == "--check-history-file-actions";
@@ -37,7 +38,7 @@ internal static partial class Program
             _mergeToolSettingsChecks = args[0] == "--check-merge-tool-settings";
             _repositoryWorkflowChecks = args[0] == "--check-repository-workflows";
             _autoFetchSettingsChecks = args[0] == "--check-auto-fetch-settings";
-            _networkWorkflowChecks = !_repositoryWorkflowChecks && !_autoFetchSettingsChecks && !_mergeToolSettingsChecks && !_historyActivityChecks && !_historyFileActionChecks && !_settingsPagesChecks && !_operationLifetimeChecks; _routine = true;
+            _networkWorkflowChecks = !_repositoryWorkflowChecks && !_autoFetchSettingsChecks && !_mergeToolSettingsChecks && !_historyActivityChecks && !_historyFileActionChecks && !_settingsPagesChecks && !_operationLifetimeChecks && !_workspaceStateChecks; _routine = true;
             _root = Path.GetFullPath("artifacts/network-workflow-checks/" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
             using var deadline = RoutineDeadline(TimeSpan.FromMinutes(3), "Network workflow checks exceeded deadline");

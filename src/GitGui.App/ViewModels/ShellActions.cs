@@ -54,7 +54,7 @@ public sealed partial class ShellViewModel
     public string FetchActionHelp => UiText.Get(ActionUnavailableKey ?? "ActionTitleFetch");
     public string PullActionHelp => ActionUnavailableKey is { } reason ? UiText.Get(reason) :
         SelectedRepository?.Snapshot?.HeadKind != HeadKind.Branch ? UiText.Get("ActionPullNeedsBranch") : DivergenceHelp;
-    private (string Remote, string Branch)? DefaultPullTarget => PullTarget(SelectedRepository);
+    private (string Remote, string Branch)? DefaultPullTarget => PreferredPullTarget(SelectedRepository);
     private static (string Remote, string Branch)? PullTarget(RepositoryTab? tab)
     {
         var snapshot = tab?.Snapshot;
@@ -104,7 +104,9 @@ public sealed partial class ShellViewModel
     private async Task OpenActionAsync(GitAction action, string? branch, bool defaultPull = false, bool directNetwork = false, RepositoryTab? targetTab = null, bool background = false)
     {
         var tab = targetTab ?? SelectedRepository!;
-        var pullTarget = defaultPull ? PullTarget(tab) : null;
+        var pullTarget = defaultPull ? PreferredPullTarget(tab) : null;
+        var savedNetwork = background ? null : NetworkPreference(tab, action);
+        var savedTarget = savedNetwork is { ExplicitTarget: true } && (action == GitAction.Fetch || savedNetwork.Branch == (tab.Snapshot?.Branch ?? ""));
         if (defaultPull && pullTarget is null) throw new GitActionException("PullDefaultNeedsUpstream");
         if (tab.Snapshot is not { Operation: RepositoryOperation.None } && action is not (GitAction.Continue or GitAction.Skip or GitAction.Abort)) throw new GitActionException("ActionSequence");
         // A modal confirmation pumps the dispatcher. Freeze its target before it opens;
@@ -136,23 +138,36 @@ public sealed partial class ShellViewModel
                 if (!_knownIdentities.TryGetValue(tab.Directory, out var known) || known.Fingerprint != context.Identity.Fingerprint)
                     throw new GitActionException("ActionIdentityChanged");
                 if (!background && (context.Repository.Commit != cached.Repository.Commit || context.Repository.Branch != cached.Repository.Branch ||
-                    (!directNetwork && !defaultPull && context.History.Fingerprint != cached.History.Fingerprint)))
+                    (!directNetwork && !defaultPull && action != GitAction.SwitchBranch && context.History.Fingerprint != cached.History.Fingerprint)))
                     throw new GitActionException("ActionChanged");
-                if (pullTarget is { } target)
+                if (!savedTarget && pullTarget is { } target)
                     await _actions.ValidateDefaultPullTargetAsync(context, target.Remote, target.Branch, token);
                 return context;
-            }, prepareOptions: directNetwork ? (context, options, token) => _actions!.ResolveDefaultNetworkAsync(context, options, token) : null);
+            }, prepareOptions: directNetwork && !savedTarget ? (context, options, token) => _actions!.ResolveDefaultNetworkAsync(context, options, token) : null);
+            model.ReviewOptions = options => ReviewCheckout(tab, options);
             model.IsBackground = background;
+            if (!background) RestoreNetworkOptions(tab, model);
             if (pullTarget is { } selectedTarget)
             {
-                model.Remote = cached.Remotes.Single(remote => remote.Name == selectedTarget.Remote);
+                model.Remote = cached.Remotes.FirstOrDefault(remote => remote.Name == selectedTarget.Remote);
                 model.RemoteBranch = selectedTarget.Branch;
             }
             var previous = _repositoryActions.GetValueOrDefault(tab.Directory);
             _preparingAction = false;
             SetLastAction(model);
-            if (recoveryAction || defaultPull || directNetwork) model.RunCommand.Execute(null);
-            else _interaction!.ShowGitAction(model);
+            if (recoveryAction || defaultPull || directNetwork || action == GitAction.SwitchBranch)
+            {
+                if (!model.RunCommand.CanExecute(null)) throw new GitActionException("ActionNoRemote");
+                model.RunCommand.Execute(null);
+            }
+            else
+            {
+                var initialOptions = model.CaptureOptions();
+                _interaction!.ShowGitAction(model);
+                // The arrow is a preference editor as well as a submit route. Closing it
+                // preserves choices; execution always uses the snapshot captured on submit.
+                RememberNetworkOptions(tab, model, initialOptions);
+            }
             model.DismissOptions(); attempted = model.HasAttempt;
             if (!model.HasAttempt && previous is not null) SetLastAction(previous);
             else

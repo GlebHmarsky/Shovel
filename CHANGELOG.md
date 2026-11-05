@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.47.0 - 2026-11-05 (Beta)
+
+- Attach stashes directly above their bases without reordering ordinary history; share projection between paging and navigation.
+- Confirm checkout with clean/dirty-aware Keep, Stash and reapply, or Discard tracked changes choices.
+- Remember Fetch/Pull/Push options and apply them to the main buttons; keep explicit destinations branch-bound.
+- Preserve sidebar expansion, window geometry and pane proportions; keep Commit resizable with close-only caption controls.
+- Accept harmless index stat refreshes while retaining stale staged-content protection; compact empty-log notifications.
+- Consolidate mutation locks, local action preparation and option capture; remove unused timer presentation and document state ownership.
+- Replace the outdated packaged feature manual with a concise launch guide linked to current documentation.
+- Keep Stable at 0.39.1.
+
 ## 0.46.0 - 2026-11-04 (Beta)
 
 - Keep initialization and accepted Git operations alive when Commit opens or tabs/views close.

@@ -69,11 +69,7 @@ public sealed partial class GitActions
     private Task<ActionResult> ExecuteRecoveryAsync(ActionContext context, GitAction action, CancellationToken token,
         Action<ProcessOutput>? progress, Action<GitActionStage>? stage) => Task.Run(() =>
     {
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context.Identity.CommonDirectory.ToUpperInvariant())));
-        using var gate = new Mutex(false, @"Local\Shovel.GitAction." + key);
-        bool owned;
-        try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
-        if (!owned) throw new GitActionException("ActionOtherInstance");
+        using var gate = EnterMutationGate(context.Identity);
         try { return ExecuteLocked().GetAwaiter().GetResult(); }
         finally { gate.ReleaseMutex(); }
 
@@ -90,13 +86,13 @@ public sealed partial class GitActions
                 fresh.Operation != context.Repository.Operation || fresh.Recovery != expected)
                 throw new GitActionException("RecoveryChanged");
             if (action == GitAction.Skip && !expected.CanSkip) throw new GitActionException("RecoveryUnavailable");
-            var index = await IndexStampAsync(fresh, token);
+            var index = await IndexStampAsync(git, fresh, token);
             if (action == GitAction.Continue)
             {
                 var unmerged = await Read(git, path, ["ls-files", "--unmerged", "-z"], token);
                 if (unmerged.StandardOutput.Length != 0) throw new GitActionException("CommitUnresolved");
             }
-            if (SequenceRecovery.Read(fresh.GitDirectory, fresh.Operation) != expected || await IndexStampAsync(fresh, token) != index)
+            if (SequenceRecovery.Read(fresh.GitDirectory, fresh.Operation) != expected || await IndexStampAsync(git, fresh, token) != index)
                 throw new GitActionException("RecoveryChanged");
             var environment = EnvironmentForGit(); environment["GIT_OPTIONAL_LOCKS"] = null;
             // Continue retains Git's existing message. Never launch an invisible message/todo editor.

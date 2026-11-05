@@ -10,6 +10,7 @@ public sealed partial class ShellViewModel
     private AppSettings? _pendingSettings;
     private string _savedUpdateChannel = "win-stable";
     private bool _savedPeriodicUpdates = true;
+    public WindowLayouts WindowLayouts { get; } = new();
     public AvatarService AvatarImages { get; } = new();
     public AvatarSettings AvatarPreferences { get; private set; } = new();
     public string AvatarRemote => SelectedRepository?.RemoteConfiguration?.Remotes.OrderBy(remote => remote.Name == "origin" ? 0 : 1).FirstOrDefault()?.Location ?? "";

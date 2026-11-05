@@ -52,7 +52,7 @@ public sealed partial class ShellViewModel
             ActionContext? prepared = null;
             var operation = new GitActionViewModel(cached, kind, _actions!, () => ReconcileActionAsync(tab), prepareExecution: async token =>
             {
-                var context = await _actions!.PrepareBranchManagementAsync(cached.Git, cached.Identity, cached.Repository, cached.History, token);
+                var context = await _actions!.PrepareLocalActionAsync(cached.Git, cached.Identity, cached.Repository, cached.History, token);
                 prepared = context; return context;
             },
                 execute: async (token, progress) =>

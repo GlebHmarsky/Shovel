@@ -44,7 +44,7 @@ internal static partial class Program
         {
             var snapshot = await reader.InspectAsync(git, path, default);
             var history = await reader.OpenHistoryAsync(git, snapshot, HistoryScope.AllCommits, default);
-            return await actions.PrepareBranchManagementAsync(git, await identities.ReadAsync(path, default), snapshot, history, default);
+            return await actions.PrepareLocalActionAsync(git, await identities.ReadAsync(path, default), snapshot, history, default);
         }
         async Task Reject(string code, Func<Task> action)
         {
@@ -87,7 +87,7 @@ internal static partial class Program
                             foreach (var id in new[] { "DefaultFetch", "FetchOptions", "DefaultPull", "PullOptions", "DefaultPush", "PushOptions" })
                             {
                                 var button = buttons.Single(b => AutomationProperties.GetAutomationId(b) == id);
-                                Expect(button.ActualWidth >= 22 && button.TranslatePoint(new(button.ActualWidth, 0), content).X < size.Item1, "Split controls fit");
+                                Expect(button.ActualWidth >= 18 && button.TranslatePoint(new(button.ActualWidth, 0), content).X < size.Item1, $"{id} fits the compact split toolbar");
                             }
                             SaveRender(content, $"history-actions-{theme}-{size.Item1}.png", size.Item1, size.Item2);
                         }
@@ -193,6 +193,7 @@ internal static partial class Program
     }
     private sealed class HistoryInteraction : IUserInteraction
     {
+        public bool ConfirmCheckout(CheckoutViewModel model) => ConfirmCheckoutForCheck(model);
         public string Clipboard = "", Confirmation = "";
         public int Options, Commits;
         public string? ChooseRepository() => null;

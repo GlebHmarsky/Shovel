@@ -1,6 +1,6 @@
 # Shovel
 
-**0.46.0 Beta:** repository-owned initialization and operations, background Commit, individual waiting-request removal, and preserved drafts/staged state after failure. [Behavior and limits](docs/product.md#repository-owned-work-0460-beta). Stable remains **0.39.1**.
+**0.47.0 Beta:** compact stash topology, checkout choices, remembered network options, persistent window/pane/sidebar state and shared-state refactoring. [Behavior and limits](docs/product.md#checkout-and-remembered-workspace-state-0470-beta). Stable remains **0.39.1**.
 
 Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help → Shovel updates. Launch checks discover updates; opening that window checks immediately, and **Update and restart** approves the download and guarded restart. Every task delivers a signed-feed Beta installer through Build-Release; routine smoke remains 26 checks.
 
@@ -11,6 +11,8 @@ Windows 10/11 Git client, C# / WPF / .NET 10 LTS. Choose Stable or Beta in Help 
 Operations show static phase/outcome text and activity logs. Remove waiting requests individually; started user commands finish, and only automatic fetch can be preempted. Elapsed badges, animated progress and fading capsules are removed. `--check-operation-style` runs four focused outcome/static-status/offscreen layout checks without showing a window.
 
 ## Prerequisites
+
+Workspace-state checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-workspace-state` (11 focused checks) covers native index cache/staging, checkout/hooks/stash recovery, disk layout reload, remembered network flags and sidebar expansion. `--check-history-layout` adds five topology/paging/offscreen checks. Fixtures are disposable; no windows are shown.
 
 Operation-lifetime checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-operation-lifetimes` (11 focused checks): held initialization, close/reopen ownership, background Commit, preserved failed drafts/index, waiting removal, failure queues, ordered staging/Commit, background Stash and protected native-process completion. No desktop launch. [Behavior](docs/product.md#repository-owned-work-0460-beta).
 
@@ -89,7 +91,7 @@ Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build
 
 **0.37.0 conflict text:** the inline editor supports UTF-8 and BOM-marked UTF-16 LE/BE, displays the result encoding and preserves it on save. `--check-conflicts` runs seventeen focused checks, including exact encoded staged bytes, malformed input, byte limits, retained failed saves and headless layouts. [Behavior and limits](docs/product.md#daily-use-interactions-0310).
 
-**0.30.1 discard:** optional `--check-discard` runs six isolated discard checks (partial staging, literal paths, filters/hooks, locks and stale state); `--check-lfs` runs eleven checks covering hydration, selected LFS verification/fallback, concurrent edits, missing objects and responsive cancellation. `--measure-discard-lfs` measures one and 64 selected assets; `--measure-discard-lfs-trace` additionally reports allowlisted child timings and adds profiling overhead. These commands use disposable repositories and do not touch your repositories. [Results](docs/roadmap.md#lfs-discard-0301).
+**0.30.1 discard:** optional `--check-discard` runs six isolated discard checks (partial staging, literal paths, filters/hooks, locks and stale state); `--check-lfs` runs eleven checks covering hydration, selected LFS verification/fallback, concurrent edits, missing objects and responsive completion of accepted restores. `--measure-discard-lfs` measures one and 64 selected assets; `--measure-discard-lfs-trace` additionally reports allowlisted child timings and adds profiling overhead. These commands use disposable repositories and do not touch your repositories. [Results](docs/roadmap.md#lfs-discard-0301).
 
 **0.30.0:** [conflict editor, operation banner, startup cache, stash history menus and tab dragging](docs/product.md#conflict-resolution-and-faster-reopening-0300). Optional focused checks: `--check-conflicts` (17), `--check-usability` (7), `--check-lfs` (11; requires already installed Git LFS). `--check-startup` runs only the two cache checks. Use the same `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- <flag>` command. All use disposable repositories; no visible app or live server.
 
@@ -100,7 +102,7 @@ Keep Shovel.AskPass.exe/.dll/.deps.json/.runtimeconfig.json beside Shovel (build
 
 Optional focused checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-history-actions` (nine checks; disposable mutations, local bare remotes, no visible app). `--check-default-network` runs only its two network-target checks. Default smoke remains 26.
 
-**Pull:** the main button runs Rebase against the current branch's configured upstream, with auto-stash off. Its arrow opens the existing modal for other targets, Merge and optional auto-stash; submit there to execute those choices. Modal settings do not change the main button's defaults. Missing upstream disables direct Pull with a reason; use upstream setup or the options arrow. Both routes use the existing top-center progress/Cancel and retained result/output. This does not make Git execution instantaneous.
+**Pull:** the main button uses remembered strategy/auto-stash choices. The arrow edits those choices and optionally an explicit destination. Unchanged destinations continue following Git’s configured upstream; explicitly changed destinations are retained for the current branch. Fetch/Push use the same preference behavior. [Current semantics](docs/product.md#checkout-and-remembered-workspace-state-0470-beta).
 
 Optional focused checks: `dotnet run --project tests/GitGui.FoundationChecks -c Release --no-build -- --check-default-pull` (four local-Git/headless checks and Dark/Light normal/minimum renders; no live server or visible app).
 

@@ -184,6 +184,7 @@ internal static partial class Program
     }
     private sealed class ActionInteraction : IUserInteraction
     {
+        public bool ConfirmCheckout(CheckoutViewModel model) => ConfirmCheckoutForCheck(model);
         public Action<GitActionViewModel>? Show { get; set; }
         public Action<GitActionViewModel>? Opening { get; set; }
         public TaskCompletionSource Done { get; } = new();

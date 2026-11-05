@@ -107,7 +107,7 @@ public sealed partial class GitActions
         if (entries.Count == 0 || entries.Select(item => item.Group == ChangeGroup.Staged).Distinct().Count() != 1) throw new GitActionException("CommitStale");
         if (entries.Any(entry => !context.Changes.Entries.Contains(entry))) throw new GitActionException("CommitStale");
         await CheckFileRead(context, entries[0], token);
-        if (await IndexStampAsync(context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
+        if (await IndexStampAsync(context.Git, context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
         var paths = FileActionPaths(entries); foreach (var relative in paths) ValidateRegularTarget(context.Identity.Worktree, relative);
         if (paths.Length > 128 || paths.Sum(item => item.Length + 3) > 16000) throw new GitActionException("FileActionSelectionLimit");
         var before = await PatchStamps();
@@ -122,7 +122,7 @@ public sealed partial class GitActions
         }
         foreach (var entry in entries.Where(item => item.Group == ChangeGroup.Untracked))
             Add(await FileRead(context, [.. filters, "diff", "--no-index", .. flags, "--", "/dev/null", entry.Path], token, MaximumPatchBytes, allowOne: true));
-        if (before != await PatchStamps() || await IndexStampAsync(context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
+        if (before != await PatchStamps() || await IndexStampAsync(context.Git, context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
         await CheckFileRead(context, entries[0], token);
         return stream.ToArray();
         void Add(ProcessResult result)

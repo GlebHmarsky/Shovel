@@ -16,6 +16,7 @@ public partial class CommitWindow : Window
     public CommitWindow(CommitViewModel model)
     {
         _model = model; DataContext = model; InitializeComponent(); GitGui.App.Services.TitleBarTheme.Attach(this);
+        GitGui.App.Services.WindowCaption.CloseOnly(this);
         RestoreLayout();
         SizeChanged += (_, _) => FilesColumn.MaxWidth = Math.Max(250, ActualWidth - 445);
         Loaded += async (_, _) =>
@@ -42,7 +43,7 @@ public partial class CommitWindow : Window
         UnstagedRow.Height = new(layout.UnstagedFraction, GridUnitType.Star);
         StagedRow.Height = new(1 - layout.UnstagedFraction, GridUnitType.Star);
         MessageRow.Height = new(Math.Min(layout.MessageHeight, Math.Max(180, Height - 330)));
-        if (layout.Maximized) WindowState = WindowState.Maximized;
+        // Commit is a resizable modal editor with close-only caption controls.
     }
     public void CaptureLayout()
     {

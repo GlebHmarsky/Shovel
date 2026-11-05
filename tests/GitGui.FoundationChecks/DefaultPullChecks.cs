@@ -76,8 +76,8 @@ internal static partial class Program
             shell.RefreshRepositoryCommand.Execute(null); await shell.WaitForIdleAsync();
             runner.Pause(); var previousOpened = opened; var fetches = runner.Fetches;
             shell.DefaultPullCommand.Execute(null); await runner.Started.Task.WaitAsync(TimeSpan.FromSeconds(15));
-            Expect(opened == previousOpened && shell.IsActionRunning && shell.ActionOpen && shell.CancelCommand.CanExecute(null), "No modal; shared action and cancellation active");
-            Expect(shell.CurrentAction is { Rebase: true, AutoStash: false }, "Main button uses fixed existing defaults");
+            Expect(opened == previousOpened && shell.IsActionRunning && shell.ActionOpen && !shell.CancelCommand.CanExecute(null), "No modal; accepted Pull keeps running without cancellation");
+            Expect(shell.CurrentAction is { Rebase: true, AutoStash: false }, "Main button uses initial defaults before preferences change");
             shell.DefaultPullCommand.Execute(null); shell.PullCommand.Execute(null);
             Expect(opened == previousOpened && runner.Fetches == fetches + 1, "Duplicate submissions share the running request");
             runner.Release.TrySetResult(); await shell.ActionTask;
@@ -85,7 +85,7 @@ internal static partial class Program
             Expect(await Git(repo, "rev-parse", "HEAD^") == remoteTip && File.Exists(Path.Combine(repo, "local.txt")) && File.Exists(Path.Combine(repo, "remote.txt")), "Remote changes imported and local commit replayed");
             Expect(shell.Commits.First().Commit.Hash == await Git(repo, "rev-parse", "HEAD"), "History reconciles actual result");
         });
-        await Check("Default Pull rejects changed upstream, explains missing tracking and drains cancellation", async () =>
+        await Check("Default Pull rejects changed upstream, explains missing tracking and protects running commands", async () =>
         {
             // The local tracking ref stays origin/main even though the real server-side
             // source changes. A matching cached ref suffix alone must not authorize Pull.
@@ -99,11 +99,12 @@ internal static partial class Program
             await Git(repo, "branch", "--set-upstream-to=origin/main"); shell.RefreshRepositoryCommand.Execute(null); await shell.WaitForIdleAsync();
             var tip = await Git(repo, "rev-parse", "HEAD"); runner.Pause();
             shell.DefaultPullCommand.Execute(null); await runner.Started.Task.WaitAsync(TimeSpan.FromSeconds(15)); shell.CancelCommand.Execute(null);
+            Expect(!shell.CancelCommand.CanExecute(null), "Running user Pull cannot be cancelled"); runner.Release.TrySetResult();
             await shell.ActionTask;
-            Expect(shell.CurrentAction?.Status == UiText.Get("ActionResultCancelled") && !shell.ActionOpen && await Git(repo, "rev-parse", "HEAD") == tip, "Cancellation retains Git state and closes operation lifetime");
+            Expect(shell.CurrentAction?.Succeeded == true && !shell.ActionOpen && await Git(repo, "rev-parse", "HEAD") == tip, "Completed command retains Git state and releases operation ownership");
             runner.Release.TrySetResult();
         });
-        await Check("Pull options still execute Merge with auto-stash while the default remains Rebase", async () =>
+        await Check("Pull options still execute Merge with auto-stash and the main button remembers them", async () =>
         {
             await File.WriteAllTextAsync(Path.Combine(peer, "second.txt"), "second\n"); await Git(peer, "add", "."); await Git(peer, "commit", "-m", "Second"); await Git(peer, "push", "origin", "main");
             await File.WriteAllTextAsync(Path.Combine(repo, "base.txt"), "my dirty edit\n");
@@ -119,8 +120,8 @@ internal static partial class Program
             Expect((await Git(repo, "rev-list", "--parents", "-n", "1", "HEAD")).Split(' ').Length == 3 &&
                 await File.ReadAllTextAsync(Path.Combine(repo, "base.txt")) == "my dirty edit\n", "Real merge and dirty edit reapplied");
             var previousOpened = opened; shell.DefaultPullCommand.Execute(null); await shell.ActionTask;
-            Expect(opened == previousOpened && shell.CurrentAction is { Rebase: true, AutoStash: false, Succeeded: false }, "Modal choices are not persisted as new defaults; dirty rebase rejection retained");
-            Expect(shell.Commits.Count > 0 && await File.ReadAllTextAsync(Path.Combine(repo, "base.txt")) == "my dirty edit\n", "Failed default Pull retains history and edits");
+            Expect(opened == previousOpened && shell.CurrentAction is { Merge: true, AutoStash: true, Succeeded: true }, "Main Pull reuses saved choices and preserves dirty edits");
+            Expect(shell.Commits.Count > 0 && await File.ReadAllTextAsync(Path.Combine(repo, "base.txt")) == "my dirty edit\n", "Remembered Pull retains history and edits");
         });
     }
     private sealed class DefaultPullRunner : IProcessRunner

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using GitGui.Core.Processes;
 
@@ -76,10 +75,7 @@ public sealed partial class GitActions
     public Task<ActionResult> ExecuteHistoricalFileAsync(HistoricalFileReview review, HistoricalFileMutation mutation, CancellationToken token, Action<ProcessOutput>? progress = null) => Task.Run(() =>
     {
         var context = review.Context; var root = context.Identity.Worktree; var git = context.Git;
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(context.Identity.CommonDirectory.ToUpperInvariant())));
-        using var gate = new Mutex(false, @"Local\Shovel.GitAction." + key);
-        bool owned; try { owned = gate.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
-        if (!owned) throw new GitActionException("ActionOtherInstance");
+        using var gate = EnterMutationGate(context.Identity);
         try { return Execute().GetAwaiter().GetResult(); } finally { gate.ReleaseMutex(); }
         async Task<ActionResult> Execute()
         {
@@ -87,7 +83,7 @@ public sealed partial class GitActions
             var fresh = await reader.ReadWorkingCopyHeadAsync(git, context.Repository, token);
             if ((await identities.ReadAsync(root, token)).Fingerprint != context.Identity.Fingerprint || fresh.Commit != context.Repository.Commit ||
                 fresh.Branch != context.Repository.Branch || fresh.Operation != RepositoryOperation.None ||
-                await IndexStampAsync(fresh, token) != context.IndexStamp || await ConfigStamp(git, root, token) != context.ConfigStamp ||
+                await IndexStampAsync(git, fresh, token) != context.IndexStamp || await ConfigStamp(git, root, token) != context.ConfigStamp ||
                 await RepositoryReader.WorktreeContentStampAsync(root, review.Path, token) != review.WorktreeStamp ||
                 Decode(await Read(git, root, ["--literal-pathspecs", "check-attr", "-z", "--all", "--", review.Path], token)) != review.AttributeStamp)
                 throw new GitActionException("CommitStale");
@@ -95,7 +91,7 @@ public sealed partial class GitActions
             {
                 var source = await HistoricalEntry(git, root, review.Revision, review.Path, token);
                 if (await RepositoryReader.WorktreeContentStampAsync(root, review.Path, token) != review.WorktreeStamp ||
-                    await IndexStampAsync(fresh, token) != context.IndexStamp) throw new GitActionException("CommitStale");
+                    await IndexStampAsync(git, fresh, token) != context.IndexStamp) throw new GitActionException("CommitStale");
                 if (source is null)
                 {
                     File.Delete(RepositoryReader.WorkingCopyPath(root, review.Path));

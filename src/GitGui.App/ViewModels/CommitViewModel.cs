@@ -352,7 +352,7 @@ public sealed partial class CommitViewModel : ObservableObject
         var entries = explicitEntries ?? (hunks is not null ? new[] { _diffChange! } : action == WorkingCopyAction.Stage ? ShiftHeld ? Unstaged : _unstagedSelection : action == WorkingCopyAction.Unstage ? ShiftHeld ? Staged : _stagedSelection : []);
         var submittedDraft = CaptureDraft();
         var options = new WorkingCopyOptions(action, entries.Select(row => row.Change).ToArray(), actionMessage ?? Message, Amend, hunks);
-        var title = push ? UiText.Get("CommitAndPush") : UiText.Get("CommitPhase" + action);
+        var title = push ? UiText.Get("CommitAndPush") : action == WorkingCopyAction.Commit ? UiText.Get("Commit") : UiText.Get("CommitPhase" + action);
         var key = action + "|" + string.Join("|", entries.Select(entry => entry.Change.Path)) + "|" + options.Message + "|" + options.Amend;
         if (_pendingActions.ContainsKey(key)) return;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

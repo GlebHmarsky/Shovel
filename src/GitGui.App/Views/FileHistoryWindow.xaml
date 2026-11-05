@@ -1,5 +1,5 @@
 <Window x:Class="GitGui.App.Views.FileHistoryWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
- xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="clr-namespace:GitGui.App.Localization" xmlns:views="clr-namespace:GitGui.App.Views"
+ xmlns:layout="clr-namespace:GitGui.App.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="clr-namespace:GitGui.App.Localization" xmlns:views="clr-namespace:GitGui.App.Views"
  Title="{Binding Title}" Width="1200" Height="800" MinWidth="900" MinHeight="620" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
  Icon="/Shovel;component/Assets/Shovel.ico" FlowDirection="{x:Static loc:UiText.Direction}" Background="{DynamicResource Theme.Panel}" Foreground="{DynamicResource Theme.Text}">
  <Window.Resources><Style x:Key="Rows" TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
@@ -14,7 +14,7 @@
   </StackPanel><TextBlock Text="{Binding Status}" TextWrapping="Wrap"/></DockPanel>
   <Expander DockPanel.Dock="Bottom" Header="{loc:Text Key=ActionOutput}"><TextBox Text="{Binding Output, Mode=OneWay}" IsReadOnly="True" MaxHeight="100" VerticalScrollBarVisibility="Auto"/></Expander>
   <TabControl SelectedIndex="{Binding Mode}">
-   <TabItem Header="{loc:Text Key=FileHistoryTab}"><Grid><Grid.RowDefinitions><RowDefinition Height="2*"/><RowDefinition Height="Auto"/><RowDefinition Height="100"/><RowDefinition Height="4"/><RowDefinition Height="3*"/></Grid.RowDefinitions>
+   <TabItem Header="{loc:Text Key=FileHistoryTab}"><Grid layout:WindowLayouts.PaneKey="FileHistoryWindow.Comparison"><Grid.RowDefinitions><RowDefinition Height="2*"/><RowDefinition Height="Auto"/><RowDefinition Height="100"/><RowDefinition Height="4"/><RowDefinition Height="3*"/></Grid.RowDefinitions>
     <DataGrid Style="{StaticResource Rows}" ItemsSource="{Binding History}" SelectedItem="{Binding Selected}" AutomationProperties.Name="{loc:Text Key=FileHistoryTab}">
      <DataGrid.Columns><DataGridTextColumn Header="{loc:Text Key=HistoryDescription}" Binding="{Binding Subject}" Width="*"/>
       <DataGridTextColumn Header="{loc:Text Key=HistoryAuthor}" Binding="{Binding Author}" Width="160"/><DataGridTextColumn Header="{loc:Text Key=HistoryDate}" Binding="{Binding Date}" Width="160"/><DataGridTextColumn Header="{loc:Text Key=HistoryHash}" Binding="{Binding Hash}" Width="90"/>

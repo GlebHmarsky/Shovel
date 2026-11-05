@@ -45,6 +45,9 @@ public sealed record AppSettings
     public double SidebarWidth { get; init; } = 210;
     public double DetailsHeight { get; init; } = 180;
     public double HistoryFilesWidth { get; init; } = 340;
+    public NetworkActionPreference[] NetworkActions { get; init; } = [];
+    public WindowLayout[] WindowLayouts { get; init; } = [];
+    public string[] CollapsedSidebarGroups { get; init; } = [];
     public CommitLayout CommitLayout { get; init; } = new();
     public NavigationSection SelectedSection { get; init; } = NavigationSection.History;
     public string[] RepositoryPaths { get; init; } = [];
@@ -76,6 +79,9 @@ public sealed record AppSettings
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Max(160, SidebarWidth) : 210,
         DetailsHeight = Clamp(DetailsHeight, 180, 80, 3000),
         HistoryFilesWidth = Clamp(HistoryFilesWidth, 340, 160, 3000),
+        NetworkActions = NetworkActionPreference.Normalize(NetworkActions),
+        WindowLayouts = WindowLayout.Normalize(WindowLayouts),
+        CollapsedSidebarGroups = (CollapsedSidebarGroups ?? []).Where(key => key is { Length: > 0 and <= 32768 }).Distinct(StringComparer.Ordinal).Take(256).ToArray(),
         CommitLayout = (CommitLayout ?? new()).Normalize(),
         SelectedSection = Enum.IsDefined(SelectedSection) ? SelectedSection : NavigationSection.History,
         Appearance = Enum.IsDefined(Appearance) ? Appearance : AppAppearance.Dark,

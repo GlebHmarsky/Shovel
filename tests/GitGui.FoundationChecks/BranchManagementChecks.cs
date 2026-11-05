@@ -50,7 +50,7 @@ internal static partial class Program
             var identity = await identities.ReadAsync(path, default);
             var snapshot = await reader.InspectAsync(git, path, default);
             var history = await reader.OpenHistoryAsync(git, snapshot, HistoryScope.AllCommits, default);
-            return await actions.PrepareBranchManagementAsync(git, identity, snapshot, history, default);
+            return await actions.PrepareLocalActionAsync(git, identity, snapshot, history, default);
         }
         static BranchManagementOptions Options(ActionContext context, BranchManagementAction action,
             string branch = "merged/日本語", string? upstream = null) => new(action,

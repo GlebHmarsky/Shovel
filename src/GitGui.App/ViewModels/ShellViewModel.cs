@@ -481,6 +481,9 @@ public sealed partial class ShellViewModel : ObservableObject
     public AppSettings CaptureSession(AppSettings layout) => layout with
     {
         CommitLayout = _commitLayout,
+        WindowLayouts = WindowLayouts.Snapshot,
+        NetworkActions = _networkActions,
+        CollapsedSidebarGroups = _collapsedSidebarGroups.Take(256).ToArray(),
         ExternalMergeTool = _pendingSettings?.ExternalMergeTool ?? ExternalMergeTool,
         HistoryRefsOnRight = _pendingSettings?.HistoryRefsOnRight ?? HistoryRefsOnRight,
         AutoFetchEnabled = _pendingSettings?.AutoFetchEnabled ?? AutoFetchEnabled,

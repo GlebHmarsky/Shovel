@@ -24,7 +24,7 @@ public sealed partial class GitActions
         var path = context.Identity.Worktree; var git = context.Git;
         ValidateRegularTarget(path, change.Path);
         if ((await identities.ReadAsync(path, token)).Fingerprint != context.Identity.Fingerprint ||
-            await IndexStampAsync(context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
+            await IndexStampAsync(git, context.Repository, token) != context.IndexStamp) throw new GitActionException("CommitStale");
         var stamp = await RepositoryReader.WorktreeContentStampAsync(path, change.Path, token);
         var raw = await Read(git, path, ["--literal-pathspecs", "ls-files", "--unmerged", "-z", "--", change.Path], token);
         var sides = new Dictionary<int, ConflictSide>();
@@ -71,7 +71,7 @@ public sealed partial class GitActions
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(s => s.TrimEnd('\r')).Take(3).ToArray();
             if (names.Length > 0) incoming = string.Join(", ", names) + " · " + incoming;
         }
-        if (await IndexStampAsync(snapshot, token) != context.IndexStamp ||
+        if (await IndexStampAsync(git, snapshot, token) != context.IndexStamp ||
             stamp != await RepositoryReader.WorktreeContentStampAsync(path, change.Path, token)) throw new GitActionException("CommitStale");
         var tools = new HashSet<string>(StringComparer.Ordinal) { "bc", "kdiff3", "meld", "p4merge", "tortoisemerge", "vscode", "winmerge" };
         var configured = await Raw(git, path, ["config", "--name-only", "--get-regexp", @"^mergetool\..*\.(cmd|path)$"], token);

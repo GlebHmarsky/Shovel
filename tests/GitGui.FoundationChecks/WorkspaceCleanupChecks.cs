@@ -48,7 +48,7 @@ internal static partial class Program
                 Expect(!runner.NetworkStarted, "Adding a remote never fetches or probes it");
                 await Git("update-ref", "refs/remotes/upstream/main", tip);
                 var snapshot = await reader.InspectAsync(git, repo, default); var history = await reader.OpenHistoryAsync(git, snapshot, HistoryScope.AllCommits, default);
-                var context = await actions.PrepareBranchManagementAsync(git, await identities.ReadAsync(repo, default), snapshot, history, default);
+                var context = await actions.PrepareLocalActionAsync(git, await identities.ReadAsync(repo, default), snapshot, history, default);
                 var tracked = await actions.ExecuteBranchManagementAsync(context, new(BranchManagementAction.SetUpstream,
                     history.References.Single(r => r.Name == "refs/heads/main"), history.References.Single(r => r.Name == "refs/remotes/upstream/main")), default);
                 Expect(tracked.Success && await Git("rev-parse", "--symbolic-full-name", "@{upstream}") == "refs/remotes/upstream/main", "Real upstream configured");

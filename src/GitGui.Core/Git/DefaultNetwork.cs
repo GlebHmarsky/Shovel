@@ -14,7 +14,7 @@ public sealed partial class GitActions
             var name = configured?.ExitCode == 0 ? Decode(configured).TrimEnd('\r', '\n') :
                 context.Remotes.Any(remote => remote.Name == "origin") ? "origin" : context.Remotes.Count == 1 ? context.Remotes[0].Name : "";
             if (!context.Remotes.Any(remote => remote.Name == name)) throw new GitActionException("DefaultFetchNeedsTarget");
-            return options with { Remote = name, AllRemotes = false };
+            return options with { Remote = name };
         }
         if (options.Action != GitAction.Push || context.Repository.HeadKind != HeadKind.Branch)
             throw new GitActionException("DefaultPushNeedsTarget");
@@ -26,8 +26,19 @@ public sealed partial class GitActions
             ["for-each-ref", "--count=1", "--format=%(refname)%00%(push:remotename)%00%(upstream:remotename)%00%(upstream:remoteref)", "--", localRef], token);
         token.ThrowIfCancellationRequested();
         var fields = Decode(result).TrimEnd('\r', '\n').Split('\0');
-        if (result.Outcome != Processes.ProcessOutcome.Exited || result.ExitCode != 0 || fields.Length != 4 || fields[0] != localRef ||
-            !context.Remotes.Any(remote => remote.Name == fields[1])) throw new GitActionException("DefaultPushNeedsTarget");
+        if (result.Outcome != Processes.ProcessOutcome.Exited || result.ExitCode != 0 || fields.Length != 4 || fields[0] != localRef)
+            throw new GitActionException("DefaultPushNeedsTarget");
+        if (fields[1].Length == 0)
+        {
+            // Ref atoms can omit push metadata when no upstream exists. Follow Git's
+            // remote priority, then still validate the single-branch push mode below.
+            var remotes = await Task.WhenAll(new[] { "branch." + context.Repository.Branch + ".pushRemote", "remote.pushDefault", "branch." + context.Repository.Branch + ".remote" }
+                .Select(key => Raw(context.Git, context.Identity.Worktree, ["config", "--get", key], token)));
+            if (remotes.Any(item => item.Outcome != Processes.ProcessOutcome.Exited || item.ExitCode is not (0 or 1)))
+                throw new GitReadException(GitFailure.CommandFailed);
+            fields[1] = remotes.FirstOrDefault(item => item.ExitCode == 0) is { } configured ? Decode(configured).TrimEnd('\r', '\n') : "origin";
+        }
+        if (!context.Remotes.Any(remote => remote.Name == fields[1])) throw new GitActionException("DefaultPushNeedsTarget");
         var settings = await Task.WhenAll(
             Raw(context.Git, context.Identity.Worktree, ["config", "--get-all", "remote." + fields[1] + ".push"], token),
             Raw(context.Git, context.Identity.Worktree, ["config", "--get", "push.default"], token));
@@ -46,6 +57,6 @@ public sealed partial class GitActions
             _ => ""
         };
         if (!destination.StartsWith("refs/heads/", StringComparison.Ordinal)) throw new GitActionException("DefaultPushNeedsTarget");
-        return options with { Branch = context.Repository.Branch!, Remote = fields[1], RemoteBranch = destination[11..], AllTags = false, SetUpstream = false };
+        return options with { Branch = context.Repository.Branch!, Remote = fields[1], RemoteBranch = destination[11..] };
     }, token);
 }

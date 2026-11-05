@@ -15,9 +15,10 @@ public sealed record HistoryEntry(CommitRecord Commit, GraphRow Graph, IReadOnly
 public sealed record HistorySession(RepositorySnapshot Repository, HistoryScope Scope, string Fingerprint,
     IReadOnlyList<CommitRef> References, bool IsShallow)
 {
+    public IReadOnlyList<CommitRecord> FoldedStashes { get; init; } = [];
     public IReadOnlySet<string> HiddenStashCommits { get; init; } = new HashSet<string>();
 }
-public sealed record HistoryCursor(long Offset, GraphCursor Graph, string? ExpectedFirst = null, long? RawOffset = null)
+public sealed record HistoryCursor(long Offset, GraphCursor Graph, string? ExpectedFirst = null, long? RawOffset = null, int InsertedOffset = 0)
 {
     public static HistoryCursor Start { get; } = new(0, GraphCursor.Start);
 }
@@ -68,6 +69,7 @@ public sealed partial class RepositoryReader
         }
         if (repository.Commit is not null) refs.Add(new("HEAD", repository.Commit));
         var session = new HistorySession(repository with { InitialHistoryState = null }, scope, state.Fingerprint, refs.ToArray(), state.IsShallow);
+        session = session with { FoldedStashes = await ReadFoldedStashesAsync(git, session, token) };
         return session with { HiddenStashCommits = await ReadStashInternalsAsync(git, session, token) };
     }
 
@@ -98,7 +100,7 @@ public sealed partial class RepositoryReader
     private Task<CommitHistory> ReadPageAsync(GitInstallation git, HistorySession session,
         HistoryCursor cursor, CancellationToken token, int pageSize, bool freshSession) => Task.Run(async () =>
     {
-        if (pageSize is < 1 or > HistoryPageSize || cursor.Offset < 0) throw new ArgumentOutOfRangeException(nameof(pageSize));
+        if (pageSize is < 1 or > HistoryPageSize || cursor.Offset < 0 || cursor.RawOffset < 0 || cursor.InsertedOffset < 0 || cursor.InsertedOffset > session.FoldedStashes.Count) throw new ArgumentOutOfRangeException(nameof(pageSize));
         using var timing = trace?.Measure(TimingStage.History);
         if (!freshSession)
         {
@@ -112,9 +114,7 @@ public sealed partial class RepositoryReader
             if (emptyState.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
             return new CommitHistory(session, cursor, null, []);
         }
-        string[] roots = session.Scope == HistoryScope.AllCommits
-            ? ["--branches", "--remotes", "--tags", .. session.References.Where(r => r.Name.StartsWith("stash@{", StringComparison.Ordinal)).Select(r => r.Hash), .. (session.Repository.Commit is { } head ? new[] { head } : [])]
-            : [session.Repository.Commit!];
+        var roots = HistoryRoots(session);
         // Re-walk an unchanged ref snapshot with --skip. Retain only one page of messages/rows.
         // Deep walks can hit the process deadline; they report a retryable error, never 'end'.
         var result = await RunAsync(git.Executable, session.Repository.Worktree, ReadArguments([
@@ -129,7 +129,10 @@ public sealed partial class RepositoryReader
         if (after.Fingerprint != session.Fingerprint) throw new GitReadException(GitFailure.ChangedDuringRead);
         IReadOnlyList<CommitRecord> raw;
         using (trace?.Measure(TimingStage.Parsing)) raw = ParseHistory(result.StandardOutput, pageSize + 1 + session.HiddenStashCommits.Count);
-        var commits = raw.Where(c => !session.HiddenStashCommits.Contains(c.Hash)).ToArray();
+        var projected = ProjectHistory(session, raw.Select(commit => commit.Hash), cursor.InsertedOffset).ToArray();
+        var records = raw.Concat(session.FoldedStashes).DistinctBy(commit => commit.Hash).ToDictionary(commit => commit.Hash);
+        var expanded = projected.Select(item => (Commit: records[item.Hash], item.Raw, item.Inserted)).ToArray();
+        var commits = expanded.Select(item => item.Commit).ToArray();
         if (raw.Count > pageSize + 1 + session.HiddenStashCommits.Count || (cursor.ExpectedFirst is not null &&
             (commits.Length == 0 || commits[0].Hash != cursor.ExpectedFirst))) throw new GitReadException(GitFailure.ChangedDuringRead);
         var shown = commits.Take(pageSize).ToArray();
@@ -142,7 +145,7 @@ public sealed partial class RepositoryReader
         var labels = session.References.ToLookup(reference => reference.Hash, StringComparer.Ordinal);
         return new CommitHistory(session, cursor, commits.Length > pageSize
             ? new HistoryCursor(checked(cursor.Offset + shown.Length), graph.Next, commits[pageSize].Hash,
-                checked((cursor.RawOffset ?? cursor.Offset) + raw.TakeWhile(c => c.Hash != commits[pageSize].Hash).Count())) : null,
+                checked((cursor.RawOffset ?? cursor.Offset) + expanded[pageSize].Raw), expanded[pageSize].Inserted) : null,
             shown.Select((commit, index) => new HistoryEntry(commit, graph.Rows[index] with { IsStash = stashTips.Contains(commit.Hash) }, labels[commit.Hash].ToArray())).ToArray());
     }, token);
 

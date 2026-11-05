@@ -12,6 +12,7 @@ public static class TitleBarTheme
     public static void Attach(Window window)
     {
         UiScale.Attach(window);
+        WindowLayouts.Attach(window);
         window.SourceInitialized += Refresh;
         window.Activated += Refresh;
         window.Deactivated += Refresh;

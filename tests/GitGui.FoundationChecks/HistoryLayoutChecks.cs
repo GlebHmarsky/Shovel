@@ -52,6 +52,20 @@ internal static partial class Program
             var result = await runner.RunAsync(new(git.Executable, repo, args), default);
             Expect(result.ExitCode == 0, Encoding.UTF8.GetString(result.StandardError)); return Encoding.UTF8.GetString(result.StandardOutput).Trim();
         }
+        await Check("Many stashes on one base stay narrow and preserve graph geometry across pages", () =>
+        {
+            CommitRecord Row(string hash, params string[] parents) => new(hash, parents, "A", "a@example.invalid", DateTimeOffset.UnixEpoch,
+                "A", "a@example.invalid", DateTimeOffset.UnixEpoch, hash);
+            var saved = Enumerable.Range(0, 256).Select(i => Row("stash" + i, "base")).ToArray();
+            var tips = saved.Select(row => row.Hash).ToHashSet();
+            var commits = saved.Append(Row("base", "root")).Append(Row("root")).ToArray();
+            var graph = CommitGraph.BuildPage(commits, GraphCursor.Start, stashTips: tips);
+            Expect(graph.Rows.All(row => row.LaneCount <= 2) && graph.Rows[^2].NodeLane == 0, "Stashes cannot steal or multiply the ordinary branch track");
+            var first = CommitGraph.BuildPage(commits[..200], GraphCursor.Start, stashTips: tips);
+            var next = CommitGraph.BuildPage(commits[200..], first.Next, stashTips: tips);
+            Expect(System.Text.Json.JsonSerializer.Serialize(first.Rows.Concat(next.Rows)) == System.Text.Json.JsonSerializer.Serialize(graph.Rows), "Bulbs cross page boundaries unchanged");
+            return Task.CompletedTask;
+        });
         await Check("Real tracked/untracked stashes fold into one row, fill pages, retain metadata and keep independently tagged internals", async () =>
         {
             await Git("init", "-b", "main", "--object-format=sha1"); await Git("config", "user.name", "Graph fixture"); await Git("config", "user.email", "graph@example.invalid");
@@ -67,12 +81,19 @@ internal static partial class Program
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var snapshot = await reader.InspectAsync(git, repo, default); var session = await reader.OpenHistoryAsync(git, snapshot, HistoryScope.AllCommits, default);
             Console.WriteLine($"Fixture inspection/session including stash projection: {watch.Elapsed.TotalMilliseconds:F0} ms"); watch.Restart();
-            Expect(session.HiddenStashCommits.SetEquals(new[] { index, secondIndex, untracked }), "Index and untracked stash objects (identical index objects can be shared)");
+            Expect(session.HiddenStashCommits.Except(session.FoldedStashes.Select(stash => stash.Hash)).ToHashSet().SetEquals(new[] { index, secondIndex, untracked }), "Index and untracked stash objects (identical index objects can be shared)");
             var first = await reader.ReadHistoryPageAsync(git, session, HistoryCursor.Start, default);
             Console.WriteLine($"Fixture first visible page: {watch.Elapsed.TotalMilliseconds:F0} ms");
             var second = await reader.ReadHistoryPageAsync(git, session, first.Next!, default);
             var all = first.Entries.Concat(second.Entries).ToArray();
             Expect(first.Entries.Count == 200 && all.Length == 208 && all.Select(e => e.Commit.Hash).Distinct().Count() == 208 && !second.HasMore, "Full visible pages without duplicate/skipped normal commits");
+            Expect(all.Take(205).All(e => !e.Graph.IsStash) && all[^3].Graph.IsStash && all[^2].Graph.IsStash && all[^1].Commit.Hash == baseHash,
+                "New-dated stashes stay adjacent to their old base, after all newer descendants");
+            var slice = await reader.ReadHistoryPageAsync(git, session, new(205, GraphCursor.Start, all[^3].Commit.Hash, 205), default, 1);
+            var nextSlice = await reader.ReadHistoryPageAsync(git, session, slice.Next!, default, 1);
+            var baseSlice = await reader.ReadHistoryPageAsync(git, session, nextSlice.Next!, default, 1);
+            Expect(slice.Entries[0].Graph.IsStash && nextSlice.Entries[0].Graph.IsStash && baseSlice.Entries[0].Commit.Hash == baseHash && !baseSlice.HasMore,
+                "Cursor resumes within a stash group without dropping or duplicating its base");
             var entry = all.Single(e => e.Commit.Hash == stash);
             Expect(!all.Any(e => e.Commit.Hash == index || e.Commit.Hash == untracked) && entry.Commit.Parents.Count == 3 && !entry.Graph.IsMerge, "One graph item with original three-parent details");
             var located = await reader.LocateHistoryAsync(git, session, baseHash, default);
@@ -119,10 +140,12 @@ internal static partial class Program
             finally { window.Close(); model.BeginShutdown(); await model.WaitForIdleAsync(); AppTheme.Apply(Application.Current.Resources, false); }
             var stashModel = new ShellViewModel(reader, new WorkspaceInteraction());
             stashModel.CompleteStartup(new(new() { RepositoryPaths = [repo] }, SettingsLoadStatus.Loaded)); await stashModel.WaitForIdleAsync();
+            stashModel.LoadMoreHistoryCommand.Execute(null); await stashModel.WaitForIdleAsync();
             var stashWindow = new MainWindow(stashModel);
             try
             {
                 var stashContent = (FrameworkElement)stashWindow.Content; Arrange(stashContent, 1200, 800); await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                Expect(stashModel.Commits.Any(row => row.Graph.IsStash), "Rendered page includes the old-base stash bulbs");
                 SaveRender(stashContent, "folded-stashes-Dark.png", 1200, 800);
             }
             finally { stashWindow.Close(); stashModel.BeginShutdown(); await stashModel.WaitForIdleAsync(); }

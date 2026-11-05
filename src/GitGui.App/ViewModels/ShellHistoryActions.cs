@@ -75,14 +75,16 @@ public sealed partial class ShellViewModel
         {
             if (GitActions.IsReset(action) && !_interaction!.ConfirmRecovery(UiText.Format("HistoryResetConfirm", tab.Directory, snapshot.Branch!,
                 snapshot.Commit!, row.Commit.Hash, UiText.Get("HistoryEffect" + action)), UiText.Get("HistoryMenu" + action))) return;
+            var reviewedOptions = ReviewCheckout(tab, new(action, StartRef: row.Commit.Hash, Mainline: mainline), row.Commit.Subject);
+            if (reviewedOptions is null) return;
             ActionContext? prepared = null;
             var operation = new GitActionViewModel(cached, action, _actions!, () => ReconcileActionAsync(tab), prepareExecution: async token =>
             {
-                prepared = await _actions!.PrepareBranchManagementAsync(cached.Git, cached.Identity, cached.Repository, cached.History, token);
+                prepared = await _actions!.PrepareLocalActionAsync(cached.Git, cached.Identity, cached.Repository, cached.History, token, requireUnchangedReferences: action != GitAction.CheckoutCommit);
                 return prepared;
             }, execute: async (token, output) =>
             {
-                var result = await _actions!.ExecuteAsync(prepared!, new(action, StartRef: row.Commit.Hash, Mainline: mainline), token, output);
+                var result = await _actions!.ExecuteAsync(prepared!, reviewedOptions, token, output);
                 return result with { Output = UiText.Format("HistoryActionTarget", row.Commit.Hash, snapshot.Commit ?? UiText.Get("NoBranch")) + Environment.NewLine + result.Output };
             });
             SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); attempted = operation.HasAttempt;

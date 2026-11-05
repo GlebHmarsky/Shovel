@@ -1,5 +1,16 @@
 # Product
 
+## Checkout and remembered workspace state (0.47.0 Beta)
+
+Stashes appear as short leaf connections immediately above their actual base commit. Their timestamps do not reorder ordinary branch history; multiple stashes on one base share a compact connection. Details retain the real stash parents and contents.
+
+Checkout opens a confirmation immediately and checks local changes after display. Clean trees show the target and confirmation only. Dirty trees offer **Don’t change**, **Stash and reapply**, or **Discard tracked changes**. Keep uses native Git overwrite protection. Stash and reapply includes untracked files and attempts to restore staged state; failure/conflicts retain the saved stash for recovery. Discard removes tracked edits while keeping untracked/ignored files and submodule worktrees. Native checkout hooks and filters remain enabled. Approval waits for the local scan; no mutation runs on opening the confirmation.
+
+Fetch/Pull/Push arrows edit remembered repository options, including Pull strategy/auto-stash, all-remotes Fetch and Push tags/upstream. Closing the options keeps choices, even without submitting. Main buttons use them. Until a destination is explicitly changed, Git’s current configured destination remains authoritative. Explicit Pull/Push destinations apply only on the branch where they were chosen; flags carry across branches. Automatic fetch retains its separate background policy. Missing saved remotes report a failure rather than silently choosing a different target.
+
+Sidebar group expansion persists through refresh/fetch and restarts. Resizable windows and their adjustable panes retain geometry in the profile; old geometry remains the migration fallback. Commit is resizable with close-only native caption controls. Attention windows without output shrink to the message/actions instead of presenting an empty log box. Harmless Git stat-cache refreshes no longer invalidate staged-content reviews; real staged changes still require a fresh review.
+
+
 ## Repository-owned work (0.46.0 Beta)
 
 Opening Commit shows cached content immediately and starts its own local scan without cancelling repository initialization. Commit remains one modal editor. Submitting Commit closes it immediately; the command, hooks and reconciliation continue in the background. Closing a repository tab or Stashes view also leaves accepted work running. Reopening a repository reconnects to its retained owner and result.

@@ -122,7 +122,7 @@ internal static partial class Program
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
         {
             if (request.Arguments.Contains("status")) Interlocked.Increment(ref StatusCalls);
-            if (request.Arguments.Contains("ls-files")) Interlocked.Increment(ref IndexMetadataCalls);
+            if (request.Arguments.Contains("ls-files") && !request.Arguments.Contains("--debug")) Interlocked.Increment(ref IndexMetadataCalls);
             var checkout = request.Arguments.Contains("checkout-index");
             if (checkout) Interlocked.Increment(ref CheckoutCalls);
             var result = await inner.RunAsync(request, token, output);

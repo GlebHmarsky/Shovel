@@ -20,6 +20,7 @@ public interface IUserInteraction
     string? ChooseRepository();
     string? ChooseGit();
     void ShowGitAction(GitActionViewModel model) { }
+    bool ConfirmCheckout(CheckoutViewModel model) => false;
     Task ShowCommitAsync(CommitViewModel model) => Task.CompletedTask;
     Task ShowStashesAsync(StashViewModel model) => Task.CompletedTask;
     void CopyFilePaths(string text) => throw new NotSupportedException();
@@ -41,6 +42,7 @@ public interface IUserInteraction
 
 public sealed class UserInteraction : IUserInteraction
 {
+    public bool ConfirmCheckout(CheckoutViewModel model) => new CheckoutWindow(model) { Owner = Owner }.ShowDialog() == true;
     private readonly List<OperationProblem> _problems = [];
     private bool _showingProblems;
     public void ShowOperationProblem(string repository, string title, string status, string output) => ShowCommitProblem(repository, title, status, output, null);

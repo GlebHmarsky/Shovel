@@ -8,11 +8,19 @@ public sealed record SidebarMenuAction(string Label, RelayCommand Command);
 public sealed record SidebarNode(string Label, string Icon, string Detail, IReadOnlyList<SidebarNode> Children,
     RelayCommand? Select = null, RelayCommand? Activate = null, IReadOnlyList<SidebarMenuAction>? Menu = null)
 {
+    public SidebarExpansion Expansion { get; init; } = new(true);
     public string Accessible => string.Join(" ", Icon, Label, Detail);
+}
+
+public sealed class SidebarExpansion(bool expanded, Action<bool>? changed = null) : ObservableObject
+{
+    private bool _expanded = expanded;
+    public bool IsExpanded { get => _expanded; set { if (Set(ref _expanded, value)) changed?.Invoke(value); } }
 }
 
 public sealed partial class ShellViewModel
 {
+    private HashSet<string> _collapsedSidebarGroups = new(StringComparer.Ordinal);
     private CancellationTokenSource? _sidebarCancel;
     private Task _sidebarTask = Task.CompletedTask;
     public IReadOnlyList<SidebarNode> SidebarNodes { get; private set; } = [];
@@ -39,7 +47,22 @@ public sealed partial class ShellViewModel
         RelayCommand Command(Action action) => new(action, CanUse);
         SidebarMenuAction Menu(string key, Action action) => new(UiText.Get(key), Command(action));
         RelayCommand Jump(string hash) => new(() => LocateSidebarCommit(tab, hash), () => SelectedRepository == tab && CanRead && !IsBusy);
-        SidebarNode Group(string key, IEnumerable<SidebarNode> nodes) => new(UiText.Get(key), "", "", nodes.ToArray());
+        SidebarExpansion Expansion(string key)
+        {
+            // Labels are localized and rows are rebuilt. Repository + stable group key owns expansion.
+            var id = tab.Directory + "|" + key;
+            return new(!_collapsedSidebarGroups.Contains(id), expanded =>
+            {
+                if (expanded) _collapsedSidebarGroups.Remove(id);
+                else
+                {
+                    if (_collapsedSidebarGroups.Count >= 256) _collapsedSidebarGroups.Remove(_collapsedSidebarGroups.First());
+                    _collapsedSidebarGroups.Add(id);
+                }
+                PreferenceTask = SavePreferencesAsync();
+            });
+        }
+        SidebarNode Group(string key, IEnumerable<SidebarNode> nodes) => new(UiText.Get(key), "", "", nodes.ToArray()) { Expansion = Expansion(key) };
         void BranchManage(BranchManagementAction action, string name) => ActionTask = QueueAction(tab, "Branch" + action + name, name, () => ManageBranchAsync(action, name, tab));
         var refs = page.Session.References;
         var branches = refs.Where(r => r.Name.StartsWith("refs/heads/", StringComparison.Ordinal)).Select(r =>
@@ -62,7 +85,7 @@ public sealed partial class ShellViewModel
             new SidebarNode(name, "↔", "", remoteRefs.Where(r => r.Name.StartsWith("refs/remotes/" + name + "/", StringComparison.Ordinal)).Select(r =>
                 new SidebarNode(r.Name[(14 + name.Length)..], "⑂", "", [], Jump(r.Hash), Menu: [new(UiText.Get("SidebarLocate"), Jump(r.Hash))])).ToArray(),
                 Menu: snapshot.RemoteNames.Contains(name) ? [Menu("ActionTitleFetch", () => RunSidebarAction(tab, GitAction.Fetch, remote: name)),
-                    new(UiText.Get("RemoteManageTitle"), new(() => ActionTask = QueueAction(tab, "ManageRemote" + name, name, () => ManageRemotesAsync(name, tab)), () => CanUse() && tab.RemoteConfiguration is not null))] : []));
+                    new(UiText.Get("RemoteManageTitle"), new(() => ActionTask = QueueAction(tab, "ManageRemote" + name, name, () => ManageRemotesAsync(name, tab)), () => CanUse() && tab.RemoteConfiguration is not null))] : []) { Expansion = Expansion("Remotes/" + name) });
         var tags = refs.Where(r => r.Name.StartsWith("refs/tags/", StringComparison.Ordinal)).Select(r =>
             new SidebarNode(r.Name[10..], "◇", "", [], Jump(r.Hash), Menu: [new(UiText.Get("SidebarLocate"), Jump(r.Hash))]));
         var stashes = (tab.Stashes.List?.Entries ?? []).Select(entry => new SidebarNode(entry.Message, "▣", entry.Selector, [], Jump(entry.Hash),
@@ -185,7 +208,7 @@ public sealed partial class ShellViewModel
             var operation = new GitActionViewModel(cached, action, _actions!, () => action == GitAction.Fetch ? ReconcileFetchAsync(tab) : ReconcileActionAsync(tab), branch, _interaction, async token =>
             {
                 var fresh = await _actions!.PrepareAsync(cached.Git, tab.Directory, token);
-                if (fresh.Identity.Fingerprint != cached.Identity.Fingerprint || fresh.History.Fingerprint != cached.History.Fingerprint) throw new GitActionException("ActionChanged");
+                if (fresh.Identity.Fingerprint != cached.Identity.Fingerprint || action != GitAction.SwitchBranch && fresh.History.Fingerprint != cached.History.Fingerprint) throw new GitActionException("ActionChanged");
                 if (historyStashAction is { } selectedAction)
                 {
                     var list = await _actions.ReadStashesAsync(cached.Git, fresh.Identity, token);
@@ -194,6 +217,7 @@ public sealed partial class ShellViewModel
                 }
                 prepared = fresh; return fresh;
             }, stash is null && historyStashAction is null ? null : (token, output) => _actions!.ExecuteStashAsync(prepared!, stash!, token, output));
+            operation.ReviewOptions = options => ReviewCheckout(tab, options);
             operation.Branch = branch; operation.StartRef = start;
             if (remote.Length > 0) operation.Remote = operation.Remotes.FirstOrDefault(r => r.Name == remote);
             SetLastAction(operation); DetailsIndex = 2; operation.RunCommand.Execute(null); await operation.RunningTask; if (SelectedRepository == tab) Status = operation.Summary;
