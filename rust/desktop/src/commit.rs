@@ -36,6 +36,7 @@ enum Event {
     FileStarted(file_menu::FileAction),
     PatchPicked(file_menu::Selection, Option<PathBuf>),
     PatchStarted,
+    ShellCompleted(Result<bool, &'static str>),
     PatchCompleted(Result<usize, shovel_core::operation::Error>),
     FileCompleted(
         file_menu::FileAction,
@@ -101,6 +102,7 @@ pub struct Editor {
     diff_deferred: bool,
     files_focus: Option<egui::Id>,
     patch_picking: bool,
+    shell_launcher: crate::file_shell::Launcher,
     patch_picker: Arc<dyn Fn(rfd::FileDialog) -> Option<PathBuf> + Send + Sync>,
 }
 impl Editor {
@@ -155,6 +157,7 @@ impl Editor {
             diff_deferred: false,
             files_focus: None,
             patch_picking: false,
+            shell_launcher: Arc::new(crate::file_shell::launch),
             patch_picker: Arc::new(|dialog| dialog.save_file()),
         }
     }
@@ -480,6 +483,7 @@ impl Editor {
                 Event::FileCompleted(action, result) => self.file_completed(action, *result, ctx),
                 Event::PatchPicked(selected, target) => self.patch_picked(selected, target, ctx),
                 Event::PatchStarted => self.status = Some(text("FilePatchWriting")),
+                Event::ShellCompleted(result) => self.shell_completed(result),
                 Event::PatchCompleted(result) => self.patch_completed(result, ctx),
                 Event::Output(stderr, bytes) => {
                     if self.output.len() < 1024 * 1024 {
@@ -1206,6 +1210,8 @@ mod conflict_tests;
 mod file_menu;
 #[path = "commit_patch.rs"]
 mod patch;
+#[path = "commit_shell.rs"]
+mod shell;
 #[cfg(test)]
 #[path = "commit_file_menu_tests.rs"]
 mod file_menu_tests;

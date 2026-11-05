@@ -29,6 +29,7 @@ cargo test -p shovel-desktop branches::tests --locked
 cargo test -p shovel-desktop stashes::tests --locked
 cargo test -p shovel-desktop commit::conflict_tests --locked
 cargo test -p shovel-desktop commit::file_menu_tests --locked
+cargo test -p shovel-desktop commit::file_menu_tests::shell_ --locked -- --test-threads=1
 cargo clippy -p shovel-core -p shovel-askpass -p shovel-desktop --all-targets --locked -- -D warnings
 cargo build -j 1 -p shovel-desktop -p shovel-askpass --locked
 ./scripts/Test-RustReleasePolicy.ps1

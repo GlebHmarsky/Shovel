@@ -148,6 +148,31 @@ impl Editor {
                 "FileMenuSelection",
                 &[&menu.selected.entries.len().to_string()],
             ));
+            let single = menu.selected.entries.len() == 1;
+            let deleted = menu.entry.code == 'D';
+            if ui
+                .add_enabled(enabled && single && !deleted, egui::Button::new(text("FileMenuOpen")).shortcut_text(text("FileMenuOpenKeys")))
+                .on_hover_text(text("FileMenuOpenHelp"))
+                .on_disabled_hover_text(if !enabled {
+                    reason.clone()
+                } else if !single {
+                    text("FileMenuSingle")
+                } else {
+                    text("FileMenuDeleted")
+                })
+                .clicked()
+            {
+                action = Some(12);
+            }
+            if ui
+                .add_enabled(enabled && single, egui::Button::new(text("FileMenuExplorer")))
+                .on_hover_text(text("FileMenuExplorerHelp"))
+                .on_disabled_hover_text(if !enabled { reason.clone() } else { text("FileMenuSingle") })
+                .clicked()
+            {
+                action = Some(13);
+            }
+            ui.separator();
             if ui
                 .add_enabled(
                     enabled && !menu.selected.entries.is_empty(),
@@ -377,6 +402,7 @@ impl Editor {
                     ctx,
                 ),
                 11 => self.begin_patch(menu.selected.clone(), ctx),
+                12 | 13 => self.begin_shell(menu.selected.clone(), action == 13, ctx),
                 _ => unreachable!(),
             }
             open = false;
@@ -653,7 +679,13 @@ impl Editor {
         }
         let selection = Selection { context, entries };
         let modifiers = ctx.input(|i| i.modifiers);
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
+        if modifiers.ctrl
+            && modifiers.shift
+            && modifiers.alt
+            && ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::O))
+        {
+            self.begin_shell(selection, false, ctx);
+        } else if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
             && files::supported(&selection.entries)
         {
             self.file_confirmation = Some(Confirmation::new(selection, FileAction::Discard));

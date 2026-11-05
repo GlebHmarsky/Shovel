@@ -183,8 +183,8 @@
         "R57"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/patches.rs",
-      "Evidence": "2026-11-05: Reviewed selected-patch destination validation and temporary replacement; native exports apply successfully and locked/read-only destinations retain original bytes. Shell Open/Explorer and historical saves remain pending."
+      "RustImplementation": "rust/core/src/patches.rs; rust/desktop/src/file_shell.rs; rust/desktop/src/commit_shell.rs",
+      "Evidence": "2026-11-05: reviewed atomic patch save and working-file/Explorer target resolution/native shell handoff. Real filesystem path/junction and headless injected-launcher checks passed for menu/shortcut, missing-folder fallback, errors, single-handoff ownership and view-independent completion. Actual GUI/default association/Explorer launches and historical saves remain unverified."
     },
     {
       "Path": "src/GitGui.App/Services/OperationAttention.cs",
@@ -340,8 +340,8 @@
         "R46"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/files.rs; rust/core/src/selected_stash.rs; rust/core/src/file_tools.rs; rust/core/src/file_rules.rs; rust/desktop/src/commit_file_menu.rs",
-      "Evidence": "2026-11-05: native file actions now include Ignore/LFS root rules with literal escaping, exclusive append, byte preservation, nested overrides and cached submenus. Focused native-Git/headless evidence is in roadmap. Patch export, file handoffs/inspection and native desktop parity remain open."
+      "RustImplementation": "rust/core/src/files.rs; rust/core/src/selected_stash.rs; rust/core/src/file_tools.rs; rust/core/src/file_rules.rs; rust/desktop/src/commit_file_menu.rs; rust/core/src/patches.rs; rust/desktop/src/commit_patch.rs; rust/desktop/src/commit_shell.rs",
+      "Evidence": "2026-11-05: captured menus wire stage/copy/discard/stash/external diff/root rules, atomic patch export, Windows Open/Explorer and shortcuts. Focused native Git/filesystem and headless injected-picker/launcher evidence is in roadmap. File History/Blame and native desktop parity remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/CheckoutViewModel.cs",

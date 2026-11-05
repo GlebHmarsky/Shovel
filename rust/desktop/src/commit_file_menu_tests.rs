@@ -1,6 +1,9 @@
 use super::*;
 use shovel_core::process::{self, Lifetime};
 use std::fs;
+// These two simulated applications exercise the process-wide shell admission
+// guard; keep their injected handoffs separate even in the optional full suite.
+static SHELL_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
 struct Harness {
     _temp: tempfile::TempDir,
     ctx: egui::Context,
@@ -262,6 +265,198 @@ impl Harness {
             .drop_without_applying_deltas();
         }
     }
+}
+
+#[test]
+fn shell_preparation_validates_literal_paths_missing_parents_and_junctions_without_git() {
+    use std::os::windows::{fs::MetadataExt, process::CommandExt};
+    let h = Harness::new();
+    let repository = &h.editor.context.as_ref().unwrap().repository;
+    let root = &repository.worktree;
+    let literal = "-literal[1] שלום.txt";
+    fs::write(root.join(literal), "working bytes").unwrap();
+    let target = crate::file_shell::prepare(repository, literal, false).unwrap();
+    assert_eq!(target.path, root.join(literal));
+    assert!(!target.select_in_explorer && !target.missing_file_folder);
+    assert!(
+        crate::file_shell::prepare(repository, literal, true)
+            .unwrap()
+            .select_in_explorer
+    );
+    fs::create_dir(root.join("existing")).unwrap();
+    let folder =
+        crate::file_shell::prepare(repository, "existing/missing/deleted.txt", true).unwrap();
+    assert_eq!(folder.path, root.join("existing"));
+    assert!(folder.missing_file_folder && !folder.select_in_explorer);
+    assert_eq!(
+        crate::file_shell::prepare(repository, "existing", false).unwrap_err(),
+        "FileMenuMissingFile"
+    );
+    assert_eq!(
+        crate::file_shell::prepare(repository, "gone.txt", false).unwrap_err(),
+        "FileMenuMissingFile"
+    );
+    for path in [
+        "../outside.txt",
+        ".git/config",
+        "C:/outside.txt",
+        "bad\0path",
+    ] {
+        assert!(crate::file_shell::prepare(repository, path, true).is_err());
+    }
+    let outside = h._temp.path().join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("keep.txt"), "keep").unwrap();
+    let link = root.join("junction");
+    let cmd = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32").join("cmd.exe");
+    let native = |path: &std::path::Path| {
+        let path = path.to_string_lossy().replace('/', "\\");
+        let path = path.strip_prefix("\\\\?\\").unwrap_or(&path).to_owned();
+        assert!(!path.contains(['"', '%', '!', '^', '&', '|', '<', '>']));
+        path
+    };
+    let created = std::process::Command::new(cmd)
+        .args(["/d", "/c"])
+        .raw_arg(format!("mklink /J \"{}\" \"{}\"", native(&link), native(&outside)))
+        .creation_flags(0x08000000)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "junction fixture: {} {} {}",
+        native(&link), native(&outside), String::from_utf8_lossy(&created.stderr)
+    );
+    assert_ne!(
+        fs::symlink_metadata(&link).unwrap().file_attributes() & 0x400,
+        0
+    );
+    let rejected = crate::file_shell::prepare(repository, "junction/keep.txt", true);
+    fs::remove_dir(&link).unwrap(); // Exact nonrecursive junction removal, never its target.
+    assert_eq!(rejected.unwrap_err(), "FileMenuLinkedPath");
+    assert_eq!(fs::read(outside.join("keep.txt")).unwrap(), b"keep");
+    let mut replaced = repository.clone();
+    replaced.identity.fingerprint.push('0');
+    assert_eq!(
+        crate::file_shell::prepare(&replaced, literal, false).unwrap_err(),
+        "FileMenuStale"
+    );
+}
+
+#[test]
+fn shell_open_menu_and_shortcut_handoff_current_working_bytes_survive_view_close() {
+    let _serial = SHELL_TEST.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = Harness::new();
+    let original = h.editor.git.clone();
+    let mut missing = (*original).clone();
+    missing.executable = h._temp.path().join("missing-git.exe");
+    h.editor.git = Arc::new(missing);
+    let captured = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let targets = captured.clone();
+    let (release, receive) = mpsc::channel::<()>();
+    let receive = std::sync::Mutex::new(receive);
+    h.editor.shell_launcher = Arc::new(move |target| {
+        targets
+            .lock()
+            .unwrap()
+            .push((target.clone(), fs::read(&target.path).unwrap()));
+        let _ = receive
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(20));
+        Ok(())
+    });
+    let index = fs::read(h.editor.path.join(".git/index")).unwrap();
+    h.menu();
+    assert!(!h.editor.scheduler.has_accepted_work());
+    h.click(&format!("{} {}", text("FileMenuOpen"), text("FileMenuOpenKeys")));
+    h.until(|_| !captured.lock().unwrap().is_empty());
+    assert!(h.editor.busy && h.editor.scheduler.has_accepted_work());
+    assert!(matches!(
+        crate::file_shell::Guard::acquire(),
+        Err("FileMenuShellBusy")
+    ));
+    h.editor.request_leave(Leave::Close, &h.ctx);
+    assert!(!h.editor.open);
+    release.send(()).unwrap();
+    h.until(|e| !e.busy && !e.scheduler.has_accepted_work());
+    assert_eq!(h.editor.status, Some(text("FileMenuOpened")));
+    assert_eq!(captured.lock().unwrap()[0].1, b"worktree\n");
+    assert!(!captured.lock().unwrap()[0].0.select_in_explorer);
+    assert_eq!(fs::read(h.editor.path.join(".git/index")).unwrap(), index);
+    h.editor.git = original;
+    h.editor.activate();
+    h.until(|e| !e.loading && !e.refresh_pending);
+    let invoked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let count = invoked.clone();
+    h.editor.shell_launcher = Arc::new(move |_| {
+        count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    });
+    h.click("M  file.txt");
+    h.key(
+        egui::Key::O,
+        egui::Modifiers {
+            ctrl: true,
+            shift: true,
+            alt: true,
+            command: true,
+            ..Default::default()
+        },
+    );
+    h.until(|e| !e.busy && invoked.load(std::sync::atomic::Ordering::SeqCst) == 1);
+    assert_eq!(h.editor.status, Some(text("FileMenuOpened")));
+}
+
+#[test]
+fn shell_explorer_fallback_and_launch_failures_keep_the_real_repository_unchanged() {
+    let _serial = SHELL_TEST.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = Harness::new();
+    fs::remove_file(h.editor.path.join("file.txt")).unwrap();
+    h.editor.refresh(&h.ctx);
+    h.until(|e| {
+        !e.loading
+            && e.context.as_ref().is_some_and(|c| {
+                c.entries
+                    .iter()
+                    .any(|e| e.path == "file.txt" && e.code == 'D')
+            })
+    });
+    let point = h.point("D  file.txt");
+    h.click_at(point, egui::PointerButton::Secondary);
+    let output = h.render(vec![]);
+    assert!(
+        output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, n)| n.label() == Some(format!("{} {}", text("FileMenuOpen"), text("FileMenuOpenKeys")).as_str()) && n.is_disabled())
+    );
+    output.drop_without_applying_deltas();
+    let captured = Arc::new(std::sync::Mutex::new(None));
+    let target = captured.clone();
+    h.editor.shell_launcher = Arc::new(move |prepared| {
+        *target.lock().unwrap() = Some(prepared.clone());
+        Ok(())
+    });
+    h.click(&text("FileMenuExplorer"));
+    h.until(|e| !e.busy && !e.scheduler.has_accepted_work());
+    assert_eq!(h.editor.status, Some(text("FileMenuOpenedFolder")));
+    assert_eq!(
+        captured.lock().unwrap().as_ref().unwrap().path,
+        h.editor.context.as_ref().unwrap().repository.worktree
+    );
+    let index = fs::read(h.editor.path.join(".git/index")).unwrap();
+    let point = h.point("D  file.txt");
+    h.click_at(point, egui::PointerButton::Secondary);
+    h.editor.shell_launcher = Arc::new(|_| Err("FileMenuOpenFailed"));
+    h.click(&text("FileMenuExplorer"));
+    h.until(|e| !e.busy && !e.scheduler.has_accepted_work());
+    assert_eq!(h.editor.status, Some(text("FileMenuOpenFailed")));
+    assert!(!h.editor.path.join("file.txt").exists());
+    assert_eq!(fs::read(h.editor.path.join(".git/index")).unwrap(), index);
 }
 
 #[test]
