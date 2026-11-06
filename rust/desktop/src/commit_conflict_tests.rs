@@ -351,6 +351,8 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         pending_exit: false,
         exit_ready: false,
         confirm_exit_without_save: false,
+        activity_open: false,
+        tab_drag: None,
         scheduler: h.editor.scheduler.clone(),
         editors: vec![h.editor],
         draft_store: None,

@@ -40,6 +40,7 @@ pub struct Pane {
     loading: bool,
     error: Option<String>,
     pub details_index: usize,
+    pub files_width: f32,
     pub view: diff_view::View,
 }
 impl Pane {
@@ -62,6 +63,7 @@ impl Pane {
             loading: false,
             error: None,
             details_index: 0,
+            files_width: 340.,
             view: Default::default(),
         }
     }
@@ -320,8 +322,9 @@ impl Pane {
             }
         });
         ui.push_id("history_comparison", |ui| {
-            egui::Panel::left("files")
-                .default_size(290.)
+            let files = egui::Panel::left("files")
+                .default_size(self.files_width)
+                .max_size((ui.available_width() - 200.).max(160.))
                 .min_size(160.)
                 .resizable(true)
                 .show(ui, |ui| {
@@ -355,6 +358,9 @@ impl Pane {
                         self.load_diff(&path, &ctx);
                     }
                 });
+            if ctx.input(|i| i.pointer.any_released()) {
+                self.files_width = files.response.rect.width();
+            }
             egui::CentralPanel::default().show(ui, |ui| {
                 if let Some(diff) = &self.diff {
                     ui.horizontal_wrapped(|ui| {

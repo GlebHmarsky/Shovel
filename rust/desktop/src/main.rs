@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod branches;
+mod caption;
 mod commit;
 mod comparison;
 mod conflict;
@@ -11,6 +12,7 @@ mod history_row;
 mod operations;
 mod stashes;
 mod strings;
+mod workspace_split;
 mod workspace_style;
 
 fn main() -> eframe::Result {
@@ -103,6 +105,8 @@ struct Workspace {
     pending_exit: bool,
     exit_ready: bool,
     confirm_exit_without_save: bool,
+    activity_open: bool,
+    tab_drag: Option<(u64, Vec<u64>)>,
     scheduler: shovel_core::scheduler::Scheduler,
     editors: Vec<commit::Editor>,
     draft_store: Option<shovel_core::drafts::Store>,
@@ -114,6 +118,7 @@ struct Workspace {
 }
 impl Workspace {
     fn new(context: &eframe::CreationContext<'_>) -> Self {
+        caption::install(context);
         let (sender, receiver) = mpsc::channel();
         let output = sender.clone();
         let ctx = context.egui_ctx.clone();
@@ -164,6 +169,8 @@ impl Workspace {
             pending_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
+            activity_open: false,
+            tab_drag: None,
             scheduler: Default::default(),
             editors: vec![],
             draft_store: None,
@@ -297,6 +304,23 @@ impl Workspace {
                     self.initialized = true;
                     self.notice = notice;
                     ctx.set_zoom_factor(self.settings.ui_scale() as f32);
+                    let dimension = |key, default, min| {
+                        self.settings
+                            .get(key)
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(default)
+                            .clamp(min, 8192.) as f32
+                    };
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                        dimension("WindowWidth", 1200., 900.),
+                        dimension("WindowHeight", 800., 620.),
+                    )));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
+                        self.settings
+                            .get("IsMaximized")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false),
+                    ));
                     theme(
                         ctx,
                         self.settings
@@ -507,6 +531,7 @@ impl Workspace {
                 self.scheduler.clone(),
                 store.clone(),
             );
+            editor.restore_layout(&self.settings);
             editor.external_merge_tool = self
                 .settings
                 .get("ExternalMergeTool")
@@ -569,7 +594,10 @@ impl Workspace {
         );
         self.settings
             .set("UiScale", serde_json::json!(ctx.zoom_factor()));
-        if let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
+        let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+        self.settings
+            .set("IsMaximized", serde_json::json!(maximized));
+        if !maximized && let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
             self.settings
                 .set("WindowWidth", serde_json::json!(rect.width()));
             self.settings
@@ -681,6 +709,11 @@ impl eframe::App for Workspace {
                         }
                     });
                     ui.menu_button(strings::text("ViewMenu"), |ui| {
+                        if ui.button(strings::text("ActivityTitle")).clicked() {
+                            self.activity_open = true;
+                            ui.close();
+                        }
+
                         ui.menu_button(strings::text("WorkspaceAppearance"), |ui| {
                             for (value, key) in [(0, "WorkspaceDark"), (1, "WorkspaceLight")] {
                                 let current = self
@@ -759,9 +792,10 @@ impl eframe::App for Workspace {
                             }
                         });
                     });
+                    caption::controls(ui);
                 });
                 ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), 48.),
+                    egui::vec2(ui.available_width(), 64.),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 2.;
@@ -832,6 +866,39 @@ impl eframe::App for Workspace {
                                                     .color(palette.muted),
                                             );
                                         }
+                                        let editor =
+                                            self.editors.iter().find(|e| e.path == tab.path);
+                                        let op = self.operations.summary(&tab.path);
+                                        let msg = if editor.is_some_and(|e| e.busy) {
+                                            editor.and_then(|e| e.status.clone()).or(op)
+                                        } else {
+                                            match (op, editor.and_then(|e| e.status.clone())) {
+                                                (Some(run), Some(local)) => {
+                                                    Some(format!("{run} · {local}"))
+                                                }
+                                                (a, b) => a.or(b),
+                                            }
+                                        };
+                                        if let Some(msg) = msg {
+                                            let r = ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(&msg)
+                                                        .small()
+                                                        .color(palette.muted),
+                                                )
+                                                .truncate()
+                                                .sense(egui::Sense::click()),
+                                            );
+                                            if r.clicked() {
+                                                self.activity_open = true;
+                                            }
+                                            r.on_hover_text(msg);
+                                        } else {
+                                            ui.allocate_space(egui::vec2(
+                                                0.,
+                                                ui.text_style_height(&egui::TextStyle::Small),
+                                            ));
+                                        }
                                     } else {
                                         ui.label(RichText::new(strings::text("AppTitle")).strong());
                                     }
@@ -862,92 +929,113 @@ impl eframe::App for Workspace {
                 if let Some(notice) = &self.notice {
                     ui.colored_label(palette.diff_removed_text, notice);
                 }
-                if let Some(tab) = self.tabs.get(self.selected) {
-                    self.operations.status(ui, &tab.path, &self.scheduler);
-                    if let Some(history) = &tab.history
-                        && !history.snapshot.operations.is_empty()
-                    {
-                        let snapshot = &history.snapshot;
-                        if let Some(state) = &snapshot.recovery {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(strings::format(
-                                    "RecoveryHelp",
-                                    &[&branches::recovery_name(state.kind)],
-                                ));
-                                if ui
-                                    .button(strings::text("ActionTitleContinue"))
-                                    .on_hover_text(strings::text("RecoveryContinueHelp"))
+                if let Some(tab) = self.tabs.get(self.selected)
+                    && let Some(history) = &tab.history
+                    && !history.snapshot.operations.is_empty()
+                {
+                    let snapshot = &history.snapshot;
+                    if let Some(state) = &snapshot.recovery {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(strings::format(
+                                "RecoveryHelp",
+                                &[&branches::recovery_name(state.kind)],
+                            ));
+                            if ui
+                                .button(strings::text("ActionTitleContinue"))
+                                .on_hover_text(strings::text("RecoveryContinueHelp"))
+                                .clicked()
+                                && let Some(git) = &self.git
+                            {
+                                self.operations.submit_recovery(
+                                    "ActionTitleContinue",
+                                    shovel_core::recovery::Action::Continue,
+                                    snapshot,
+                                    git.clone(),
+                                    &self.scheduler,
+                                    &ctx,
+                                );
+                            }
+                            if state.can_skip()
+                                && ui
+                                    .button(strings::text("ActionTitleSkip"))
+                                    .on_hover_text(strings::text("RecoverySkipHelp"))
                                     .clicked()
-                                    && let Some(git) = &self.git
-                                {
-                                    self.operations.submit_recovery(
-                                        "ActionTitleContinue",
-                                        shovel_core::recovery::Action::Continue,
-                                        snapshot,
-                                        git.clone(),
-                                        &self.scheduler,
-                                        &ctx,
-                                    );
-                                }
-                                if state.can_skip()
-                                    && ui
-                                        .button(strings::text("ActionTitleSkip"))
-                                        .on_hover_text(strings::text("RecoverySkipHelp"))
-                                        .clicked()
-                                {
-                                    self.branches.confirm_recovery(
-                                        snapshot,
-                                        shovel_core::recovery::Action::Skip,
-                                    );
-                                }
-                                if ui
-                                    .button(strings::text("ActionTitleAbort"))
-                                    .on_hover_text(strings::text("RecoveryAbortHelp"))
-                                    .clicked()
-                                {
-                                    self.branches.confirm_recovery(
-                                        snapshot,
-                                        shovel_core::recovery::Action::Abort,
-                                    );
-                                }
-                            });
-                        } else {
-                            ui.label(strings::text("RecoveryUnavailable"));
-                        }
+                            {
+                                self.branches.confirm_recovery(
+                                    snapshot,
+                                    shovel_core::recovery::Action::Skip,
+                                );
+                            }
+                            if ui
+                                .button(strings::text("ActionTitleAbort"))
+                                .on_hover_text(strings::text("RecoveryAbortHelp"))
+                                .clicked()
+                            {
+                                self.branches.confirm_recovery(
+                                    snapshot,
+                                    shovel_core::recovery::Action::Abort,
+                                );
+                            }
+                        });
+                    } else {
+                        ui.label(strings::text("RecoveryUnavailable"));
                     }
                 }
-                if let Some(tab) = self.tabs.get(self.selected)
-                    && let Some(editor) = self
-                        .editors
-                        .iter_mut()
-                        .find(|editor| editor.path == tab.path)
-                    && (editor.status.is_some() || !editor.output.is_empty())
-                {
-                    ui.horizontal(|ui| {
-                        if let Some(status) = &editor.status {
-                            ui.label(status);
-                        }
-                        if editor.failed_commit
-                            && ui.button(strings::text("ReopenCommit")).clicked()
-                        {
-                            editor.activate();
-                        }
-                        if !editor.output.is_empty() {
-                            egui::CollapsingHeader::new(strings::text("OperationAttentionLogs"))
-                                .show(ui, |ui| {
-                                    egui::ScrollArea::both().max_height(170.).show(ui, |ui| {
-                                        ui.add(
-                                            egui::Label::new(
-                                                RichText::new(&editor.output).monospace(),
-                                            )
-                                            .selectable(true),
-                                        );
-                                    });
-                                });
-                        }
-                    });
-                }
             });
+        if self.activity_open {
+            let mut open = true;
+            egui::Window::new(strings::text("ActivityTitle"))
+                .open(&mut open)
+                .enabled(!modal_open && !self.closing)
+                .default_width(580.)
+                .show(&ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(420.)
+                        .show(ui, |ui| {
+                            if let Some(tab) = self.tabs.get(self.selected) {
+                                self.operations.status(ui, &tab.path, &self.scheduler);
+                            }
+                            if let Some(tab) = self.tabs.get(self.selected)
+                                && let Some(editor) = self
+                                    .editors
+                                    .iter_mut()
+                                    .find(|editor| editor.path == tab.path)
+                                && (editor.status.is_some() || !editor.output.is_empty())
+                            {
+                                ui.horizontal(|ui| {
+                                    if let Some(status) = &editor.status {
+                                        ui.label(status);
+                                    }
+                                    if editor.failed_commit
+                                        && ui.button(strings::text("ReopenCommit")).clicked()
+                                    {
+                                        editor.activate();
+                                    }
+                                    if !editor.output.is_empty() {
+                                        egui::CollapsingHeader::new(strings::text(
+                                            "OperationAttentionLogs",
+                                        ))
+                                        .show(ui, |ui| {
+                                            egui::ScrollArea::both().max_height(170.).show(
+                                                ui,
+                                                |ui| {
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            RichText::new(&editor.output)
+                                                                .monospace(),
+                                                        )
+                                                        .selectable(true),
+                                                    );
+                                                },
+                                            );
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                });
+            self.activity_open = open;
+        }
         egui::Panel::top("repository-tabs")
             .frame(workspace_style::pane(palette.tab_strip, 4, 0))
             .show(ui, |ui| {
@@ -959,6 +1047,7 @@ impl eframe::App for Workspace {
                         / count as f32
                 };
                 let mut selected = None;
+                let mut target = None;
                 ui.horizontal(|ui| {
                     for (index, tab) in self.tabs.iter().enumerate() {
                         let label = tab.path.file_name().unwrap_or_default().to_string_lossy();
@@ -966,6 +1055,7 @@ impl eframe::App for Workspace {
                             [width, 26.],
                             egui::Button::new(RichText::new(label).color(palette.text))
                                 .truncate()
+                                .sense(egui::Sense::click_and_drag())
                                 .selected(index == self.selected)
                                 .fill(if index == self.selected {
                                     palette.sidebar
@@ -979,12 +1069,55 @@ impl eframe::App for Workspace {
                                     se: 0,
                                 }),
                         );
+                        if response.drag_started() {
+                            self.tab_drag =
+                                Some((tab.id, self.tabs.iter().map(|t| t.id).collect()));
+                        }
+                        if ctx.input(|i| i.pointer.interact_pos()).is_some_and(|pos| {
+                            pos.x >= response.rect.left() && pos.x <= response.rect.right()
+                        }) {
+                            target = Some(index);
+                        }
                         if response.clicked() {
                             selected = Some(index);
                         }
                         response.on_hover_text(tab.path.to_string_lossy());
                     }
                 });
+                if let Some((drag, original)) = &self.tab_drag {
+                    let active = self.tabs.get(self.selected).map(|t| t.id);
+                    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        self.tabs.sort_by_key(|t| {
+                            original
+                                .iter()
+                                .position(|id| *id == t.id)
+                                .unwrap_or(usize::MAX)
+                        });
+                        self.tab_drag = None;
+                    } else {
+                        if let (Some(target), Some(from)) =
+                            (target, self.tabs.iter().position(|t| t.id == *drag))
+                            && target != from
+                        {
+                            let moved = self.tabs.remove(from);
+                            self.tabs.insert(target, moved);
+                        }
+                        if !ctx.input(|i| i.pointer.primary_down()) {
+                            self.tab_drag = None;
+                            self.settings.set(
+                                "RepositoryPaths",
+                                serde_json::json!(
+                                    self.tabs.iter().map(|t| &t.path).collect::<Vec<_>>()
+                                ),
+                            );
+                            self.preferences_dirty = true;
+                        }
+                    }
+                    if let Some(index) = self.tabs.iter().position(|t| Some(t.id) == active) {
+                        self.selected = index;
+                    }
+                    selected = None;
+                }
                 if let Some(index) = selected {
                     egui::Popup::close_all(&ctx);
                     self.history_menu = None;
@@ -995,10 +1128,12 @@ impl eframe::App for Workspace {
                     }
                 }
             });
-        egui::Panel::left("sidebar")
+        use workspace_split::Divider;
+        let width = ui.available_width();
+        let sidebar = egui::Panel::left("sidebar")
             .frame(workspace_style::pane(palette.sidebar, 8, 4))
-            .default_size(210.)
-            .min_size(160.)
+            .exact_size(Divider::Sidebar.size(ui, &self.settings, width))
+            .resizable(false)
             .show(ui, |ui| {
                 if let Some(tab) = self.tabs.get_mut(self.selected)
                     && let Some(history) = &tab.history
@@ -1010,12 +1145,19 @@ impl eframe::App for Workspace {
                             ("Tags", "refs/tags/"),
                             ("Stashes", "stash@{"),
                         ] {
-                            egui::CollapsingHeader::new(
+                            let group_id = format!("{}|{}", tab.path.display(), key);
+                            let mut collapsed: Vec<String> = self
+                                .settings
+                                .get("CollapsedSidebarGroups")
+                                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                                .unwrap_or_default();
+                            let group = egui::CollapsingHeader::new(
                                 RichText::new(strings::text(key))
                                     .strong()
                                     .color(palette.muted),
                             )
-                            .default_open(true)
+                            .default_open(!collapsed.iter().any(|g| g == &group_id))
+                            .id_salt((tab.id, key))
                             .show(ui, |ui| {
                                 for reference in history
                                     .snapshot
@@ -1084,15 +1226,30 @@ impl eframe::App for Workspace {
                                     }
                                 }
                             });
+                            if group.header_response.clicked() {
+                                if collapsed.iter().any(|g| g == &group_id) {
+                                    collapsed.retain(|g| g != &group_id);
+                                } else {
+                                    if collapsed.len() >= 256 {
+                                        collapsed.remove(0);
+                                    }
+                                    collapsed.push(group_id);
+                                }
+                                self.settings
+                                    .set("CollapsedSidebarGroups", serde_json::json!(collapsed));
+                                self.preferences_dirty = true;
+                            }
                         }
                     });
                 }
             });
-        egui::Panel::bottom("details")
-            .frame(workspace_style::pane(palette.panel, 6, 2))
-            .resizable(true)
-            .default_size(205.)
-            .min_size(80.)
+        let height = ui.available_height();
+        self.preferences_dirty |=
+            Divider::Sidebar.handle(ui, sidebar.response.rect, width, &mut self.settings);
+        let details = egui::Panel::bottom("details")
+            .frame(workspace_style::pane(palette.panel, 6, 3))
+            .exact_size(Divider::Details.size(ui, &self.settings, height))
+            .resizable(false)
             .show(ui, |ui| {
                 if let Some(tab) = self.tabs.get_mut(self.selected)
                     && let Some(commit) = tab
@@ -1109,6 +1266,17 @@ impl eframe::App for Workspace {
                         && let Some(git) = &self.git
                     {
                         let mut pane = comparison::Pane::new(tab.path.clone(), git.clone());
+                        pane.files_width = self
+                            .settings
+                            .get("HistoryFilesWidth")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(340.) as f32;
+                        pane.details_index = self
+                            .settings
+                            .get("RustDetailsTab")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0)
+                            .min(1) as usize;
                         pane.view.side_by_side = self
                             .settings
                             .get("DiffSideBySide")
@@ -1123,10 +1291,32 @@ impl eframe::App for Workspace {
                     }
                     if let Some(pane) = &mut tab.comparison {
                         pane.select(&commit, &ctx);
-                        pane.show(ui);
+                        let before = pane.details_index;
+                        let old_width = pane.files_width;
+                        let h = ui.available_height();
+                        egui::ScrollArea::vertical()
+                            .id_salt("details-viewport")
+                            .max_height(h)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.set_max_height(h);
+                                pane.show(ui);
+                            });
+                        if (old_width - pane.files_width).abs() > 1. {
+                            self.settings
+                                .set("HistoryFilesWidth", serde_json::json!(pane.files_width));
+                            self.preferences_dirty = true;
+                        }
+                        if before != pane.details_index {
+                            self.settings
+                                .set("RustDetailsTab", serde_json::json!(pane.details_index));
+                            self.preferences_dirty = true;
+                        }
                     }
                 }
             });
+        self.preferences_dirty |=
+            Divider::Details.handle(ui, details.response.rect, height, &mut self.settings);
         egui::CentralPanel::default()
             .frame(workspace_style::pane(palette.canvas, 0, 0))
             .show(ui, |ui| {
@@ -1369,10 +1559,15 @@ impl eframe::App for Workspace {
             view.show(&ctx, &mut self.operations, &self.scheduler, stash_input);
         }
         for editor in &mut self.editors {
+            let open = editor.open;
             editor.show(
                 &ctx,
                 !self.closing && !self.operations.modal_open() && !self.branches.is_open(),
             );
+            if open && !editor.open {
+                editor.save_layout(&mut self.settings);
+                self.preferences_dirty = true;
+            }
         }
         let allow_branch_input = !self.closing && !self.operations.modal_open();
         self.branches.show(
@@ -1413,6 +1608,8 @@ mod tests {
             pending_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
+            activity_open: false,
+            tab_drag: None,
             scheduler: Default::default(),
             editors: vec![],
             draft_store: None,
@@ -1485,6 +1682,8 @@ mod tests {
             pending_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
+            activity_open: false,
+            tab_drag: None,
             scheduler: Default::default(),
             editors: vec![],
             draft_store: Some(shovel_core::drafts::Store {
@@ -1548,3 +1747,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod workspace_interaction_tests;

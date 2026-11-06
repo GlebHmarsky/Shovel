@@ -820,9 +820,16 @@ impl Controller {
             .filter_map(|r| std::mem::take(&mut r.changed).then(|| r.path.clone()))
             .collect()
     }
+    pub fn summary(&self, path: &std::path::Path) -> Option<String> {
+        let mut runs = self.runs.iter().rev().filter(|r| r.path == path);
+        runs.clone()
+            .find(|r| !r.done)
+            .or_else(|| runs.next())
+            .map(|r| format!("{} · {}", text(r.label), r.status))
+    }
     pub fn status(&self, ui: &mut egui::Ui, path: &PathBuf, scheduler: &Scheduler) {
         let records = scheduler.records();
-        for run in self.runs.iter().filter(|r| &r.path == path).rev().take(8) {
+        for run in self.runs.iter().filter(|r| &r.path == path).rev() {
             ui.horizontal(|ui| {
                 ui.label(format!("{} · {}", text(run.label), run.status));
                 if !run.done
@@ -1149,5 +1156,52 @@ mod tests {
         closed.cancel();
         controller.poll(&ctx);
         assert!(!controller.modal_open());
+    }
+}
+
+#[cfg(test)]
+mod activity_layout_test {
+    use super::*;
+    use crate::workspace_interaction_tests::{frame, workspace};
+    #[test]
+    fn retained_operation_output_does_not_push_down_repository_tabs() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut app = workspace();
+        let tab_y = |app: &mut crate::Workspace| {
+            let output = frame(&ctx, app, vec![]);
+            let y = output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find(|(_, n)| n.label() == Some("Bravo"))
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap()
+                .y0;
+            output.drop_without_applying_deltas();
+            y
+        };
+        let before = tab_y(&mut app);
+        for seq in 1..=8 {
+            app.operations.runs.push(Run {
+                sequence: seq,
+                request: seq,
+                path: "Bravo".into(),
+                label: "Fetch",
+                status: "complete".into(),
+                output: "command output\n".repeat(20),
+                done: true,
+                changed: false,
+            });
+        }
+        let after = tab_y(&mut app);
+        assert_eq!(before, after);
+        app.activity_open = true;
+        assert_eq!(tab_y(&mut app), after);
     }
 }

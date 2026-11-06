@@ -62,6 +62,8 @@ pub struct Editor {
     pub output: String,
     pub busy: bool,
     pub size: egui::Vec2,
+    files_width: f32,
+    message_height: f32,
     pub external_merge_tool: shovel_core::conflicts::ToolSettings,
     git: Arc<Git>,
     scheduler: Scheduler,
@@ -117,7 +119,9 @@ impl Editor {
             status: None,
             output: String::new(),
             busy: false,
-            size: egui::vec2(1100., 760.),
+            size: egui::vec2(1200., 800.),
+            files_width: 380.,
+            message_height: 220.,
             external_merge_tool: Default::default(),
             git,
             scheduler,
@@ -176,9 +180,7 @@ impl Editor {
         self.patch_picking
     }
     fn action_busy(&self) -> bool {
-        self.busy
-            || self.patch_picking
-            || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
+        self.busy || self.patch_picking || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
     }
     pub fn unsaved_conflict(&self) -> bool {
         self.conflict
@@ -790,6 +792,39 @@ impl Editor {
             }
         }
     }
+    pub fn restore_layout(&mut self, settings: &shovel_core::settings::Settings) {
+        if let Some(layout) = settings.get("CommitLayout") {
+            let value = |key: &str, default: f32, min: f32, max: f32| {
+                layout
+                    .get(key)
+                    .and_then(|v| v.as_f64())
+                    .map(|v| (v as f32).clamp(min, max))
+                    .unwrap_or(default)
+            };
+            self.size = egui::vec2(
+                value("Width", 1200., 900., 7680.),
+                value("Height", 800., 620., 4320.),
+            );
+            self.files_width = value("FilesWidth", 380., 250., 3000.);
+            self.message_height = value("MessageHeight", 220., 180., 2000.);
+        }
+    }
+    pub fn save_layout(&self, settings: &mut shovel_core::settings::Settings) {
+        let mut layout = settings
+            .get("CommitLayout")
+            .and_then(|v| v.as_object())
+            .cloned()
+            .unwrap_or_default();
+        for (key, value) in [
+            ("Width", self.size.x),
+            ("Height", self.size.y),
+            ("FilesWidth", self.files_width),
+            ("MessageHeight", self.message_height),
+        ] {
+            layout.insert(key.into(), serde_json::json!(value));
+        }
+        settings.set("CommitLayout", serde_json::Value::Object(layout));
+    }
     pub fn show(&mut self, ctx: &egui::Context, enabled: bool) {
         if let Some(inspector) = &mut self.inspector {
             inspector.show(ctx);
@@ -809,7 +844,7 @@ impl Editor {
             egui::ViewportBuilder::default()
                 .with_title(title)
                 .with_inner_size(self.size)
-                .with_min_inner_size([760., 560.])
+                .with_min_inner_size([900., 620.])
                 .with_minimize_button(false)
                 .with_maximize_button(false),
             |ui, _| {
@@ -867,8 +902,8 @@ impl Editor {
                         }
                     });
                 });
-                egui::Panel::bottom("commit_message")
-                    .default_size(175.)
+                let message = egui::Panel::bottom("commit_message")
+                    .default_size(self.message_height)
                     .min_size(140.)
                     .resizable(true)
                     .show(ui, |ui| {
@@ -926,6 +961,7 @@ impl Editor {
                             }
                         });
                     });
+                self.message_height = message.response.rect.height();
                 if !self.operation_output.is_empty() {
                     egui::Panel::bottom("commit-output").show(ui, |ui| {
                         egui::CollapsingHeader::new(text("ActionOutput")).show(ui, |ui| {
@@ -940,8 +976,8 @@ impl Editor {
                         });
                     });
                 }
-                egui::Panel::left("commit_files")
-                    .default_size(370.)
+                let files = egui::Panel::left("commit_files")
+                    .default_size(self.files_width)
                     .min_size(220.)
                     .resizable(true)
                     .show(ui, |ui| {
@@ -1090,6 +1126,7 @@ impl Editor {
                             self.request_leave(next, &ctx);
                         }
                     });
+                self.files_width = files.response.rect.width();
                 egui::CentralPanel::default().show(ui, |ui| {
                     if let Some(pane) = &mut self.conflict {
                         ui.add_enabled_ui(!self.busy && !self.loading, |ui| pane.show(ui));
@@ -1213,13 +1250,13 @@ impl Editor {
 mod conflict_tests;
 #[path = "commit_file_menu.rs"]
 mod file_menu;
+#[cfg(test)]
+#[path = "commit_file_menu_tests.rs"]
+mod file_menu_tests;
 #[path = "commit_patch.rs"]
 mod patch;
 #[path = "commit_shell.rs"]
 mod shell;
-#[cfg(test)]
-#[path = "commit_file_menu_tests.rs"]
-mod file_menu_tests;
 fn error_text(error: working::Error) -> String {
     match error {
         working::Error::Git(shovel_core::git::Error::Command { output, .. }) => {
