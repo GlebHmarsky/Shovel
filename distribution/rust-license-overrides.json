@@ -1,0 +1,361 @@
+{
+  "SchemaVersion": 1,
+  "Description": "Supplemental upstream license files omitted from packaged crates; exact versions and source provenance. Collected 2026-11-05.",
+  "Packages": [
+    {
+      "Package": "accesskit",
+      "Version": "0.25.2",
+      "CrateCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "LicenseCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-APACHE",
+          "SHA256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-MIT",
+          "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-MIT"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE.chromium",
+          "SHA256": "845022e0c1db1abb41a6ba4cd3c4b674ec290f3359d9d3c78ae558d4c0ed9308",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE.chromium"
+        }
+      ]
+    },
+    {
+      "Package": "profiling",
+      "Version": "1.0.18",
+      "CrateCommit": "8271551172eb6fa4cba47369aedd93790c623df9",
+      "LicenseCommit": "8271551172eb6fa4cba47369aedd93790c623df9",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/profiling/LICENSE-APACHE",
+          "SHA256": "10d30a673cd5e9349bdc02aeb48f14b3386d27d0da32df8f0a555d4aa16aa551",
+          "Source": "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/profiling/LICENSE-MIT",
+          "SHA256": "c8167fdeeed46d3f244d3f85c5bf998ce889343691c32be2c61a8bc4b5c08333",
+          "Source": "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "khronos_api",
+      "Version": "3.1.0",
+      "CrateCommit": "f150967b1c44ae888e6676f93f639ebc82771bdc",
+      "LicenseCommit": "f150967b1c44ae888e6676f93f639ebc82771bdc",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/khronos-api/LICENSE",
+          "SHA256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "Source": "https://raw.githubusercontent.com/brendanzab/gl-rs/f150967b1c44ae888e6676f93f639ebc82771bdc/LICENSE"
+        }
+      ]
+    },
+    {
+      "Package": "gl_generator",
+      "Version": "0.14.0",
+      "CrateCommit": "ea503e8d5fb6d73c6030e6191ce738cd3bf3433e",
+      "LicenseCommit": "ea503e8d5fb6d73c6030e6191ce738cd3bf3433e",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/gl-generator/LICENSE",
+          "SHA256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "Source": "https://raw.githubusercontent.com/brendanzab/gl-rs/ea503e8d5fb6d73c6030e6191ce738cd3bf3433e/LICENSE"
+        }
+      ]
+    },
+    {
+      "Package": "epaint_default_fonts",
+      "Version": "0.37.0",
+      "CrateCommit": "7c0b40402271e8d40cda69f87cf3c2617c2e4382",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "epaint",
+      "Version": "0.37.0",
+      "CrateCommit": "7c0b40402271e8d40cda69f87cf3c2617c2e4382",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "emath",
+      "Version": "0.37.0",
+      "CrateCommit": "7c0b40402271e8d40cda69f87cf3c2617c2e4382",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "egui_system_font_provider",
+      "Version": "0.37.0",
+      "CrateCommit": "3c6eb8261c3293ad9c7ea1ed58487e038860ebef",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "spirv",
+      "Version": "0.4.0+sdk-1.4.341.0",
+      "CrateCommit": "8afc3d0ac8e158128cd1410bb2e4b4c26ab11bb4",
+      "LicenseCommit": "8afc3d0ac8e158128cd1410bb2e4b4c26ab11bb4",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/spirv/LICENSE",
+          "SHA256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "Source": "https://raw.githubusercontent.com/gfx-rs/rspirv/8afc3d0ac8e158128cd1410bb2e4b4c26ab11bb4/LICENSE"
+        }
+      ]
+    },
+    {
+      "Package": "egui-winit",
+      "Version": "0.37.0",
+      "CrateCommit": "7c0b40402271e8d40cda69f87cf3c2617c2e4382",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "egui",
+      "Version": "0.37.0",
+      "CrateCommit": "7c0b40402271e8d40cda69f87cf3c2617c2e4382",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "eframe",
+      "Version": "0.37.0",
+      "CrateCommit": "3c6eb8261c3293ad9c7ea1ed58487e038860ebef",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "ecolor",
+      "Version": "0.37.0",
+      "CrateCommit": "7c0b40402271e8d40cda69f87cf3c2617c2e4382",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "clipboard-win",
+      "Version": "5.4.3",
+      "CrateCommit": "ed27008ae5d1f10cfbb266de039f0fb35fd05a56",
+      "LicenseCommit": "ed27008ae5d1f10cfbb266de039f0fb35fd05a56",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/clipboard-win/LICENSE",
+          "SHA256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+          "Source": "https://raw.githubusercontent.com/DoumanAsh/clipboard-win/ed27008ae5d1f10cfbb266de039f0fb35fd05a56/LICENSE"
+        }
+      ]
+    },
+    {
+      "Package": "accesskit_winit",
+      "Version": "0.34.2",
+      "CrateCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "LicenseCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-APACHE",
+          "SHA256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-MIT",
+          "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-MIT"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE.chromium",
+          "SHA256": "845022e0c1db1abb41a6ba4cd3c4b674ec290f3359d9d3c78ae558d4c0ed9308",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE.chromium"
+        }
+      ]
+    },
+    {
+      "Package": "accesskit_windows",
+      "Version": "0.35.2",
+      "CrateCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "LicenseCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-APACHE",
+          "SHA256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-MIT",
+          "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-MIT"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE.chromium",
+          "SHA256": "845022e0c1db1abb41a6ba4cd3c4b674ec290f3359d9d3c78ae558d4c0ed9308",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE.chromium"
+        }
+      ]
+    },
+    {
+      "Package": "accesskit_consumer",
+      "Version": "0.39.2",
+      "CrateCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "LicenseCommit": "f3026222559c7f5f46d8f25cb7404de68eb149f0",
+      "Reason": "Root licenses at the exact crate publication commit.",
+      "Files": [
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-APACHE",
+          "SHA256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE-MIT",
+          "SHA256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE-MIT"
+        },
+        {
+          "Path": "third-party/rust/accesskit/LICENSE.chromium",
+          "SHA256": "845022e0c1db1abb41a6ba4cd3c4b674ec290f3359d9d3c78ae558d4c0ed9308",
+          "Source": "https://raw.githubusercontent.com/AccessKit/accesskit/f3026222559c7f5f46d8f25cb7404de68eb149f0/LICENSE.chromium"
+        }
+      ]
+    },
+    {
+      "Package": "egui-wgpu",
+      "Version": "0.37.0",
+      "CrateCommit": "7c0b40402271e8d40cda69f87cf3c2617c2e4382",
+      "LicenseCommit": "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+      "Reason": "Root licenses from the upstream 0.37.0 release tag, peeled to its immutable commit; packaged workspace crates omit these files and record different publication commits.",
+      "Files": [
+        {
+          "Path": "third-party/rust/egui/LICENSE-APACHE",
+          "SHA256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE"
+        },
+        {
+          "Path": "third-party/rust/egui/LICENSE-MIT",
+          "SHA256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "Source": "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "Package": "velopack",
+      "Version": "1.2.161",
+      "LicenseCommit": "tag:1.2.161",
+      "Reason": "Pinned SDK and packaging tool share the existing committed Velopack license.",
+      "Files": [
+        {
+          "Path": "third-party/VELOPACK-LICENSE.txt",
+          "SHA256": "02b97d1e929543acfbea09fafff2d441a051544b142fea7f2f9bd7400dad0226",
+          "Source": "https://github.com/velopack/velopack/blob/1.2.161/LICENSE"
+        }
+      ]
+    }
+  ]
+}

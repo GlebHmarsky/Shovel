@@ -1,3 +1,7 @@
 # Signed fixture bytes must not be changed by core.autocrlf on checkout.
 rust/core/tests/fixtures/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 *.sig binary
+
+# The native payload verifies these upstream notice bytes before packaging.
+third-party/rust/** -text
+third-party/VELOPACK-LICENSE.txt text eol=crlf

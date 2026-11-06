@@ -256,26 +256,29 @@ impl Controller {
         for kind in [Kind::Fetch, Kind::Pull, Kind::Push] {
             ui.push_id(kind.number(), |ui| {
                 let available = snapshot.is_some() && git.is_some();
-                ui.horizontal(|ui| {
-                    let button = ui.add_enabled(available, egui::Button::new(text(kind.key())));
-                    if !available {
-                        button
-                            .clone()
-                            .on_disabled_hover_text(text("ActionInspectionNeeded"));
-                    }
-                    if button.clicked()
-                        && let (Some(snapshot), Some(git)) = (snapshot, git)
-                    {
-                        self.submit(
-                            Options::load(settings, snapshot, kind),
-                            snapshot,
-                            git.clone(),
-                            scheduler,
-                            ui.ctx(),
-                        );
-                    }
-                    ui.add_enabled_ui(available, |ui| {
-                        ui.menu_button("▾", |ui| {
+                ui.spacing_mut().item_spacing.x = 0.;
+                let button = crate::workspace_style::action(ui, kind.key(), available);
+                if !available {
+                    button
+                        .clone()
+                        .on_disabled_hover_text(text("ActionInspectionNeeded"));
+                }
+                if button.clicked()
+                    && let (Some(snapshot), Some(git)) = (snapshot, git)
+                {
+                    self.submit(
+                        Options::load(settings, snapshot, kind),
+                        snapshot,
+                        git.clone(),
+                        scheduler,
+                        ui.ctx(),
+                    );
+                }
+                ui.add_enabled_ui(available, |ui| {
+                    crate::workspace_style::options_menu(
+                        ui,
+                        strings::format("RustNetworkOptions", &[&text(kind.key())]),
+                        |ui| {
                             let Some(snapshot) = snapshot else {
                                 return;
                             };
@@ -370,10 +373,8 @@ impl Controller {
                                 }
                                 ui.close();
                             }
-                        })
-                        .response
-                        .on_hover_text(strings::format("RustNetworkOptions", &[&text(kind.key())]));
-                    });
+                        },
+                    );
                 });
             });
         }

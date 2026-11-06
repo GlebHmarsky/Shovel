@@ -2,6 +2,8 @@
 
 **Rust rewrite worktree — in progress.** This branch preserves C# 0.47.0 as the parity reference and is not a delivered Rust application yet. [Rust design/channel identities](docs/rust-rewrite.md) and the [active parity checklist](TODO.md#entire-rust-application--active-not-delivered) describe the independent implementation. Existing C# release channels and master remain unchanged.
 
+To build the current Rust desktop locally, run `./scripts/Build-RustPayload.ps1` from this worktree. It prints the output directory. Run `app/ShovelRust.exe` there with the adjacent askpass helper. `VERIFICATION.json` records the source fingerprint and executable hashes. View → Appearance switches between Dark and Light and saves the choice in the Rust profile.
+
 Rust focused development commands (PowerShell, from this worktree; select the relevant check):
 
 ```powershell

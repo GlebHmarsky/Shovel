@@ -14,13 +14,18 @@ shovel-core = { path = "../core" }
 eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "system_fonts", "wgpu"] }
 rfd = "0.15"
 serde_json.workspace = true
+sha2.workspace = true
+unicode-segmentation = "1"
 velopack = "=1.2.161"
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
 raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging", "Win32_System_Com", "Win32_System_Registry"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_Accessibility", "Win32_Graphics_Gdi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging", "Win32_System_Com", "Win32_System_Registry"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[build-dependencies]
+winresource = "=0.1.30"

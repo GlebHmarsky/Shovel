@@ -300,7 +300,12 @@ impl Dialogs {
     }
     pub fn toolbar(&mut self, ui: &mut egui::Ui, snapshot: Option<&Snapshot>) {
         ui.add_enabled_ui(snapshot.is_some_and(|s| s.operations.is_empty()), |ui| {
-            ui.menu_button(text("BranchToolbar"), |ui| {
+            if crate::workspace_style::action(ui, "BranchToolbar", snapshot.is_some()).clicked()
+                && let Some(snapshot) = snapshot
+            {
+                self.create(snapshot);
+            }
+            crate::workspace_style::options_menu(ui, text("BranchMenu"), |ui| {
                 let Some(snapshot) = snapshot else {
                     return;
                 };
@@ -345,7 +350,6 @@ impl Dialogs {
                     }
                 }
             })
-            .response
             .on_disabled_hover_text(text("ActionInspectionNeeded"));
         })
         .response

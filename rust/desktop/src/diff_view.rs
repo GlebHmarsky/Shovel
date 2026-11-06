@@ -307,31 +307,17 @@ fn row(
     width: f32,
     selected: bool,
 ) -> egui::Response {
-    let dark = ui.visuals().dark_mode;
-    let color = match line.kind {
-        LineKind::Added => {
-            if dark {
-                Color32::from_rgb(135, 207, 150)
-            } else {
-                Color32::from_rgb(24, 105, 48)
-            }
-        }
-        LineKind::Removed => {
-            if dark {
-                Color32::from_rgb(235, 152, 152)
-            } else {
-                Color32::from_rgb(156, 32, 32)
-            }
-        }
-        LineKind::Hunk => {
-            if dark {
-                Color32::from_rgb(139, 178, 225)
-            } else {
-                Color32::from_rgb(25, 80, 150)
-            }
-        }
-        _ => ui.visuals().text_color(),
+    let p = crate::workspace_style::Palette::current(ui);
+    let (mut color, mut fill) = match line.kind {
+        LineKind::Added => (p.diff_added_text, p.diff_added_background),
+        LineKind::Removed => (p.diff_removed_text, p.diff_removed_background),
+        LineKind::Hunk => (p.focus, p.raised),
+        _ => (p.text, Color32::TRANSPARENT),
     };
+    if selected {
+        color = p.selection_text;
+        fill = p.active_selection;
+    }
     let old = line.old.map(|n| n.to_string()).unwrap_or_default();
     let new = line.new.map(|n| n.to_string()).unwrap_or_default();
     let marker = match line.kind {
@@ -346,11 +332,6 @@ fn row(
             if new_side { new } else { old },
             line.text
         ),
-    };
-    let fill = if selected {
-        ui.visuals().selection.bg_fill
-    } else {
-        Color32::TRANSPARENT
     };
     egui::Frame::new()
         .fill(fill)

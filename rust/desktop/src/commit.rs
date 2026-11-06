@@ -1,7 +1,7 @@
 //! Repository-owned Local Changes state. The native window is only a view;
 //! closing it never drops accepted work, draft saves, or reconciliation.
 use crate::strings::{self, text};
-use eframe::egui::{self, Color32};
+use eframe::egui;
 use shovel_core::{
     drafts,
     git::Git,
@@ -873,7 +873,7 @@ impl Editor {
                     .resizable(true)
                     .show(ui, |ui| {
                         if let Some(error) = &self.draft_error {
-                            ui.colored_label(Color32::LIGHT_RED, error);
+                            ui.colored_label(ui.visuals().error_fg_color, error);
                         }
                         ui.label(text("CommitSubject"));
                         let subject = ui.add(
@@ -1125,7 +1125,7 @@ impl Editor {
                         self.show_diff(entry, &ctx);
                     }
                     if let Some(error) = &self.diff_error {
-                        ui.colored_label(Color32::LIGHT_RED, error);
+                        ui.colored_label(ui.visuals().error_fg_color, error);
                     } else if let Some(diff) = &self.diff {
                         if let Some(ids) =
                             self.diff_view.show(ui, diff, !self.busy && !self.loading)

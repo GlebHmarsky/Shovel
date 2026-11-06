@@ -4,17 +4,27 @@ mod commit;
 mod comparison;
 mod conflict;
 mod diff_view;
+mod file_history;
 mod file_picker;
 mod file_shell;
-mod file_history;
+mod history_row;
 mod operations;
 mod stashes;
 mod strings;
+mod workspace_style;
 
 fn main() -> eframe::Result {
-    velopack::VelopackApp::build().run();
+    velopack::VelopackApp::build()
+        .set_auto_apply_on_startup(false)
+        .run();
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
+            .with_icon(
+                eframe::icon_data::from_png_bytes(include_bytes!(
+                    "../../../src/GitGui.App/Assets/Shovel.png"
+                ))
+                .expect("checked application icon"),
+            )
             .with_inner_size([1200., 800.])
             .with_min_inner_size([900., 620.]),
         ..Default::default()
@@ -26,7 +36,7 @@ fn main() -> eframe::Result {
     )
 }
 
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 use shovel_core::{
     git::{Cursor, Git, History, Page},
     process::Cancellation,
@@ -108,6 +118,8 @@ impl Workspace {
         let output = sender.clone();
         let ctx = context.egui_ctx.clone();
         theme(&ctx, false);
+        let font_ctx = ctx.clone();
+        thread::spawn(move || workspace_style::install_windows_font(&font_ctx));
         thread::spawn(move || {
             let local = std::env::var_os("LOCALAPPDATA")
                 .map(PathBuf::from)
@@ -599,19 +611,7 @@ fn error_text(error: shovel_core::git::Error) -> String {
     }
 }
 fn theme(ctx: &egui::Context, light: bool) {
-    let mut visuals = if light {
-        egui::Visuals::light()
-    } else {
-        egui::Visuals::dark()
-    };
-    if !light {
-        visuals.panel_fill = Color32::from_rgb(34, 34, 34);
-        visuals.window_fill = Color32::from_rgb(50, 50, 50);
-        visuals.extreme_bg_color = Color32::from_rgb(39, 39, 39);
-        visuals.override_text_color = Some(Color32::from_rgb(228, 228, 228));
-        visuals.selection.bg_fill = Color32::from_rgb(36, 101, 170);
-    }
-    ctx.set_visuals(visuals);
+    workspace_style::apply(ctx, light);
 }
 impl eframe::App for Workspace {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -656,203 +656,347 @@ impl eframe::App for Workspace {
         if !modal_open && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageUp)) {
             self.page(false, &ctx);
         }
-        egui::Panel::top("toolbar").show(ui, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button(strings::text("FileMenu"), |ui| {
-                    if ui.button(strings::text("OpenRepository")).clicked() {
-                        self.pick_repository(&ctx);
-                        ui.close();
-                    }
-                });
-                ui.menu_button(strings::text("ViewMenu"), |ui| {
-                    if ui.button(strings::text("RefreshRepository")).clicked() {
-                        self.refresh(&ctx);
-                        ui.close();
-                    }
-                    if ui.button(strings::text("LoadOlderCommits")).clicked() {
-                        self.page(true, &ctx);
-                        ui.close();
-                    }
-                    if ui.button(strings::text("NewerCommits")).clicked() {
-                        self.page(false, &ctx);
-                        ui.close();
-                    }
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(strings::text("AppTitle"));
-                });
-            });
-            ui.horizontal(|ui| {
-                if ui.button(strings::text("OpenRepository")).clicked() {
-                    self.pick_repository(&ctx);
-                }
-                if ui.button(strings::text("RefreshRepository")).clicked() {
-                    self.refresh(&ctx);
-                }
-                self.branches.toolbar(
-                    ui,
-                    self.tabs
-                        .get(self.selected)
-                        .and_then(|t| t.history.as_ref())
-                        .map(|h| &h.snapshot),
-                );
-                self.preferences_dirty |= self.operations.toolbar(
-                    ui,
-                    &mut self.settings,
-                    self.tabs
-                        .get(self.selected)
-                        .and_then(|t| t.history.as_ref())
-                        .map(|h| &h.snapshot),
-                    self.git.as_ref(),
-                    &self.scheduler,
-                );
-                if ui
-                    .add_enabled(
-                        self.tabs
-                            .get(self.selected)
-                            .is_some_and(|t| t.history.is_some()),
-                        egui::Button::new(strings::text("Stashes")),
-                    )
-                    .on_disabled_hover_text(strings::text("ActionInspectionNeeded"))
-                    .clicked()
-                {
-                    self.open_stashes();
-                }
-                let commit_response = ui.add_enabled(
-                    self.git.is_some() && !self.tabs.is_empty(),
-                    egui::Button::new(strings::text("Commit")),
-                );
-                if commit_response.clicked() {
-                    self.open_commit();
-                }
-                if let Some(tab) = self.tabs.get(self.selected) {
-                    ui.label(tab.path.file_name().unwrap_or_default().to_string_lossy());
-                    if let Some(history) = &tab.history {
-                        ui.label(history.snapshot.branch.as_deref().unwrap_or("HEAD"));
-                    }
-                    if tab.loading {
-                        ui.label(strings::text("HistoryLoading"));
-                    }
-                }
-                if let Some(notice) = &self.notice {
-                    ui.colored_label(Color32::LIGHT_RED, notice);
-                }
-            });
-            if let Some(tab) = self.tabs.get(self.selected) {
-                self.operations.status(ui, &tab.path, &self.scheduler);
-                if let Some(history) = &tab.history
-                    && !history.snapshot.operations.is_empty()
-                {
-                    let snapshot = &history.snapshot;
-                    if let Some(state) = &snapshot.recovery {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(strings::format(
-                                "RecoveryHelp",
-                                &[&branches::recovery_name(state.kind)],
-                            ));
-                            if ui
-                                .button(strings::text("ActionTitleContinue"))
-                                .on_hover_text(strings::text("RecoveryContinueHelp"))
-                                .clicked()
-                                && let Some(git) = &self.git
-                            {
-                                self.operations.submit_recovery(
-                                    "ActionTitleContinue",
-                                    shovel_core::recovery::Action::Continue,
-                                    snapshot,
-                                    git.clone(),
-                                    &self.scheduler,
-                                    &ctx,
-                                );
-                            }
-                            if state.can_skip()
-                                && ui
-                                    .button(strings::text("ActionTitleSkip"))
-                                    .on_hover_text(strings::text("RecoverySkipHelp"))
+        if ctx.input(|i| {
+            i.events
+                .iter()
+                .any(|event| matches!(event, egui::Event::WindowFocused(true)))
+        }) {
+            theme(
+                &ctx,
+                self.settings
+                    .get("Appearance")
+                    .and_then(serde_json::Value::as_u64)
+                    == Some(1),
+            );
+        }
+        let palette = workspace_style::Palette::current(ui);
+        egui::Panel::top("toolbar")
+            .frame(workspace_style::pane(palette.chrome, 6, 2))
+            .show(ui, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button(strings::text("FileMenu"), |ui| {
+                        if ui.button(strings::text("OpenRepository")).clicked() {
+                            self.pick_repository(&ctx);
+                            ui.close();
+                        }
+                    });
+                    ui.menu_button(strings::text("ViewMenu"), |ui| {
+                        ui.menu_button(strings::text("WorkspaceAppearance"), |ui| {
+                            for (value, key) in [(0, "WorkspaceDark"), (1, "WorkspaceLight")] {
+                                let current = self
+                                    .settings
+                                    .get("Appearance")
+                                    .and_then(serde_json::Value::as_u64)
+                                    .unwrap_or(0);
+                                if ui
+                                    .selectable_label(current == value, strings::text(key))
                                     .clicked()
-                            {
-                                self.branches.confirm_recovery(
-                                    snapshot,
-                                    shovel_core::recovery::Action::Skip,
-                                );
-                            }
-                            if ui
-                                .button(strings::text("ActionTitleAbort"))
-                                .on_hover_text(strings::text("RecoveryAbortHelp"))
-                                .clicked()
-                            {
-                                self.branches.confirm_recovery(
-                                    snapshot,
-                                    shovel_core::recovery::Action::Abort,
-                                );
+                                {
+                                    self.settings.set("Appearance", serde_json::json!(value));
+                                    theme(&ctx, value == 1);
+                                    self.preferences_dirty = true;
+                                    ui.close();
+                                }
                             }
                         });
-                    } else {
-                        ui.label(strings::text("RecoveryUnavailable"));
+                        ui.separator();
+                        if ui.button(strings::text("RefreshRepository")).clicked() {
+                            self.refresh(&ctx);
+                            ui.close();
+                        }
+                        if ui.button(strings::text("LoadOlderCommits")).clicked() {
+                            self.page(true, &ctx);
+                            ui.close();
+                        }
+                        if ui.button(strings::text("NewerCommits")).clicked() {
+                            self.page(false, &ctx);
+                            ui.close();
+                        }
+                    });
+                    ui.menu_button(strings::text("RepositoryMenu"), |ui| {
+                        if ui
+                            .add_enabled(
+                                !self.tabs.is_empty(),
+                                egui::Button::new(strings::text("RefreshRepository")),
+                            )
+                            .clicked()
+                        {
+                            self.refresh(&ctx);
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(
+                                self.tabs
+                                    .get(self.selected)
+                                    .is_some_and(|t| t.history.is_some()),
+                                egui::Button::new(strings::text("Stashes")),
+                            )
+                            .clicked()
+                        {
+                            self.open_stashes();
+                            ui.close();
+                        }
+                    });
+                    ui.add_enabled_ui(!self.tabs.is_empty(), |ui| {
+                        ui.menu_button(strings::text("WindowMenu"), |ui| {
+                            for (index, tab) in self.tabs.iter().enumerate() {
+                                if ui
+                                    .selectable_label(
+                                        index == self.selected,
+                                        tab.path.to_string_lossy(),
+                                    )
+                                    .clicked()
+                                {
+                                    self.selected = index;
+                                    self.history_menu = None;
+                                    self.reference_menu = None;
+                                    ui.close();
+                                    if self.tabs[index].history.is_none() {
+                                        self.refresh(&ctx);
+                                    }
+                                    break;
+                                }
+                            }
+                        });
+                    });
+                });
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), 48.),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.x = 2.;
+                        if workspace_style::action(ui, "OpenRepository", true).clicked() {
+                            self.pick_repository(&ctx);
+                        }
+                        self.preferences_dirty |= self.operations.toolbar(
+                            ui,
+                            &mut self.settings,
+                            self.tabs
+                                .get(self.selected)
+                                .and_then(|t| t.history.as_ref())
+                                .map(|h| &h.snapshot),
+                            self.git.as_ref(),
+                            &self.scheduler,
+                        );
+                        if workspace_style::action(
+                            ui,
+                            "Commit",
+                            self.git.is_some() && !self.tabs.is_empty(),
+                        )
+                        .clicked()
+                        {
+                            self.open_commit();
+                        }
+                        let context_width = (ui.available_width() - 150.).clamp(90., 530.);
+                        let margin = ((ui.available_width() - 150. - context_width) / 2.).max(0.);
+                        ui.add_space(margin);
+                        egui::Frame::new()
+                            .fill(palette.raised)
+                            .stroke(egui::Stroke::new(1., palette.border))
+                            .corner_radius(6)
+                            .inner_margin(egui::Margin::symmetric(10, 4))
+                            .show(ui, |ui| {
+                                ui.set_width((context_width - 22.).max(1.));
+                                ui.vertical_centered(|ui| {
+                                    if let Some(tab) = self.tabs.get(self.selected) {
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(
+                                                    tab.path
+                                                        .file_name()
+                                                        .unwrap_or_default()
+                                                        .to_string_lossy(),
+                                                )
+                                                .strong(),
+                                            )
+                                            .truncate(),
+                                        )
+                                        .on_hover_text(tab.path.to_string_lossy());
+                                        if let Some(history) = &tab.history {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(
+                                                        history
+                                                            .snapshot
+                                                            .branch
+                                                            .as_deref()
+                                                            .unwrap_or("HEAD"),
+                                                    )
+                                                    .color(palette.muted),
+                                                )
+                                                .truncate(),
+                                            );
+                                        } else if tab.loading {
+                                            ui.label(
+                                                RichText::new(strings::text("HistoryLoading"))
+                                                    .color(palette.muted),
+                                            );
+                                        }
+                                    } else {
+                                        ui.label(RichText::new(strings::text("AppTitle")).strong());
+                                    }
+                                });
+                            });
+                        ui.add_space(margin);
+                        self.branches.toolbar(
+                            ui,
+                            self.tabs
+                                .get(self.selected)
+                                .and_then(|t| t.history.as_ref())
+                                .map(|h| &h.snapshot),
+                        );
+                        if workspace_style::action(
+                            ui,
+                            "Stashes",
+                            self.tabs
+                                .get(self.selected)
+                                .is_some_and(|t| t.history.is_some()),
+                        )
+                        .on_disabled_hover_text(strings::text("ActionInspectionNeeded"))
+                        .clicked()
+                        {
+                            self.open_stashes();
+                        }
+                    },
+                );
+                if let Some(notice) = &self.notice {
+                    ui.colored_label(palette.diff_removed_text, notice);
+                }
+                if let Some(tab) = self.tabs.get(self.selected) {
+                    self.operations.status(ui, &tab.path, &self.scheduler);
+                    if let Some(history) = &tab.history
+                        && !history.snapshot.operations.is_empty()
+                    {
+                        let snapshot = &history.snapshot;
+                        if let Some(state) = &snapshot.recovery {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(strings::format(
+                                    "RecoveryHelp",
+                                    &[&branches::recovery_name(state.kind)],
+                                ));
+                                if ui
+                                    .button(strings::text("ActionTitleContinue"))
+                                    .on_hover_text(strings::text("RecoveryContinueHelp"))
+                                    .clicked()
+                                    && let Some(git) = &self.git
+                                {
+                                    self.operations.submit_recovery(
+                                        "ActionTitleContinue",
+                                        shovel_core::recovery::Action::Continue,
+                                        snapshot,
+                                        git.clone(),
+                                        &self.scheduler,
+                                        &ctx,
+                                    );
+                                }
+                                if state.can_skip()
+                                    && ui
+                                        .button(strings::text("ActionTitleSkip"))
+                                        .on_hover_text(strings::text("RecoverySkipHelp"))
+                                        .clicked()
+                                {
+                                    self.branches.confirm_recovery(
+                                        snapshot,
+                                        shovel_core::recovery::Action::Skip,
+                                    );
+                                }
+                                if ui
+                                    .button(strings::text("ActionTitleAbort"))
+                                    .on_hover_text(strings::text("RecoveryAbortHelp"))
+                                    .clicked()
+                                {
+                                    self.branches.confirm_recovery(
+                                        snapshot,
+                                        shovel_core::recovery::Action::Abort,
+                                    );
+                                }
+                            });
+                        } else {
+                            ui.label(strings::text("RecoveryUnavailable"));
+                        }
                     }
                 }
-            }
-            if let Some(tab) = self.tabs.get(self.selected)
-                && let Some(editor) = self
-                    .editors
-                    .iter_mut()
-                    .find(|editor| editor.path == tab.path)
-                && (editor.status.is_some() || !editor.output.is_empty())
-            {
-                ui.horizontal(|ui| {
-                    if let Some(status) = &editor.status {
-                        ui.label(status);
-                    }
-                    if editor.failed_commit && ui.button(strings::text("ReopenCommit")).clicked() {
-                        editor.activate();
-                    }
-                    if !editor.output.is_empty() {
-                        egui::CollapsingHeader::new(strings::text("OperationAttentionLogs")).show(
-                            ui,
-                            |ui| {
-                                egui::ScrollArea::both().max_height(170.).show(ui, |ui| {
-                                    ui.add(
-                                        egui::Label::new(RichText::new(&editor.output).monospace())
+                if let Some(tab) = self.tabs.get(self.selected)
+                    && let Some(editor) = self
+                        .editors
+                        .iter_mut()
+                        .find(|editor| editor.path == tab.path)
+                    && (editor.status.is_some() || !editor.output.is_empty())
+                {
+                    ui.horizontal(|ui| {
+                        if let Some(status) = &editor.status {
+                            ui.label(status);
+                        }
+                        if editor.failed_commit
+                            && ui.button(strings::text("ReopenCommit")).clicked()
+                        {
+                            editor.activate();
+                        }
+                        if !editor.output.is_empty() {
+                            egui::CollapsingHeader::new(strings::text("OperationAttentionLogs"))
+                                .show(ui, |ui| {
+                                    egui::ScrollArea::both().max_height(170.).show(ui, |ui| {
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(&editor.output).monospace(),
+                                            )
                                             .selectable(true),
-                                    );
+                                        );
+                                    });
                                 });
-                            },
-                        );
-                    }
-                });
-            }
-            let count = self.tabs.len();
-            let width = if count == 0 {
-                0.
-            } else {
-                (ui.available_width() - ui.spacing().item_spacing.x * (count - 1) as f32)
-                    / count as f32
-            };
-            let mut selected = None;
-            ui.horizontal(|ui| {
-                for (index, tab) in self.tabs.iter().enumerate() {
-                    let label = tab.path.file_name().unwrap_or_default().to_string_lossy();
-                    let response = ui.add_sized(
-                        [width, 26.],
-                        egui::Button::new(label).selected(index == self.selected),
-                    );
-                    if response.clicked() {
-                        selected = Some(index);
-                    }
-                    response.on_hover_text(tab.path.to_string_lossy());
+                        }
+                    });
                 }
             });
-            if let Some(index) = selected {
-                egui::Popup::close_all(&ctx);
-                self.history_menu = None;
-                self.reference_menu = None;
-                self.selected = index;
-                if self.tabs[index].history.is_none() {
-                    self.refresh(&ctx);
+        egui::Panel::top("repository-tabs")
+            .frame(workspace_style::pane(palette.tab_strip, 4, 0))
+            .show(ui, |ui| {
+                let count = self.tabs.len();
+                let width = if count == 0 {
+                    0.
+                } else {
+                    (ui.available_width() - ui.spacing().item_spacing.x * (count - 1) as f32)
+                        / count as f32
+                };
+                let mut selected = None;
+                ui.horizontal(|ui| {
+                    for (index, tab) in self.tabs.iter().enumerate() {
+                        let label = tab.path.file_name().unwrap_or_default().to_string_lossy();
+                        let response = ui.add_sized(
+                            [width, 26.],
+                            egui::Button::new(RichText::new(label).color(palette.text))
+                                .truncate()
+                                .selected(index == self.selected)
+                                .fill(if index == self.selected {
+                                    palette.sidebar
+                                } else {
+                                    palette.tab_strip
+                                })
+                                .corner_radius(egui::CornerRadius {
+                                    nw: 5,
+                                    ne: 5,
+                                    sw: 0,
+                                    se: 0,
+                                }),
+                        );
+                        if response.clicked() {
+                            selected = Some(index);
+                        }
+                        response.on_hover_text(tab.path.to_string_lossy());
+                    }
+                });
+                if let Some(index) = selected {
+                    egui::Popup::close_all(&ctx);
+                    self.history_menu = None;
+                    self.reference_menu = None;
+                    self.selected = index;
+                    if self.tabs[index].history.is_none() {
+                        self.refresh(&ctx);
+                    }
                 }
-            }
-        });
+            });
         egui::Panel::left("sidebar")
+            .frame(workspace_style::pane(palette.sidebar, 8, 4))
             .default_size(210.)
             .min_size(160.)
             .show(ui, |ui| {
@@ -866,78 +1010,89 @@ impl eframe::App for Workspace {
                             ("Tags", "refs/tags/"),
                             ("Stashes", "stash@{"),
                         ] {
-                            egui::CollapsingHeader::new(strings::text(key))
-                                .default_open(true)
-                                .show(ui, |ui| {
-                                    for reference in history
-                                        .snapshot
-                                        .references
-                                        .iter()
-                                        .filter(|r| r.name.starts_with(prefix))
+                            egui::CollapsingHeader::new(
+                                RichText::new(strings::text(key))
+                                    .strong()
+                                    .color(palette.muted),
+                            )
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                for reference in history
+                                    .snapshot
+                                    .references
+                                    .iter()
+                                    .filter(|r| r.name.starts_with(prefix))
+                                {
+                                    let short = reference
+                                        .name
+                                        .strip_prefix(prefix)
+                                        .unwrap_or(&reference.name);
+                                    let response = ui
+                                        .add(
+                                            egui::Button::selectable(
+                                                tab.selected.as_deref() == Some(&reference.hash),
+                                                short,
+                                            )
+                                            .truncate(),
+                                        )
+                                        .on_hover_text(&reference.name);
+                                    if response.clicked() {
+                                        tab.selected = Some(reference.hash.clone());
+                                    }
+                                    if reference.name.starts_with("refs/heads/")
+                                        || reference.name.starts_with("stash@{")
                                     {
-                                        let response = ui.selectable_label(
-                                            tab.selected.as_deref() == Some(&reference.hash),
-                                            reference
-                                                .name
-                                                .strip_prefix(prefix)
-                                                .unwrap_or(&reference.name),
-                                        );
-                                        if response.clicked() {
-                                            tab.selected = Some(reference.hash.clone());
-                                        }
-                                        if reference.name.starts_with("refs/heads/")
-                                            || reference.name.starts_with("stash@{")
-                                        {
-                                            if response.secondary_clicked() {
-                                                self.reference_menu = Some(ReferenceMenu {
-                                                    owner: tab.id,
-                                                    snapshot: history.snapshot.clone(),
-                                                    reference: reference.clone(),
-                                                });
-                                            }
-                                            response.context_menu(|ui| {
-                                                if let Some(menu) = &self.reference_menu
-                                                    && menu.owner == tab.id
-                                                {
-                                                    if menu.reference.name.starts_with("stash@{") {
-                                                        let message = history
-                                                            .stashes
-                                                            .iter()
-                                                            .find(|c| c.hash == menu.reference.hash)
-                                                            .map(|c| c.subject())
-                                                            .unwrap_or_default();
-                                                        stashes::quick_actions(
-                                                            ui,
-                                                            stashes::QuickTarget {
-                                                                snapshot: &menu.snapshot,
-                                                                reference: &menu.reference,
-                                                                message,
-                                                            },
-                                                            self.git.as_ref(),
-                                                            &mut self.operations,
-                                                            &mut self.branches,
-                                                            &self.scheduler,
-                                                        );
-                                                    } else {
-                                                        self.branches.ref_menu(
-                                                            ui,
-                                                            &menu.snapshot,
-                                                            &menu.reference,
-                                                        );
-                                                    }
-                                                }
+                                        if response.secondary_clicked() {
+                                            self.reference_menu = Some(ReferenceMenu {
+                                                owner: tab.id,
+                                                snapshot: history.snapshot.clone(),
+                                                reference: reference.clone(),
                                             });
                                         }
+                                        response.context_menu(|ui| {
+                                            if let Some(menu) = &self.reference_menu
+                                                && menu.owner == tab.id
+                                            {
+                                                if menu.reference.name.starts_with("stash@{") {
+                                                    let message = history
+                                                        .stashes
+                                                        .iter()
+                                                        .find(|c| c.hash == menu.reference.hash)
+                                                        .map(|c| c.subject())
+                                                        .unwrap_or_default();
+                                                    stashes::quick_actions(
+                                                        ui,
+                                                        stashes::QuickTarget {
+                                                            snapshot: &menu.snapshot,
+                                                            reference: &menu.reference,
+                                                            message,
+                                                        },
+                                                        self.git.as_ref(),
+                                                        &mut self.operations,
+                                                        &mut self.branches,
+                                                        &self.scheduler,
+                                                    );
+                                                } else {
+                                                    self.branches.ref_menu(
+                                                        ui,
+                                                        &menu.snapshot,
+                                                        &menu.reference,
+                                                    );
+                                                }
+                                            }
+                                        });
                                     }
-                                });
+                                }
+                            });
                         }
                     });
                 }
             });
         egui::Panel::bottom("details")
+            .frame(workspace_style::pane(palette.panel, 6, 2))
             .resizable(true)
-            .default_size(320.)
-            .min_size(200.)
+            .default_size(205.)
+            .min_size(80.)
             .show(ui, |ui| {
                 if let Some(tab) = self.tabs.get_mut(self.selected)
                     && let Some(commit) = tab
@@ -972,146 +1127,138 @@ impl eframe::App for Workspace {
                     }
                 }
             });
-        egui::CentralPanel::default().show(ui, |ui| {
-            let Some(tab) = self.tabs.get_mut(self.selected) else {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
+        egui::CentralPanel::default()
+            .frame(workspace_style::pane(palette.canvas, 0, 0))
+            .show(ui, |ui| {
+                let Some(tab) = self.tabs.get_mut(self.selected) else {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space((ui.available_height() / 2. - 55.).max(8.));
                         ui.heading(strings::text("HistoryEmptyTitle"));
-                        ui.label(strings::text("HistoryEmptyBody"));
+                        ui.label(
+                            RichText::new(strings::text("HistoryEmptyBody")).color(palette.muted),
+                        );
+                        ui.add_space(8.);
+                        if ui.button(strings::text("OpenRepository")).clicked() {
+                            self.pick_repository(&ctx);
+                        }
                     });
-                });
-                return;
-            };
-            if let Some(error) = &tab.error {
-                ui.colored_label(Color32::LIGHT_RED, error);
-            }
-            let Some(page) = &tab.page else {
-                return;
-            };
-            if page.entries.is_empty() {
-                ui.label(strings::text("HistoryEmptyAll"));
-            }
-            egui::ScrollArea::vertical().id_salt(tab.id).show_rows(
-                ui,
-                23.,
-                page.entries.len(),
-                |ui, range| {
-                    for index in range {
-                        let entry = &page.entries[index];
-                        ui.horizontal(|ui| {
-                            let graph_width = entry.graph.width.max(2) as f32 * 12.;
-                            let (rect, _) = ui.allocate_exact_size(
-                                egui::vec2(graph_width, 23.),
-                                egui::Sense::hover(),
-                            );
-                            let colors = [
-                                Color32::from_rgb(225, 128, 96),
-                                Color32::from_rgb(100, 181, 246),
-                                Color32::from_rgb(129, 199, 132),
-                                Color32::from_rgb(186, 104, 200),
-                                Color32::from_rgb(255, 213, 79),
-                            ];
-                            let point = |lane: usize, y: f32| {
-                                egui::pos2(
-                                    rect.left() + 6. + lane as f32 * 12.,
-                                    rect.top() + y * 23.,
-                                )
-                            };
-                            for line in &entry.graph.lines {
-                                ui.painter().line_segment(
-                                    [point(line.from, line.from_y), point(line.to, line.to_y)],
-                                    egui::Stroke::new(1.7, colors[line.color % colors.len()]),
-                                );
-                            }
-                            let center = point(entry.graph.node, 0.5);
-                            let color = colors[entry.graph.color % colors.len()];
-                            if entry.graph.is_merge || entry.graph.is_stash {
-                                ui.painter().circle_stroke(
-                                    center,
-                                    3.5,
-                                    egui::Stroke::new(1.7, color),
-                                );
-                            } else {
-                                ui.painter().circle_filled(center, 3.5, color);
-                            }
-                            for reference in &entry.references {
-                                ui.label(
-                                    RichText::new(
-                                        reference
-                                            .name
-                                            .trim_start_matches("refs/heads/")
-                                            .trim_start_matches("refs/remotes/")
-                                            .trim_start_matches("refs/tags/"),
-                                    )
-                                    .color(Color32::LIGHT_BLUE),
-                                );
-                            }
-                            let response = ui.selectable_label(
-                                tab.selected.as_deref() == Some(&entry.commit.hash),
-                                entry.commit.subject(),
-                            );
-                            if response.clicked() {
-                                tab.selected = Some(entry.commit.hash.clone());
-                            }
-                            if response.secondary_clicked()
-                                && let Some(history) = &tab.history
+                    return;
+                };
+                if let Some(error) = &tab.error {
+                    ui.colored_label(palette.diff_removed_text, error);
+                }
+                let Some(page) = &tab.page else {
+                    return;
+                };
+                if page.entries.is_empty() {
+                    ui.label(strings::text("HistoryEmptyAll"));
+                }
+                let selected_author = page
+                    .entries
+                    .iter()
+                    .find(|e| Some(&e.commit.hash) == tab.selected.as_ref())
+                    .map(|e| (&e.commit.author, &e.commit.email));
+                let lanes = page
+                    .entries
+                    .iter()
+                    .map(|e| e.graph.width)
+                    .max()
+                    .unwrap_or(1)
+                    .max(2);
+                let refs_right = self
+                    .settings
+                    .get("HistoryRefsOnRight")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+                ui.spacing_mut().item_spacing.y = 0.;
+                egui::ScrollArea::both().id_salt(tab.id).show_rows(
+                    ui,
+                    23.,
+                    page.entries.len(),
+                    |ui, range| {
+                        for index in range {
+                            let entry = &page.entries[index];
                             {
-                                self.history_menu = Some(HistoryMenu {
-                                    owner: tab.id,
-                                    snapshot: history.snapshot.clone(),
-                                    commit: entry.commit.clone(),
+                                let selected = tab.selected.as_ref() == Some(&entry.commit.hash);
+                                let peer = selected_author.is_some_and(|(name, email)| {
+                                    !email.trim().is_empty()
+                                        && &entry.commit.author == name
+                                        && &entry.commit.email == email
                                 });
-                            }
-                            response.context_menu(|ui| {
-                                if let Some(menu) = &self.history_menu
-                                    && menu.owner == tab.id
+                                let response = history_row::show(
+                                    ui, entry, lanes, selected, peer, refs_right, &palette,
+                                );
+                                if response.clicked() {
+                                    tab.selected = Some(entry.commit.hash.clone());
+                                }
+                                if response.secondary_clicked()
+                                    && let Some(history) = &tab.history
                                 {
-                                    if let Some(reference) =
-                                        menu.snapshot.references.iter().find(|r| {
-                                            r.name.starts_with("stash@{")
-                                                && r.hash == menu.commit.hash
-                                        })
+                                    self.history_menu = Some(HistoryMenu {
+                                        owner: tab.id,
+                                        snapshot: history.snapshot.clone(),
+                                        commit: entry.commit.clone(),
+                                    });
+                                }
+                                response.context_menu(|ui| {
+                                    if let Some(menu) = &self.history_menu
+                                        && menu.owner == tab.id
                                     {
-                                        stashes::quick_actions(
-                                            ui,
-                                            stashes::QuickTarget {
-                                                snapshot: &menu.snapshot,
-                                                reference,
-                                                message: menu.commit.subject(),
-                                            },
-                                            self.git.as_ref(),
-                                            &mut self.operations,
-                                            &mut self.branches,
-                                            &self.scheduler,
-                                        );
-                                    } else {
-                                        ui.add_enabled_ui(
-                                            menu.snapshot.operations.is_empty(),
-                                            |ui| {
-                                                if ui
-                                                    .button(strings::text(
-                                                        "HistoryMenuCheckoutCommit",
-                                                    ))
-                                                    .clicked()
-                                                {
-                                                    self.branches.checkout(
+                                        if let Some(reference) =
+                                            menu.snapshot.references.iter().find(|r| {
+                                                r.name.starts_with("stash@{")
+                                                    && r.hash == menu.commit.hash
+                                            })
+                                        {
+                                            stashes::quick_actions(
+                                                ui,
+                                                stashes::QuickTarget {
+                                                    snapshot: &menu.snapshot,
+                                                    reference,
+                                                    message: menu.commit.subject(),
+                                                },
+                                                self.git.as_ref(),
+                                                &mut self.operations,
+                                                &mut self.branches,
+                                                &self.scheduler,
+                                            );
+                                        } else {
+                                            ui.add_enabled_ui(
+                                                menu.snapshot.operations.is_empty(),
+                                                |ui| {
+                                                    if ui
+                                                        .button(strings::text(
+                                                            "HistoryMenuCheckoutCommit",
+                                                        ))
+                                                        .clicked()
+                                                    {
+                                                        self.branches.checkout(
                                                         &menu.snapshot,
                                                         shovel_core::branches::Checkout::Detached(
                                                             menu.commit.hash.clone(),
                                                         ),
                                                     );
-                                                    ui.close();
-                                                }
-                                                ui.menu_button(
-                                                    strings::text("HistoryResetMenu"),
-                                                    |ui| {
-                                                        use shovel_core::history_actions::Reset;
-                                                        for (mode, label) in [
-                                                            (Reset::Soft, "HistoryMenuResetSoft"),
-                                                            (Reset::Mixed, "HistoryMenuResetMixed"),
-                                                            (Reset::Hard, "HistoryMenuResetHard"),
-                                                        ] {
-                                                            if ui
+                                                        ui.close();
+                                                    }
+                                                    ui.menu_button(
+                                                        strings::text("HistoryResetMenu"),
+                                                        |ui| {
+                                                            use shovel_core::history_actions::Reset;
+                                                            for (mode, label) in [
+                                                                (
+                                                                    Reset::Soft,
+                                                                    "HistoryMenuResetSoft",
+                                                                ),
+                                                                (
+                                                                    Reset::Mixed,
+                                                                    "HistoryMenuResetMixed",
+                                                                ),
+                                                                (
+                                                                    Reset::Hard,
+                                                                    "HistoryMenuResetHard",
+                                                                ),
+                                                            ] {
+                                                                if ui
                                                                 .add_enabled(
                                                                     menu.snapshot.branch.is_some()
                                                                         && menu
@@ -1136,55 +1283,57 @@ impl eframe::App for Workspace {
                                                                 );
                                                                 ui.close();
                                                             }
-                                                        }
-                                                    },
-                                                );
-                                                let mut revert_mainline = None;
-                                                if menu.commit.parents.len() > 1 {
-                                                    ui.menu_button(
-                                                        strings::text("HistoryMenuRevertCommit"),
-                                                        |ui| {
-                                                            for (index, parent) in menu
-                                                                .commit
-                                                                .parents
-                                                                .iter()
-                                                                .enumerate()
-                                                            {
-                                                                if ui
-                                                                    .button(strings::format(
-                                                                        "HistoryRevertParent",
-                                                                        &[
-                                                                            &(index + 1)
-                                                                                .to_string(),
-                                                                            parent,
-                                                                        ],
-                                                                    ))
-                                                                    .clicked()
-                                                                {
-                                                                    revert_mainline =
-                                                                        Some(index + 1);
-                                                                    ui.close();
-                                                                }
                                                             }
                                                         },
-                                                    )
-                                                    .response
-                                                    .on_hover_text(strings::text(
-                                                        "HistoryRevertParentHelp",
-                                                    ));
-                                                } else if ui
-                                                    .button(strings::text(
-                                                        "HistoryMenuRevertCommit",
-                                                    ))
-                                                    .clicked()
-                                                {
-                                                    revert_mainline = Some(0);
-                                                    ui.close();
-                                                }
-                                                if let Some(mainline) = revert_mainline
-                                                    && let Some(git) = &self.git
-                                                {
-                                                    self.operations.submit_history(
+                                                    );
+                                                    let mut revert_mainline = None;
+                                                    if menu.commit.parents.len() > 1 {
+                                                        ui.menu_button(
+                                                            strings::text(
+                                                                "HistoryMenuRevertCommit",
+                                                            ),
+                                                            |ui| {
+                                                                for (index, parent) in menu
+                                                                    .commit
+                                                                    .parents
+                                                                    .iter()
+                                                                    .enumerate()
+                                                                {
+                                                                    if ui
+                                                                        .button(strings::format(
+                                                                            "HistoryRevertParent",
+                                                                            &[
+                                                                                &(index + 1)
+                                                                                    .to_string(),
+                                                                                parent,
+                                                                            ],
+                                                                        ))
+                                                                        .clicked()
+                                                                    {
+                                                                        revert_mainline =
+                                                                            Some(index + 1);
+                                                                        ui.close();
+                                                                    }
+                                                                }
+                                                            },
+                                                        )
+                                                        .response
+                                                        .on_hover_text(strings::text(
+                                                            "HistoryRevertParentHelp",
+                                                        ));
+                                                    } else if ui
+                                                        .button(strings::text(
+                                                            "HistoryMenuRevertCommit",
+                                                        ))
+                                                        .clicked()
+                                                    {
+                                                        revert_mainline = Some(0);
+                                                        ui.close();
+                                                    }
+                                                    if let Some(mainline) = revert_mainline
+                                                        && let Some(git) = &self.git
+                                                    {
+                                                        self.operations.submit_history(
                                                 "ActionTitleRevertCommit",
                                                 shovel_core::history_actions::Action::Revert {
                                                     target: menu.commit.hash.clone(),
@@ -1195,34 +1344,25 @@ impl eframe::App for Workspace {
                                                 &self.scheduler,
                                                 &ctx,
                                             );
-                                                }
-                                            },
-                                        )
-                                        .response
-                                        .on_disabled_hover_text(strings::text("ActionSequence"));
+                                                    }
+                                                },
+                                            )
+                                            .response
+                                            .on_disabled_hover_text(strings::text(
+                                                "ActionSequence",
+                                            ));
+                                        }
+                                        if ui.button(strings::text("HistoryCopySha")).clicked() {
+                                            ctx.copy_text(menu.commit.hash.clone());
+                                            ui.close();
+                                        }
                                     }
-                                    if ui.button(strings::text("HistoryCopySha")).clicked() {
-                                        ctx.copy_text(menu.commit.hash.clone());
-                                        ui.close();
-                                    }
-                                }
-                            });
-                            response.on_hover_text(&entry.commit.message);
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.monospace(
-                                        &entry.commit.hash[..entry.commit.hash.len().min(8)],
-                                    );
-                                    ui.label(entry.commit.authored.format("%Y-%m-%d").to_string());
-                                    ui.label(&entry.commit.author);
-                                },
-                            );
-                        });
-                    }
-                },
-            );
-        });
+                                });
+                            }
+                        }
+                    },
+                );
+            });
         let stash_input =
             !self.closing && !self.operations.modal_open() && !self.branches.is_open();
         for view in &mut self.stash_views {
