@@ -1,0 +1,219 @@
+{
+  "Date": "2026-11-07",
+  "Version": "0.49.2",
+  "SourceCommit": "370e987bf3e90b0f49597a4ba7cd2a353a55ad08",
+  "SourceFingerprint": "0D2D36F46AC135A9B5B72818D753C8F889D15730EB6F0320C0F5735C122A32EE",
+  "InstallerSHA256": "BD4D5AD1EFF57AFDB8CD693F4D193E6DFBA99E2B40D6F6DDB990C06274BDF0E5",
+  "AuthenticodeSigned": false,
+  "Smoke": {
+    "SourceFingerprint": "0D2D36F46AC135A9B5B72818D753C8F889D15730EB6F0320C0F5735C122A32EE",
+    "Passed": true,
+    "Count": 18,
+    "Seconds": 33.2066895,
+    "Checks": [
+      {
+        "Name": "updates::tests::accepts_velopack_notes_html_spelling_without_ignoring_unknown_fields",
+        "Seconds": 5.5070023
+      },
+      {
+        "Name": "updates::tests::rust_urls_and_identifiers_are_separate",
+        "Seconds": 0.5165526
+      },
+      {
+        "Name": "updates::tests::verifies_powershell_pss_signature_and_exact_package",
+        "Seconds": 0.5088789
+      },
+      {
+        "Name": "updates::tests::rejects_modified_feed_wrong_key_and_swapped_channel",
+        "Seconds": 0.5126003
+      },
+      {
+        "Name": "updates::tests::rejects_validly_signed_foreign_product_and_unsafe_package",
+        "Seconds": 0.5094685
+      },
+      {
+        "Name": "settings::tests::imports_all_fields_without_modifying_csharp_and_roundtrips",
+        "Seconds": 0.5065985
+      },
+      {
+        "Name": "settings::tests::preserves_bad_or_newer_profiles_and_refuses_saves",
+        "Seconds": 0.510447
+      },
+      {
+        "Name": "settings::tests::competing_writer_preserved_and_successful_save_keeps_backup",
+        "Seconds": 0.5123525
+      },
+      {
+        "Name": "settings::tests::explicit_fetch_interval_survives_and_channels_cannot_be_csharp",
+        "Seconds": 0.4985007
+      },
+      {
+        "Name": "automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation",
+        "Seconds": 11.8214601
+      },
+      {
+        "Name": "workspace_interaction_tests::tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop",
+        "Seconds": 1.0487214
+      },
+      {
+        "Name": "workspace_interaction_tests::details_splitter_reserves_history_and_saves_drag_proportion",
+        "Seconds": 0.7839745
+      },
+      {
+        "Name": "workspace_interaction_tests::reference_navigation_finds_old_tags_and_stashes_beyond_first_page",
+        "Seconds": 4.0260187
+      },
+      {
+        "Name": "operations::tests::network_options_are_modal_persist_on_close_and_do_not_execute",
+        "Seconds": 1.5986331
+      },
+      {
+        "Name": "operations::activity_layout_test::retained_operation_output_does_not_push_down_repository_tabs",
+        "Seconds": 0.8002653
+      },
+      {
+        "Name": "git_identity::tests::global_identity_preserves_other_config_and_rejects_stale_review",
+        "Seconds": 1.9073724
+      },
+      {
+        "Name": "updater::tests::obsolete_update_events_cannot_restore_previous_channel_or_progress",
+        "Seconds": 0.7744887
+      },
+      {
+        "Name": "caption::tests::hidden_window_extends_client_area_and_separates_drag_from_buttons",
+        "Seconds": 0.7402614
+      }
+    ],
+    "DesktopVerified": false,
+    "InstalledUpdatesVerified": false
+  },
+  "ChannelIsolation": {
+    "Version": "0.49.2",
+    "SourceCommit": "370e987bf3e90b0f49597a4ba7cd2a353a55ad08",
+    "Passed": true,
+    "Checks": [
+      {
+        "Check": "Production signed Rust Beta",
+        "Passed": true,
+        "ExpectedAcceptance": true
+      },
+      {
+        "Check": "Rust Beta cannot be substituted into Rust Stable",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Tampered signature rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Correctly signed csharp-product rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Correctly signed csharp-channel rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Correctly signed csharp-package rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Correctly signed wrong-architecture rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Correctly signed unsafe-path rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Same-size modified package rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      },
+      {
+        "Check": "Actual anonymous C# signed Beta feed rejected",
+        "Passed": true,
+        "ExpectedAcceptance": false
+      }
+    ]
+  },
+  "NativeLifecycleFixture": {
+    "SourceCommit": "370e987bf3e90b0f49597a4ba7cd2a353a55ad08",
+    "Identity": "ShovelRustLifecycle",
+    "Channel": "win-rust-beta",
+    "From": "0.49.1",
+    "To": "0.49.2",
+    "ProductionPayload": false,
+    "ProductionKey": false,
+    "Transport": "local signed fixture",
+    "Limit": "Fixture-only local transport and console orchestration, no UI input or public GitHub discovery.",
+    "Installed": "0.49.1",
+    "Registered": true,
+    "Restart": {
+      "DraftLoaded": true,
+      "SettingsLoaded": true,
+      "Version": "0.49.2"
+    },
+    "Updated": "0.49.2",
+    "ProfileAndDraftBytesPreserved": true,
+    "RepairedVersion": "0.49.2",
+    "Uninstalled": true,
+    "DataRetained": true,
+    "Passed": true
+  },
+  "Publication": {
+    "Published": true,
+    "Version": "0.49.2",
+    "SourceCommit": "370e987bf3e90b0f49597a4ba7cd2a353a55ad08",
+    "Url": "https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.49.2-win-rust-beta",
+    "AnonymousInstallerVerified": true,
+    "AnonymousSignedPackageVerified": true,
+    "CSharpUnchanged": true,
+    "ParityVerified": false
+  },
+  "ProductionUi": {
+    "InstalledVersion": "0.49.1",
+    "OfferedVersion": "0.49.2",
+    "ManualGitHubDiscoveryVerified": true,
+    "DownloadAndPackageVerificationVerified": true,
+    "StatusObserved": "Update ready",
+    "ApplyRestartVerified": false,
+    "ApplyRestartBlockedByAutomaticApprovalReview": true,
+    "Reason": "Two Rust windows remain open; review cited the restriction against updating a running application."
+  },
+  "Limits": [
+    "No complete C# feature/UI parity claim.",
+    "Production UI restart, failed/interrupted updates and cross-session/repository exit gates remain unverified.",
+    "Native lifecycle fixture uses copied source, separate identity and ephemeral test signing key, local transport and console orchestration; it is not the production installer.",
+    "C#/Rust equivalent startup, memory and representative operation measurements remain outstanding."
+  ],
+  "CSharpBeforeAndAfter": {
+    "Master": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+    "Latest": "v0.39.1-win-stable",
+    "LatestId": 430591871,
+    "BetaId": 430216325,
+    "BetaAssets": [
+      {
+        "id": 712287310,
+        "name": "releases.win-beta.json",
+        "size": 2268,
+        "digest": "sha256:09df0de06cebd3b3a45f5d38a4020353a9818c34993343d6182fe0ef45861d34",
+        "updated_at": "2026-11-05T06:08:27Z"
+      },
+      {
+        "id": 712287397,
+        "name": "releases.win-beta.json.sig",
+        "size": 384,
+        "digest": "sha256:48bd35a182d05bd2d9e0a44f5a54a111da67448a7e450e9835806ae9338dde87",
+        "updated_at": "2026-11-05T06:08:28Z"
+      }
+    ]
+  }
+}

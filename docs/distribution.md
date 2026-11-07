@@ -1,5 +1,13 @@
 # Windows installation and GitHub publishing
 
+## Independent Rust Beta (2026-11-07)
+
+Rust 0.49.2 is a separate prerelease in the same public repository. Its immutable tag is `rust-v0.49.2-win-rust-beta`; `rust-beta` hosts only `releases.win-rust-beta.json` and its RSA-PSS signature. The desktop resolves package URLs under the immutable Rust version tag and never uses C# `beta` or GitHub latest. `codex/rust-beta` points to the packaged source, while `codex/rust-stable` is reserved without a published Stable feed/release.
+
+On `codex/rust-rewrite`, `scripts/Build-Release.ps1 -Channel win-rust-beta` builds/verifies the native payload, uploads a draft with the checked assets, publishes it as a prerelease with `make_latest=false`, verifies anonymous installer/package downloads, then advances/verifies the signed Rust feed. It reuses the existing Git Credential Manager login without logging credentials. No GitHub CLI is required. Existing immutable artifacts are never overwritten. Partial Beta publication is explicitly authorized; Stable requires complete parity and explicit owner approval.
+
+The production installed 0.49.1 UI discovered and downloaded 0.49.2 from GitHub and showed Update ready. Automatic approval review blocked the production restart while two Rust windows remained open. The isolated native lifecycle fixture separately passed installation, signed update/restart, settings/draft retention, repair and uninstall. [Recorded evidence](evidence/rust-beta-0.49.2.json) distinguishes these checks. Windows publisher/Authenticode signing is still unset. C# instructions below remain specific to C#.
+
 ## Stable and Beta delivery (confirmed 2026-11-01)
 
 Every task still produces a build. **Routine delivery publishes Beta only**: `pwsh -NoProfile -File scripts/Build-Release.ps1` defaults to `win-beta`. Stable requires the owner's explicit approval after testing: use `-Channel win-stable` on the approved source/version with its matching verified preview. Do not silently promote newer source. 0.35.0 was the common starting version on both channels. On 2026-11-01 the owner explicitly approved Stable for the next TODO delivery, 0.39.1, alongside Beta. Later tasks remain Beta-only unless separately approved.
