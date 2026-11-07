@@ -8,7 +8,7 @@ Updated 2026-11-07. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 Owner request 2026-11-05. Parity baseline: C# **0.47.0**, commit **2175458**. Later sections describe C# deliveries, not completed Rust work. Current product/requirements supersede historical behavior (especially command lifetimes, quiet feedback, remembered network flags and approved updates). Every unchecked item below remains required before claiming parity; backend-only tests do not complete UI rows. C# deferred/unimplemented extensions remain deferred rather than being misrepresented as existing functionality.
 
-Current partial implementation includes history/comparison/Commit, Rust askpass and Fetch/Pull/Push, local branch/upstream management, reviewed checkout, confirmed history Reset/Revert, native sequence Continue/Skip/Abort, saved-stash inspection/comparisons/Create/Apply/Pop/Drop, inline native-side/text/tool conflict resolution, and captured local-file Open/Explorer/Stage/Unstage/Copy/confirmed Discard with selected-LFS hash reconciliation selected-path Stash with unrelated-index preservation, configured External Diff, root Ignore/LFS rule editing, and atomic binary patch export through an asynchronous Windows save picker, and captured-tip file History/Blame with rename paging and real revision comparisons. Focused evidence and queue/authentication/UI limits are in [roadmap](docs/roadmap.md#independent-rust-rewrite--active-2026-11-05). R58–R64 remain unchecked: native menu/keyboard/appearance, persisted pane geometry and all remaining scenarios are not certified. Continue the remaining parity rows before packaging/publication.
+Current partial implementation includes history/comparison/Commit, Rust askpass and Fetch/Pull/Push, local branch/upstream management, reviewed checkout, confirmed history Reset/Revert, native sequence Continue/Skip/Abort, saved-stash inspection/comparisons/Create/Apply/Pop/Drop, inline native-side/text/tool conflict resolution, and captured local-file Open/Explorer/Stage/Unstage/Copy/confirmed Discard with selected-LFS hash reconciliation selected-path Stash with unrelated-index preservation, configured External Diff, root Ignore/LFS rule editing, and atomic binary patch export through an asynchronous Windows save picker, and captured-tip file History/Blame with rename paging and real revision comparisons. Focused evidence and queue/authentication/UI limits are in [roadmap](docs/roadmap.md#independent-rust-rewrite--active-2026-11-05). R58–R64 remain unchecked: native menu/keyboard/appearance, persisted pane geometry and all remaining scenarios are not certified. Continue the remaining parity rows before claiming full parity. The owner explicitly authorized partial Rust Beta publication on 2026-11-07 after installer/update verification.
 
 #### Current owner delivery — workspace and installer preview (2026-11-07)
 
@@ -20,6 +20,12 @@ Current partial implementation includes history/comparison/Commit, Rust askpass 
 - [x] Add Rust-only signed update transport and package verification, offered download/retry/cancel, persisted channel floors and guarded restart.
 - [x] Generate and verify the 0.49.1 Rust preview installer. Native payload and signed package verified from fada70f; 18 smoke checks passed in 24.67 s. No merge or public feed publication. See roadmap for artifact paths and limits.
 - [ ] Complete the broader parity rows below. Settings avatar providers, full sidebar/submodule workflows, full activity categorization, installed Beta-to-Beta update, live UI/authentication and paired C#/Rust measurements remain open. This preview is not full C# parity.
+
+#### Current owner delivery — installed update and Rust Beta publication (2026-11-07)
+
+- [ ] Verify native installation and a real version-to-version update, with separate test-profile preservation and explicit limits.
+- [ ] Publish the immutable Rust Beta installer and signed GitHub feed; verify anonymous downloads and unchanged C# feeds/latest/master.
+- [ ] Record evidence and remaining parity/performance work without merging into main or publishing Rust Stable.
 
 #### P0 — isolation, architecture and delivery
 

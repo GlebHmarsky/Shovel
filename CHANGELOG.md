@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.49.2 - 2026-11-07 (Rust Beta)
+
+- Publish native Rust installers and signed updates through the existing GitHub credential integration.
+- Verify artifact hashes, exact Rust release commits, anonymous downloads and C# release isolation during publication.
+- Allow the owner-requested partial Rust Beta while keeping full parity and explicit approval mandatory for Rust Stable.
+- Preserve the independent Rust application, settings and update identity. Remaining feature and verification gaps stay in TODO.
+
 ## Rust 0.49.1 - 2026-11-07 (installer preview, separate Rust branch)
 
 - Accept the pinned Velopack packager’s NotesHTML field while rejecting duplicate/unknown metadata fields; retain signature and Rust channel verification.

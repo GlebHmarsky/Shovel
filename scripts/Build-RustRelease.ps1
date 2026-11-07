@@ -13,9 +13,9 @@ $pending=git -C $root status --porcelain
 if($LASTEXITCODE -ne 0 -or $pending){throw 'Commit intended Rust changes before delivery.'}
 $version=Get-RustVersion $root
 $plan=Get-RustReleasePlan -Channel $Channel -Version $version -SourceCommit $commit -SourceBranch $branch -StableApproval $StableApproval
-if(-not $PackageOnly){
+if(-not $PackageOnly -and $Channel -eq 'win-rust-stable'){
     $unchecked=@(Select-String -LiteralPath (Join-Path $root 'TODO.md') -Pattern '^- \[ \] \*\*R\d+')
-    if($unchecked.Count){throw 'Full Rust publication requires the parity acceptance rows. Use -PackageOnly for the owner-requested installer preview.'}
+    if($unchecked.Count){throw 'Rust Stable requires complete parity acceptance and explicit owner approval.'}
 }
 $smokePath=Join-Path $root 'Build/rust-smoke.json'
 $smoke=if(Test-Path -LiteralPath $smokePath){Get-Content -LiteralPath $smokePath -Raw | ConvertFrom-Json}else{$null}
@@ -24,6 +24,9 @@ if(!$smoke -or !$smoke.Passed -or $smoke.SourceFingerprint -ne (Get-RustSourceFi
 }
 $payload=Join-Path $root "Build/rust-$version-win-x64"
 if(!(Test-Path -LiteralPath $payload)){& (Join-Path $PSScriptRoot 'Build-RustPayload.ps1') -OutputDirectory $payload}
-& (Join-Path $PSScriptRoot 'Build-RustInstaller.ps1') -PayloadDirectory $payload -Channel $Channel -PrivateKeyPath $PrivateKeyPath -StableApproval $StableApproval
+$installer=Join-Path $root "Build/rust-$version-installer-$Channel"
+if(!(Test-Path -LiteralPath $installer)){
+    & (Join-Path $PSScriptRoot 'Build-RustInstaller.ps1') -PayloadDirectory $payload -Channel $Channel -PrivateKeyPath $PrivateKeyPath -StableApproval $StableApproval
+}
 if($PackageOnly){Write-Output 'Signed Rust installer built. No branches were merged and no public release or feed was changed.';return}
 & (Join-Path $PSScriptRoot 'Publish-RustRelease.ps1') -ArtifactDirectory (Join-Path $root "Build/rust-$version-installer-$Channel") -PayloadDirectory $payload -StableApproval $StableApproval
