@@ -1,0 +1,49 @@
+{
+  "From": "0.49.1",
+  "To": "0.49.2",
+  "ProductionPayload": true,
+  "GitHubFeed": true,
+  "AutomaticRestart": true,
+  "ExpectedArgumentsPreserved": true,
+  "InstalledExecutableMatchesPublishedBuild": true,
+  "DraftBytesPreserved": true,
+  "NormalProfilesPreserved": true,
+  "HeadPreserved": true,
+  "IndexEntriesPreserved": true,
+  "WorkingFilePreserved": true,
+  "UiDraftRestoreVerified": true,
+  "UiDraftRestoreObservation": "The real Commit editor displayed the retained Unicode subject and full description after native restart.",
+  "PostUpdateUiVersion": "0.49.2",
+  "PostUpdateChannel": "win-rust-beta",
+  "PostUpdateCheckCurrent": true,
+  "WindowGeometryPreserved": false,
+  "WindowGeometryObservation": "At UI scale 1.1, seeded WindowWidth 1100 was saved as 1000 before update and the restarted window was narrower. Geometry normalization remains open in R16.",
+  "InstalledPayloadFilesVerified": 19,
+  "StartingExecutableMatchesPreviousBuild": true,
+  "NormalProfilesPreservedAfterClose": true,
+  "TestProfileClosed": true,
+  "ProductionShortcuts": [
+    {
+      "Name": "Shovel Rust.lnk",
+      "TestArgumentsAbsent": true
+    }
+  ],
+  "Date": "2026-11-07",
+  "OwnerApprovedProductionUpdate": true,
+  "SeparateTestProfile": true,
+  "DisposableRepository": true,
+  "SelectedPreferencesPreserved": true,
+  "CheckedPreferenceKeys": [
+    "UiScale",
+    "Appearance",
+    "AutoFetchEnabled",
+    "AcceptanceSentinel",
+    "RepositoryPaths"
+  ],
+  "VersionedReleaseCommit": "370e987bf3e90b0f49597a4ba7cd2a353a55ad08",
+  "Limits": [
+    "Failed/interrupted update and cross-session/repository restart guard scenarios remain open.",
+    "Window geometry drifts at non-default UI scale; recorded in R16.",
+    "No full C# parity or performance claim."
+  ]
+}

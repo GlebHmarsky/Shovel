@@ -184,15 +184,22 @@
     "ManualGitHubDiscoveryVerified": true,
     "DownloadAndPackageVerificationVerified": true,
     "StatusObserved": "Update ready",
-    "ApplyRestartVerified": false,
-    "ApplyRestartBlockedByAutomaticApprovalReview": true,
-    "Reason": "Two Rust windows remain open; review cited the restriction against updating a running application."
+    "ApplyRestartVerified": true,
+    "ApplyRestartBlockedByAutomaticApprovalReview": false,
+    "InitialAttemptBlockedByAutomaticApprovalReview": true,
+    "OwnerApprovedAfterClosingPriorWindows": true,
+    "InstalledVersionAfterRestart": "0.49.2",
+    "UiDraftRestoreVerified": true,
+    "NormalProfilesPreserved": true,
+    "PostUpdateCheckCurrent": true,
+    "ProductionEvidence": "rust-beta-0.49.2-production-update.json"
   },
   "Limits": [
     "No complete C# feature/UI parity claim.",
-    "Production UI restart, failed/interrupted updates and cross-session/repository exit gates remain unverified.",
+    "Failed/interrupted updates and cross-session/repository exit gates remain unverified.",
     "Native lifecycle fixture uses copied source, separate identity and ephemeral test signing key, local transport and console orchestration; it is not the production installer.",
-    "C#/Rust equivalent startup, memory and representative operation measurements remain outstanding."
+    "C#/Rust equivalent startup, memory and representative operation measurements remain outstanding.",
+    "Main-window geometry drifts at non-default UI scale; R16 records the observed 1100-to-1000 width capture at scale 1.1."
   ],
   "CSharpBeforeAndAfter": {
     "Master": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
