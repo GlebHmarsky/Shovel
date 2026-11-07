@@ -10,6 +10,7 @@ try{
     & cargo test -j 1 -p shovel-desktop -p shovel-core --lib --bins --test network --locked --no-run
     if($LASTEXITCODE -ne 0){throw 'Smoke test compilation failed.'}
     $checks=@(
+        @('shovel-core','--lib','updates::tests::accepts_velopack_notes_html_spelling_without_ignoring_unknown_fields'),
         @('shovel-core','--lib','updates::tests::rust_urls_and_identifiers_are_separate'),
         @('shovel-core','--lib','updates::tests::verifies_powershell_pss_signature_and_exact_package'),
         @('shovel-core','--lib','updates::tests::rejects_modified_feed_wrong_key_and_swapped_channel'),

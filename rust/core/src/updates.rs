@@ -117,7 +117,7 @@ struct Asset {
     size: u64,
     #[serde(default)]
     notes_markdown: String,
-    #[serde(default)]
+    #[serde(default, alias = "NotesHTML")]
     notes_html: String,
 }
 
@@ -265,6 +265,14 @@ mod tests {
     const VALID: &[u8] = include_bytes!("../tests/fixtures/beta.json");
     const SIGNATURE: &[u8] = include_bytes!("../tests/fixtures/beta.json.sig");
 
+    #[test]
+    fn accepts_velopack_notes_html_spelling_without_ignoring_unknown_fields() {
+        let bytes=String::from_utf8(VALID.to_vec()).unwrap().replace("NotesHtml","NotesHTML");
+        let feed:Feed=serde_json::from_str(&bytes).unwrap();
+        assert_eq!(feed.assets.len(),1);
+        let duplicate=bytes.replace("\"NotesHTML\": \"\"","\"NotesHTML\": \"\", \"NotesHtml\": \"\"");
+        assert!(serde_json::from_str::<Feed>(&duplicate).is_err());
+    }
     #[test]
     fn rust_urls_and_identifiers_are_separate() {
         let version = Version::new(0, 48, 0);

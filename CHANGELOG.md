@@ -1,7 +1,8 @@
 # Changelog
 
-## Rust 0.49.0 - 2026-11-07 (installer preview, separate Rust branch)
+## Rust 0.49.1 - 2026-11-07 (installer preview, separate Rust branch)
 
+- Accept the pinned Velopack packager’s NotesHTML field while rejecting duplicate/unknown metadata fields; retain signature and Rust channel verification.
 - Align sidebar, Branch placement, file-list sizing and graph curves with the C# workspace.
 - Locate tags and stashes across history pages; preserve tab dragging and pane layouts.
 - Use remembered modal Fetch/Pull/Push options, categorized settings and cancellable automatic fetch.

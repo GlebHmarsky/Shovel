@@ -18,7 +18,7 @@ Current partial implementation includes history/comparison/Commit, Rust askpass 
 - [x] Replace network arrow popovers with remembered-options dialogs; dismissal saves choices without executing a command.
 - [x] Add categorized working appearance/scale/history-label/diff/Git/identity/tools/update preferences, cancellable automatic fetch and explicit repository tool handoff.
 - [x] Add Rust-only signed update transport and package verification, offered download/retry/cancel, persisted channel floors and guarded restart.
-- [ ] Generate and verify the 0.49.0 Rust preview installer and record its artifact receipt. No merge or public feed publication.
+- [ ] Generate and verify the 0.49.1 Rust preview installer and record its artifact receipt. No merge or public feed publication.
 - [ ] Complete the broader parity rows below. Settings avatar providers, full sidebar/submodule workflows, full activity categorization, installed Beta-to-Beta update, live UI/authentication and paired C#/Rust measurements remain open. This preview is not full C# parity.
 
 #### P0 — isolation, architecture and delivery
