@@ -2,7 +2,9 @@
 
 **Rust rewrite worktree — in progress.** This branch preserves C# 0.47.0 as the parity reference and is not a delivered Rust application yet. [Rust design/channel identities](docs/rust-rewrite.md) and the [active parity checklist](TODO.md#entire-rust-application--active-not-delivered) describe the independent implementation. Existing C# release channels and master remain unchanged.
 
-To build the current Rust desktop locally, run `./scripts/Build-RustPayload.ps1` from this worktree. It prints the output directory. Run `app/ShovelRust.exe` there with the adjacent askpass helper. `VERIFICATION.json` records the source fingerprint and executable hashes. View → Appearance switches between Dark and Light and saves the choice in the Rust profile.
+To build a signed Rust preview installer, commit the Rust source and run `./scripts/Build-Release.ps1 -Channel win-rust-beta -PackageOnly`. It runs the explicit 17-check smoke suite, builds both native executables and packages `Build/rust-0.49.0-installer-win-rust-beta/ShovelRust-Setup.exe` with a signed Rust-only feed. The existing private update key stays outside Git. PackageOnly does not publish a GitHub release or merge branches. Public Rust publication remains gated by TODO acceptance; Rust Stable always requires explicit owner approval.
+
+For a local executable alone, run `./scripts/Build-RustPayload.ps1`. Run `app/ShovelRust.exe` with its adjacent askpass helper. `VERIFICATION.json` records source fingerprint, executable hashes and smoke coverage. File → Settings edits preferences. View → Activity log shows output; clicking repository context also opens it. Help → Shovel Rust updates checks the selected independent Rust channel. Downloads and restart are explicit; a channel with no published feed reports that limitation. An actual installed update has not yet been certified.
 
 Rust focused development commands (PowerShell, from this worktree; select the relevant check):
 

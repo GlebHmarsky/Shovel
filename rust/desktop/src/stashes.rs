@@ -35,6 +35,7 @@ pub struct View {
     viewport: egui::ViewportId,
     list: Option<List>,
     selected: Option<String>,
+    navigation: Option<String>,
     message: String,
     include_untracked: bool,
     restore_index: bool,
@@ -56,6 +57,10 @@ pub struct View {
     pending: Vec<(u64, Option<String>)>,
 }
 impl View {
+    pub fn take_navigation(&mut self) -> Option<String> {
+        self.navigation.take()
+    }
+
     pub fn new(snapshot: Snapshot, git: Arc<Git>) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
@@ -66,6 +71,7 @@ impl View {
             viewport: egui::ViewportId::from_hash_of(uuid::Uuid::new_v4()),
             list: None,
             selected: None,
+            navigation: None,
             message: String::new(),
             include_untracked: false,
             restore_index: false,
@@ -380,7 +386,7 @@ impl View {
                         }
                     });
                     ui.label(&self.status);
-                    operations.status(ui, &self.path, scheduler);
+                    operations.status(ui, Some(&self.path), scheduler);
                 });
                 egui::Panel::bottom("stash-close").show(ui, |ui| {
                     if ui.button(text("RustCloseStashes")).clicked() {
@@ -418,6 +424,7 @@ impl View {
                                             .clicked()
                                         {
                                             self.selected = Some(entry.hash.clone());
+                                            self.navigation = Some(entry.hash.clone());
                                             inspect = true;
                                         }
                                     }

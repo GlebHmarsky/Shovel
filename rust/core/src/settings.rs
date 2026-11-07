@@ -179,14 +179,8 @@ impl Settings {
             values.insert("RepositoryPreferences".into(), json!([]));
         }
         if importing {
-            // A C# channel string is never persisted into the Rust profile.
-            let channel =
-                if values.get("UpdateChannel").and_then(Value::as_str) == Some("win-stable") {
-                    Channel::Stable
-                } else {
-                    Channel::Beta
-                };
-            values.insert("UpdateChannel".into(), json!(channel.id()));
+            // C# channel preferences never select a Rust release channel.
+            values.insert("UpdateChannel".into(), json!(Channel::Beta.id()));
         }
         let mut settings = Self { values };
         settings.normalize();
@@ -362,7 +356,7 @@ mod tests {
     fn imports_all_fields_without_modifying_csharp_and_roundtrips() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("csharp.json");
-        let original=br#"{"SchemaVersion":6,"UpdateChannel":"win-beta","UiScale":1.3,"AutoFetchIntervalSeconds":10,"ExternalMergeTool":{"Mode":2,"CustomCommand":"tool $MERGED"},"UnknownFuturePreference":"retained"}"#;
+        let original=br#"{"SchemaVersion":6,"UpdateChannel":"win-stable","UiScale":1.3,"AutoFetchIntervalSeconds":10,"ExternalMergeTool":{"Mode":2,"CustomCommand":"tool $MERGED"},"UnknownFuturePreference":"retained"}"#;
         fs::write(&source, original).unwrap();
         let root = temp.path().join("rust");
         let mut store = SettingsStore::new(root.clone());

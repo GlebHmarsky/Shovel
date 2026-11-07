@@ -3322,7 +3322,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "shovel-askpass"
-version = "0.48.0"
+version = "0.49.0"
 dependencies = [
  "shovel-core",
  "winresource",
@@ -3330,7 +3330,7 @@ dependencies = [
 
 [[package]]
 name = "shovel-core"
-version = "0.48.0"
+version = "0.49.0"
 dependencies = [
  "chrono",
  "rsa",
@@ -3348,16 +3348,18 @@ dependencies = [
 
 [[package]]
 name = "shovel-desktop"
-version = "0.48.0"
+version = "0.49.0"
 dependencies = [
  "eframe",
  "raw-window-handle",
  "rfd",
+ "semver",
  "serde_json",
  "sha2 0.10.9",
  "shovel-core",
  "tempfile",
  "unicode-segmentation",
+ "ureq",
  "uuid",
  "velopack",
  "windows-sys 0.61.2",

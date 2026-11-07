@@ -1,5 +1,13 @@
 # Changelog
 
+## Rust 0.49.0 - 2026-11-07 (installer preview, separate Rust branch)
+
+- Align sidebar, Branch placement, file-list sizing and graph curves with the C# workspace.
+- Locate tags and stashes across history pages; preserve tab dragging and pane layouts.
+- Use remembered modal Fetch/Pull/Push options, categorized settings and cancellable automatic fetch.
+- Add global Git identity editing, repository Open in tools, shared action history and Rust-only signed update discovery/download/restart.
+- Add signed native Windows installer packaging without merging C# or changing its release feeds. Full parity and installed-update/performance acceptance remain pending.
+
 ## 0.47.0 - 2026-11-05 (Beta)
 
 - Attach stashes directly above their bases without reordering ordinary history; share projection between paging and navigation.

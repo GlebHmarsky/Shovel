@@ -322,6 +322,85 @@ pub fn action(ui: &mut egui::Ui, key: &str, enabled: bool) -> egui::Response {
 }
 
 /// The chevron is drawn from geometry so it survives system font substitution.
+pub fn options_button(ui: &mut egui::Ui, label: String, enabled: bool) -> egui::Response {
+    let response = ui.add_enabled(
+        enabled,
+        egui::Button::new("")
+            .min_size(egui::vec2(16., 40.))
+            .frame_when_inactive(false),
+    );
+    let p = Palette::current(ui);
+    let center = response.rect.center();
+    ui.painter().add(egui::Shape::convex_polygon(
+        vec![
+            center + egui::vec2(-3.5, -1.5),
+            center + egui::vec2(3.5, -1.5),
+            center + egui::vec2(0., 2.5),
+        ],
+        if enabled { p.text } else { p.disabled },
+        Stroke::NONE,
+    ));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &label));
+    response.on_hover_text(label)
+}
+pub fn reference_row(ui: &mut egui::Ui, selected: bool, label: &str, kind: &str) -> egui::Response {
+    let p = Palette::current(ui);
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 24.), egui::Sense::click());
+    if selected || response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 3., if selected { p.selected } else { p.hover });
+    }
+    let center = egui::pos2(rect.left() + 9., rect.center().y);
+    let fg = if selected { p.selection_text } else { p.text };
+    let stroke = Stroke::new(1.2, if selected { fg } else { p.muted });
+    if kind == "Tags" {
+        let points = vec![
+            center + egui::vec2(-5., -4.),
+            center + egui::vec2(1., -4.),
+            center + egui::vec2(5., 0.),
+            center + egui::vec2(1., 4.),
+            center + egui::vec2(-5., 4.),
+        ];
+        ui.painter().add(egui::Shape::closed_line(points, stroke));
+    } else if kind == "Stashes" {
+        ui.painter().rect_stroke(
+            egui::Rect::from_center_size(center, egui::vec2(10., 8.)),
+            2.,
+            stroke,
+            egui::StrokeKind::Inside,
+        );
+    } else {
+        ui.painter().line_segment(
+            [center + egui::vec2(0., -5.), center + egui::vec2(0., 5.)],
+            stroke,
+        );
+        for dy in [-4., 4.] {
+            ui.painter()
+                .circle_stroke(center + egui::vec2(0., dy), 2., stroke);
+        }
+    }
+    let mut job = egui::text::LayoutJob::simple_singleline(
+        label.to_owned(),
+        egui::FontId::proportional(13.),
+        fg,
+    );
+    job.wrap.max_width = (rect.width() - 23.).max(1.);
+    job.wrap.max_rows = 1;
+    let galley = ui.painter().layout_job(job);
+    ui.painter()
+        .with_clip_rect(rect.intersect(ui.clip_rect()))
+        .galley(
+            egui::pos2(rect.left() + 22., rect.center().y - galley.size().y / 2.),
+            galley,
+            fg,
+        );
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, label)
+    });
+    response
+}
+
 pub fn options_menu(
     ui: &mut egui::Ui,
     label: String,

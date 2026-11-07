@@ -15,6 +15,9 @@ pub(super) fn workspace() -> Workspace {
             previous: vec![],
             loading: false,
             refresh_again: false,
+            locating: None,
+            locate_cancel: Default::default(),
+            scroll_selected: false,
             error: None,
             comparison: None,
         })
@@ -37,6 +40,11 @@ pub(super) fn workspace() -> Workspace {
         exit_ready: false,
         confirm_exit_without_save: false,
         activity_open: false,
+        activity_all: false,
+        auto_fetch: Default::default(),
+        settings_dialog: None,
+        updater: Default::default(),
+        external_tools_opened: false,
         tab_drag: None,
         scheduler: Default::default(),
         editors: vec![],
@@ -163,4 +171,104 @@ fn details_splitter_reserves_history_and_saves_drag_proportion() {
         .and_then(|v| v.as_f64())
         .unwrap();
     assert!(ratio > 0.27 && ratio < 0.34);
+}
+
+#[test]
+fn reference_navigation_finds_old_tags_and_stashes_beyond_first_page() {
+    use shovel_core::process::{self, Lifetime};
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().to_owned();
+    let mut git = Git::discover(None, &Cancellation::default()).unwrap();
+    git.environment
+        .insert("GIT_CONFIG_GLOBAL".into(), Some("NUL".into()));
+    git.environment
+        .insert("GIT_CONFIG_NOSYSTEM".into(), Some("1".into()));
+    for key in ["GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"] {
+        git.environment.insert(key.into(), Some("Fixture".into()));
+    }
+    for key in ["GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"] {
+        git.environment
+            .insert(key.into(), Some("fixture@example.invalid".into()));
+    }
+    let command = |args: &[&str], input: Vec<u8>| {
+        let mut request = git.request(
+            &root,
+            args.iter().copied(),
+            Lifetime::AcceptedCommand,
+            1024 * 1024,
+        );
+        request.input = input;
+        let result = process::run(&request, &Cancellation::default(), None).unwrap();
+        assert!(result.success(), "{result:?}");
+        String::from_utf8(result.stdout).unwrap().trim().to_owned()
+    };
+    command(&["init", "-b", "main"], vec![]);
+    std::fs::write(root.join("file"), "base").unwrap();
+    command(&["add", "file"], vec![]);
+    command(
+        &["-c", "commit.gpgsign=false", "commit", "-m", "base"],
+        vec![],
+    );
+    let base = command(&["rev-parse", "HEAD"], vec![]);
+    command(&["tag", "old-tag"], vec![]);
+    std::fs::write(root.join("file"), "stash").unwrap();
+    command(&["stash", "push", "-m", "old stash"], vec![]);
+    let stash = command(&["rev-parse", "refs/stash"], vec![]);
+    let mut stream = String::new();
+    for n in 0..220 {
+        let message = format!("commit {n}");
+        stream += &format!(
+            "commit refs/heads/main\nmark :{}\ncommitter Fixture <fixture@example.invalid> {} +0000\ndata {}\n{}\nfrom {}\n\n",
+            n + 1,
+            1800000000 + n,
+            message.len(),
+            message,
+            if n == 0 {
+                base.clone()
+            } else {
+                format!(":{n}")
+            }
+        );
+    }
+    command(&["fast-import", "--quiet"], stream.into_bytes());
+    let history = git
+        .history(
+            git.inspect(&root, &Cancellation::default()).unwrap(),
+            &Cancellation::default(),
+        )
+        .unwrap();
+    let page = git
+        .page(&history, &Cursor::default(), &Cancellation::default())
+        .unwrap();
+    let mut app = workspace();
+    app.tabs.truncate(1);
+    app.selected = 0;
+    app.tabs[0].path = root;
+    app.git = Some(Arc::new(git));
+    app.tabs[0].history = Some(history);
+    app.tabs[0].page = Some(page);
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    let ctx = egui::Context::default();
+    for hash in [base, stash] {
+        app.locate(hash.clone(), &ctx);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while app.tabs[0].locating.is_some() {
+            assert!(std::time::Instant::now() < deadline);
+            app.receive(&ctx);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(app.tabs[0].selected.as_ref(), Some(&hash));
+        assert!(
+            app.tabs[0]
+                .page
+                .as_ref()
+                .unwrap()
+                .entries
+                .iter()
+                .any(|e| e.commit.hash == hash)
+        );
+        assert!(!app.tabs[0].previous.is_empty());
+        assert!(app.tabs[0].scroll_selected);
+    }
 }

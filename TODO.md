@@ -1,6 +1,6 @@
 # Implementation checklist
 
-Updated 2026-11-05. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-11-07. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
 ## Current phase
 
@@ -9,6 +9,17 @@ Updated 2026-11-05. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 Owner request 2026-11-05. Parity baseline: C# **0.47.0**, commit **2175458**. Later sections describe C# deliveries, not completed Rust work. Current product/requirements supersede historical behavior (especially command lifetimes, quiet feedback, remembered network flags and approved updates). Every unchecked item below remains required before claiming parity; backend-only tests do not complete UI rows. C# deferred/unimplemented extensions remain deferred rather than being misrepresented as existing functionality.
 
 Current partial implementation includes history/comparison/Commit, Rust askpass and Fetch/Pull/Push, local branch/upstream management, reviewed checkout, confirmed history Reset/Revert, native sequence Continue/Skip/Abort, saved-stash inspection/comparisons/Create/Apply/Pop/Drop, inline native-side/text/tool conflict resolution, and captured local-file Open/Explorer/Stage/Unstage/Copy/confirmed Discard with selected-LFS hash reconciliation selected-path Stash with unrelated-index preservation, configured External Diff, root Ignore/LFS rule editing, and atomic binary patch export through an asynchronous Windows save picker, and captured-tip file History/Blame with rename paging and real revision comparisons. Focused evidence and queue/authentication/UI limits are in [roadmap](docs/roadmap.md#independent-rust-rewrite--active-2026-11-05). R58–R64 remain unchecked: native menu/keyboard/appearance, persisted pane geometry and all remaining scenarios are not certified. Continue the remaining parity rows before packaging/publication.
+
+#### Current owner delivery — workspace and installer preview (2026-11-07)
+
+- [x] Keep Branch beside the central repository display and Open in at the right; expose Activity from the display and View.
+- [x] Show bounded, left-aligned Branches/Remotes/Tags/Stashes groups; locate selected refs across 200-row pages and reveal them in history. Stash inspector selection also requests history navigation.
+- [x] Keep changed-file paths single-line with tooltips and an adjustable vertical divider; smooth graph bends.
+- [x] Replace network arrow popovers with remembered-options dialogs; dismissal saves choices without executing a command.
+- [x] Add categorized working appearance/scale/history-label/diff/Git/identity/tools/update preferences, cancellable automatic fetch and explicit repository tool handoff.
+- [x] Add Rust-only signed update transport and package verification, offered download/retry/cancel, persisted channel floors and guarded restart.
+- [ ] Generate and verify the 0.49.0 Rust preview installer and record its artifact receipt. No merge or public feed publication.
+- [ ] Complete the broader parity rows below. Settings avatar providers, full sidebar/submodule workflows, full activity categorization, installed Beta-to-Beta update, live UI/authentication and paired C#/Rust measurements remain open. This preview is not full C# parity.
 
 #### P0 — isolation, architecture and delivery
 

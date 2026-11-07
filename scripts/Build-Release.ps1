@@ -1,8 +1,15 @@
 #requires -Version 7.4
-param([ValidateSet('win-stable','win-beta')][string]$Channel='win-beta', [string]$PrivateKeyPath=(Join-Path $env:USERPROFILE '.shovel-signing/shovel-update.key'))
+param([ValidateSet('win-stable','win-beta','win-rust-beta','win-rust-stable')][string]$Channel='win-beta', [string]$PrivateKeyPath=(Join-Path $env:USERPROFILE '.shovel-signing/shovel-update.key'), [switch]$PackageOnly, [string]$StableApproval)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $branch=git -C $root branch --show-current
+if($branch -eq 'codex/rust-rewrite') {
+    if(-not $PSBoundParameters.ContainsKey('Channel')){$Channel='win-rust-beta'}
+    if($Channel -notin @('win-rust-beta','win-rust-stable')){throw 'The Rust branch can only build Rust channels.'}
+    & (Join-Path $PSScriptRoot 'Build-RustRelease.ps1') -Channel $Channel -PrivateKeyPath $PrivateKeyPath -PackageOnly:$PackageOnly -StableApproval $StableApproval
+    return
+}
+if($Channel -like 'win-rust-*' -or $PackageOnly){throw 'Rust packaging options require codex/rust-rewrite.'}
 if($LASTEXITCODE -ne 0 -or $branch -ne 'master'){throw 'Stable deliveries must be built from master.'}
 $pending=git -C $root status --porcelain
 if($LASTEXITCODE -ne 0 -or $pending){throw 'Commit the intended release changes before running Build-Release.'}

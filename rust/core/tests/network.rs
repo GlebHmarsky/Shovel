@@ -303,3 +303,33 @@ fn merge_choice_overrides_branch_merge_options_and_autostash_conflicts_are_not_s
         command(&f.git, &f.other, &["rev-parse", "HEAD"])
     );
 }
+
+#[test]
+fn automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation() {
+    let f = Fixture::new();
+    let incoming = f.incoming("auto.txt", "incoming\n");
+    let head = command(&f.git, &f.root, &["rev-parse", "HEAD"]);
+    fs::write(f.root.join("a"), "local edit\n").unwrap();
+    let review = f
+        .git
+        .prepare_network(&f.root, &Cancellation::default())
+        .unwrap();
+    let token = Cancellation::default();
+    token.cancel();
+    assert!(f.git.automatic_fetch(&review, &token).is_err());
+    let result = f
+        .git
+        .automatic_fetch(&review, &Cancellation::default())
+        .unwrap();
+    assert!(result.succeeded(), "{}", result.output);
+    assert_eq!(
+        command(&f.git, &f.root, &["rev-parse", "refs/remotes/origin/main"]),
+        incoming
+    );
+    assert_eq!(command(&f.git, &f.root, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        fs::read_to_string(f.root.join("a")).unwrap(),
+        "local edit\n"
+    );
+    assert!(!f.root.join("auto.txt").exists());
+}

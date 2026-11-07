@@ -109,6 +109,21 @@ pub struct Editor {
     patch_picker: Arc<dyn Fn(rfd::FileDialog) -> Option<PathBuf> + Send + Sync>,
 }
 impl Editor {
+    pub fn apply_preferences(&mut self, settings: &shovel_core::settings::Settings) {
+        self.diff_view.side_by_side = settings
+            .get("DiffSideBySide")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        self.diff_view.font_size = settings
+            .get("DiffFontSize")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(12.) as f32;
+        self.external_merge_tool = settings
+            .get("ExternalMergeTool")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+    }
+
     pub fn new(path: PathBuf, git: Arc<Git>, scheduler: Scheduler, store: drafts::Store) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {

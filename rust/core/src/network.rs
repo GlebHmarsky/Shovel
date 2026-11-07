@@ -449,7 +449,41 @@ impl Git {
         auth: Option<&authentication::Session>,
         progress: Option<Progress>,
     ) -> Result<Completed, Error> {
-        let cancel = Cancellation::default(); // Repository-owned accepted work.
+        self.execute_network_inner(
+            context,
+            action,
+            auth,
+            progress,
+            &Cancellation::default(),
+            Lifetime::AcceptedCommand,
+        )
+    }
+    pub fn automatic_fetch(
+        &self,
+        context: &Context,
+        cancel: &Cancellation,
+    ) -> Result<Completed, Error> {
+        self.execute_network_inner(
+            context,
+            &Action::Fetch {
+                remote: None,
+                all: false,
+            },
+            None,
+            None,
+            cancel,
+            Lifetime::AutomaticFetch,
+        )
+    }
+    fn execute_network_inner(
+        &self,
+        context: &Context,
+        action: &Action,
+        auth: Option<&authentication::Session>,
+        progress: Option<Progress>,
+        cancel: &Cancellation,
+        lifetime: Lifetime,
+    ) -> Result<Completed, Error> {
         let stage = |value| {
             if let Some(callback) = &progress {
                 callback(value);
@@ -468,9 +502,9 @@ impl Git {
         } else {
             None
         };
-        self.validate_network(context, true, &cancel)?;
+        self.validate_network(context, true, cancel)?;
         let root = &context.repository.worktree;
-        let environment = self.network_environment(root, auth, &cancel)?;
+        let environment = self.network_environment(root, auth, cancel)?;
         let mut commands = Vec::new();
         let mut output = String::new();
         let mut output_truncated = false;
@@ -493,14 +527,14 @@ impl Git {
                     "-c",
                     "protocol.git.allow=always",
                 ],
-                Lifetime::AcceptedCommand,
+                lifetime,
                 LIMIT,
             );
             request
                 .arguments
                 .extend(args.into_iter().map(OsString::from));
             request.environment.extend(environment.clone());
-            let result = process::run(&request, &cancel, None)?;
+            let result = process::run(&request, cancel, None)?;
             let command = Command {
                 outcome: result.outcome,
                 exit_code: result.exit_code,
@@ -542,9 +576,9 @@ impl Git {
                     let selected = remote
                         .clone()
                         .map(Ok)
-                        .unwrap_or_else(|| self.default_fetch(context, &cancel))?;
+                        .unwrap_or_else(|| self.default_fetch(context, cancel))?;
                     self.require_remote(context, &selected, "ActionNoRemote")?;
-                    self.validate_network(context, true, &cancel)?;
+                    self.validate_network(context, true, cancel)?;
                     stage(Stage::Fetching);
                     for remote in context
                         .remotes
@@ -567,10 +601,10 @@ impl Git {
                     let target = target
                         .clone()
                         .map(Ok)
-                        .unwrap_or_else(|| self.default_push(context, &cancel))?;
+                        .unwrap_or_else(|| self.default_push(context, cancel))?;
                     self.require_remote(context, &target.destination.remote, "ActionNoRemote")?;
-                    self.network_branch(root, &target.source, &cancel)?;
-                    self.network_branch(root, &target.destination.branch, &cancel)?;
+                    self.network_branch(root, &target.source, cancel)?;
+                    self.network_branch(root, &target.destination.branch, cancel)?;
                     if !context
                         .repository
                         .references
@@ -608,7 +642,7 @@ impl Git {
                             target.source, target.destination.branch
                         ),
                     ]);
-                    self.validate_network(context, true, &cancel)?;
+                    self.validate_network(context, true, cancel)?;
                     stage(Stage::Pushing);
                     write(args)?;
                 }
@@ -620,9 +654,9 @@ impl Git {
                     let target = target
                         .clone()
                         .map(Ok)
-                        .unwrap_or_else(|| self.default_pull(context, &cancel))?;
+                        .unwrap_or_else(|| self.default_pull(context, cancel))?;
                     self.require_remote(context, &target.remote, "ActionNoRemote")?;
-                    self.network_branch(root, &target.branch, &cancel)?;
+                    self.network_branch(root, &target.branch, cancel)?;
                     let branch = context
                         .repository
                         .branch
@@ -633,7 +667,7 @@ impl Git {
                         .head
                         .as_ref()
                         .ok_or(Error::Code("ActionAttachedRequired"))?;
-                    self.validate_network(context, true, &cancel)?;
+                    self.validate_network(context, true, cancel)?;
                     stage(Stage::Fetching);
                     if !write(fetch(
                         &target.remote,
@@ -645,12 +679,12 @@ impl Git {
                         return Ok(());
                     }
                     stage(Stage::CheckingFetchedTip);
-                    self.validate_network(context, false, &cancel)
+                    self.validate_network(context, false, cancel)
                         .map_err(|_| Error::Code("ActionChangedAfterFetch"))?;
                     let tip = self.network_read(
                         root,
                         &["rev-parse", "--verify", "FETCH_HEAD^{commit}"],
-                        &cancel,
+                        cancel,
                     )?;
                     let tip = trim(&tip);
                     let tracking = self.network_read(
@@ -663,7 +697,7 @@ impl Git {
                                 target.remote, target.branch
                             ),
                         ],
-                        &cancel,
+                        cancel,
                     )?;
                     if !oid(tip) || tip != trim(&tracking) {
                         return Err(Error::Code("ActionChangedAfterFetch"));
@@ -688,7 +722,7 @@ impl Git {
                                 tip,
                                 "--",
                             ],
-                            &cancel,
+                            cancel,
                         )?;
                         let additions = additions
                             .split('\0')
@@ -707,7 +741,7 @@ impl Git {
                                     "--no-empty-directory",
                                     "-z",
                                 ],
-                                &cancel,
+                                cancel,
                             )?;
                             let ignored = ignored
                                 .split('\0')
@@ -765,8 +799,8 @@ impl Git {
             Ok(()) => None,
         };
         stage(Stage::Reconciling);
-        let updated = self.inspect(root, &cancel).map_err(Error::from);
-        let unmerged = self.network_read(root, &["ls-files", "--unmerged", "-z"], &cancel);
+        let updated = self.inspect(root, cancel).map_err(Error::from);
+        let unmerged = self.network_read(root, &["ls-files", "--unmerged", "-z"], cancel);
         let message = message.or_else(|| unmerged.as_ref().err().map(Error::code));
         let has_conflicts = unmerged.is_ok_and(|data| !data.is_empty());
         Ok(Completed {

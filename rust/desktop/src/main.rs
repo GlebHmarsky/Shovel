@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod auto_fetch;
 mod branches;
 mod caption;
 mod commit;
@@ -8,10 +9,14 @@ mod diff_view;
 mod file_history;
 mod file_picker;
 mod file_shell;
+mod git_identity;
 mod history_row;
 mod operations;
+mod repository_tools;
+mod settings_ui;
 mod stashes;
 mod strings;
+mod updater;
 mod workspace_split;
 mod workspace_style;
 
@@ -63,8 +68,11 @@ enum Event {
     Open(PathBuf),
     Loaded(u64, Box<History>, Box<Page>),
     Page(u64, Box<Page>, bool),
+    Located(u64, String, Result<(Page, Vec<Cursor>), String>),
     Failed(u64, String),
     Saved(Box<SettingsStore>, Result<(), String>),
+    PreferencesSaved(Box<SettingsStore>, Box<Settings>, Result<(), String>),
+    ToolFinished(Result<(), String>),
 }
 struct Tab {
     id: u64,
@@ -75,6 +83,9 @@ struct Tab {
     previous: Vec<Cursor>,
     loading: bool,
     refresh_again: bool,
+    locating: Option<String>,
+    locate_cancel: Cancellation,
+    scroll_selected: bool,
     error: Option<String>,
     comparison: Option<comparison::Pane>,
 }
@@ -106,6 +117,11 @@ struct Workspace {
     exit_ready: bool,
     confirm_exit_without_save: bool,
     activity_open: bool,
+    activity_all: bool,
+    auto_fetch: auto_fetch::Controller,
+    settings_dialog: Option<settings_ui::Dialog>,
+    updater: updater::Controller,
+    external_tools_opened: bool,
     tab_drag: Option<(u64, Vec<u64>)>,
     scheduler: shovel_core::scheduler::Scheduler,
     editors: Vec<commit::Editor>,
@@ -170,6 +186,11 @@ impl Workspace {
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
+            activity_all: false,
+            auto_fetch: Default::default(),
+            settings_dialog: None,
+            updater: Default::default(),
+            external_tools_opened: false,
             tab_drag: None,
             scheduler: Default::default(),
             editors: vec![],
@@ -197,6 +218,9 @@ impl Workspace {
             previous: vec![],
             loading: false,
             refresh_again: false,
+            locating: None,
+            locate_cancel: Cancellation::default(),
+            scroll_selected: false,
             error: None,
             comparison: None,
         });
@@ -217,6 +241,8 @@ impl Workspace {
             tab.refresh_again = true;
             return;
         }
+        tab.locate_cancel.cancel();
+        tab.locating = None;
         tab.loading = true;
         tab.error = None;
         let path = tab.path.clone();
@@ -264,6 +290,8 @@ impl Workspace {
             };
             previous
         };
+        tab.locate_cancel.cancel();
+        tab.locating = None;
         tab.loading = true;
         let history = history.clone();
         let id = tab.id;
@@ -275,6 +303,50 @@ impl Workspace {
                 Ok(page) => Event::Page(id, Box::new(page), older),
                 Err(error) => Event::Failed(id, error_text(error)),
             });
+            ctx.request_repaint();
+        });
+    }
+    fn locate(&mut self, hash: String, ctx: &egui::Context) {
+        let Some(tab) = self.tabs.get_mut(self.selected) else {
+            return;
+        };
+        tab.locate_cancel.cancel();
+        tab.locating = None;
+        if tab
+            .page
+            .as_ref()
+            .is_some_and(|p| p.entries.iter().any(|e| e.commit.hash == hash))
+        {
+            tab.selected = Some(hash);
+            tab.scroll_selected = true;
+            return;
+        }
+        let (Some(git), Some(history)) = (self.git.clone(), tab.history.clone()) else {
+            return;
+        };
+        tab.locate_cancel = Cancellation::default();
+        let cancel = tab.locate_cancel.clone();
+        tab.locating = Some(hash.clone());
+        let id = tab.id;
+        let tx = self.sender.clone();
+        let ctx = ctx.clone();
+        thread::spawn(move || {
+            let result = (|| {
+                let mut cursor = Cursor::default();
+                let mut previous = Vec::new();
+                loop {
+                    let page = git.page(&history, &cursor, &cancel).map_err(error_text)?;
+                    if page.entries.iter().any(|e| e.commit.hash == hash) {
+                        return Ok((page, previous));
+                    }
+                    let Some(next) = page.next else {
+                        return Err(strings::text("RustRefNotFound"));
+                    };
+                    previous.push(cursor);
+                    cursor = next;
+                }
+            })();
+            let _ = tx.send(Event::Located(id, hash, result));
             ctx.request_repaint();
         });
     }
@@ -291,6 +363,32 @@ impl Workspace {
     fn receive(&mut self, ctx: &egui::Context) {
         while let Ok(event) = self.receiver.try_recv() {
             match event {
+                Event::ToolFinished(result) => {
+                    self.external_tools_opened |= result.is_ok();
+                    self.notice = Some(
+                        result
+                            .err()
+                            .unwrap_or_else(|| strings::text("RustToolOpened")),
+                    );
+                }
+                Event::PreferencesSaved(store, saved, result) => {
+                    self.store = Some(*store);
+                    self.saving = false;
+                    if let Err(error) = result {
+                        if let Some(dialog) = &mut self.settings_dialog {
+                            dialog.saving = false;
+                            dialog.error = Some(error);
+                        }
+                    } else {
+                        for key in settings_ui::KEYS {
+                            if let Some(value) = saved.get(key) {
+                                self.settings.set(*key, value.clone());
+                            }
+                        }
+                        self.settings_dialog = None;
+                        self.apply_preferences(ctx);
+                    }
+                }
                 Event::Initialized(settings, store, git, notice) => {
                     self.settings = *settings;
                     let local = std::env::var_os("LOCALAPPDATA")
@@ -345,6 +443,9 @@ impl Workspace {
                             previous: vec![],
                             loading: false,
                             refresh_again: false,
+                            locating: None,
+                            locate_cancel: Cancellation::default(),
+                            scroll_selected: false,
                             error: None,
                             comparison: None,
                         });
@@ -408,6 +509,22 @@ impl Workspace {
                         tab.loading = false;
                     }
                 }
+                Event::Located(id, hash, result) => {
+                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id)
+                        && tab.locating.as_ref() == Some(&hash)
+                    {
+                        tab.locating = None;
+                        match result {
+                            Ok((page, previous)) => {
+                                tab.page = Some(page);
+                                tab.previous = previous;
+                                tab.selected = Some(hash);
+                                tab.scroll_selected = true;
+                            }
+                            Err(error) => tab.error = Some(error),
+                        }
+                    }
+                }
                 Event::Failed(id, error) => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
                         tab.loading = false;
@@ -420,6 +537,14 @@ impl Workspace {
                     match result {
                         Ok(()) => {
                             if self.closing && !self.preferences_dirty {
+                                if self.updater.restart_requested {
+                                    self.updater.apply(
+                                        ctx,
+                                        self.git.clone(),
+                                        self.tabs.iter().map(|t| t.path.clone()).collect(),
+                                    );
+                                    continue;
+                                }
                                 self.exit_ready = true;
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                             }
@@ -433,13 +558,67 @@ impl Workspace {
                 }
             }
         }
+        if self.initialized {
+            self.updater.tick(
+                ctx,
+                self.settings.channel(),
+                self.settings
+                    .get("CheckUpdatesPeriodically")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true),
+            );
+        }
+        if self.updater.exit_ready {
+            self.exit_ready = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        } else if self.closing
+            && !self.updater.restart_requested
+            && !self.saving
+            && !self.exit_ready
+        {
+            self.closing = false;
+        }
         let mut changed = self.operations.poll(ctx);
+        changed.extend(
+            self.auto_fetch.tick(
+                ctx,
+                self.initialized
+                    && !self.closing
+                    && self
+                        .settings
+                        .get("AutoFetchEnabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
+                self.settings
+                    .get("AutoFetchIntervalSeconds")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(60)
+                    .clamp(10, 3600),
+                self.tabs
+                    .iter()
+                    .filter_map(|t| t.history.as_ref().map(|h| h.snapshot.clone()))
+                    .collect(),
+                self.git.clone(),
+                &self.scheduler,
+            ),
+        );
         for editor in &mut self.editors {
             if changed.iter().any(|path| path == &editor.path) {
                 editor.external_changed();
             }
+            let was_busy = editor.busy;
             if editor.poll(ctx) {
                 changed.push(editor.path.clone());
+            }
+            if was_busy
+                && !editor.busy
+                && let Some(status) = &editor.status
+            {
+                self.operations.record_local(
+                    editor.path.clone(),
+                    status.clone(),
+                    editor.output.clone(),
+                );
             }
         }
         for view in &mut self.stash_views {
@@ -537,6 +716,7 @@ impl Workspace {
                 .get("ExternalMergeTool")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
+            editor.apply_preferences(&self.settings);
             self.editors.push(editor);
         }
     }
@@ -545,14 +725,27 @@ impl Workspace {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if self.closing {
+            return;
+        }
         if self.editors.iter().any(commit::Editor::native_picker_open) {
             self.pending_exit = false;
             self.notice = Some(strings::text("RustPatchChooserOpen"));
             return;
         }
+        self.auto_fetch.cancel();
+        if self
+            .settings_dialog
+            .as_ref()
+            .is_some_and(|d| d.identity.busy)
+        {
+            self.notice = Some(strings::text("SettingsIdentityWorking"));
+            return;
+        }
         if self.scheduler.has_accepted_work() {
             self.pending_exit = false;
             self.notice = Some(strings::text("AppCommandRunningClose"));
+            self.updater.restart_requested = false;
             return;
         }
         if let Some(editor) = self.editors.iter_mut().find(|e| e.unsaved_conflict()) {
@@ -608,6 +801,63 @@ impl Workspace {
         self.preferences_dirty = true;
         self.save_preferences(ctx);
     }
+    fn apply_preferences(&mut self, ctx: &egui::Context) {
+        ctx.set_zoom_factor(self.settings.ui_scale() as f32);
+        theme(
+            ctx,
+            self.settings.get("Appearance").and_then(|v| v.as_u64()) == Some(1),
+        );
+        for tab in &mut self.tabs {
+            if let Some(pane) = &mut tab.comparison {
+                pane.view.side_by_side = self
+                    .settings
+                    .get("DiffSideBySide")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                pane.view.font_size = self
+                    .settings
+                    .get("DiffFontSize")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(12.) as f32;
+            }
+        }
+        for editor in &mut self.editors {
+            editor.apply_preferences(&self.settings);
+        }
+    }
+    fn settings_window(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.settings_dialog else {
+            return;
+        };
+        let (save, close) = dialog.show(ctx, self.git.clone());
+        if close {
+            self.settings_dialog = None;
+            return;
+        }
+        if save
+            && !self.saving
+            && let Some(mut store) = self.store.take()
+        {
+            let mut settings = self.settings.clone();
+            dialog.merge(&mut settings);
+            dialog.saving = true;
+            dialog.error = None;
+            self.saving = true;
+            let tx = self.sender.clone();
+            let ctx = ctx.clone();
+            thread::spawn(move || {
+                let result = store
+                    .save(&settings)
+                    .map_err(|_| strings::text("SettingsSaveFailed"));
+                let _ = tx.send(Event::PreferencesSaved(
+                    Box::new(store),
+                    Box::new(settings),
+                    result,
+                ));
+                ctx.request_repaint();
+            });
+        }
+    }
     fn save_preferences(&mut self, ctx: &egui::Context) {
         let Some(mut store) = self.store.take() else {
             return;
@@ -647,7 +897,8 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let modal_open = self.editors.iter().any(|editor| editor.open)
+        let modal_open = self.settings_dialog.is_some()
+            || self.editors.iter().any(|editor| editor.open)
             || self.operations.modal_open()
             || self.branches.is_open()
             || self.stash_views.iter().any(|view| view.open);
@@ -703,6 +954,10 @@ impl eframe::App for Workspace {
             .show(ui, |ui| {
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button(strings::text("FileMenu"), |ui| {
+                        if ui.button(strings::text("SettingsMenu")).clicked() {
+                            self.settings_dialog = Some(settings_ui::Dialog::new(&self.settings));
+                            ui.close();
+                        }
                         if ui.button(strings::text("OpenRepository")).clicked() {
                             self.pick_repository(&ctx);
                             ui.close();
@@ -792,6 +1047,13 @@ impl eframe::App for Workspace {
                             }
                         });
                     });
+                    ui.menu_button(strings::text("HelpMenu"), |ui| {
+                        if ui.button(strings::text("RustUpdatesTitle")).clicked() {
+                            self.updater.open = true;
+                            self.updater.check(&ctx);
+                            ui.close();
+                        }
+                    });
                     caption::controls(ui);
                 });
                 ui.allocate_ui_with_layout(
@@ -821,10 +1083,10 @@ impl eframe::App for Workspace {
                         {
                             self.open_commit();
                         }
-                        let context_width = (ui.available_width() - 150.).clamp(90., 530.);
-                        let margin = ((ui.available_width() - 150. - context_width) / 2.).max(0.);
+                        let context_width = (ui.available_width() - 180.).clamp(90., 530.);
+                        let margin = ((ui.available_width() - 180. - context_width) / 2.).max(0.);
                         ui.add_space(margin);
-                        egui::Frame::new()
+                        let context_response = egui::Frame::new()
                             .fill(palette.raised)
                             .stroke(egui::Stroke::new(1., palette.border))
                             .corner_radius(6)
@@ -869,7 +1131,9 @@ impl eframe::App for Workspace {
                                         let editor =
                                             self.editors.iter().find(|e| e.path == tab.path);
                                         let op = self.operations.summary(&tab.path);
-                                        let msg = if editor.is_some_and(|e| e.busy) {
+                                        let msg = if tab.loading || tab.locating.is_some() {
+                                            Some(strings::text("HistoryLoading"))
+                                        } else if editor.is_some_and(|e| e.busy) {
                                             editor.and_then(|e| e.status.clone()).or(op)
                                         } else {
                                             match (op, editor.and_then(|e| e.status.clone())) {
@@ -904,7 +1168,14 @@ impl eframe::App for Workspace {
                                     }
                                 });
                             });
-                        ui.add_space(margin);
+                        if context_response
+                            .response
+                            .interact(egui::Sense::click())
+                            .on_hover_text(strings::text("ActivityTitle"))
+                            .clicked()
+                        {
+                            self.activity_open = true;
+                        }
                         self.branches.toolbar(
                             ui,
                             self.tabs
@@ -912,18 +1183,30 @@ impl eframe::App for Workspace {
                                 .and_then(|t| t.history.as_ref())
                                 .map(|h| &h.snapshot),
                         );
-                        if workspace_style::action(
-                            ui,
-                            "Stashes",
-                            self.tabs
-                                .get(self.selected)
-                                .is_some_and(|t| t.history.is_some()),
-                        )
-                        .on_disabled_hover_text(strings::text("ActionInspectionNeeded"))
-                        .clicked()
-                        {
-                            self.open_stashes();
-                        }
+                        ui.add_space((ui.available_width() - 85.).max(0.));
+                        ui.add_enabled_ui(!self.tabs.is_empty(), |ui| {
+                            ui.menu_button(strings::text("WorkspaceOpenIn"), |ui| {
+                                for (kind, label) in repository_tools::TOOLS {
+                                    if ui.button(strings::text(label)).clicked() {
+                                        if let Some(tab) = self.tabs.get(self.selected) {
+                                            let path = tab.path.clone();
+                                            let settings = self.settings.clone();
+                                            let tx = self.sender.clone();
+                                            let ctx = ctx.clone();
+                                            thread::spawn(move || {
+                                                let _ = tx.send(Event::ToolFinished(
+                                                    repository_tools::launch(
+                                                        kind, &path, &settings,
+                                                    ),
+                                                ));
+                                                ctx.request_repaint();
+                                            });
+                                        }
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        });
                     },
                 );
                 if let Some(notice) = &self.notice {
@@ -989,11 +1272,34 @@ impl eframe::App for Workspace {
                 .enabled(!modal_open && !self.closing)
                 .default_width(580.)
                 .show(&ctx, |ui| {
+                    ui.checkbox(
+                        &mut self.activity_all,
+                        strings::text("ActivityAllRepositories"),
+                    );
                     egui::ScrollArea::vertical()
                         .max_height(420.)
                         .show(ui, |ui| {
+                            egui::CollapsingHeader::new(strings::text("ActivityBackground")).show(
+                                ui,
+                                |ui| {
+                                    for (path, message) in self.auto_fetch.activity.iter().rev() {
+                                        ui.label(
+                                            path.file_name().unwrap_or_default().to_string_lossy(),
+                                        );
+                                        ui.add(egui::Label::new(message).wrap());
+                                    }
+                                },
+                            );
                             if let Some(tab) = self.tabs.get(self.selected) {
-                                self.operations.status(ui, &tab.path, &self.scheduler);
+                                self.operations.status(
+                                    ui,
+                                    if self.activity_all {
+                                        None
+                                    } else {
+                                        Some(&tab.path)
+                                    },
+                                    &self.scheduler,
+                                );
                             }
                             if let Some(tab) = self.tabs.get(self.selected)
                                 && let Some(editor) = self
@@ -1130,6 +1436,7 @@ impl eframe::App for Workspace {
             });
         use workspace_split::Divider;
         let width = ui.available_width();
+        let mut locate_request = None;
         let sidebar = egui::Panel::left("sidebar")
             .frame(workspace_style::pane(palette.sidebar, 8, 4))
             .exact_size(Divider::Sidebar.size(ui, &self.settings, width))
@@ -1152,79 +1459,115 @@ impl eframe::App for Workspace {
                                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                                 .unwrap_or_default();
                             let group = egui::CollapsingHeader::new(
-                                RichText::new(strings::text(key))
-                                    .strong()
-                                    .color(palette.muted),
+                                RichText::new(format!(
+                                    "{}  {}",
+                                    strings::text(key),
+                                    history
+                                        .snapshot
+                                        .references
+                                        .iter()
+                                        .filter(|r| r.name.starts_with(prefix))
+                                        .count()
+                                ))
+                                .strong()
+                                .color(palette.muted),
                             )
                             .default_open(!collapsed.iter().any(|g| g == &group_id))
                             .id_salt((tab.id, key))
                             .show(ui, |ui| {
-                                for reference in history
-                                    .snapshot
-                                    .references
-                                    .iter()
-                                    .filter(|r| r.name.starts_with(prefix))
-                                {
-                                    let short = reference
-                                        .name
-                                        .strip_prefix(prefix)
-                                        .unwrap_or(&reference.name);
-                                    let response = ui
-                                        .add(
-                                            egui::Button::selectable(
+                                let group_height = ((ui.clip_rect().height() - 112.) / 4.).max(48.);
+                                egui::ScrollArea::vertical()
+                                    .id_salt(("refs", key))
+                                    .max_height(group_height)
+                                    .auto_shrink([false, true])
+                                    .show(ui, |ui| {
+                                        for reference in history
+                                            .snapshot
+                                            .references
+                                            .iter()
+                                            .filter(|r| r.name.starts_with(prefix))
+                                        {
+                                            let short = if key == "Stashes" {
+                                                history
+                                                    .stashes
+                                                    .iter()
+                                                    .find(|c| c.hash == reference.hash)
+                                                    .map(|c| {
+                                                        format!(
+                                                            "{}  {}",
+                                                            reference.name,
+                                                            c.subject()
+                                                        )
+                                                    })
+                                                    .unwrap_or_else(|| reference.name.clone())
+                                            } else {
+                                                reference
+                                                    .name
+                                                    .strip_prefix(prefix)
+                                                    .unwrap_or(&reference.name)
+                                                    .to_owned()
+                                            };
+                                            let response = workspace_style::reference_row(
+                                                ui,
                                                 tab.selected.as_deref() == Some(&reference.hash),
-                                                short,
+                                                &short,
+                                                key,
                                             )
-                                            .truncate(),
-                                        )
-                                        .on_hover_text(&reference.name);
-                                    if response.clicked() {
-                                        tab.selected = Some(reference.hash.clone());
-                                    }
-                                    if reference.name.starts_with("refs/heads/")
-                                        || reference.name.starts_with("stash@{")
-                                    {
-                                        if response.secondary_clicked() {
-                                            self.reference_menu = Some(ReferenceMenu {
-                                                owner: tab.id,
-                                                snapshot: history.snapshot.clone(),
-                                                reference: reference.clone(),
-                                            });
-                                        }
-                                        response.context_menu(|ui| {
-                                            if let Some(menu) = &self.reference_menu
-                                                && menu.owner == tab.id
-                                            {
-                                                if menu.reference.name.starts_with("stash@{") {
-                                                    let message = history
-                                                        .stashes
-                                                        .iter()
-                                                        .find(|c| c.hash == menu.reference.hash)
-                                                        .map(|c| c.subject())
-                                                        .unwrap_or_default();
-                                                    stashes::quick_actions(
-                                                        ui,
-                                                        stashes::QuickTarget {
-                                                            snapshot: &menu.snapshot,
-                                                            reference: &menu.reference,
-                                                            message,
-                                                        },
-                                                        self.git.as_ref(),
-                                                        &mut self.operations,
-                                                        &mut self.branches,
-                                                        &self.scheduler,
-                                                    );
-                                                } else {
-                                                    self.branches.ref_menu(
-                                                        ui,
-                                                        &menu.snapshot,
-                                                        &menu.reference,
-                                                    );
-                                                }
+                                            .on_hover_text(&reference.name);
+                                            if response.clicked() {
+                                                locate_request = Some(reference.hash.clone());
                                             }
-                                        });
-                                    }
-                                }
+                                            if reference.name.starts_with("refs/heads/")
+                                                || reference.name.starts_with("stash@{")
+                                            {
+                                                if response.secondary_clicked() {
+                                                    self.reference_menu = Some(ReferenceMenu {
+                                                        owner: tab.id,
+                                                        snapshot: history.snapshot.clone(),
+                                                        reference: reference.clone(),
+                                                    });
+                                                }
+                                                response.context_menu(|ui| {
+                                                    if let Some(menu) = &self.reference_menu
+                                                        && menu.owner == tab.id
+                                                    {
+                                                        if menu
+                                                            .reference
+                                                            .name
+                                                            .starts_with("stash@{")
+                                                        {
+                                                            let message = history
+                                                                .stashes
+                                                                .iter()
+                                                                .find(|c| {
+                                                                    c.hash == menu.reference.hash
+                                                                })
+                                                                .map(|c| c.subject())
+                                                                .unwrap_or_default();
+                                                            stashes::quick_actions(
+                                                                ui,
+                                                                stashes::QuickTarget {
+                                                                    snapshot: &menu.snapshot,
+                                                                    reference: &menu.reference,
+                                                                    message,
+                                                                },
+                                                                self.git.as_ref(),
+                                                                &mut self.operations,
+                                                                &mut self.branches,
+                                                                &self.scheduler,
+                                                            );
+                                                        } else {
+                                                            self.branches.ref_menu(
+                                                                ui,
+                                                                &menu.snapshot,
+                                                                &menu.reference,
+                                                            );
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    });
                             });
                             if group.header_response.clicked() {
                                 if collapsed.iter().any(|g| g == &group_id) {
@@ -1243,6 +1586,9 @@ impl eframe::App for Workspace {
                     });
                 }
             });
+        if let Some(hash) = locate_request {
+            self.locate(hash, &ctx);
+        }
         let height = ui.available_height();
         self.preferences_dirty |=
             Divider::Sidebar.handle(ui, sidebar.response.rect, width, &mut self.settings);
@@ -1290,6 +1636,11 @@ impl eframe::App for Workspace {
                         tab.comparison = Some(pane);
                     }
                     if let Some(pane) = &mut tab.comparison {
+                        pane.view.font_size = self
+                            .settings
+                            .get("DiffFontSize")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(12.) as f32;
                         pane.select(&commit, &ctx);
                         let before = pane.details_index;
                         let old_width = pane.files_width;
@@ -1361,94 +1712,90 @@ impl eframe::App for Workspace {
                     .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
                 ui.spacing_mut().item_spacing.y = 0.;
-                egui::ScrollArea::both().id_salt(tab.id).show_rows(
-                    ui,
-                    23.,
-                    page.entries.len(),
-                    |ui, range| {
-                        for index in range {
-                            let entry = &page.entries[index];
+                let mut scroll = egui::ScrollArea::both().id_salt(tab.id);
+                if std::mem::take(&mut tab.scroll_selected)
+                    && let Some(index) = page
+                        .entries
+                        .iter()
+                        .position(|e| Some(&e.commit.hash) == tab.selected.as_ref())
+                {
+                    scroll = scroll.vertical_scroll_offset((index as f32 * 23. - 46.).max(0.));
+                }
+                scroll.show_rows(ui, 23., page.entries.len(), |ui, range| {
+                    for index in range {
+                        let entry = &page.entries[index];
+                        {
+                            let selected = tab.selected.as_ref() == Some(&entry.commit.hash);
+                            let peer = selected_author.is_some_and(|(name, email)| {
+                                !email.trim().is_empty()
+                                    && &entry.commit.author == name
+                                    && &entry.commit.email == email
+                            });
+                            let response = history_row::show(
+                                ui, entry, lanes, selected, peer, refs_right, &palette,
+                            );
+                            if response.clicked() {
+                                tab.selected = Some(entry.commit.hash.clone());
+                            }
+                            if response.secondary_clicked()
+                                && let Some(history) = &tab.history
                             {
-                                let selected = tab.selected.as_ref() == Some(&entry.commit.hash);
-                                let peer = selected_author.is_some_and(|(name, email)| {
-                                    !email.trim().is_empty()
-                                        && &entry.commit.author == name
-                                        && &entry.commit.email == email
+                                self.history_menu = Some(HistoryMenu {
+                                    owner: tab.id,
+                                    snapshot: history.snapshot.clone(),
+                                    commit: entry.commit.clone(),
                                 });
-                                let response = history_row::show(
-                                    ui, entry, lanes, selected, peer, refs_right, &palette,
-                                );
-                                if response.clicked() {
-                                    tab.selected = Some(entry.commit.hash.clone());
-                                }
-                                if response.secondary_clicked()
-                                    && let Some(history) = &tab.history
+                            }
+                            response.context_menu(|ui| {
+                                if let Some(menu) = &self.history_menu
+                                    && menu.owner == tab.id
                                 {
-                                    self.history_menu = Some(HistoryMenu {
-                                        owner: tab.id,
-                                        snapshot: history.snapshot.clone(),
-                                        commit: entry.commit.clone(),
-                                    });
-                                }
-                                response.context_menu(|ui| {
-                                    if let Some(menu) = &self.history_menu
-                                        && menu.owner == tab.id
+                                    if let Some(reference) =
+                                        menu.snapshot.references.iter().find(|r| {
+                                            r.name.starts_with("stash@{")
+                                                && r.hash == menu.commit.hash
+                                        })
                                     {
-                                        if let Some(reference) =
-                                            menu.snapshot.references.iter().find(|r| {
-                                                r.name.starts_with("stash@{")
-                                                    && r.hash == menu.commit.hash
-                                            })
-                                        {
-                                            stashes::quick_actions(
-                                                ui,
-                                                stashes::QuickTarget {
-                                                    snapshot: &menu.snapshot,
-                                                    reference,
-                                                    message: menu.commit.subject(),
-                                                },
-                                                self.git.as_ref(),
-                                                &mut self.operations,
-                                                &mut self.branches,
-                                                &self.scheduler,
-                                            );
-                                        } else {
-                                            ui.add_enabled_ui(
-                                                menu.snapshot.operations.is_empty(),
-                                                |ui| {
-                                                    if ui
-                                                        .button(strings::text(
-                                                            "HistoryMenuCheckoutCommit",
-                                                        ))
-                                                        .clicked()
-                                                    {
-                                                        self.branches.checkout(
+                                        stashes::quick_actions(
+                                            ui,
+                                            stashes::QuickTarget {
+                                                snapshot: &menu.snapshot,
+                                                reference,
+                                                message: menu.commit.subject(),
+                                            },
+                                            self.git.as_ref(),
+                                            &mut self.operations,
+                                            &mut self.branches,
+                                            &self.scheduler,
+                                        );
+                                    } else {
+                                        ui.add_enabled_ui(
+                                            menu.snapshot.operations.is_empty(),
+                                            |ui| {
+                                                if ui
+                                                    .button(strings::text(
+                                                        "HistoryMenuCheckoutCommit",
+                                                    ))
+                                                    .clicked()
+                                                {
+                                                    self.branches.checkout(
                                                         &menu.snapshot,
                                                         shovel_core::branches::Checkout::Detached(
                                                             menu.commit.hash.clone(),
                                                         ),
                                                     );
-                                                        ui.close();
-                                                    }
-                                                    ui.menu_button(
-                                                        strings::text("HistoryResetMenu"),
-                                                        |ui| {
-                                                            use shovel_core::history_actions::Reset;
-                                                            for (mode, label) in [
-                                                                (
-                                                                    Reset::Soft,
-                                                                    "HistoryMenuResetSoft",
-                                                                ),
-                                                                (
-                                                                    Reset::Mixed,
-                                                                    "HistoryMenuResetMixed",
-                                                                ),
-                                                                (
-                                                                    Reset::Hard,
-                                                                    "HistoryMenuResetHard",
-                                                                ),
-                                                            ] {
-                                                                if ui
+                                                    ui.close();
+                                                }
+                                                ui.menu_button(
+                                                    strings::text("HistoryResetMenu"),
+                                                    |ui| {
+                                                        use shovel_core::history_actions::Reset;
+                                                        for (mode, label) in [
+                                                            (Reset::Soft, "HistoryMenuResetSoft"),
+                                                            (Reset::Mixed, "HistoryMenuResetMixed"),
+                                                            (Reset::Hard, "HistoryMenuResetHard"),
+                                                        ] {
+                                                            if ui
                                                                 .add_enabled(
                                                                     menu.snapshot.branch.is_some()
                                                                         && menu
@@ -1473,57 +1820,55 @@ impl eframe::App for Workspace {
                                                                 );
                                                                 ui.close();
                                                             }
+                                                        }
+                                                    },
+                                                );
+                                                let mut revert_mainline = None;
+                                                if menu.commit.parents.len() > 1 {
+                                                    ui.menu_button(
+                                                        strings::text("HistoryMenuRevertCommit"),
+                                                        |ui| {
+                                                            for (index, parent) in menu
+                                                                .commit
+                                                                .parents
+                                                                .iter()
+                                                                .enumerate()
+                                                            {
+                                                                if ui
+                                                                    .button(strings::format(
+                                                                        "HistoryRevertParent",
+                                                                        &[
+                                                                            &(index + 1)
+                                                                                .to_string(),
+                                                                            parent,
+                                                                        ],
+                                                                    ))
+                                                                    .clicked()
+                                                                {
+                                                                    revert_mainline =
+                                                                        Some(index + 1);
+                                                                    ui.close();
+                                                                }
                                                             }
                                                         },
-                                                    );
-                                                    let mut revert_mainline = None;
-                                                    if menu.commit.parents.len() > 1 {
-                                                        ui.menu_button(
-                                                            strings::text(
-                                                                "HistoryMenuRevertCommit",
-                                                            ),
-                                                            |ui| {
-                                                                for (index, parent) in menu
-                                                                    .commit
-                                                                    .parents
-                                                                    .iter()
-                                                                    .enumerate()
-                                                                {
-                                                                    if ui
-                                                                        .button(strings::format(
-                                                                            "HistoryRevertParent",
-                                                                            &[
-                                                                                &(index + 1)
-                                                                                    .to_string(),
-                                                                                parent,
-                                                                            ],
-                                                                        ))
-                                                                        .clicked()
-                                                                    {
-                                                                        revert_mainline =
-                                                                            Some(index + 1);
-                                                                        ui.close();
-                                                                    }
-                                                                }
-                                                            },
-                                                        )
-                                                        .response
-                                                        .on_hover_text(strings::text(
-                                                            "HistoryRevertParentHelp",
-                                                        ));
-                                                    } else if ui
-                                                        .button(strings::text(
-                                                            "HistoryMenuRevertCommit",
-                                                        ))
-                                                        .clicked()
-                                                    {
-                                                        revert_mainline = Some(0);
-                                                        ui.close();
-                                                    }
-                                                    if let Some(mainline) = revert_mainline
-                                                        && let Some(git) = &self.git
-                                                    {
-                                                        self.operations.submit_history(
+                                                    )
+                                                    .response
+                                                    .on_hover_text(strings::text(
+                                                        "HistoryRevertParentHelp",
+                                                    ));
+                                                } else if ui
+                                                    .button(strings::text(
+                                                        "HistoryMenuRevertCommit",
+                                                    ))
+                                                    .clicked()
+                                                {
+                                                    revert_mainline = Some(0);
+                                                    ui.close();
+                                                }
+                                                if let Some(mainline) = revert_mainline
+                                                    && let Some(git) = &self.git
+                                                {
+                                                    self.operations.submit_history(
                                                 "ActionTitleRevertCommit",
                                                 shovel_core::history_actions::Action::Revert {
                                                     target: menu.commit.hash.clone(),
@@ -1534,29 +1879,38 @@ impl eframe::App for Workspace {
                                                 &self.scheduler,
                                                 &ctx,
                                             );
-                                                    }
-                                                },
-                                            )
-                                            .response
-                                            .on_disabled_hover_text(strings::text(
-                                                "ActionSequence",
-                                            ));
-                                        }
-                                        if ui.button(strings::text("HistoryCopySha")).clicked() {
-                                            ctx.copy_text(menu.commit.hash.clone());
-                                            ui.close();
-                                        }
+                                                }
+                                            },
+                                        )
+                                        .response
+                                        .on_disabled_hover_text(strings::text("ActionSequence"));
                                     }
-                                });
-                            }
+                                    if ui.button(strings::text("HistoryCopySha")).clicked() {
+                                        ctx.copy_text(menu.commit.hash.clone());
+                                        ui.close();
+                                    }
+                                }
+                            });
                         }
-                    },
-                );
+                    }
+                });
             });
         let stash_input =
             !self.closing && !self.operations.modal_open() && !self.branches.is_open();
+        let mut stash_navigation = None;
         for view in &mut self.stash_views {
             view.show(&ctx, &mut self.operations, &self.scheduler, stash_input);
+            if let Some(hash) = view.take_navigation() {
+                stash_navigation = Some((view.path.clone(), hash));
+            }
+        }
+        if let Some((path, hash)) = stash_navigation
+            && self
+                .tabs
+                .get(self.selected)
+                .is_some_and(|tab| tab.path == path)
+        {
+            self.locate(hash, &ctx);
         }
         for editor in &mut self.editors {
             let open = editor.open;
@@ -1569,6 +1923,25 @@ impl eframe::App for Workspace {
                 self.preferences_dirty = true;
             }
         }
+        self.settings_window(&ctx);
+        let update_blocked = self.scheduler.has_accepted_work()
+            || self.saving
+            || self
+                .editors
+                .iter()
+                .any(|e| e.blocks_exit() || e.unsaved_conflict() || e.native_picker_open());
+        self.updater
+            .show(&ctx, update_blocked, self.external_tools_opened);
+        if self.updater.restart_requested && !self.closing {
+            self.close(&ctx);
+        }
+
+        self.preferences_dirty |= self.operations.options_dialog(
+            &ctx,
+            &mut self.settings,
+            self.git.as_ref(),
+            &self.scheduler,
+        );
         let allow_branch_input = !self.closing && !self.operations.modal_open();
         self.branches.show(
             &ctx,
@@ -1609,6 +1982,11 @@ mod tests {
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
+            activity_all: false,
+            auto_fetch: Default::default(),
+            settings_dialog: None,
+            updater: Default::default(),
+            external_tools_opened: false,
             tab_drag: None,
             scheduler: Default::default(),
             editors: vec![],
@@ -1667,6 +2045,9 @@ mod tests {
                 previous: vec![],
                 loading: true,
                 refresh_again: false,
+                locating: None,
+                locate_cancel: Cancellation::default(),
+                scroll_selected: false,
                 error: None,
                 comparison: None,
             }],
@@ -1683,6 +2064,11 @@ mod tests {
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
+            activity_all: false,
+            auto_fetch: Default::default(),
+            settings_dialog: None,
+            updater: Default::default(),
+            external_tools_opened: false,
             tab_drag: None,
             scheduler: Default::default(),
             editors: vec![],

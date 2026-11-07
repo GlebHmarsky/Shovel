@@ -46,7 +46,10 @@ try {
     $files = @(Get-ChildItem -LiteralPath $app -Recurse -File | Sort-Object FullName | ForEach-Object {
         [ordered]@{Name=[IO.Path]::GetRelativePath($app,$_.FullName).Replace('\','/');Size=$_.Length;SHA256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
     })
-    [ordered]@{SchemaVersion=1;Product='ShovelRust';Version=$version;SourceCommit=$commit;SourceFingerprint=$fingerprint;Dirty=($pending.Count -gt 0);Target='x86_64-pc-windows-msvc';Profile='release';StaticCrt=$true;CompiledAt=[DateTimeOffset]::UtcNow.ToString('O');ParityVerified=$false;SmokeVerified=$false;Binaries=@($binaries);Notices=$notices;Files=$files;VerifierSHA256=(Get-FileHash -LiteralPath (Join-Path $output 'verify_update_bundle.exe') -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'VERIFICATION.json') -Encoding utf8NoBOM
+    $smokePath=Join-Path $root 'Build/rust-smoke.json'
+    $smoke=if(Test-Path -LiteralPath $smokePath){Get-Content -LiteralPath $smokePath -Raw | ConvertFrom-Json}else{$null}
+    $smokeVerified=$smoke -and $smoke.Passed -and $smoke.SourceFingerprint -eq $fingerprint
+    [ordered]@{SchemaVersion=1;Product='ShovelRust';Version=$version;SourceCommit=$commit;SourceFingerprint=$fingerprint;Dirty=($pending.Count -gt 0);Target='x86_64-pc-windows-msvc';Profile='release';StaticCrt=$true;CompiledAt=[DateTimeOffset]::UtcNow.ToString('O');ParityVerified=$false;SmokeVerified=[bool]$smokeVerified;Binaries=@($binaries);Notices=$notices;Files=$files;VerifierSHA256=(Get-FileHash -LiteralPath (Join-Path $output 'verify_update_bundle.exe') -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'VERIFICATION.json') -Encoding utf8NoBOM
     Write-Output $output
 } finally {
     $env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS = $previousFlags

@@ -49,9 +49,8 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette) {
         if line.from == line.to {
             painter.line_segment([a, b], stroke);
         } else {
-            let mid = (a.y + b.y) / 2.;
             painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
-                [a, Pos2::new(a.x, mid), Pos2::new(b.x, mid), b],
+                [a, Pos2::new(a.x, b.y), Pos2::new(b.x, a.y), b],
                 false,
                 Color32::TRANSPARENT,
                 stroke,

@@ -333,26 +333,28 @@ impl Pane {
                         if comparison.commit != commit.hash {
                             ui.label(text("DiffRetainedLoading"));
                         }
-                        egui::ScrollArea::both().show_rows(
-                            ui,
-                            22.,
-                            comparison.entries.len(),
-                            |ui, range| {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show_rows(ui, 22., comparison.entries.len(), |ui, range| {
                                 for index in range {
                                     let entry = &comparison.entries[index];
                                     if ui
-                                        .selectable_label(
-                                            self.selected_file.as_deref() == Some(&entry.path),
-                                            format!("{}  {}", entry.code, entry.path),
+                                        .add_sized(
+                                            [ui.available_width(), 22.],
+                                            egui::Button::selectable(
+                                                self.selected_file.as_deref() == Some(&entry.path),
+                                                format!("{}  {}", entry.code, entry.path),
+                                            )
+                                            .truncate(),
                                         )
+                                        .on_hover_text(&entry.path)
                                         .clicked()
                                         && !self.loading
                                     {
                                         chosen = Some(entry.path.clone());
                                     }
                                 }
-                            },
-                        );
+                            });
                     }
                     if let Some(path) = chosen {
                         self.load_diff(&path, &ctx);
@@ -363,8 +365,12 @@ impl Pane {
             }
             egui::CentralPanel::default().show(ui, |ui| {
                 if let Some(diff) = &self.diff {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.strong(&self.displayed_file);
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(&self.displayed_file).strong())
+                                .truncate(),
+                        )
+                        .on_hover_text(&self.displayed_file);
                         ui.monospace(&self.displayed_commit[..self.displayed_commit.len().min(8)]);
                     });
                     self.view.show(ui, diff, false);

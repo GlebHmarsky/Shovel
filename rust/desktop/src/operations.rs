@@ -220,6 +220,7 @@ struct Question {
     focus: bool,
 }
 pub struct Controller {
+    options: Option<(Options, Snapshot)>,
     next: u64,
     runs: Vec<Run>,
     prompts: VecDeque<Question>,
@@ -231,6 +232,7 @@ impl Default for Controller {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            options: None,
             next: 1,
             runs: vec![],
             prompts: VecDeque::new(),
@@ -242,7 +244,7 @@ impl Default for Controller {
 }
 impl Controller {
     pub fn modal_open(&self) -> bool {
-        !self.prompts.is_empty()
+        !self.prompts.is_empty() || self.options.is_some()
     }
     pub fn toolbar(
         &mut self,
@@ -252,7 +254,7 @@ impl Controller {
         git: Option<&Arc<Git>>,
         scheduler: &Scheduler,
     ) -> bool {
-        let mut changed = false;
+        let changed = false;
         for kind in [Kind::Fetch, Kind::Pull, Kind::Push] {
             ui.push_id(kind.number(), |ui| {
                 let available = snapshot.is_some() && git.is_some();
@@ -274,109 +276,123 @@ impl Controller {
                         ui.ctx(),
                     );
                 }
-                ui.add_enabled_ui(available, |ui| {
-                    crate::workspace_style::options_menu(
-                        ui,
-                        strings::format("RustNetworkOptions", &[&text(kind.key())]),
-                        |ui| {
-                            let Some(snapshot) = snapshot else {
-                                return;
-                            };
-                            let mut options = Options::load(settings, snapshot, kind);
-                            let before = options.clone();
-                            ui.set_max_width(480.);
-                            ui.label(text("NetworkRememberOptions"));
-                            ui.label(text(if options.explicit {
-                                "ActionCachedTargets"
-                            } else {
-                                "RustNetworkConfigured"
-                            }));
-                            if kind == Kind::Fetch {
-                                ui.checkbox(&mut options.all_remotes, text("ActionAllRemotes"));
-                            }
-                            if kind == Kind::Pull {
-                                ui.radio_value(
-                                    &mut options.strategy,
-                                    Strategy::Rebase,
-                                    text("ActionPullRebase"),
-                                );
-                                ui.radio_value(
-                                    &mut options.strategy,
-                                    Strategy::Merge,
-                                    text("ActionPullMerge"),
-                                );
-                                ui.checkbox(&mut options.auto_stash, text("ActionAutoStash"));
-                            }
-                            if kind == Kind::Push {
-                                ui.checkbox(&mut options.all_tags, text("ActionAllTags"));
-                                ui.checkbox(&mut options.set_upstream, text("ActionSetUpstream"));
-                                ui.label(text("ActionBranchLabel"));
-                                let old = options.source.clone();
-                                egui::ComboBox::from_id_salt("source")
-                                    .selected_text(&options.source)
-                                    .show_ui(ui, |ui| {
-                                        for reference in &snapshot.references {
-                                            if let Some(branch) =
-                                                reference.name.strip_prefix("refs/heads/")
-                                            {
-                                                ui.selectable_value(
-                                                    &mut options.source,
-                                                    branch.to_owned(),
-                                                    branch,
-                                                );
-                                            }
-                                        }
-                                    });
-                                options.explicit |= options.source != old;
-                            }
-                            ui.label(text("ActionRemote"));
-                            let old = options.remote.clone();
-                            egui::ComboBox::from_id_salt("remote")
-                                .selected_text(&options.remote)
-                                .show_ui(ui, |ui| {
-                                    for remote in &snapshot.remotes {
-                                        ui.selectable_value(
-                                            &mut options.remote,
-                                            remote.clone(),
-                                            remote,
-                                        );
-                                    }
-                                });
-                            options.explicit |= old != options.remote;
-                            if kind != Kind::Fetch {
-                                ui.label(text("ActionRemoteBranch"));
-                                options.explicit |= ui
-                                    .add(
-                                        egui::TextEdit::singleline(&mut options.branch)
-                                            .char_limit(1024),
-                                    )
-                                    .changed();
-                            }
-                            if options.explicit
-                                && ui.button(text("RustNetworkUseConfigured")).clicked()
-                            {
-                                options.explicit = false;
-                            }
-                            if options != before {
-                                options.save(settings, snapshot);
-                                changed = true;
-                            }
-                            if ui.button(text(kind.key())).clicked() {
-                                if let Some(git) = git {
-                                    self.submit(
-                                        options,
-                                        snapshot,
-                                        git.clone(),
-                                        scheduler,
-                                        ui.ctx(),
+                if crate::workspace_style::options_button(
+                    ui,
+                    strings::format("RustNetworkOptions", &[&text(kind.key())]),
+                    available,
+                )
+                .clicked()
+                    && let Some(snapshot) = snapshot
+                {
+                    self.options =
+                        Some((Options::load(settings, snapshot, kind), snapshot.clone()));
+                }
+            });
+        }
+        changed
+    }
+    pub fn options_dialog(
+        &mut self,
+        ctx: &egui::Context,
+        settings: &mut Settings,
+        git: Option<&Arc<Git>>,
+        scheduler: &Scheduler,
+    ) -> bool {
+        let Some((mut options, snapshot)) = self.options.take() else {
+            return false;
+        };
+        let before = options.clone();
+        let kind = options.kind;
+        let mut open = true;
+        let mut close = false;
+        egui::Window::new(strings::format("RustNetworkOptions", &[&text(kind.key())]))
+            .id(egui::Id::unique("network-options"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(480.)
+            .show(ctx, |ui| {
+                ui.label(text("NetworkRememberOptions"));
+                ui.label(text(if options.explicit {
+                    "ActionCachedTargets"
+                } else {
+                    "RustNetworkConfigured"
+                }));
+                if kind == Kind::Fetch {
+                    ui.checkbox(&mut options.all_remotes, text("ActionAllRemotes"));
+                }
+                if kind == Kind::Pull {
+                    ui.radio_value(
+                        &mut options.strategy,
+                        Strategy::Rebase,
+                        text("ActionPullRebase"),
+                    );
+                    ui.radio_value(
+                        &mut options.strategy,
+                        Strategy::Merge,
+                        text("ActionPullMerge"),
+                    );
+                    ui.checkbox(&mut options.auto_stash, text("ActionAutoStash"));
+                }
+                if kind == Kind::Push {
+                    ui.checkbox(&mut options.all_tags, text("ActionAllTags"));
+                    ui.checkbox(&mut options.set_upstream, text("ActionSetUpstream"));
+                    ui.label(text("ActionBranchLabel"));
+                    let old = options.source.clone();
+                    egui::ComboBox::from_id_salt("source")
+                        .selected_text(&options.source)
+                        .show_ui(ui, |ui| {
+                            for reference in &snapshot.references {
+                                if let Some(branch) = reference.name.strip_prefix("refs/heads/") {
+                                    ui.selectable_value(
+                                        &mut options.source,
+                                        branch.to_owned(),
+                                        branch,
                                     );
                                 }
-                                ui.close();
                             }
-                        },
-                    );
+                        });
+                    options.explicit |= options.source != old;
+                }
+                ui.label(text("ActionRemote"));
+                let old = options.remote.clone();
+                egui::ComboBox::from_id_salt("remote")
+                    .selected_text(&options.remote)
+                    .show_ui(ui, |ui| {
+                        for remote in &snapshot.remotes {
+                            ui.selectable_value(&mut options.remote, remote.clone(), remote);
+                        }
+                    });
+                options.explicit |= old != options.remote;
+                if kind != Kind::Fetch {
+                    ui.label(text("ActionRemoteBranch"));
+                    options.explicit |= ui
+                        .add(egui::TextEdit::singleline(&mut options.branch).char_limit(1024))
+                        .changed();
+                }
+                if options.explicit && ui.button(text("RustNetworkUseConfigured")).clicked() {
+                    options.explicit = false;
+                }
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button(text("Close")).clicked() {
+                        close = true;
+                    }
+                    if ui.button(text(kind.key())).clicked() {
+                        if let Some(git) = git {
+                            self.submit(options.clone(), &snapshot, git.clone(), scheduler, ctx);
+                        }
+                        close = true;
+                    }
                 });
             });
+        let changed = options != before;
+        if changed {
+            options.save(settings, &snapshot);
+        }
+        if open && !close && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.options = Some((options, snapshot));
         }
         changed
     }
@@ -820,6 +836,20 @@ impl Controller {
             .filter_map(|r| std::mem::take(&mut r.changed).then(|| r.path.clone()))
             .collect()
     }
+    pub fn record_local(&mut self, path: PathBuf, status: String, output: String) {
+        let sequence = self.next;
+        self.next += 1;
+        self.runs.push(Run {
+            sequence,
+            request: 0,
+            path,
+            label: "Commit",
+            status,
+            output: network::redact(&output).chars().take(32768).collect(),
+            done: true,
+            changed: false,
+        });
+    }
     pub fn summary(&self, path: &std::path::Path) -> Option<String> {
         let mut runs = self.runs.iter().rev().filter(|r| r.path == path);
         runs.clone()
@@ -827,11 +857,21 @@ impl Controller {
             .or_else(|| runs.next())
             .map(|r| format!("{} · {}", text(r.label), r.status))
     }
-    pub fn status(&self, ui: &mut egui::Ui, path: &PathBuf, scheduler: &Scheduler) {
+    pub fn status(&self, ui: &mut egui::Ui, path: Option<&PathBuf>, scheduler: &Scheduler) {
         let records = scheduler.records();
-        for run in self.runs.iter().filter(|r| &r.path == path).rev() {
+        for run in self
+            .runs
+            .iter()
+            .filter(|r| path.is_none_or(|p| &r.path == p))
+            .rev()
+        {
             ui.horizontal(|ui| {
-                ui.label(format!("{} · {}", text(run.label), run.status));
+                ui.label(format!(
+                    "{} · {} · {}",
+                    run.path.file_name().unwrap_or_default().to_string_lossy(),
+                    text(run.label),
+                    run.status
+                ));
                 if !run.done
                     && records
                         .iter()
@@ -966,6 +1006,80 @@ mod tests {
             );
             thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    #[test]
+    fn network_options_are_modal_persist_on_close_and_do_not_execute() {
+        let (_temp, git, snapshot) = fixture();
+        let mut controller = Controller {
+            options: Some((
+                Options::load(&Settings::default(), &snapshot, Kind::Pull),
+                snapshot.clone(),
+            )),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut settings = Settings::default();
+        let scheduler = Scheduler::default();
+        assert!(controller.modal_open());
+        let render = |controller: &mut Controller, settings: &mut Settings, events| {
+            ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(800., 600.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |_| {
+                    controller.options_dialog(&ctx, settings, Some(&git), &scheduler);
+                },
+            )
+        };
+        let mut nodes = std::collections::HashMap::new();
+        for _ in 0..3 {
+            let out = render(&mut controller, &mut settings, vec![]);
+            if let Some(update) = &out.platform_output.accesskit_update {
+                for (_, node) in &update.nodes {
+                    if let (Some(label), Some(r)) = (node.label(), node.bounds()) {
+                        nodes.insert(
+                            label.to_owned(),
+                            egui::pos2(((r.x0 + r.x1) / 2.) as f32, ((r.y0 + r.y1) / 2.) as f32),
+                        );
+                    }
+                }
+            }
+            out.drop_without_applying_deltas();
+        }
+        for label in [text("ActionPullMerge"), text("Close")] {
+            let point = nodes[&label];
+            for events in [
+                vec![egui::Event::PointerMoved(point)],
+                vec![egui::Event::PointerButton {
+                    pos: point,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                vec![egui::Event::PointerButton {
+                    pos: point,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+            ] {
+                render(&mut controller, &mut settings, events).drop_without_applying_deltas();
+            }
+        }
+        assert!(!controller.modal_open());
+        assert_eq!(
+            Options::load(&settings, &snapshot, Kind::Pull).strategy,
+            Strategy::Merge
+        );
+        assert!(!scheduler.has_accepted_work());
+        assert!(controller.runs.is_empty());
     }
     #[test]
     fn remembered_flags_persist_and_explicit_targets_are_branch_bound() {

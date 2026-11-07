@@ -15,14 +15,16 @@ eframe = { version = "=0.37.0", default-features = false, features = ["accesskit
 rfd = "0.15"
 serde_json.workspace = true
 sha2.workspace = true
+semver = "1"
+ureq = "=3.5.1"
 unicode-segmentation = "1"
-velopack = "=1.2.161"
+velopack = { version = "=1.2.161", features = ["public-utils"] }
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
 raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_UI_Accessibility", "Win32_Graphics_Gdi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging", "Win32_System_Com", "Win32_System_Registry"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_Accessibility", "Win32_Graphics_Gdi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging", "Win32_System_Com", "Win32_System_Registry", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 
 [dev-dependencies]
 tempfile.workspace = true
