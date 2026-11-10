@@ -2047,7 +2047,15 @@ impl eframe::App for Workspace {
                                                                     key,
                                                                 )
                                                                 .on_hover_text(&reference.name);
-                                                            if response.clicked() {
+                                                            if response.clicked()
+                                                                || response.has_focus()
+                                                                    && ui.input_mut(|i| {
+                                                                        i.consume_key(
+                                                                            egui::Modifiers::NONE,
+                                                                            egui::Key::Enter,
+                                                                        )
+                                                                    })
+                                                            {
                                                                 locate_request =
                                                                     Some(reference.hash.clone());
                                                             }
@@ -2071,6 +2079,37 @@ impl eframe::App for Workspace {
                                                     .header_response
                                                     .on_hover_text(name)
                                                     .context_menu(|ui| {
+                                                        if history
+                                                            .snapshot
+                                                            .remotes
+                                                            .iter()
+                                                            .any(|r| r == name)
+                                                            && ui
+                                                                .add_enabled(
+                                                                    self.git.is_some(),
+                                                                    egui::Button::new(
+                                                                        strings::text(
+                                                                            "ActionTitleFetch",
+                                                                        ),
+                                                                    ),
+                                                                )
+                                                                .on_disabled_hover_text(
+                                                                    strings::text(
+                                                                        "GitErrorMissingGit",
+                                                                    ),
+                                                                )
+                                                                .clicked()
+                                                            && let Some(git) = &self.git
+                                                        {
+                                                            self.operations.fetch_remote(
+                                                                name,
+                                                                &history.snapshot,
+                                                                git.clone(),
+                                                                &self.scheduler,
+                                                                &ctx,
+                                                            );
+                                                            ui.close();
+                                                        }
                                                         self.remotes.menu(
                                                             ui,
                                                             Some(&history.snapshot),
@@ -2130,7 +2169,29 @@ impl eframe::App for Workspace {
                                                 key,
                                             )
                                             .on_hover_text(&reference.name);
-                                            if response.clicked() {
+                                            let activated = response.double_clicked()
+                                                || response.has_focus()
+                                                    && ui.input_mut(|i| {
+                                                        i.consume_key(
+                                                            egui::Modifiers::NONE,
+                                                            egui::Key::Enter,
+                                                        )
+                                                    });
+                                            if activated
+                                                && reference.name.starts_with("refs/heads/")
+                                            {
+                                                if history.snapshot.operations.is_empty() {
+                                                    self.branches.checkout(
+                                                        &history.snapshot,
+                                                        shovel_core::branches::Checkout::Branch(
+                                                            reference.clone(),
+                                                        ),
+                                                    );
+                                                } else {
+                                                    self.notice =
+                                                        Some(strings::text("ActionSequence"));
+                                                }
+                                            } else if response.clicked() || activated {
                                                 locate_request = Some(reference.hash.clone());
                                             }
                                             if reference.name.starts_with("refs/heads/")

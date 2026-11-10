@@ -438,6 +438,9 @@ pub fn reference_row(ui: &mut egui::Ui, selected: bool, label: &str, kind: &str)
             galley,
             fg,
         );
+    if response.clicked() {
+        response.request_focus();
+    }
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, label)
     });

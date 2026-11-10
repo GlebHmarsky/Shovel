@@ -575,3 +575,295 @@ fn middle_close_and_keyboard_selection_preserve_tab_owner_and_saved_order() {
     assert_eq!(app.tabs.len(), 1);
     assert_eq!(app.tabs[0].id, 1);
 }
+
+fn sidebar_point(
+    ctx: &egui::Context,
+    app: &mut Workspace,
+    label: &str,
+) -> Option<(egui::Pos2, bool)> {
+    let out = frame(ctx, app, vec![]);
+    let value = out
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .unwrap()
+        .nodes
+        .iter()
+        .filter(|(_, n)| {
+            n.label() == Some(label) && n.bounds().is_some() && n.role() != egui::Role::Window
+        })
+        // Toolbar and sidebar actions may share the same localized label.
+        .max_by(|(_, a), (_, b)| a.bounds().unwrap().y0.total_cmp(&b.bounds().unwrap().y0))
+        .map(|(_, n)| {
+            let r = n.bounds().unwrap();
+            (
+                egui::pos2(((r.x0 + r.x1) / 2.) as f32, ((r.y0 + r.y1) / 2.) as f32),
+                n.is_disabled(),
+            )
+        });
+    out.drop_without_applying_deltas();
+    value
+}
+fn sidebar_click(
+    ctx: &egui::Context,
+    app: &mut Workspace,
+    label: &str,
+    button: egui::PointerButton,
+) {
+    frame(ctx, app, vec![]).drop_without_applying_deltas();
+    let (p, disabled) = sidebar_point(ctx, app, label).unwrap_or_else(|| panic!("Missing {label}"));
+    assert!(!disabled, "Disabled {label}");
+    frame(ctx, app, vec![egui::Event::PointerMoved(p)]).drop_without_applying_deltas();
+    for pressed in [true, false] {
+        frame(
+            ctx,
+            app,
+            vec![egui::Event::PointerButton {
+                pos: p,
+                button,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        )
+        .drop_without_applying_deltas();
+    }
+}
+#[test]
+fn sidebar_remote_fetch_uses_clicked_target_without_changing_toolbar_flags() {
+    use crate::history_view::tests::{Fixture, wait};
+    use shovel_core::scheduler::{Lane, Outcome};
+    use std::time::{Duration, Instant};
+    let f = Fixture::new();
+    let root = f.root.to_str().unwrap();
+    let mut tips = vec![];
+    for name in ["origin", "other"] {
+        let path = f._temp.path().join(format!("{name}.git"));
+        let path = path.to_str().unwrap();
+        f.command(&["init", "--bare", path], &[]);
+        f.command(&["remote", "add", name, path], &[]);
+        f.command(&["push", name, "main"], &[]);
+        let tip = f.command(
+            &[
+                "--git-dir",
+                path,
+                "commit-tree",
+                "refs/heads/main^{tree}",
+                "-p",
+                "refs/heads/main",
+            ],
+            name.as_bytes(),
+        );
+        f.command(
+            &["--git-dir", path, "update-ref", "refs/heads/main", &tip],
+            &[],
+        );
+        tips.push(tip);
+    }
+    let old = f.command(&["rev-parse", "HEAD"], &[]);
+    let before_config = f.command(&["config", "--local", "--list"], &[]);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = f.app(&ctx);
+    app.operations.set_authentication_helper(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelRustAskPass.exe"),
+    );
+    let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
+    let prefs = serde_json::json!([{"Path":snapshot.worktree.to_string_lossy(),"Action":2,"Branch":"main",
+        "SourceBranch":"main","Remote":"other","RemoteBranch":"main","Strategy":0,"AllRemotes":true,"AllTags":false,
+        "SetUpstream":false,"AutoStash":false,"ExplicitTarget":true}]);
+    app.settings.set("NetworkActions", prefs.clone());
+    let common = snapshot.common_directory.to_string_lossy().to_uppercase();
+    let (held, _) = app.scheduler.reserve(
+        snapshot.identity.fingerprint.clone(),
+        common.clone(),
+        "held".into(),
+        Lane::Exclusive,
+        |_| {},
+    );
+    for _ in 0..2 {
+        sidebar_click(&ctx, &mut app, "origin", egui::PointerButton::Secondary);
+        sidebar_click(
+            &ctx,
+            &mut app,
+            &strings::text("ActionTitleFetch"),
+            egui::PointerButton::Primary,
+        );
+    }
+    assert_eq!(
+        app.scheduler
+            .records()
+            .iter()
+            .filter(|r| r.outcome.is_none())
+            .count(),
+        2,
+        "duplicate same-remote request must coalesce"
+    );
+    assert!(
+        app.scheduler
+            .records()
+            .iter()
+            .any(|r| r.outcome.is_none() && r.key == "network:Fetch:origin"),
+        "context menu must submit the explicit remote, not the toolbar action"
+    );
+    assert_eq!(app.settings.get("NetworkActions"), Some(&prefs));
+    let owner = app.tabs[0].id;
+    app.close_tab(owner, &ctx);
+    assert!(app.scheduler.remove_waiting(held));
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while app.scheduler.has_accepted_work() || app.operations.has_pending(&snapshot.worktree) {
+        app.receive(&ctx);
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    app.receive(&ctx);
+    assert_eq!(
+        f.command(&["rev-parse", "refs/remotes/origin/main"], &[]),
+        tips[0]
+    );
+    assert_eq!(
+        f.command(&["rev-parse", "refs/remotes/other/main"], &[]),
+        old
+    );
+    assert_eq!(f.command(&["rev-parse", "HEAD"], &[]), old);
+    assert_eq!(
+        f.command(&["config", "--local", "--list"], &[]),
+        before_config
+    );
+    assert!(
+        app.scheduler
+            .records()
+            .iter()
+            .any(|r| r.outcome == Some(Outcome::Succeeded))
+    );
+    app.open(PathBuf::from(root), &ctx);
+    wait(&mut app, &ctx);
+    let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
+    let (held, _) = app.scheduler.reserve(
+        snapshot.identity.fingerprint.clone(),
+        common,
+        "held-again".into(),
+        Lane::Exclusive,
+        |_| {},
+    );
+    for name in ["origin", "other"] {
+        sidebar_click(&ctx, &mut app, name, egui::PointerButton::Secondary);
+        sidebar_click(
+            &ctx,
+            &mut app,
+            &strings::text("ActionTitleFetch"),
+            egui::PointerButton::Primary,
+        );
+    }
+    assert_eq!(
+        app.scheduler
+            .records()
+            .iter()
+            .filter(|r| r.outcome.is_none())
+            .count(),
+        3,
+        "different targets must remain separate requests"
+    );
+    assert!(app.scheduler.remove_waiting(held));
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while app.scheduler.has_accepted_work() || app.operations.has_pending(&snapshot.worktree) {
+        app.receive(&ctx);
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    app.receive(&ctx);
+    wait(&mut app, &ctx);
+    assert_eq!(
+        f.command(&["rev-parse", "refs/remotes/other/main"], &[]),
+        tips[1]
+    );
+    assert_eq!(f.command(&["rev-parse", "HEAD"], &[]), old);
+    assert_eq!(app.settings.get("NetworkActions"), Some(&prefs));
+}
+#[test]
+fn sidebar_enter_and_double_click_open_review_then_switch_the_captured_branch() {
+    use crate::history_view::tests::{Fixture, wait};
+    use std::time::{Duration, Instant};
+    let f = Fixture::new();
+    let tip = f.command(&["rev-parse", "HEAD~350"], &[]);
+    f.command(&["branch", "target", &tip], &[]);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    ctx.set_embed_viewports(true);
+    let mut app = f.app(&ctx);
+    sidebar_click(&ctx, &mut app, "target", egui::PointerButton::Primary);
+    wait(&mut app, &ctx);
+    assert_eq!(app.tabs[0].selected.as_deref(), Some(tip.as_str()));
+    assert!(!app.branches.is_open());
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+    )
+    .drop_without_applying_deltas();
+    assert!(
+        app.branches.is_open(),
+        "Enter should open the reviewed checkout"
+    );
+    assert_eq!(
+        f.command(&["symbolic-ref", "--short", "HEAD"], &[]),
+        "main",
+        "opening review cannot switch"
+    );
+    for expected in ["target", "main"] {
+        if expected == "main" {
+            // Native Git elapsed time does not advance egui's synthetic frame
+            // clock. Separate this gesture from the earlier confirmation click.
+            let time = ctx.input(|i| i.time) + 0.5;
+            ctx.run_ui(
+                egui::RawInput {
+                    time: Some(time),
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900., 620.),
+                    )),
+                    ..Default::default()
+                },
+                |ui| app.ui(ui, &mut eframe::Frame::_new_kittest()),
+            )
+            .drop_without_applying_deltas();
+            sidebar_click(&ctx, &mut app, "main", egui::PointerButton::Primary);
+            sidebar_click(&ctx, &mut app, "main", egui::PointerButton::Primary);
+            assert!(
+                app.branches.is_open(),
+                "double-click should open the reviewed checkout"
+            );
+        }
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while sidebar_point(&ctx, &mut app, &strings::text("ActionTitleSwitchBranch"))
+            .is_none_or(|(_, disabled)| disabled)
+        {
+            app.receive(&ctx);
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        sidebar_click(
+            &ctx,
+            &mut app,
+            &strings::text("ActionTitleSwitchBranch"),
+            egui::PointerButton::Primary,
+        );
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while app.scheduler.has_accepted_work() {
+            app.receive(&ctx);
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        app.receive(&ctx);
+        wait(&mut app, &ctx);
+        assert_eq!(
+            f.command(&["symbolic-ref", "--short", "HEAD"], &[]),
+            expected
+        );
+    }
+}

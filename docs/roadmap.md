@@ -2,6 +2,9 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust sidebar interactions, 2026-11-10.** Exact-target remote context Fetch now preserves toolbar preferences and separates different queued targets. Branch Enter/double-click opens review and performs confirmed native checkout. Two focused actual-input/native checks, four queue regressions and tag/stash navigation pass; Clippy passes. [Evidence and remaining R33 scope](rust-rewrite.md#sidebar-fetch-and-activation-2026-11-10). R33 stays open.
+
+
 **Rust remote management, 2026-11-10.** R50 is functionally verified: cached native Add/Manage forms and sidebar menus, fetch/push/fallback, unsupported/redacted values, exact removal confirmation and repository-owned execution/reconciliation. Five native checks, six exact pinned C#/Rust outcomes, four headless input/cache checks and fourteen workspace/cache regressions pass; Clippy passes. [Evidence and remaining native/release limits](rust-rewrite.md#remote-management-checkpoint-2026-11-10).
 
 

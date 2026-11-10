@@ -1,0 +1,55 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T13:21:16.086508+00:00",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "RustBaseCommit": "4ce27cc898ebc49d6fa40a6c4ba4bab1a0705baa",
+  "Scope": "R33 partial: configured remote context Fetch, target-specific queues, branch Enter/double-click through real checkout review and native switch. Existing network/branch engines reused.",
+  "SourceSha256": {
+    "rust/desktop/src/main.rs": "050C5DE89D97D590EF246EE7C710CD30F31F0DECD9F7D316232BA97E728619FF",
+    "rust/desktop/src/operations.rs": "FB76DB2E961471DE532F29A285C6FDAFC561BE30B362CA9BC161393A1E0711D0",
+    "rust/desktop/src/workspace_style.rs": "A71708C5C54B23F1B6B2A5773725BC536DE35EDF7DFB384490BF49EBDECE9292",
+    "rust/desktop/src/workspace_interaction_tests.rs": "0D01C76BC00E080AD12D15ED06060AEFAA2D03BA4066C8D9EADFD66837B67B82"
+  },
+  "Checks": [
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop workspace_interaction_tests::sidebar_ --locked -- --test-threads=1",
+      "Passed": 2,
+      "Seconds": 42.3,
+      "Evidence": [
+        "Actual origin context menu ignores remembered AllRemotes/other toolbar target, leaves preferences/config/HEAD unchanged, fetches only origin after the owner tab closes.",
+        "Repeated origin requests coalesce; queued origin and other requests remain distinct and both finish through actual native local Fetch.",
+        "Single click locates an old branch across history pages; Enter and double-click each open the review before mutation, then explicit confirmation performs native checkout to the captured target."
+      ]
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop operations::queue_tests --locked -- --test-threads=1",
+      "Passed": 4,
+      "Seconds": 29.5
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop workspace_interaction_tests::reference_navigation --locked -- --test-threads=1",
+      "Passed": 1,
+      "Seconds": 5.25
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true
+    },
+    {
+      "Command": "cargo build -j 1 -p shovel-desktop -p shovel-askpass --locked",
+      "Passed": true,
+      "Seconds": 13.33,
+      "Profile": "development, not installer"
+    }
+  ],
+  "Limits": [
+    "Headless egui actual input and disposable native Git only; no screen capture, native app launch, normal profile, working repository or release.",
+    "The first fixture ambiguously chose a same-labelled toolbar button; final selection identifies the lower sidebar/context action and checks the explicit queue key.",
+    "The synthetic egui clock does not advance during awaited native Git. It initially classified the subsequent double-click as a triple-click; the fixture now separates that gesture from the earlier confirmation with explicit simulated time.",
+    "Whole-check timings are not performance comparisons. R33 remains open for submodules, branch tracking details, other context actions and broader native input/visual/accessibility acceptance."
+  ],
+  "DevelopmentExecutables": {
+    "ShovelRust.exe": "A483EC839CFE9973B90FC39EFC7483A20FBFC724D4DFF837DD9C4B1D3AD2B1BC",
+    "ShovelRustAskPass.exe": "E0306B11194981FFED303994FCAAB85974F30C81A400A08E15713C1DFAEBE86F"
+  }
+}

@@ -469,6 +469,7 @@ impl Controller {
         kind: Kind,
         path: &Path,
         owner: (&str, &str),
+        target_key: Option<&str>,
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) -> Option<(u64, u64)> {
@@ -479,7 +480,10 @@ impl Controller {
         let (request, accepted) = scheduler.reserve(
             owner.0.into(),
             owner.1.into(),
-            format!("network:{}", kind.key()),
+            match target_key {
+                Some(key) => format!("network:{}:{key}", kind.key()),
+                None => format!("network:{}", kind.key()),
+            },
             if kind == Kind::Fetch {
                 Lane::Fetch
             } else {
@@ -517,7 +521,7 @@ impl Controller {
     ) {
         let owner = Self::pending_owner(path);
         if let Some((request, sequence)) =
-            self.reserve_run(kind, path, (&owner, &owner), scheduler, ctx)
+            self.reserve_run(kind, path, (&owner, &owner), None, scheduler, ctx)
         {
             self.pending.push(PendingNetwork {
                 request,
@@ -609,6 +613,34 @@ impl Controller {
             options.kind,
             &snapshot.worktree,
             (&snapshot.identity.fingerprint, &common),
+            None,
+            scheduler,
+            ctx,
+        ) {
+            self.activate_network(ticket, options, snapshot, git, scheduler, ctx);
+        }
+    }
+
+    pub fn fetch_remote(
+        &mut self,
+        name: &str,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        // A sidebar action selects exactly this remote. It neither inherits
+        // AllRemotes nor replaces the user's remembered toolbar preferences.
+        let mut options = Options::load(&Settings::default(), snapshot, Kind::Fetch);
+        options.remote = name.to_owned();
+        options.explicit = true;
+        options.all_remotes = false;
+        let common = snapshot.common_directory.to_string_lossy().to_uppercase();
+        if let Some(ticket) = self.reserve_run(
+            Kind::Fetch,
+            &snapshot.worktree,
+            (&snapshot.identity.fingerprint, &common),
+            Some(name),
             scheduler,
             ctx,
         ) {

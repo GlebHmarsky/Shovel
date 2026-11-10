@@ -229,6 +229,9 @@ Opening these menus performs no Git, tool discovery or filesystem preparation. S
 
 ## Repository sidebar (0.23.0)
 
+**Rust interaction checkpoint (2026-11-10):** local branch rows receive keyboard focus on selection. Enter or double-click opens the existing captured-target checkout review; confirmation executes through the repository-owned queue. Remote context Fetch uses exactly the clicked configured remote, without inheriting or changing remembered toolbar flags. Same-target queued clicks coalesce; different remote targets remain distinct requests. Opening menus performs no preparation. [Evidence and remaining sidebar scope](rust-rewrite.md#sidebar-fetch-and-activation-2026-11-10).
+
+
 Expandable **Branches**, **Remotes**, **Tags**, **Stashes** and **Submodules** use local snapshots. Lists refresh after first history, on stale activation or explicit Refresh; auto-fetch updates remote refs as described above, without inactive history preload. Empty groups are honest empty states; pending/failure text is explicit and failed refresh retains cached entries. Menus open from available data without preparation. The sidebar scrolls vertically; long labels ellipsize and reveal their full name on hover. Its splitter has no fixed maximum width, retaining 180 DIP for the workspace. The duplicate repository title and Local Changes entry are removed; Commit remains in the toolbar.
 
 - **Branches:** current checkmark and local upstream counts (↑ ahead / ↓ behind). Single click locates its commit; double click or Enter switches. Right-click offers Switch, Show in history, Delete, Set upstream and Unset upstream. Existing clean-state/worktree/deletion protections apply. Counts reflect fetched local refs, not live server state; no upstream has no count, pending shows an ellipsis and removed upstream is identified.
