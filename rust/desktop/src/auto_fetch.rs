@@ -38,6 +38,9 @@ impl Controller {
         self.due
             .insert(path, Instant::now() - Duration::from_secs(1));
     }
+    pub fn drained(&self) -> bool {
+        self.active.is_empty()
+    }
     pub fn cancel(&self) {
         for cancel in self.active.values() {
             cancel.cancel();

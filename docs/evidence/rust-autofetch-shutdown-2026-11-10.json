@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-10",
+  "scope": "Automatic-fetch shutdown drainage",
+  "checks": [
+    {
+      "filter": "shutdown_",
+      "passed": 3,
+      "seconds": 18.28
+    },
+    {
+      "filter": "app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save",
+      "passed": 1,
+      "seconds": 4.74
+    },
+    {
+      "filter": "automatic_fetch_updates_an_evicted_repository_without_preloading_inactive_history",
+      "passed": 1,
+      "seconds": 7.58
+    }
+  ],
+  "native_transport": {
+    "hold_seconds": 60,
+    "cases": [
+      "Save settings on exit",
+      "Exit without saving"
+    ],
+    "each_cancel_and_drain_under_seconds": 5,
+    "head_index_worktree_preserved": true,
+    "competing_profile_bytes_preserved": true,
+    "new_fetch_while_closing": false
+  },
+  "clippy": "desktop/core all targets passed with warnings denied",
+  "limits": [
+    "Headless interaction; not native desktop acceptance",
+    "History/diff/sidebar/updater read drainage remains open",
+    "No installer or publication verification in this source batch"
+  ]
+}

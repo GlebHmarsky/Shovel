@@ -929,3 +929,7 @@ Shared zoom now follows C# bounds/steps and ignores repeats; shortcut changes pe
 ### Rust final shutdown guard — 2026-11-10
 
 Recheck accepted work and editor/native-dialog state after asynchronous settings saves and before Exit without saving; gate workspace input during the failed-save choice. Two actual-Git/headless checks and six related geometry/lifetime/conflict regressions passed, plus Clippy. [Evidence and remaining shutdown limits](rust-rewrite.md#final-shutdown-guard-checkpoint-2026-11-10). R24 remains open; existing local builds are unchanged.
+
+### Rust automatic-fetch exit drainage — 2026-11-10
+
+Pending close now cancels and drains automatic fetch, then continues the original save/discard decision. New background fetches stay suspended during shutdown decisions. Five focused checks and Clippy passed; [native transport evidence and remaining read-drain limits](rust-rewrite.md#automatic-fetch-shutdown-drainage-2026-11-10). No local payload replacement or publication.

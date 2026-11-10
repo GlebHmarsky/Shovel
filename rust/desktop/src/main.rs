@@ -136,6 +136,7 @@ struct Workspace {
     preferences_dirty: bool,
     closing: bool,
     pending_exit: bool,
+    discard_settings_on_exit: bool,
     exit_ready: bool,
     confirm_exit_without_save: bool,
     activity_open: bool,
@@ -211,6 +212,7 @@ impl Workspace {
             preferences_dirty: false,
             closing: false,
             pending_exit: false,
+            discard_settings_on_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
@@ -842,6 +844,8 @@ impl Workspace {
                 ctx,
                 self.initialized
                     && !self.closing
+                    && !self.pending_exit
+                    && !self.confirm_exit_without_save
                     && !self.git_selection.busy()
                     && self
                         .settings
@@ -973,9 +977,14 @@ impl Workspace {
             .any(commit::Editor::take_exit_cancelled)
         {
             self.pending_exit = false;
+            self.discard_settings_on_exit = false;
         }
         if self.pending_exit && !self.editors.iter().any(commit::Editor::exit_prompt_open) {
-            self.close(ctx);
+            if self.discard_settings_on_exit {
+                self.exit_without_saving(ctx);
+            } else {
+                self.close(ctx);
+            }
         }
     }
     fn open_stashes(&mut self) {
@@ -1061,12 +1070,26 @@ impl Workspace {
             self.notice = Some(strings::text("SettingsIdentityWorking"));
             return false;
         }
-        if self.scheduler.has_accepted_work() {
+        let work = self.scheduler.records();
+        if work
+            .iter()
+            .any(|record| record.outcome.is_none() && !record.key.starts_with("automatic-fetch:"))
+        {
             self.pending_exit = false;
+            self.discard_settings_on_exit = false;
             self.notice = Some(strings::text("AppCommandRunningClose"));
             self.updater.restart_requested = false;
             return false;
         }
+        if !self.auto_fetch.drained() || work.iter().any(|record| record.outcome.is_none()) {
+            self.pending_exit = true;
+            self.notice = Some(strings::text("RustShutdownBackground"));
+            ctx.request_repaint_after(std::time::Duration::from_millis(25));
+            return false;
+        }
+        // The background wait is over. A later draft failure must leave
+        // the workspace usable rather than retain a modal pending-exit state.
+        self.pending_exit = false;
         if let Some(editor) = self.editors.iter_mut().find(|e| e.unsaved_conflict()) {
             self.pending_exit = true;
             editor.confirm_exit(ctx);
@@ -1097,11 +1120,13 @@ impl Workspace {
             return;
         }
         self.confirm_exit_without_save = false;
+        self.discard_settings_on_exit = true;
         self.updater.restart_requested = false;
         if !self.prepare_exit(ctx) {
             self.closing = false;
             return;
         }
+        self.pending_exit = false;
         self.exit_ready = true;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
@@ -1113,6 +1138,7 @@ impl Workspace {
         if self.closing {
             return;
         }
+        self.discard_settings_on_exit = false;
         if !self.prepare_exit(ctx) {
             return;
         }
@@ -1269,6 +1295,7 @@ impl eframe::App for Workspace {
         self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
         let modal_open = self.closing
+            || self.pending_exit
             || self.confirm_exit_without_save
             || self.git_selection.busy()
             || self.settings_dialog.is_some()
@@ -1293,6 +1320,9 @@ impl eframe::App for Workspace {
                         }
                         if ui.button(strings::text("RustStayOpen")).clicked() {
                             self.confirm_exit_without_save = false;
+                            self.pending_exit = false;
+                            self.discard_settings_on_exit = false;
+                            self.updater.restart_requested = false;
                         }
                     });
                 });
@@ -2853,6 +2883,7 @@ mod tests {
             preferences_dirty: false,
             closing: false,
             pending_exit: false,
+            discard_settings_on_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
@@ -2946,6 +2977,7 @@ mod tests {
             preferences_dirty: false,
             closing: false,
             pending_exit: false,
+            discard_settings_on_exit: false,
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,

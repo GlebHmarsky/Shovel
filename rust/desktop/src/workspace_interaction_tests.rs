@@ -46,6 +46,7 @@ pub(super) fn workspace() -> Workspace {
         preferences_dirty: false,
         closing: false,
         pending_exit: false,
+        discard_settings_on_exit: false,
         exit_ready: false,
         confirm_exit_without_save: false,
         activity_open: false,
@@ -1091,4 +1092,79 @@ fn shutdown_failed_save_stay_open_and_retry_preserve_competing_profile() {
         std::fs::read(temp.path().join("settings.json")).unwrap(),
         foreign
     );
+}
+
+#[test]
+fn shutdown_drains_real_automatic_fetch_then_preserves_save_or_discard_intent() {
+    for discard in [false, true] {
+        let fixture = RepositoryFixture::new();
+        let remote = fixture._temp.path().join("remote.git");
+        fixture.command(&["clone", "--bare", ".", remote.to_str().unwrap()]);
+        fixture.command(&["remote", "add", "origin", remote.to_str().unwrap()]);
+        let script = fixture._temp.path().join("held-upload-pack.sh");
+        let marker = fixture._temp.path().join("fetch-started");
+        let marker_shell = marker.to_string_lossy().replace('\\', "/");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ntouch '{marker_shell}'\nsleep 60\nexit 1\n"),
+        )
+        .unwrap();
+        let upload = format!("sh '{}'", script.to_string_lossy().replace('\\', "/"));
+        fixture.command(&["config", "remote.origin.uploadpack", &upload]);
+        let ctx = egui::Context::default();
+        let mut app = fixture.workspace();
+        app.open(fixture.root.clone(), &ctx);
+        until(&mut app, &ctx, |app| !app.tabs[0].loading);
+        let profile = fixture._temp.path().join("profile");
+        let mut store = SettingsStore::new(profile.clone());
+        store.load().unwrap();
+        store.save(&app.settings).unwrap();
+        app.store = Some(store);
+        app.settings
+            .set("AutoFetchEnabled", serde_json::json!(true));
+        app.auto_fetch.due_now(fixture.root.clone());
+        until(&mut app, &ctx, |_| marker.exists());
+        assert!(!app.auto_fetch.drained());
+        let original_head = fixture.command(&["rev-parse", "HEAD"]);
+        let original_index = fixture.command(&["ls-files", "--stage", "-z"]);
+        let foreign = b"other writer; exit without saving must preserve this";
+        if discard {
+            std::fs::write(profile.join("settings.json"), foreign).unwrap();
+            app.confirm_exit_without_save = true;
+            app.exit_without_saving(&ctx);
+        } else {
+            app.close(&ctx);
+        }
+        assert!(app.pending_exit && !app.exit_ready && !app.closing);
+        assert_eq!(app.discard_settings_on_exit, discard);
+        assert_eq!(app.notice, Some(strings::text("RustShutdownBackground")));
+        let started = std::time::Instant::now();
+        until(&mut app, &ctx, |app| app.exit_ready);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "automatic fetch cancellation must drain instead of waiting for the 60-second transport"
+        );
+        assert!(app.auto_fetch.drained());
+        assert!(!app.scheduler.has_accepted_work());
+        assert_eq!(
+            app.auto_fetch.activity.len(),
+            1,
+            "shutdown must not start another automatic fetch"
+        );
+        assert_eq!(fixture.command(&["rev-parse", "HEAD"]), original_head);
+        assert_eq!(
+            fixture.command(&["ls-files", "--stage", "-z"]),
+            original_index
+        );
+        assert_eq!(std::fs::read(fixture.root.join("file")).unwrap(), b"base\n");
+        if discard {
+            assert_eq!(
+                std::fs::read(profile.join("settings.json")).unwrap(),
+                foreign
+            );
+        } else {
+            let saved = SettingsStore::new(profile).load().unwrap();
+            assert_eq!(saved.repositories(), vec![fixture.root.clone()]);
+        }
+    }
 }
