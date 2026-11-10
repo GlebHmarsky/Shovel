@@ -252,10 +252,20 @@ impl Workspace {
         self.refresh_at(self.selected, ctx);
     }
     fn refresh_at(&mut self, index: usize, ctx: &egui::Context) {
+        if let Some(tab) = self.tabs.get(index) {
+            self.refresh_owner(tab.id, ctx);
+        }
+    }
+    fn refresh_owner(&mut self, id: u64, ctx: &egui::Context) {
         let Some(git) = self.git.clone() else {
             return;
         };
-        let Some(tab) = self.tabs.get_mut(index) else {
+        let Some(tab) = self
+            .tabs
+            .iter_mut()
+            .chain(self.retained_tabs.iter_mut())
+            .find(|t| t.id == id)
+        else {
             return;
         };
         if tab.loading {
@@ -465,6 +475,15 @@ impl Workspace {
                 }
                 Event::Open(path) => self.open(path, ctx),
                 Event::Loaded(id, history, page) => {
+                    if let Some(git) = &self.git {
+                        self.operations.resolve_initialization(
+                            &history.snapshot.worktree,
+                            Ok(&history.snapshot),
+                            git,
+                            &self.scheduler,
+                            ctx,
+                        );
+                    }
                     if self.tabs.get(self.selected).is_some_and(|tab| tab.id == id) {
                         egui::Popup::close_all(ctx);
                         self.history_menu = None;
@@ -552,6 +571,17 @@ impl Workspace {
                         .find(|t| t.id == id)
                     {
                         tab.loading = false;
+                        if tab.history.is_none()
+                            && let Some(git) = &self.git
+                        {
+                            self.operations.resolve_initialization(
+                                &tab.path,
+                                Err(&error),
+                                git,
+                                &self.scheduler,
+                                ctx,
+                            );
+                        }
                         tab.error = Some(error);
                     }
                 }
@@ -584,6 +614,16 @@ impl Workspace {
                         }
                     }
                 }
+            }
+        }
+        for path in self.operations.pending_paths() {
+            if let Some(owner) = self
+                .tabs
+                .iter()
+                .chain(self.retained_tabs.iter())
+                .find(|t| Self::same_path(&t.path, &path) && t.history.is_none() && !t.loading)
+            {
+                self.refresh_owner(owner.id, ctx);
             }
         }
         self.restore_main_window_layout(ctx);
@@ -638,6 +678,15 @@ impl Workspace {
             let was_busy = editor.busy;
             if editor.poll(ctx) {
                 changed.push(editor.path.clone());
+            }
+            if let Some(context) = &editor.context {
+                // Commit can finish its independent scan before history. Bind
+                // waiting requests now, before its controls can submit mutations.
+                self.operations.bind_initialization(
+                    &editor.path,
+                    &context.repository,
+                    &self.scheduler,
+                );
             }
             if was_busy
                 && !editor.busy
@@ -1136,6 +1185,7 @@ impl eframe::App for Workspace {
                         self.preferences_dirty |= self.operations.toolbar(
                             ui,
                             &mut self.settings,
+                            self.tabs.get(self.selected).map(|t| &t.path),
                             self.tabs
                                 .get(self.selected)
                                 .and_then(|t| t.history.as_ref())

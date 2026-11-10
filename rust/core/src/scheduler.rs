@@ -41,7 +41,7 @@ pub struct Record {
 }
 struct Work {
     record: Record,
-    run: Box<dyn FnOnce() -> Outcome + Send>,
+    run: Option<Box<dyn FnOnce() -> Outcome + Send>>,
     discard: Box<dyn FnOnce(Outcome) + Send>,
 }
 struct State {
@@ -86,6 +86,39 @@ impl Scheduler {
         run: impl FnOnce() -> Outcome + Send + 'static,
         discard: impl FnOnce(Outcome) + Send + 'static,
     ) -> (u64, bool) {
+        self.enqueue(
+            repository,
+            common,
+            key,
+            lane,
+            Some(Box::new(run)),
+            Box::new(discard),
+        )
+    }
+
+    /// Reserve a real waiting request before repository initialization resolves.
+    /// It participates in exit guards, FIFO, deduplication and individual removal,
+    /// but no worker may start until the owning controller supplies verified state.
+    pub fn reserve(
+        &self,
+        repository: String,
+        common: String,
+        key: String,
+        lane: Lane,
+        discard: impl FnOnce(Outcome) + Send + 'static,
+    ) -> (u64, bool) {
+        self.enqueue(repository, common, key, lane, None, Box::new(discard))
+    }
+
+    fn enqueue(
+        &self,
+        repository: String,
+        common: String,
+        key: String,
+        lane: Lane,
+        run: Option<Box<dyn FnOnce() -> Outcome + Send>>,
+        discard: Box<dyn FnOnce(Outcome) + Send>,
+    ) -> (u64, bool) {
         let id;
         {
             let mut state = self.state.lock().unwrap();
@@ -109,13 +142,77 @@ impl Scheduler {
                     running: false,
                     outcome: None,
                 },
-                run: Box::new(run),
-                discard: Box::new(discard),
+                run,
+                discard,
             });
         }
         self.dispatch();
         (id, true)
     }
+    /// Bind the whole pending owner before activating any request. Failure of
+    /// the first action can then stop all its remaining requests consistently.
+    pub fn bind_repository(&self, pending: &str, repository: &str, common: &str) {
+        let mut state = self.state.lock().unwrap();
+        for work in &mut state.waiting {
+            if work.record.repository == pending && work.run.is_none() {
+                work.record.repository = repository.to_owned();
+                work.record.common = common.to_owned();
+            }
+        }
+    }
+
+    pub fn activate(&self, id: u64, run: impl FnOnce() -> Outcome + Send + 'static) -> bool {
+        {
+            let mut state = self.state.lock().unwrap();
+            let Some(work) = state
+                .waiting
+                .iter_mut()
+                .find(|w| w.record.id == id && w.run.is_none())
+            else {
+                return false;
+            };
+            work.run = Some(Box::new(run));
+        }
+        self.dispatch();
+        true
+    }
+
+    pub fn fail_reserved(&self, id: u64) -> bool {
+        let discarded = {
+            let mut state = self.state.lock().unwrap();
+            let Some(repository) = state
+                .waiting
+                .iter()
+                .find(|w| w.record.id == id && w.run.is_none())
+                .map(|w| w.record.repository.clone())
+            else {
+                return false;
+            };
+            let mut discarded = Vec::new();
+            let mut index = 0;
+            while index < state.waiting.len() {
+                if state.waiting[index].record.repository == repository {
+                    let mut work = state.waiting.remove(index).unwrap();
+                    work.record.outcome = Some(if work.record.id == id {
+                        Outcome::Failed
+                    } else {
+                        Outcome::StoppedAfterFailure
+                    });
+                    state.retain_completed(work.record.clone());
+                    discarded.push(work);
+                } else {
+                    index += 1;
+                }
+            }
+            discarded
+        };
+        for work in discarded {
+            (work.discard)(work.record.outcome.unwrap());
+        }
+        self.dispatch();
+        true
+    }
+
     pub fn records(&self) -> Vec<Record> {
         let state = self.state.lock().unwrap();
         state
@@ -152,10 +249,11 @@ impl Scheduler {
             let mut index = 0;
             while index < state.waiting.len() {
                 let candidate = &state.waiting[index].record;
-                let blocked = state
-                    .running
-                    .values()
-                    .any(|r| r.common == candidate.common && conflicts(r.lane, candidate.lane))
+                let blocked = state.waiting[index].run.is_none()
+                    || state
+                        .running
+                        .values()
+                        .any(|r| r.common == candidate.common && conflicts(r.lane, candidate.lane))
                     || state.waiting.iter().take(index).any(|w| {
                         w.record.common == candidate.common
                             && conflicts(w.record.lane, candidate.lane)
@@ -171,11 +269,13 @@ impl Scheduler {
             }
             ready
         };
-        for work in ready {
+        for mut work in ready {
             let scheduler = self.clone();
             thread::spawn(move || {
-                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work.run))
-                    .unwrap_or(Outcome::Failed);
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    work.run.take().expect("ready request"),
+                ))
+                .unwrap_or(Outcome::Failed);
                 scheduler.finish(work.record.id, outcome);
             });
         }
@@ -217,6 +317,137 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
     use std::time::Duration;
+    #[test]
+    fn reserved_initialization_coalesces_removes_and_orders_bound_linked_work() {
+        let scheduler = Scheduler::default();
+        let (a, accepted) = scheduler.reserve(
+            "pending".into(),
+            "pending".into(),
+            "push".into(),
+            Lane::Exclusive,
+            |_| {},
+        );
+        assert!(accepted);
+        let duplicate = scheduler.reserve(
+            "pending".into(),
+            "pending".into(),
+            "push".into(),
+            Lane::Exclusive,
+            |_| panic!("duplicate"),
+        );
+        assert_eq!(duplicate, (a, false));
+        let (b, _) = scheduler.reserve(
+            "pending".into(),
+            "pending".into(),
+            "pull".into(),
+            Lane::Exclusive,
+            |_| {},
+        );
+        let (removed, _) = scheduler.reserve(
+            "pending".into(),
+            "pending".into(),
+            "fetch".into(),
+            Lane::Fetch,
+            |_| {},
+        );
+        assert!(scheduler.remove_waiting(removed));
+        assert!(!scheduler.activate(removed, || panic!("removed reservation started")));
+        assert!(scheduler.has_accepted_work());
+        assert!(scheduler.records().iter().all(|r| !r.running));
+        scheduler.bind_repository("pending", "worktree-A", "common");
+        let (sent, received) = mpsc::channel();
+        let tx = sent.clone();
+        // Activating a later request cannot overtake an earlier unresolved one.
+        assert!(scheduler.activate(b, move || {
+            tx.send("second").unwrap();
+            Outcome::Succeeded
+        }));
+        assert!(received.recv_timeout(Duration::from_millis(40)).is_err());
+        let tx = sent.clone();
+        scheduler.submit(
+            "worktree-B".into(),
+            "common".into(),
+            "linked".into(),
+            Lane::Exclusive,
+            move || {
+                tx.send("linked").unwrap();
+                Outcome::Succeeded
+            },
+            |_| {},
+        );
+        let tx = sent.clone();
+        scheduler.submit(
+            "other".into(),
+            "other".into(),
+            "independent".into(),
+            Lane::Exclusive,
+            move || {
+                tx.send("independent").unwrap();
+                Outcome::Succeeded
+            },
+            |_| {},
+        );
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(5)).unwrap(),
+            "independent"
+        );
+        assert!(scheduler.activate(a, move || {
+            sent.send("first").unwrap();
+            Outcome::Succeeded
+        }));
+        for expected in ["first", "second", "linked"] {
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(5)).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn failed_initialization_stops_only_its_waiting_requests_without_running_them() {
+        let scheduler = Scheduler::default();
+        let (tx, rx) = mpsc::channel();
+        let sent = tx.clone();
+        let (first, _) = scheduler.reserve(
+            "a".into(),
+            "a".into(),
+            "push".into(),
+            Lane::Exclusive,
+            move |outcome| {
+                sent.send(outcome).unwrap();
+            },
+        );
+        let (second, _) = scheduler.reserve(
+            "a".into(),
+            "a".into(),
+            "pull".into(),
+            Lane::Exclusive,
+            move |outcome| {
+                tx.send(outcome).unwrap();
+            },
+        );
+        let (other, _) =
+            scheduler.reserve("b".into(), "b".into(), "fetch".into(), Lane::Fetch, |_| {});
+        assert!(scheduler.fail_reserved(first));
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Outcome::Failed
+        );
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Outcome::StoppedAfterFailure
+        );
+        assert!(!scheduler.activate(second, || panic!("failed initialization ran")));
+        assert!(
+            scheduler
+                .records()
+                .iter()
+                .any(|r| r.id == other && r.outcome.is_none())
+        );
+        assert!(scheduler.remove_waiting(other));
+        assert!(!scheduler.has_accepted_work());
+    }
+
     #[test]
     fn waiting_removals_bound_completed_history_without_evicting_running_work() {
         let scheduler = Scheduler::default();

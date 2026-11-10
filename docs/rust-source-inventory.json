@@ -623,9 +623,9 @@
         "R09",
         "R24"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/scheduler.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10 source review and initialization queue checkpoint: native/headless network queuing, removal, failure scope, captured branch and prior accepted commit. Distinct working-copy queues and full acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellActions.cs",
@@ -800,9 +800,9 @@
         "R09",
         "R24"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/scheduler.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10 source review and initialization queue checkpoint: native/headless network queuing, removal, failure scope, captured branch and prior accepted commit. Distinct working-copy queues and full acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellSettings.cs",

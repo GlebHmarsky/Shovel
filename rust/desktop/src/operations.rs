@@ -10,7 +10,7 @@ use shovel_core::{
 };
 use std::{
     collections::VecDeque,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         mpsc::{self, Receiver, Sender},
@@ -219,7 +219,15 @@ struct Question {
     response: Zeroizing<String>,
     focus: bool,
 }
+struct PendingNetwork {
+    sequence: u64,
+    request: u64,
+    path: PathBuf,
+    kind: Kind,
+    settings: Settings,
+}
 pub struct Controller {
+    pending: Vec<PendingNetwork>,
     options: Option<(Options, Snapshot)>,
     next: u64,
     runs: Vec<Run>,
@@ -232,6 +240,7 @@ impl Default for Controller {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            pending: vec![],
             options: None,
             next: 1,
             runs: vec![],
@@ -250,6 +259,7 @@ impl Controller {
         &mut self,
         ui: &mut egui::Ui,
         settings: &mut Settings,
+        path: Option<&PathBuf>,
         snapshot: Option<&Snapshot>,
         git: Option<&Arc<Git>>,
         scheduler: &Scheduler,
@@ -257,7 +267,7 @@ impl Controller {
         let changed = false;
         for kind in [Kind::Fetch, Kind::Pull, Kind::Push] {
             ui.push_id(kind.number(), |ui| {
-                let available = snapshot.is_some() && git.is_some();
+                let available = path.is_some() && git.is_some();
                 ui.spacing_mut().item_spacing.x = 0.;
                 let button = crate::workspace_style::action(ui, kind.key(), available);
                 if !available {
@@ -266,20 +276,24 @@ impl Controller {
                         .on_disabled_hover_text(text("ActionInspectionNeeded"));
                 }
                 if button.clicked()
-                    && let (Some(snapshot), Some(git)) = (snapshot, git)
+                    && let (Some(path), Some(git)) = (path, git)
                 {
-                    self.submit(
-                        Options::load(settings, snapshot, kind),
-                        snapshot,
-                        git.clone(),
-                        scheduler,
-                        ui.ctx(),
-                    );
+                    if let Some(snapshot) = snapshot {
+                        self.submit(
+                            Options::load(settings, snapshot, kind),
+                            snapshot,
+                            git.clone(),
+                            scheduler,
+                            ui.ctx(),
+                        );
+                    } else {
+                        self.defer_network(kind, path, settings, scheduler, ui.ctx());
+                    }
                 }
                 if crate::workspace_style::options_button(
                     ui,
                     strings::format("RustNetworkOptions", &[&text(kind.key())]),
-                    available,
+                    snapshot.is_some() && git.is_some(),
                 )
                 .clicked()
                     && let Some(snapshot) = snapshot
@@ -396,6 +410,144 @@ impl Controller {
         }
         changed
     }
+    fn pending_owner(path: &std::path::Path) -> String {
+        format!(
+            "initializing:{}",
+            path.to_string_lossy().replace('/', "\\").to_uppercase()
+        )
+    }
+
+    fn reserve_run(
+        &mut self,
+        kind: Kind,
+        path: &Path,
+        owner: (&str, &str),
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) -> Option<(u64, u64)> {
+        let sequence = self.next;
+        self.next += 1;
+        let sender = self.sender.clone();
+        let ctx = ctx.clone();
+        let (request, accepted) = scheduler.reserve(
+            owner.0.into(),
+            owner.1.into(),
+            format!("network:{}", kind.key()),
+            if kind == Kind::Fetch {
+                Lane::Fetch
+            } else {
+                Lane::Exclusive
+            },
+            move |outcome| {
+                let _ = sender.send(Event::Removed(sequence, outcome));
+                ctx.request_repaint();
+            },
+        );
+        if !accepted {
+            return None;
+        }
+        self.runs.push(Run {
+            sequence,
+            request,
+            path: path.to_path_buf(),
+            label: kind.key(),
+            status: text("OperationWaiting"),
+            output: String::new(),
+            done: false,
+            changed: false,
+        });
+        Some((request, sequence))
+    }
+
+    pub fn defer_network(
+        &mut self,
+        kind: Kind,
+        path: &Path,
+        settings: &Settings,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        let owner = Self::pending_owner(path);
+        if let Some((request, sequence)) =
+            self.reserve_run(kind, path, (&owner, &owner), scheduler, ctx)
+        {
+            self.pending.push(PendingNetwork {
+                request,
+                sequence,
+                path: path.to_path_buf(),
+                kind,
+                settings: settings.clone(),
+            });
+        }
+    }
+
+    pub fn pending_paths(&self) -> Vec<PathBuf> {
+        self.pending.iter().map(|p| p.path.clone()).collect()
+    }
+
+    pub fn has_pending(&self, path: &std::path::Path) -> bool {
+        self.pending
+            .iter()
+            .any(|p| crate::Workspace::same_path(&p.path, path))
+    }
+
+    pub fn bind_initialization(
+        &self,
+        path: &std::path::Path,
+        snapshot: &Snapshot,
+        scheduler: &Scheduler,
+    ) {
+        scheduler.bind_repository(
+            &Self::pending_owner(path),
+            &snapshot.identity.fingerprint,
+            &snapshot.common_directory.to_string_lossy().to_uppercase(),
+        );
+    }
+
+    pub fn resolve_initialization(
+        &mut self,
+        path: &std::path::Path,
+        result: Result<&Snapshot, &str>,
+        git: &Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        let (pending, others): (Vec<_>, Vec<_>) = std::mem::take(&mut self.pending)
+            .into_iter()
+            .partition(|p| crate::Workspace::same_path(&p.path, path));
+        self.pending = others;
+        if pending.is_empty() {
+            return;
+        }
+        match result {
+            Ok(snapshot) => {
+                self.bind_initialization(path, snapshot, scheduler);
+                for request in pending {
+                    self.activate_network(
+                        (request.request, request.sequence),
+                        Options::load(&request.settings, snapshot, request.kind),
+                        snapshot,
+                        git.clone(),
+                        scheduler,
+                        ctx,
+                    );
+                }
+            }
+            Err(error) => {
+                for request in pending {
+                    if let Some(run) = self
+                        .runs
+                        .iter_mut()
+                        .find(|r| r.sequence == request.sequence)
+                    {
+                        run.output = error.to_owned();
+                    }
+                    scheduler.fail_reserved(request.request);
+                }
+            }
+        }
+    }
+
     fn submit(
         &mut self,
         options: Options,
@@ -404,102 +556,83 @@ impl Controller {
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) {
-        let sequence = self.next;
-        self.next += 1;
-        let kind = options.kind;
+        let common = snapshot.common_directory.to_string_lossy().to_uppercase();
+        if let Some(ticket) = self.reserve_run(
+            options.kind,
+            &snapshot.worktree,
+            (&snapshot.identity.fingerprint, &common),
+            scheduler,
+            ctx,
+        ) {
+            self.activate_network(ticket, options, snapshot, git, scheduler, ctx);
+        }
+    }
+
+    fn activate_network(
+        &self,
+        (request, sequence): (u64, u64),
+        options: Options,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
         let action = options.action();
         let captured = snapshot.clone();
         let helper = self.helper.clone();
         let sender = self.sender.clone();
-        let discarded = sender.clone();
         let ctx = ctx.clone();
-        let discarded_ctx = ctx.clone();
-        let key = format!("network:{action:?}");
-        let (request, accepted) = scheduler.submit(
-            snapshot.identity.fingerprint.clone(),
-            snapshot.common_directory.to_string_lossy().to_uppercase(),
-            key,
-            if kind == Kind::Fetch {
-                Lane::Fetch
-            } else {
-                Lane::Exclusive
-            },
-            move || {
-                let progress_sender = sender.clone();
-                let progress_ctx = ctx.clone();
-                let progress = Arc::new(move |stage| {
-                    let _ = progress_sender.send(Event::Stage(sequence, stage));
-                    progress_ctx.request_repaint();
-                });
-                let prompt_sender = sender.clone();
-                let prompt_ctx = ctx.clone();
-                let handler = Arc::new(move |prompt| {
-                    let _ = prompt_sender.send(Event::Prompt(sequence, prompt));
-                    prompt_ctx.request_repaint();
-                });
-                let result = (|| {
-                    progress(network::Stage::Validating);
-                    let helper = match helper {
-                        Some(path) => path,
-                        None => std::env::current_exe()
-                            .map_err(|_| text("ActionAskPassMissing"))?
-                            .with_file_name("ShovelRustAskPass.exe"),
-                    };
-                    let auth = authentication::Session::start(&helper, handler)
-                        .map_err(|_| text("ActionAskPassMissing"))?;
-                    let review = git
-                        .prepare_network(&captured.worktree, &Cancellation::default())
-                        .map_err(|e| text(&e.code()))?;
-                    if review.repository.identity != captured.identity
-                        || review.repository.branch != captured.branch
-                        || review.repository.head != captured.head
-                    {
-                        return Err(text("ActionChanged"));
-                    }
-                    git.execute_network(&review, &action, Some(&auth), Some(progress))
-                        .map_err(|e| text(&e.code()))
-                })();
-                let outcome = match &result {
-                    Ok(result) if result.succeeded() => Outcome::Succeeded,
-                    Ok(result)
-                        if result.has_conflicts
-                            || result
-                                .updated
-                                .as_ref()
-                                .is_ok_and(|r| !r.operations.is_empty()) =>
-                    {
-                        Outcome::Conflict
-                    }
-                    _ => Outcome::Failed,
-                };
-                let _ = sender.send(Event::Completed(sequence, Box::new(result)));
-                ctx.request_repaint();
-                outcome
-            },
-            move |outcome| {
-                let _ = discarded.send(Event::Removed(sequence, outcome));
-                discarded_ctx.request_repaint();
-            },
-        );
-        if accepted {
-            self.runs.push(Run {
-                sequence,
-                request,
-                path: snapshot.worktree.clone(),
-                label: kind.key(),
-                status: text("OperationWaiting"),
-                output: String::new(),
-                done: false,
-                changed: false,
+        scheduler.activate(request, move || {
+            let progress_sender = sender.clone();
+            let progress_ctx = ctx.clone();
+            let progress = Arc::new(move |stage| {
+                let _ = progress_sender.send(Event::Stage(sequence, stage));
+                progress_ctx.request_repaint();
             });
-            while self.runs.len() > 128 {
-                if let Some(index) = self.runs.iter().position(|r| r.done) {
-                    self.runs.remove(index);
-                } else {
-                    break;
+            let prompt_sender = sender.clone();
+            let prompt_ctx = ctx.clone();
+            let handler = Arc::new(move |prompt| {
+                let _ = prompt_sender.send(Event::Prompt(sequence, prompt));
+                prompt_ctx.request_repaint();
+            });
+            let result = (|| {
+                progress(network::Stage::Validating);
+                let helper = match helper {
+                    Some(path) => path,
+                    None => std::env::current_exe()
+                        .map_err(|_| text("ActionAskPassMissing"))?
+                        .with_file_name("ShovelRustAskPass.exe"),
+                };
+                let auth = authentication::Session::start(&helper, handler)
+                    .map_err(|_| text("ActionAskPassMissing"))?;
+                let review = git
+                    .prepare_network(&captured.worktree, &Cancellation::default())
+                    .map_err(|e| text(&e.code()))?;
+                if review.repository.identity != captured.identity
+                    || review.repository.branch != captured.branch
+                {
+                    return Err(text("ActionChanged"));
                 }
-            }
-        }
+                git.execute_network(&review, &action, Some(&auth), Some(progress))
+                    .map_err(|e| text(&e.code()))
+            })();
+            let outcome = match &result {
+                Ok(result) if result.succeeded() => Outcome::Succeeded,
+                Ok(result)
+                    if result.has_conflicts
+                        || result
+                            .updated
+                            .as_ref()
+                            .is_ok_and(|r| !r.operations.is_empty()) =>
+                {
+                    Outcome::Conflict
+                }
+                _ => Outcome::Failed,
+            };
+            let _ = sender.send(Event::Completed(sequence, Box::new(result)));
+            ctx.request_repaint();
+            outcome
+        });
     }
     pub fn submit_branch(
         &mut self,
@@ -809,12 +942,13 @@ impl Controller {
                     }
                 }
                 Event::Removed(id, outcome) => {
+                    self.pending.retain(|p| p.sequence != id);
                     if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
                         run.done = true;
-                        run.status = text(if outcome == Outcome::Removed {
-                            "QueuedRequestCancelled"
-                        } else {
-                            "ActionStoppedShort"
+                        run.status = text(match outcome {
+                            Outcome::Removed => "QueuedRequestCancelled",
+                            Outcome::Failed => "ActionFailedShort",
+                            _ => "ActionStoppedShort",
                         });
                     }
                 }
@@ -962,7 +1096,7 @@ mod tests {
     use super::*;
     use shovel_core::process::{self, Lifetime};
     use std::{fs, path::Path, thread, time::Instant};
-    fn command(git: &Git, path: &Path, args: &[&str]) -> String {
+    pub(super) fn command(git: &Git, path: &Path, args: &[&str]) -> String {
         let output = process::run(
             &git.request(path, args.iter().copied(), Lifetime::AcceptedCommand, 65536),
             &Cancellation::default(),
@@ -975,7 +1109,7 @@ mod tests {
             .trim_end()
             .to_owned()
     }
-    fn fixture() -> (tempfile::TempDir, Arc<Git>, Snapshot) {
+    pub(super) fn fixture() -> (tempfile::TempDir, Arc<Git>, Snapshot) {
         let temporary = tempfile::tempdir().unwrap();
         let path = temporary.path();
         let mut git = Git::discover(None, &Cancellation::default()).unwrap();
@@ -997,7 +1131,7 @@ mod tests {
         let snapshot = git.inspect(path, &Cancellation::default()).unwrap();
         (temporary, Arc::new(git), snapshot)
     }
-    fn wait(mut condition: impl FnMut() -> bool) {
+    pub(super) fn wait(mut condition: impl FnMut() -> bool) {
         let until = Instant::now() + Duration::from_secs(20);
         while !condition() {
             assert!(
@@ -1156,7 +1290,14 @@ mod tests {
             },
             |ui| {
                 ui.horizontal(|ui| {
-                    controller.toolbar(ui, &mut settings, Some(&snapshot), Some(&git), &scheduler);
+                    controller.toolbar(
+                        ui,
+                        &mut settings,
+                        Some(&snapshot.worktree),
+                        Some(&snapshot),
+                        Some(&git),
+                        &scheduler,
+                    );
                 });
             },
         );
@@ -1201,6 +1342,7 @@ mod tests {
                         controller.toolbar(
                             ui,
                             &mut settings,
+                            Some(&snapshot.worktree),
                             Some(&snapshot),
                             Some(&git),
                             &scheduler,
@@ -1319,3 +1461,7 @@ mod activity_layout_test {
         assert_eq!(tab_y(&mut app), after);
     }
 }
+
+#[cfg(test)]
+#[path = "operation_queue_tests.rs"]
+mod queue_tests;

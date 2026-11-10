@@ -116,6 +116,7 @@ impl Workspace {
         let mut remove = Vec::new();
         for (index, owner) in self.retained_tabs.iter().enumerate().rev() {
             let active = owner.loading
+                || self.operations.has_pending(&owner.path)
                 || owner.history.as_ref().is_some_and(|history| {
                     records.iter().any(|r| {
                         r.outcome.is_none() && r.repository == history.snapshot.identity.fingerprint
