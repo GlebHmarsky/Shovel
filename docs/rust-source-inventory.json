@@ -545,9 +545,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/ViewModels/RemoteSetupViewModel.cs",
@@ -555,9 +555,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/ViewModels/RepositoryCloneViewModel.cs",
@@ -772,9 +772,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellRemoteSetup.cs",
@@ -782,9 +782,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellRepositoryLifetime.cs",
@@ -1281,9 +1281,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/Views/RemoteManagementWindow.xaml.cs",
@@ -1291,9 +1291,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/Views/RemoteSetupWindow.xaml",
@@ -1301,9 +1301,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/Views/RemoteSetupWindow.xaml.cs",
@@ -1311,9 +1311,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.App/Views/RepositoryCloneWindow.xaml",
@@ -1895,9 +1895,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.Core/Git/RemoteSetup.cs",
@@ -1905,9 +1905,9 @@
       "ParityIds": [
         "R50"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/remotes.rs; rust/desktop/src/remotes.rs; operations.rs/main.rs repository-owned queue and cached sidebar integration",
+      "Evidence": "2026-11-10: all ten R50 baseline files reviewed; functional R50 verified by five native checks, six exact C#/Rust outcomes and four headless actual-input/cache checks. General native appearance/accessibility remains R13/R14; other sidebar scope remains R33. docs/rust-rewrite.md remote-management checkpoint."
     },
     {
       "Path": "src/GitGui.Core/Git/RepositoryClone.cs",

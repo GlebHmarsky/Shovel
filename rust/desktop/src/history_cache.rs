@@ -48,7 +48,7 @@ impl Tab {
                 .map(|r| 128 + 2 * (r.name.len() + r.hash.len()))
                 .sum::<usize>()
                 + h.stashes.iter().map(commit_bytes).sum::<usize>()
-        });
+        }) + self.remotes.bytes();
     }
     fn evict_history(&mut self) {
         // Keep only previously observed repository metadata. It is not an action
@@ -65,6 +65,7 @@ impl Tab {
         self.locating = None;
         self.scroll_selected = false;
         self.divergence = Default::default();
+        self.remotes = Default::default();
         self.view.clear_views();
         self.view.preview = None;
         self.view.stale = true;

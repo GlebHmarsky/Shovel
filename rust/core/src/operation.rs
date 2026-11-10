@@ -48,12 +48,13 @@ pub struct Completed {
     pub warning: Option<String>,
     pub has_conflicts: bool,
     pub(crate) preserves_worktree: bool,
+    pub(crate) unchanged: bool,
     pub updated: Result<Snapshot, Error>,
     pub authentication_failure: Option<authentication::Failure>,
 }
 impl Completed {
     pub fn succeeded(&self) -> bool {
-        !self.commands.is_empty()
+        (!self.commands.is_empty() || self.unchanged)
             && self.commands.iter().all(Command::succeeded)
             && self.message.is_none()
             && (!self.has_conflicts || self.preserves_worktree)
@@ -162,6 +163,7 @@ impl Transcript {
             warning,
             has_conflicts,
             preserves_worktree: false,
+            unchanged: false,
             updated,
             authentication_failure: None,
         })

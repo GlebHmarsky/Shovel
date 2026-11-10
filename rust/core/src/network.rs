@@ -811,6 +811,7 @@ impl Git {
             warning: None,
             has_conflicts,
             preserves_worktree: false,
+            unchanged: false,
             updated,
             authentication_failure: auth.and_then(authentication::Session::failure),
         })

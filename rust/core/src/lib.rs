@@ -47,6 +47,8 @@ pub mod patches;
 pub mod process;
 #[cfg(windows)]
 pub mod recovery;
+#[cfg(windows)]
+pub mod remotes;
 pub mod scheduler;
 #[cfg(windows)]
 mod selected_stash;

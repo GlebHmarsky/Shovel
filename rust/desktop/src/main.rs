@@ -15,6 +15,7 @@ mod history_cache;
 mod history_row;
 mod history_view;
 mod operations;
+mod remotes;
 mod repository_init;
 mod repository_tools;
 mod settings_ui;
@@ -88,6 +89,7 @@ struct Tab {
     history: Option<History>,
     owner_snapshot: Option<shovel_core::git::Snapshot>,
     divergence: divergence::Counter,
+    remotes: remotes::Cache,
     page: Option<Page>,
     selected: Option<String>,
     previous: Vec<Cursor>,
@@ -142,6 +144,7 @@ struct Workspace {
     draft_store: Option<shovel_core::drafts::Store>,
     operations: operations::Controller,
     branches: branches::Dialogs,
+    remotes: remotes::Dialogs,
     initialization: repository_init::Controller,
     stash_views: Vec<stashes::View>,
     history_menu: Option<HistoryMenu>,
@@ -215,6 +218,7 @@ impl Workspace {
             draft_store: None,
             operations: Default::default(),
             branches: Default::default(),
+            remotes: Default::default(),
             initialization: Default::default(),
             stash_views: vec![],
             history_menu: None,
@@ -256,6 +260,7 @@ impl Workspace {
             history: None,
             owner_snapshot: None,
             divergence: Default::default(),
+            remotes: Default::default(),
             page: None,
             selected: None,
             previous: vec![],
@@ -319,6 +324,7 @@ impl Workspace {
         tab.locating = None;
         tab.loading = true;
         tab.divergence.invalidate();
+        tab.remotes.invalidate();
         tab.error = None;
         let generation = tab.view.begin();
         let previous = tab
@@ -513,6 +519,7 @@ impl Workspace {
                             history: None,
                             owner_snapshot: None,
                             divergence: Default::default(),
+                            remotes: Default::default(),
                             page: None,
                             selected: None,
                             previous: vec![],
@@ -592,6 +599,7 @@ impl Workspace {
                         tab.publish_history(*history, *page, keep);
                         if let (Some(git), Some(history)) = (&self.git, &tab.history) {
                             tab.divergence.start(git.clone(), &history.snapshot, ctx);
+                            tab.remotes.start(git.clone(), &history.snapshot, ctx);
                         }
                     }
                 }
@@ -670,6 +678,7 @@ impl Workspace {
                             tab.locating = None;
                             tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
                             tab.divergence = Default::default();
+                            tab.remotes = Default::default();
                             tab.history = None;
                             tab.owner_snapshot = None;
                             tab.view.preview = None;
@@ -804,6 +813,9 @@ impl Workspace {
         );
         for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
             tab.divergence.poll(ctx);
+            if tab.remotes.poll(ctx) {
+                tab.estimate_cache();
+            }
         }
         for editor in &mut self.editors {
             if changed.iter().any(|path| path == &editor.path) {
@@ -844,6 +856,22 @@ impl Workspace {
             }
             view.poll(ctx, &self.scheduler);
         }
+        let common: Vec<_> = self
+            .tabs
+            .iter()
+            .chain(self.retained_tabs.iter())
+            .filter(|t| changed.iter().any(|p| Self::same_path(p, &t.path)))
+            .filter_map(|t| t.observed_snapshot().map(|s| s.common_directory.clone()))
+            .collect();
+        for tab in self.tabs.iter().chain(self.retained_tabs.iter()) {
+            if tab
+                .observed_snapshot()
+                .is_some_and(|s| common.contains(&s.common_directory))
+                && !changed.contains(&tab.path)
+            {
+                changed.push(tab.path.clone());
+            }
+        }
         for path in changed {
             if let Some(index) = self.tabs.iter().position(|tab| tab.path == path) {
                 if index == self.selected {
@@ -852,6 +880,7 @@ impl Workspace {
                     self.tabs[index].refresh_again = true;
                     self.tabs[index].view.stale = true;
                     self.tabs[index].divergence.invalidate();
+                    self.tabs[index].remotes.invalidate();
                 }
             } else if let Some(owner) = self
                 .retained_tabs
@@ -859,6 +888,7 @@ impl Workspace {
                 .find(|t| Self::same_path(&t.path, &path))
             {
                 owner.refresh_again = true;
+                owner.remotes.invalidate();
             }
         }
         self.prune_retained_tabs();
@@ -1159,6 +1189,7 @@ impl eframe::App for Workspace {
         let modal_open = self.settings_dialog.is_some()
             || self.editors.iter().any(|editor| editor.open)
             || self.operations.modal_open()
+            || self.remotes.is_open()
             || self.branches.is_open()
             || self.initialization.is_open()
             || self.stash_views.iter().any(|view| view.open);
@@ -1407,6 +1438,14 @@ impl eframe::App for Workspace {
                         }
                     });
                     ui.menu_button(strings::text("RepositoryMenu"), |ui| {
+                        let tab = self.tabs.get(self.selected);
+                        self.remotes.menu(
+                            ui,
+                            tab.and_then(|t| t.history.as_ref()).map(|h| &h.snapshot),
+                            tab.map(|t| &t.remotes),
+                            None,
+                        );
+                        ui.separator();
                         if ui
                             .add_enabled(
                                 self.git.is_some()
@@ -1963,11 +2002,106 @@ impl eframe::App for Workspace {
                                     .max_height(group_height)
                                     .auto_shrink([false, true])
                                     .show(ui, |ui| {
-                                        for reference in history
-                                            .snapshot
-                                            .references
-                                            .iter()
-                                            .filter(|r| r.name.starts_with(prefix))
+                                        if key == "Remotes" {
+                                            let names: std::collections::BTreeSet<_> = history
+                                                .snapshot
+                                                .remotes
+                                                .iter()
+                                                .map(String::as_str)
+                                                .chain(
+                                                    history.snapshot.references.iter().filter_map(
+                                                        |r| {
+                                                            r.name
+                                                                .strip_prefix("refs/remotes/")
+                                                                .and_then(|s| s.split('/').next())
+                                                        },
+                                                    ),
+                                                )
+                                                .collect();
+                                            for name in names {
+                                                let prefix = format!("refs/remotes/{name}/");
+                                                let remote_id = format!(
+                                                    "{}|Remotes/{}",
+                                                    tab.path.display(),
+                                                    name
+                                                );
+                                                let remote = egui::CollapsingHeader::new(name)
+                                                    .default_open(!collapsed.contains(&remote_id))
+                                                    .id_salt((tab.id, "remote", name))
+                                                    .show(ui, |ui| {
+                                                        for reference in history
+                                                            .snapshot
+                                                            .references
+                                                            .iter()
+                                                            .filter(|r| r.name.starts_with(&prefix))
+                                                        {
+                                                            let response =
+                                                                workspace_style::reference_row(
+                                                                    ui,
+                                                                    tab.selected.as_deref()
+                                                                        == Some(&reference.hash),
+                                                                    reference
+                                                                        .name
+                                                                        .strip_prefix(&prefix)
+                                                                        .unwrap_or(&reference.name),
+                                                                    key,
+                                                                )
+                                                                .on_hover_text(&reference.name);
+                                                            if response.clicked() {
+                                                                locate_request =
+                                                                    Some(reference.hash.clone());
+                                                            }
+                                                            response.context_menu(|ui| {
+                                                                if ui
+                                                                    .button(strings::text(
+                                                                        "SidebarLocate",
+                                                                    ))
+                                                                    .clicked()
+                                                                {
+                                                                    locate_request = Some(
+                                                                        reference.hash.clone(),
+                                                                    );
+                                                                    ui.close();
+                                                                }
+                                                            });
+                                                        }
+                                                    });
+                                                let clicked = remote.header_response.clicked();
+                                                remote
+                                                    .header_response
+                                                    .on_hover_text(name)
+                                                    .context_menu(|ui| {
+                                                        self.remotes.menu(
+                                                            ui,
+                                                            Some(&history.snapshot),
+                                                            Some(&tab.remotes),
+                                                            Some(name),
+                                                        );
+                                                    });
+                                                if clicked {
+                                                    if collapsed.contains(&remote_id) {
+                                                        collapsed.retain(|id| id != &remote_id);
+                                                    } else {
+                                                        if collapsed.len() >= 256 {
+                                                            collapsed.remove(0);
+                                                        }
+                                                        collapsed.push(remote_id);
+                                                    }
+                                                    self.settings.set(
+                                                        "CollapsedSidebarGroups",
+                                                        serde_json::json!(&collapsed),
+                                                    );
+                                                    self.preferences_dirty = true;
+                                                }
+                                            }
+                                            if let Some(error) = &tab.remotes.error {
+                                                ui.label(error);
+                                            }
+                                        }
+                                        for reference in
+                                            history.snapshot.references.iter().filter(|r| {
+                                                key != "Remotes" && r.name.starts_with(prefix)
+                                            })
                                         {
                                             let short = if key == "Stashes" {
                                                 history
@@ -2051,6 +2185,16 @@ impl eframe::App for Workspace {
                                         }
                                     });
                             });
+                            if key == "Remotes" {
+                                group.header_response.context_menu(|ui| {
+                                    self.remotes.menu(
+                                        ui,
+                                        Some(&history.snapshot),
+                                        Some(&tab.remotes),
+                                        None,
+                                    )
+                                });
+                            }
                             if group.header_response.clicked() {
                                 if collapsed.iter().any(|g| g == &group_id) {
                                     collapsed.retain(|g| g != &group_id);
@@ -2388,8 +2532,10 @@ impl eframe::App for Workspace {
                 });
                 tab.view.offset = scroll_output.state.clamped_offset();
             });
-        let stash_input =
-            !self.closing && !self.operations.modal_open() && !self.branches.is_open();
+        let stash_input = !self.closing
+            && !self.operations.modal_open()
+            && !self.branches.is_open()
+            && !self.remotes.is_open();
         let mut stash_navigation = None;
         for view in &mut self.stash_views {
             view.show(&ctx, &mut self.operations, &self.scheduler, stash_input);
@@ -2409,7 +2555,10 @@ impl eframe::App for Workspace {
             let open = editor.open;
             editor.show(
                 &ctx,
-                !self.closing && !self.operations.modal_open() && !self.branches.is_open(),
+                !self.closing
+                    && !self.operations.modal_open()
+                    && !self.branches.is_open()
+                    && !self.remotes.is_open(),
             );
             if open && !editor.open {
                 editor.save_layout(&mut self.settings);
@@ -2443,7 +2592,17 @@ impl eframe::App for Workspace {
             self.git.as_ref(),
             &self.scheduler,
         );
-        let allow_branch_input = !self.closing && !self.operations.modal_open();
+        let allow_remote_input =
+            !self.closing && !self.operations.modal_open() && !self.branches.is_open();
+        self.remotes.show(
+            &ctx,
+            self.git.as_ref(),
+            &mut self.operations,
+            &self.scheduler,
+            allow_remote_input,
+        );
+        let allow_branch_input =
+            !self.closing && !self.operations.modal_open() && !self.remotes.is_open();
         self.branches.show(
             &ctx,
             self.git.as_ref(),
@@ -2497,6 +2656,7 @@ mod tests {
             draft_store: None,
             operations: Default::default(),
             branches: Default::default(),
+            remotes: Default::default(),
             initialization: Default::default(),
             stash_views: vec![],
             history_menu: None,
@@ -2547,6 +2707,7 @@ mod tests {
                 history: None,
                 owner_snapshot: None,
                 divergence: Default::default(),
+                remotes: Default::default(),
                 page: None,
                 selected: None,
                 previous: vec![],
@@ -2589,6 +2750,7 @@ mod tests {
             }),
             operations: Default::default(),
             branches: Default::default(),
+            remotes: Default::default(),
             initialization: Default::default(),
             stash_views: vec![],
             history_menu: None,

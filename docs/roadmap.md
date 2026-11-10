@@ -2,6 +2,9 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust remote management, 2026-11-10.** R50 is functionally verified: cached native Add/Manage forms and sidebar menus, fetch/push/fallback, unsupported/redacted values, exact removal confirmation and repository-owned execution/reconciliation. Five native checks, six exact pinned C#/Rust outcomes, four headless input/cache checks and fourteen workspace/cache regressions pass; Clippy passes. [Evidence and remaining native/release limits](rust-rewrite.md#remote-management-checkpoint-2026-11-10).
+
+
 **Rust startup and session cache, 2026-11-10.** R19 is verified: selected labelled startup preview, identity/size/graph bounds, no cached action readiness, three-tab/32-MiB idle eviction, active-owner retention and inactive-fetch preservation. Three core and seven desktop/native cache checks, 14 regressions and both pinned C# startup checks pass; native development build and Clippy pass. [Evidence and remaining native/performance limits](rust-rewrite.md#startup-preview-and-session-cache-2026-11-10).
 
 **Rust history retention, 2026-11-10.** Unchanged refresh retains page/rows/selection/both scroll axes; failed reads retain useful content, changed identities require reopening, and View First/range/status plus bounded page views are wired. Fresh activation checks identity without Git; stale activation refreshes after 30 seconds. Seven focused checks and seven workspace regressions pass; six exact C#/Rust native page outcomes match. [Evidence and remaining cache acceptance](rust-rewrite.md#history-retention-checkpoint-2026-11-10). R28/R31 remain open; the subsequent startup-cache checkpoint verifies R19.

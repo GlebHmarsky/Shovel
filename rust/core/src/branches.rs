@@ -59,6 +59,7 @@ pub enum Stage {
     Reapplying,
     DroppingStash,
     UpdatingBranch,
+    UpdatingRemote,
     Resetting,
     Reverting,
     Recovering,

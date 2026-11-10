@@ -366,6 +366,7 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         draft_store: None,
         operations: Default::default(),
         branches: Default::default(),
+        remotes: Default::default(),
         initialization: Default::default(),
         stash_views: vec![],
         history_menu: None,

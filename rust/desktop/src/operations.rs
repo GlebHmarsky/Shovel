@@ -1,5 +1,6 @@
 use crate::strings::{self, text};
 use eframe::egui::{self, RichText};
+use sha2::{Digest, Sha256};
 use shovel_core::{
     authentication,
     git::{Git, Snapshot},
@@ -177,6 +178,7 @@ enum LocalAction {
     History(shovel_core::history_actions::Action),
     Recovery(shovel_core::recovery::Action),
     Stash(shovel_core::stashes::Action),
+    Remote(shovel_core::remotes::Action),
 }
 impl LocalAction {
     fn key(&self) -> String {
@@ -192,6 +194,10 @@ impl LocalAction {
             Self::History(action) => format!("history:{action:?}"),
             Self::Recovery(action) => format!("recovery:{action:?}"),
             Self::Stash(action) => format!("stash:{action:?}"),
+            Self::Remote(action) => format!(
+                "remote:{:x}",
+                Sha256::digest(format!("{action:?}").as_bytes())
+            ),
         }
     }
 }
@@ -748,6 +754,24 @@ impl Controller {
             ctx,
         )
     }
+    pub fn submit_remote(
+        &mut self,
+        label: &'static str,
+        action: shovel_core::remotes::Action,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        self.submit_local(
+            label,
+            LocalAction::Remote(action),
+            snapshot,
+            git,
+            scheduler,
+            ctx,
+        );
+    }
     fn submit_local(
         &mut self,
         label: &'static str,
@@ -796,6 +820,8 @@ impl Controller {
                         git.execute_recovery(&captured, *action, Some(progress))
                     } else if let LocalAction::Stash(action) = &action {
                         git.execute_stash(&captured, action, Some(progress))
+                    } else if let LocalAction::Remote(action) = &action {
+                        git.execute_remote(&captured, action, Some(progress))
                     } else {
                         let unchanged_refs = !matches!(
                             action,
@@ -811,7 +837,9 @@ impl Controller {
                             LocalAction::History(action) => {
                                 git.execute_history(&prepared, action, Some(progress))
                             }
-                            LocalAction::Recovery(_) | LocalAction::Stash(_) => unreachable!(),
+                            LocalAction::Recovery(_)
+                            | LocalAction::Stash(_)
+                            | LocalAction::Remote(_) => unreachable!(),
                         }
                     };
                     result
@@ -884,6 +912,7 @@ impl Controller {
                             Stage::Reapplying => "ActionTitleStashApply",
                             Stage::DroppingStash => "ActionTitleStashDrop",
                             Stage::UpdatingBranch => "ActionStageUpdatingBranch",
+                            Stage::UpdatingRemote => "RemoteManageTitle",
                             Stage::Resetting => "ActionStageResetting",
                             Stage::Reverting => "ActionStageReverting",
                             Stage::Recovering => "ActionStageRecovering",

@@ -5,7 +5,7 @@ using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
 
-if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence" or "--history")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone, --divergence or --history.");
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence" or "--history" or "--remotes")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone, --divergence or --history, --remotes.");
 var root = Path.GetFullPath(args[0]);
 var output = Path.GetFullPath(args[1]);
 if (Directory.Exists(root) || File.Exists(root)) throw new IOException("Fixture path must not exist.");
@@ -25,6 +25,60 @@ async Task<string> Git(string path, params string[] arguments)
     var result = await runner.RunAsync(new(git.Executable, path, arguments), default);
     if (result.ExitCode != 0) throw new IOException(Encoding.UTF8.GetString(result.StandardError));
     return Encoding.UTF8.GetString(result.StandardOutput).TrimEnd();
+}
+
+if (args.Length == 3 && args[2] == "--remotes")
+{
+    var path = Path.Combine(root, "repository");
+    Directory.CreateDirectory(path);
+    await Git(path, "init", "--initial-branch=main");
+    await File.WriteAllTextAsync(Path.Combine(path, "file"), "base\n");
+    await Git(path, "add", "file"); await Git(path, "commit", "-m", "base");
+    await File.WriteAllTextAsync(Path.Combine(path, "file"), "staged\n"); await Git(path, "add", "file");
+    await File.WriteAllTextAsync(Path.Combine(path, "file"), "working\n");
+    var context = await actions.PrepareAsync(git, path, default);
+    var records = new List<object>();
+    async Task Record(string name, bool success, int count) {
+        var cfg = await runner.RunAsync(new(git.Executable, path, ["config", "--local", "--get-regexp", @"^(remote\.|branch\.main\.)"]), default);
+        records.Add(new {
+            @case = name, success, commands = count,
+            head = await Git(path, "rev-parse", "HEAD"),
+            index = await Git(path, "ls-files", "--stage"),
+            worktree = await File.ReadAllTextAsync(Path.Combine(path, "file")),
+            status = await Git(path, "status", "--porcelain=v1"),
+            config = Encoding.UTF8.GetString(cfg.StandardOutput).TrimEnd().Replace("\r", ""),
+            refs = await Git(path, "for-each-ref", "--format=%(refname) %(objectname)")
+        });
+    }
+    var before = runner.RemoteWrites;
+    var prepared = await actions.PrepareRemoteSetupAsync(context, default);
+    var result = await actions.AddRemoteAsync(prepared, new("origin", "no-contact::initial"), default);
+    await Record("add", result.Success, runner.RemoteWrites - before);
+    async Task Change(string name, string fetch, string push, bool remove=false) {
+        var reviewed = await actions.ReadRemoteConfigurationAsync(git, path, default);
+        var count = runner.RemoteWrites;
+        var changed = await actions.ChangeRemoteAsync(context, reviewed, new("origin", fetch, push, remove), default);
+        await Record(name, changed.Success, runner.RemoteWrites - count);
+    }
+    await Change("edit", "../fetch two", "../push two");
+    await Change("fallback", "../fetch two", "");
+    await Change("unchanged", "../fetch two", "");
+    var stale = await actions.ReadRemoteConfigurationAsync(git, path, default);
+    await Git(path, "config", "remote.origin.url", "../external");
+    before = runner.RemoteWrites;
+    try {
+        await actions.ChangeRemoteAsync(context, stale, new("origin", "../should-not-write", ""), default);
+        throw new IOException("Expected stale reviewed-config rejection.");
+    } catch (GitActionException e) when (e.Code == "RemoteManageChanged") { }
+    await Record("stale", false, runner.RemoteWrites - before);
+    var head = await Git(path, "rev-parse", "HEAD");
+    await Git(path, "update-ref", "refs/remotes/origin/main", head);
+    await Git(path, "config", "branch.main.remote", "origin");
+    await Git(path, "config", "branch.main.merge", "refs/heads/main");
+    await Change("remove", "", "", true);
+    await File.WriteAllTextAsync(Path.Combine(output, "remotes.json"), JsonSerializer.Serialize(records, new JsonSerializerOptions { WriteIndented=true }));
+    Console.WriteLine("PASS baseline local remote workflow: 6 native outcomes.");
+    return;
 }
 
 if (args.Length == 3 && args[2] == "--history")
@@ -309,8 +363,11 @@ foreach (var scenario in new[] { "stage-commit", "removed-commit", "external-ind
 sealed class FixedDateRunner : IProcessRunner
 {
     private readonly WindowsProcessRunner _inner = new();
+    public int RemoteWrites { get; private set; }
     public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken token, Action<ProcessOutput>? output = null)
     {
+        if (request.Arguments.Contains("remote") && request.Arguments.Any(a => a is "add" or "set-url" or "remove") ||
+            request.Arguments.Contains("config") && request.Arguments.Contains("--unset-all")) RemoteWrites++;
         var environment = new Dictionary<string, string?>(request.Environment, StringComparer.OrdinalIgnoreCase)
         {
             ["GIT_AUTHOR_DATE"] = "2026-01-01T00:00:00+00:00",

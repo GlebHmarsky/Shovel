@@ -1,0 +1,223 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T12:46:22.2227375Z",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "RustBaseCommit": "3d4966c9e0292cb83a576e06b5ad615362cb1433",
+  "GitVersion": "git version 2.51.1.windows.1",
+  "SourceSha256": {
+    "rust/core/src/remotes.rs": "142F153034F2235289E45492F4B2C4835B238DAC329998F9BF95B4453F2EE568",
+    "rust/core/tests/remotes.rs": "13AF67B16EC9A3FE810BF2CBF33F04D2A8BE0079443604AF81984683FFEB3EFF",
+    "rust/desktop/src/remotes.rs": "30462B8F4593D986052CB541D304CD6313594DDAFA4482C44CBDC30E964F0981",
+    "rust/desktop/src/main.rs": "E448E46A82C1F2CF556C4F5F98DA60B95B8A220B7F6A878AE5E131B26D63AA18",
+    "rust/desktop/src/operations.rs": "F7F1E73A674303B87846850991EF4757DD06A205AF7893A964EFBC87C08B705E",
+    "tests/RustParityBaseline/Program.cs": "43C895BE346ED58AB09D0CAB65BF4B5BCA09FB2FFCA14ED3015AAE95E7BB2179",
+    "scripts/Test-RustRemoteParity.ps1": "F92D08C833951EAD0ACDFDFE80CC91434A36A726C19BBFF2FB5D77187B8E4812"
+  },
+  "Scope": "Local-only remote add, fetch/push URL edits, push fallback, unchanged save, stale configuration rejection and exact remote removal. Compare HEAD, staged content, working file, status, remote/upstream config, all refs and actual mutation counts.",
+  "FixtureClock": "Both drivers fix author/committer dates to 2026-01-01T00:00:00+00:00.",
+  "DesktopCapture": false,
+  "Equal": true,
+  "Baseline": [
+    {
+      "case": "add",
+      "success": true,
+      "commands": 1,
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "worktree": "working\n",
+      "status": "MM file",
+      "config": "remote.origin.url no-contact::initial\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498"
+    },
+    {
+      "case": "edit",
+      "success": true,
+      "commands": 2,
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "worktree": "working\n",
+      "status": "MM file",
+      "config": "remote.origin.url ../fetch two\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*\nremote.origin.pushurl ../push two",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498"
+    },
+    {
+      "case": "fallback",
+      "success": true,
+      "commands": 1,
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "worktree": "working\n",
+      "status": "MM file",
+      "config": "remote.origin.url ../fetch two\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498"
+    },
+    {
+      "case": "unchanged",
+      "success": true,
+      "commands": 0,
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "worktree": "working\n",
+      "status": "MM file",
+      "config": "remote.origin.url ../fetch two\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498"
+    },
+    {
+      "case": "stale",
+      "success": false,
+      "commands": 0,
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "worktree": "working\n",
+      "status": "MM file",
+      "config": "remote.origin.url ../external\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498"
+    },
+    {
+      "case": "remove",
+      "success": true,
+      "commands": 1,
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "worktree": "working\n",
+      "status": "MM file",
+      "config": "",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498"
+    }
+  ],
+  "Rust": [
+    {
+      "case": "add",
+      "commands": 1,
+      "config": "remote.origin.url no-contact::initial\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498",
+      "status": "MM file",
+      "success": true,
+      "worktree": "working\n"
+    },
+    {
+      "case": "edit",
+      "commands": 2,
+      "config": "remote.origin.url ../fetch two\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*\nremote.origin.pushurl ../push two",
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498",
+      "status": "MM file",
+      "success": true,
+      "worktree": "working\n"
+    },
+    {
+      "case": "fallback",
+      "commands": 1,
+      "config": "remote.origin.url ../fetch two\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498",
+      "status": "MM file",
+      "success": true,
+      "worktree": "working\n"
+    },
+    {
+      "case": "unchanged",
+      "commands": 0,
+      "config": "remote.origin.url ../fetch two\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498",
+      "status": "MM file",
+      "success": true,
+      "worktree": "working\n"
+    },
+    {
+      "case": "stale",
+      "commands": 0,
+      "config": "remote.origin.url ../external\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*",
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498",
+      "status": "MM file",
+      "success": false,
+      "worktree": "working\n"
+    },
+    {
+      "case": "remove",
+      "commands": 1,
+      "config": "",
+      "head": "d322b7a10f093fee24cba658f59a5a093940b498",
+      "index": "100644 19d9cc8584ac2c7dcf57d2680375e80f099dc481 0\tfile",
+      "refs": "refs/heads/main d322b7a10f093fee24cba658f59a5a093940b498",
+      "status": "MM file",
+      "success": true,
+      "worktree": "working\n"
+    }
+  ],
+  "FinalSourceSha256": {
+    "rust/core/src/remotes.rs": "142F153034F2235289E45492F4B2C4835B238DAC329998F9BF95B4453F2EE568",
+    "rust/core/src/operation.rs": "AD6768A0FA4F4080D44493F1E5B4587C516FAE419C90C3099C29A517CAC63922",
+    "rust/core/src/network.rs": "227DD02276B9C7E34AAB4DE9A430A31B03D49BEC3AD62C3F8B4202583D9B4A16",
+    "rust/core/src/branches.rs": "ACD9C96C0DEBD6465181B9FE271054468FCC32C38E870A879268C5D19F642936",
+    "rust/core/tests/remotes.rs": "13AF67B16EC9A3FE810BF2CBF33F04D2A8BE0079443604AF81984683FFEB3EFF",
+    "rust/desktop/src/remotes.rs": "28B792B24ECFCE48E0486A79D39FEEB4A1B1FC31351C92BBA16C7862A0F25220",
+    "rust/desktop/src/remote_tests.rs": "C3573EAD0B161D8AB27ED89F6F029463AD13A89DE15CCB849A3CFA13F2000BD9",
+    "rust/desktop/src/main.rs": "1FBBC444124CE5E3D8E1463B486F536D0F5828A54E61D8E64D166D6F71AF49FE",
+    "rust/desktop/src/operations.rs": "59C00B7D370B85A7AFCC14ECD034A687D234BE6B62264DED71D118938C42FFDA",
+    "rust/desktop/src/history_cache.rs": "D79069F84198CFBC37DF63B3E90549A9FD8B0023A16FAAEFF35B16E303475668",
+    "tests/RustParityBaseline/Program.cs": "43C895BE346ED58AB09D0CAB65BF4B5BCA09FB2FFCA14ED3015AAE95E7BB2179",
+    "scripts/Test-RustRemoteParity.ps1": "F92D08C833951EAD0ACDFDFE80CC91434A36A726C19BBFF2FB5D77187B8E4812"
+  },
+  "Verification": [
+    {
+      "Command": "cargo test -j 1 -p shovel-core --test remotes --locked -- --test-threads=1",
+      "Passed": 5,
+      "Seconds": 54.58,
+      "Scope": "Native validation, dirty index/worktree/local tip preservation, config URL semantics, native locks and duplicates, partial two-write failure, unsupported/inherited/redacted/bounded records, identity replacement and active sequence/head movement."
+    },
+    {
+      "Command": "./scripts/Test-RustRemoteParity.ps1",
+      "Passed": 6,
+      "RustCheckSeconds": 20.99,
+      "Scope": "Exact unchanged pinned C# versus Rust native outcomes, recorded above."
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop remotes::tests --locked -- --test-threads=1 --nocapture",
+      "Passed": 4,
+      "Seconds": 22.79,
+      "Scope": "Headless actual text/pointer input Add/Edit/fallback/no-op/confirmed Remove/Cancel, stale error shown through Activity, unsupported read-only form with unavailable Git, waiting removal, real Repository/sidebar menus, linked cache refresh after owner tab closure, late/failing secondary reads."
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop workspace_interaction_tests --locked -- --test-threads=1",
+      "Passed": 7,
+      "Seconds": 19.37
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop history_cache::tests --locked -- --test-threads=1",
+      "Passed": 7,
+      "Seconds": 31.46
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-core -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true
+    },
+    {
+      "Command": "cargo build -j 1 -p shovel-desktop -p shovel-askpass --locked",
+      "Passed": true,
+      "Seconds": 24.84,
+      "Profile": "development; not a distributable installer"
+    }
+  ],
+  "Limits": [
+    "Headless egui event routing and native disposable Git are functional evidence, not real Windows visual, assistive-technology, DPI or installed-update acceptance.",
+    "No screen capture, interactive app launch, normal installed profile, working repository, installer or release used in this batch.",
+    "Elapsed values are whole-check timings, not C#/Rust performance comparisons.",
+    "Native Git serial writes are not transactional; other clients can race after reviewed digest validation. No rollback is promised.",
+    "Initial UI harness failures used unordered accessibility nodes, an empty Text event as deletion, a tab index instead of ID, a non-normalized expected path and the summary instead of the Activity output. Corrected before final passing runs. An undrained assertion in the initial harness also aborted its test process; no native application window was running.",
+    "R50 functional scope verified. General native appearance/accessibility remains R13/R14, other sidebar actions R33, performance R72 and final release/update gates remain open."
+  ],
+  "ReferenceCheckout": "Clean C# checkout at 2175458d97a447e7b1a01b7d5a64f68316010fd9, verified 2026-11-10.",
+  "DevelopmentExecutables": {
+    "ShovelRust.exe": "8EF42AEC41E8BB7C1ADAD320A77175BD327CC0BCF8829F5C6AFDC5E9DF64484F",
+    "ShovelRustAskPass.exe": "E0306B11194981FFED303994FCAAB85974F30C81A400A08E15713C1DFAEBE86F"
+  }
+}
