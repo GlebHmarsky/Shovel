@@ -1,0 +1,37 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T15:00:54.038598+00:00",
+  "RustBaseCommit": "6ac66c4b956e769812c1d443c1c567ccfae991cc",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "SourceSha256": {
+    "rust/desktop/src/git_selection.rs": "d636bb7570e23c2050bc6106783e42a72baad7c67df8916e8e1be8e0a77a22e8",
+    "rust/desktop/src/main.rs": "1d6dc3c251e74ab891693abda8f3ea72a02d1d6fe74b2c2ba106f1f365274499",
+    "rust/desktop/resources/strings.json": "89ada533acdb1eb7a0ee318bccefb702d30d9e6ee59856aef0c7efe8d49fedce",
+    "rust/desktop/src/workspace_interaction_tests.rs": "243ea78448d0176134b3728cae80ac07cb819bce1afea58c6486e05f6866d209",
+    "rust/desktop/src/commit_conflict_tests.rs": "009431dd45df1cbf836048904618b26ecf87f1f92727d952f41cf2fe8df7822f"
+  },
+  "Scope": "Session-only Repository Git executable selection through native picker, async discovery, safe cache/editor invalidation and native command execution. Preserves existing Git on cancellation/failure and blocks startup/accepted-work races.",
+  "Checks": [
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop git_selection::tests --locked -- --test-threads=1",
+      "Passed": 2,
+      "Seconds": 13.46
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop history_cache::tests --locked -- --test-threads=1",
+      "Passed": 7,
+      "Seconds": 34.26
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-core -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true
+    }
+  ],
+  "Fixture": "Headless actual Repository menu input; only picker result is supplied by fixture. Discovery runs the real installed cmd/git.exe, refreshes disposable repository history and performs real local remote add with isolated Git configuration.",
+  "Limits": [
+    "Native Windows file-picker interaction, focus, accessibility and appearance are not certified.",
+    "No persisted executable setting exists in the pinned baseline; no persistence is claimed.",
+    "The final native filter display label was corrected after checks; operation logic is unchanged.",
+    "No screen capture, interactive launch, normal profile, user repository, installation or publication. The earlier local 0.50.0 payload is unchanged."
+  ]
+}

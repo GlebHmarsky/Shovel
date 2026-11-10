@@ -11,6 +11,7 @@ mod file_history;
 mod file_picker;
 mod file_shell;
 mod git_identity;
+mod git_selection;
 mod history_cache;
 mod history_row;
 mod history_view;
@@ -119,6 +120,7 @@ struct Workspace {
     settings: Settings,
     store: Option<SettingsStore>,
     git: Option<Arc<Git>>,
+    git_selection: git_selection::Controller,
     tabs: Vec<Tab>,
     retained_tabs: Vec<Tab>,
     restore_window_layout: bool,
@@ -193,6 +195,7 @@ impl Workspace {
             settings: Settings::default(),
             store: None,
             git: None,
+            git_selection: Default::default(),
             tabs: vec![],
             retained_tabs: vec![],
             restore_window_layout: false,
@@ -461,6 +464,7 @@ impl Workspace {
         });
     }
     fn receive(&mut self, ctx: &egui::Context) {
+        self.poll_git_selection(ctx);
         while let Ok(event) = self.receiver.try_recv() {
             match event {
                 Event::ToolFinished(result) => {
@@ -827,6 +831,7 @@ impl Workspace {
                 ctx,
                 self.initialized
                     && !self.closing
+                    && !self.git_selection.busy()
                     && self
                         .settings
                         .get("AutoFetchEnabled")
@@ -1028,6 +1033,10 @@ impl Workspace {
         if self.closing {
             return;
         }
+        if self.git_selection.busy() {
+            self.notice = Some(strings::text("RustGitSelecting"));
+            return;
+        }
         if self.initialization.picking {
             self.notice = Some(strings::text("RustRepositoryChooserOpen"));
             return;
@@ -1224,7 +1233,8 @@ impl eframe::App for Workspace {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.main_geometry.observe(&ctx);
-        let modal_open = self.settings_dialog.is_some()
+        let modal_open = self.git_selection.busy()
+            || self.settings_dialog.is_some()
             || self.editors.iter().any(|editor| editor.open)
             || self.operations.modal_open()
             || self.remotes.is_open()
@@ -1476,6 +1486,18 @@ impl eframe::App for Workspace {
                         }
                     });
                     ui.menu_button(strings::text("RepositoryMenu"), |ui| {
+                        if ui
+                            .add_enabled(
+                                self.can_choose_git(),
+                                egui::Button::new(strings::text("ChooseGit")),
+                            )
+                            .on_disabled_hover_text(strings::text("RustGitSelectionBusy"))
+                            .clicked()
+                        {
+                            self.choose_git(&ctx);
+                            ui.close();
+                        }
+                        ui.separator();
                         let tab = self.tabs.get(self.selected);
                         self.remotes.menu(
                             ui,
@@ -2767,6 +2789,7 @@ mod tests {
             settings,
             store: Some(store),
             git: None,
+            git_selection: Default::default(),
             tabs: vec![],
             retained_tabs: vec![],
             restore_window_layout: false,
@@ -2840,6 +2863,7 @@ mod tests {
             settings: Settings::default(),
             store: None,
             git: Some(Arc::new(git)),
+            git_selection: Default::default(),
             tabs: vec![Tab {
                 id: 1,
                 path: path.clone(),

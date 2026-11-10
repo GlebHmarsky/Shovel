@@ -338,6 +338,7 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         settings,
         store: Some(store),
         git: Some(h.editor.git.clone()),
+        git_selection: Default::default(),
         tabs: vec![],
         retained_tabs: vec![],
         restore_window_layout: false,

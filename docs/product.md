@@ -1,5 +1,9 @@
 # Product
 
+## Rust Git executable selection (2026-11-10)
+
+Repository > Git executable opens the native executable picker, then checks the selected Git off-thread. The choice applies to this session, matching the C# baseline; restart uses normal discovery. Cancel or a failed version check keeps the prior executable and useful repository view. Selection waits for startup/loading and accepted work to finish and for repository dialogs/draft saves to settle. The picker/version check blocks further workspace submission with a visible explanation. Successful selection invalidates repository caches, refreshes the selected repository and preserves saved drafts and settings. Automatic fetch pauses during selection. [Evidence and limits](evidence/rust-git-selection-2026-11-10.json).
+
 ## Rust history reopening (2026-11-10)
 
 On orderly exit, Rust saves the selected verified history page. The next launch can show that page, selection and scroll position immediately with an explicit last-known timestamp while current data loads. Cached rows do not authorize Git actions or comparison reads. If live reading fails or Git is unavailable, the retained preview remains labelled and Refresh retries normally.

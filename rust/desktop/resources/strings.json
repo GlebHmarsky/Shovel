@@ -1091,5 +1091,8 @@
   "RustAutoFetchDone": "Automatic fetch completed.",
   "RustAutoFetchFailed": "Automatic fetch did not complete. Manual Fetch can show authentication prompts.",
   "RustRepositoryChooserOpen": "Close the repository folder chooser before exiting or restarting Shovel.",
-  "RustRepositoryCreationBusy": "A repository is being created. Wait for it to finish before creating another."
+  "RustRepositoryCreationBusy": "A repository is being created. Wait for it to finish before creating another.",
+  "RustGitSelectionBusy": "Finish repository loading and accepted work, then close repository dialogs before changing Git.",
+  "RustGitSelecting": "Choose a Git executable and wait for its version check to finish.",
+  "RustGitExecutableFilter": "Executable files"
 }

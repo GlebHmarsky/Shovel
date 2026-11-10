@@ -41,6 +41,7 @@ cargo test -j 1 -p shovel-desktop commit::queue_tests --locked -- --test-threads
 cargo test -j 1 -p shovel-core --test submodules --locked -- --test-threads=1
 cargo test -j 1 -p shovel-desktop submodule_tests --locked -- --test-threads=1
 cargo test -j 1 -p shovel-desktop sidebar::tests --locked -- --test-threads=1
+cargo test -j 1 -p shovel-desktop git_selection::tests --locked -- --test-threads=1
 cargo test -j 1 -p shovel-core --test remotes --locked -- --test-threads=1
 cargo test -j 1 -p shovel-desktop --locked remotes::tests -- --test-threads=1
 cargo test -j 1 -p shovel-desktop --locked workspace_interaction_tests::sidebar_ -- --test-threads=1

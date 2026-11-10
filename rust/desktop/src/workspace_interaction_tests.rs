@@ -31,6 +31,7 @@ pub(super) fn workspace() -> Workspace {
         settings: Settings::default(),
         store: None,
         git: None,
+        git_selection: Default::default(),
         tabs,
         retained_tabs: vec![],
         restore_window_layout: false,
