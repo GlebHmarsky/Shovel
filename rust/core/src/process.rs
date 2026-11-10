@@ -352,6 +352,9 @@ pub fn run(
         });
     }
     let _permit = permit;
+    // Match the native baseline: admission waiting contributes to displayed
+    // elapsed time, but does not consume the process execution deadline.
+    let admitted_at = Instant::now();
     let executable = wide(request.executable.as_os_str())?;
     let directory = wide(request.directory.as_os_str())?;
     let mut command = quote(request.executable.as_os_str())?;
@@ -454,7 +457,7 @@ pub fn run(
                 Outcome::Cancelled
             } else if overflow.load(Ordering::Acquire) {
                 Outcome::OutputLimit
-            } else if start.elapsed() >= request.deadline {
+            } else if admitted_at.elapsed() >= request.deadline {
                 Outcome::TimedOut
             } else {
                 Outcome::Exited
@@ -517,6 +520,12 @@ mod tests {
                 b"finished",
             )
             .unwrap();
+        } else if mode == "hold" {
+            std::fs::write("started", "").unwrap();
+            let end = Instant::now() + Duration::from_secs(15);
+            while !std::path::Path::new("release").exists() && Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
         } else if mode == "descendant-root" {
             use std::os::windows::process::CommandExt;
             // Deliberately outlive this fixture root: the outer Windows job
@@ -708,6 +717,110 @@ mod tests {
             unsafe { WaitForSingleObject(event.as_raw_handle(), 0) },
             WAIT_TIMEOUT
         );
+    }
+    struct Held {
+        temp: tempfile::TempDir,
+        workers: Vec<thread::JoinHandle<std::io::Result<Result>>>,
+        paths: Vec<PathBuf>,
+    }
+    impl Held {
+        fn new(lifetime: Lifetime, count: usize) -> Self {
+            let mut held = Self {
+                temp: tempfile::tempdir().unwrap(),
+                workers: vec![],
+                paths: vec![],
+            };
+            for index in 0..count {
+                let path = held.temp.path().join(index.to_string());
+                std::fs::create_dir(&path).unwrap();
+                let mut request = request(&path, "hold");
+                request.lifetime = lifetime;
+                held.paths.push(path.clone());
+                held.workers.push(thread::spawn(move || {
+                    run(&request, &Cancellation::default(), None)
+                }));
+                let end = Instant::now() + Duration::from_secs(5);
+                while !path.join("started").exists() {
+                    assert!(Instant::now() < end, "held native process did not start");
+                    thread::sleep(Duration::from_millis(5));
+                }
+            }
+            held
+        }
+        fn release(&self) {
+            for path in &self.paths {
+                let _ = std::fs::write(path.join("release"), "");
+            }
+        }
+        fn finish(mut self) {
+            self.release();
+            for worker in self.workers.drain(..) {
+                assert!(worker.join().unwrap().unwrap().success());
+            }
+        }
+    }
+    impl Drop for Held {
+        fn drop(&mut self) {
+            self.release();
+            for worker in self.workers.drain(..) {
+                let _ = worker.join();
+            }
+        }
+    }
+    #[test]
+    fn queued_read_receives_full_execution_deadline_after_admission() {
+        let held = Held::new(Lifetime::Read, 2);
+        let temp = tempfile::tempdir().unwrap();
+        let mut request = request(temp.path(), "finish");
+        request.deadline = Duration::from_millis(800);
+        let (ready, began) = std::sync::mpsc::channel();
+        let worker = thread::spawn(move || {
+            ready.send(()).unwrap();
+            run(&request, &Cancellation::default(), None)
+        });
+        began.recv().unwrap();
+        thread::sleep(Duration::from_millis(1100));
+        assert!(!temp.path().join("started").exists());
+        held.finish();
+        let result = worker.join().unwrap().unwrap();
+        assert!(result.success(), "{result:?}");
+        assert!(result.elapsed >= Duration::from_millis(1100));
+        assert!(temp.path().join("finished").exists());
+    }
+    #[test]
+    fn saturated_lanes_remain_independent_and_cancelled_waiters_never_start() {
+        for (blocked, count, available) in [
+            (Lifetime::Read, 2, Lifetime::AcceptedCommand),
+            (Lifetime::AcceptedCommand, 4, Lifetime::Read),
+        ] {
+            let held = Held::new(blocked, count);
+            let temp = tempfile::tempdir().unwrap();
+            let mut available_request = request(temp.path(), "finish");
+            available_request.lifetime = available;
+            assert!(
+                run(&available_request, &Cancellation::default(), None)
+                    .unwrap()
+                    .success()
+            );
+            let waiting = tempfile::tempdir().unwrap();
+            let mut waiting_request = request(waiting.path(), "finish");
+            waiting_request.lifetime = blocked;
+            let cancel = Cancellation::default();
+            let worker_cancel = cancel.clone();
+            let (ready, began) = std::sync::mpsc::channel();
+            let worker = thread::spawn(move || {
+                ready.send(()).unwrap();
+                run(&waiting_request, &worker_cancel, None)
+            });
+            began.recv().unwrap();
+            thread::sleep(Duration::from_millis(100));
+            assert!(!worker.is_finished());
+            cancel.cancel();
+            let result = worker.join().unwrap().unwrap();
+            assert_eq!(result.outcome, Outcome::Cancelled);
+            assert!(!waiting.path().join("started").exists());
+            held.finish();
+        }
     }
     #[test]
     fn bounded_capture_drains_accepted_commands() {
