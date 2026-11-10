@@ -235,3 +235,12 @@ Release packages and profiles use `ShovelRust` to coexist with `Shovel`. Beta/St
 ## Verification boundaries
 
 The initial partial Rust Beta is published under the owner’s 2026-11-07 instruction; do not represent it as the completed rewrite. Build checks, pure parsers, a downloaded package and an installed update are different evidence. The requested native update rehearsal uses the isolated Rust installation only; no installation over or restart of C# is authorized. Every unfinished parity row remains visible in TODO. Same-host paired performance measurements must report fixture, build, process-tree scope, raw samples and variation; no faster/smaller claim precedes measurement.
+
+
+## Shared scale shortcut checkpoint (2026-11-10)
+
+The native Rust UI now intercepts Ctrl+Plus/Equals/Minus before widgets in each viewport, matches the pinned C# 70-200% range in 10% steps, and ignores held-key repeats. Changes update shared settings and an open preferences dialog immediately, then save off-thread. A revision check keeps a newer shortcut when an earlier preferences save completes. Existing geometry continues to use native logical dimensions, independently of UI zoom.
+
+Two focused headless checks passed (0.02 s): root/child viewport shortcuts, bounds/repeats and file-backed persistence without exit including delayed preferences completion. Four existing main/Commit geometry checks passed (0.52 s); desktop/core all-target Clippy passed with warnings denied. Initial failures were a non-const egui ID and test fixture API/profile initialization errors; corrected before final verification. Native Windows keyboard routing, DPI/monitor geometry, accessibility and all auxiliary windows remain unverified; R14/R16 remain open. Local 0.50.1 is a checkpoint, not full parity or release acceptance.
+
+Final local-build smoke: all 18 checks passed in 42.98 s on version 0.50.1. Build/rust-smoke.json records the source fingerprint. The optimized payload receipt records the exact committed source, native executable checks and hashes.

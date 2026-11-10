@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.50.1 - 2026-11-10 (local test build; not published)
+
+- Match shared Ctrl+Plus/Minus scaling to the C# 70-200% range and 10% steps, ignore held-key repeats, and persist changes without exiting. Keep newer shortcuts when an earlier settings save completes.
+- Include repository-ordered Fetch/New Branch dialogs and submissions, native process ownership fixes, Unicode-compatible C#/Rust mutex names, and stale repository replacement rejection since the previous local build.
+- Local Windows x64 payload only; full parity, native UI acceptance, final update verification and paired performance measurements remain open. No publication, installation or merge.
+
 ## Rust 0.50.0 - 2026-11-10 (local test build; not published)
 
 - Add selected submodule Open, indexed Update and URL Sync, with literal paths, parent/child ownership, native dirty-file protection and retained Activity output.

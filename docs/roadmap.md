@@ -920,3 +920,8 @@ All paths below are historical ignored outputs, relative to repository root. Ear
 - `artifacts/preview-0.9.1-verification.txt`
 - `artifacts/foundation-checks/20261026-151432-7f167dee62bc4163ba6c75183c7be306`
 - `Build/0.9.1-win-x64/Shovel.exe`
+
+
+### Rust shared scale local checkpoint — 2026-11-10
+
+Shared zoom now follows C# bounds/steps and ignores repeats; shortcut changes persist without exit and survive a concurrent preferences save. Two focused scale and four geometry checks passed; Clippy passed. [Evidence and limits](rust-rewrite.md#shared-scale-shortcut-checkpoint-2026-11-10). This batch ends at a local-only 0.50.1 payload and owner testing pause; no publication, installation or merge. All unfinished parity rows remain in TODO.

@@ -23,6 +23,7 @@ mod settings_ui;
 mod sidebar;
 mod stashes;
 mod strings;
+mod ui_scale;
 mod updater;
 mod window_geometry;
 mod workspace_split;
@@ -83,7 +84,7 @@ enum Event {
     Located(u64, u64, String, Result<(Page, Vec<Cursor>), String>),
     Failed(u64, u64, history_view::Failure),
     Saved(Box<SettingsStore>, Result<(), String>),
-    PreferencesSaved(Box<SettingsStore>, Box<Settings>, Result<(), String>),
+    PreferencesSaved(Box<SettingsStore>, Box<Settings>, Result<(), String>, u64),
     ToolFinished(Result<(), String>),
 }
 struct Tab {
@@ -464,6 +465,7 @@ impl Workspace {
         });
     }
     fn receive(&mut self, ctx: &egui::Context) {
+        self.sync_ui_scale(ctx);
         self.poll_git_selection(ctx);
         while let Ok(event) = self.receiver.try_recv() {
             match event {
@@ -475,7 +477,7 @@ impl Workspace {
                             .unwrap_or_else(|| strings::text("RustToolOpened")),
                     );
                 }
-                Event::PreferencesSaved(store, saved, result) => {
+                Event::PreferencesSaved(store, mut saved, result, scale_revision) => {
                     self.store = Some(*store);
                     self.saving = false;
                     if let Err(error) = result {
@@ -484,6 +486,10 @@ impl Workspace {
                             dialog.error = Some(error);
                         }
                     } else {
+                        if ui_scale::revision(ctx) != scale_revision {
+                            saved.set("UiScale", serde_json::json!(ui_scale::current(ctx)));
+                            self.preferences_dirty = true;
+                        }
                         for key in settings_ui::KEYS {
                             if let Some(value) = saved.get(key) {
                                 self.settings.set(*key, value.clone());
@@ -505,7 +511,7 @@ impl Workspace {
                     self.store = Some(*store);
                     self.initialized = true;
                     self.notice = notice;
-                    ctx.set_zoom_factor(self.settings.ui_scale() as f32);
+                    ui_scale::set(ctx, self.settings.ui_scale() as f32);
                     self.restore_window_layout = true;
                     theme(
                         ctx,
@@ -1101,8 +1107,7 @@ impl Workspace {
                     .map(|t| t.path.to_string_lossy())
             ),
         );
-        self.settings
-            .set("UiScale", serde_json::json!(ctx.zoom_factor()));
+        self.sync_ui_scale(ctx);
         let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
         self.settings
             .set("IsMaximized", serde_json::json!(maximized));
@@ -1129,7 +1134,7 @@ impl Workspace {
         self.save_preferences(ctx);
     }
     fn apply_preferences(&mut self, ctx: &egui::Context) {
-        ctx.set_zoom_factor(self.settings.ui_scale() as f32);
+        ui_scale::set(ctx, self.settings.ui_scale() as f32);
         theme(
             ctx,
             self.settings.get("Appearance").and_then(|v| v.as_u64()) == Some(1),
@@ -1171,6 +1176,7 @@ impl Workspace {
             dialog.error = None;
             self.saving = true;
             let tx = self.sender.clone();
+            let scale_revision = ui_scale::revision(ctx);
             let ctx = ctx.clone();
             thread::spawn(move || {
                 let result = store
@@ -1180,6 +1186,7 @@ impl Workspace {
                     Box::new(store),
                     Box::new(settings),
                     result,
+                    scale_revision,
                 ));
                 ctx.request_repaint();
             });
@@ -1224,6 +1231,7 @@ fn error_text(error: shovel_core::git::Error) -> String {
     }
 }
 fn theme(ctx: &egui::Context, light: bool) {
+    ui_scale::install(ctx);
     workspace_style::apply(ctx, light);
 }
 impl eframe::App for Workspace {
@@ -1232,6 +1240,7 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
         let modal_open = self.git_selection.busy()
             || self.settings_dialog.is_some()
