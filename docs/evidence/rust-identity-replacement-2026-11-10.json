@@ -1,0 +1,169 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T15:44:48.833498+00:00",
+  "RustBaseCommit": "797ef80e0e7111ca16eb3eb12e4294aab395f55c",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "SourceSha256": {
+    "rust/core/src/working.rs": "3b5519ecb522ea47c6d0b9ab81facbc38fa18c6dacdedc1dd4be3e888e7f75ad",
+    "rust/core/tests/identity.rs": "70ab3ce98303b832e61c028a8d59b3c1798f1c9ec5a2609148b73ddb8bdd9e35",
+    "rust/core/src/branches.rs": "e3e38afdec9ce547d3a6beb883579d07c10eff9566808dfc4f68fd75372b57f6",
+    "rust/core/src/history_actions.rs": "83c50887fc8a222be866b379cd1bbd9d45f8147407360e53e01d0c75cfbad919",
+    "rust/core/src/network.rs": "72fe9f319032a20104b3341032c6bccda6942c636c5a99460f5d3b5558fe802a",
+    "rust/core/src/remotes.rs": "142f153034f2235289e45492f4b2c4835b238dac329998f9bf95b4453f2ee568",
+    "rust/core/src/stashes.rs": "a2d800e4524c86b1fffcce6f624f886814831a609818714e5fb751529ebab0e3",
+    "rust/core/src/selected_stash.rs": "82dd8c32c55c6322cf8d01b1e09272b3f05601c305ede9d8082d50d22f2e6401",
+    "rust/core/src/files.rs": "f8beb08549d5bb7b9f9e7d3e0dd679c41cbf03018dd67cf818a9f8abd09830e5",
+    "rust/core/src/file_rules.rs": "09c25b96d743158e615909db8c8bc7db2e806221080688750e4d98b2e6980291",
+    "rust/core/src/file_tools.rs": "d555ebbf9ea621b1ce91440cc68ba135c1fe4bc74f602d85fd6a36cffed0ef87",
+    "rust/core/src/conflicts.rs": "fab46da3516b16b52af569da8ea82ab878cffe52fa2d599e89666aaba1539da2",
+    "rust/core/src/recovery.rs": "fe63b50742d0ae07fe364ab30df66842829b0fae86f59b75377950469a9d082c",
+    "rust/core/src/submodules.rs": "c0a4a187488755a4612075d5203db45232ef8ad802b50f6d3e9f61a636587195",
+    "rust/core/src/initialization.rs": "bf8a91173c3dae1dd419dd8c62ba1c68680e98c14c0ed7db1e7c21c7453f1dfe",
+    "rust/core/src/cloning.rs": "7fe90f074f2f1e485edbf4205fa9943fa061bdd739f471d2cda29cc1fadb1feb",
+    "rust/core/src/patches.rs": "4cbf5b617f3a5955434963b8d56736bc85b5636bf3f472d430d2288b535bc9a6"
+  },
+  "Scope": "Repository replacement validation and thread-affine native mutex ownership.",
+  "SourceReview": [
+    {
+      "File": "rust/core/src/working.rs",
+      "Entry": "execute_working",
+      "Observed": "GitAction common-directory gate; fresh identity/HEAD/branch/sequence/index/config; selected content/hunk validation.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/branches.rs",
+      "Entry": "prepare_local / execute_branch",
+      "Observed": "GitAction gate plus validate_local; filesystem identity before fresh Git metadata, captured refs/config and branch/checkout state.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/history_actions.rs",
+      "Entry": "execute_history",
+      "Observed": "GitAction gate plus validate_local; immutable commit ID and parent checks.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/network.rs",
+      "Entry": "execute_network / automatic_fetch",
+      "Observed": "Fetch gate or GitAction; Pull owns both. validate_network checks identity before metadata/config and sequence validation.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/remotes.rs",
+      "Entry": "execute_remote",
+      "Observed": "Identity before and after GitAction gate; captured configuration stamps.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/stashes.rs",
+      "Entry": "execute_stash",
+      "Observed": "GitAction gate; stashes read checks identity, fresh identity/HEAD/branch and target hash/reflog stamp.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/selected_stash.rs",
+      "Entry": "stash_files",
+      "Observed": "GitAction gate and validate_file_selection before temporary index/native stash operations.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/files.rs",
+      "Entry": "discard_files",
+      "Observed": "GitAction gate; fresh working-copy identity/index/config/selection and content validation.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/file_rules.rs",
+      "Entry": "edit_file_rules",
+      "Observed": "GitAction gate and validate_file_selection before root ignore/attribute writes.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/file_tools.rs",
+      "Entry": "external_file_diff",
+      "Observed": "GitAction gate and validate_file_selection before discovery/native tool execution.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/conflicts.rs",
+      "Entry": "resolve_conflict",
+      "Observed": "GitAction gate and validate_conflict, including identity/index/config/recovery/content/attributes, before side/text/tool mutation.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/recovery.rs",
+      "Entry": "execute_recovery",
+      "Observed": "GitAction gate and validate_recovery identity/recovery stamps; revalidation before native sequence command.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/submodules.rs",
+      "Entry": "execute_submodule",
+      "Observed": "Parent GitAction gate, validate_local and indexed target; actual/prospective child gate, child identity and sequence checks.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/initialization.rs",
+      "Entry": "initialize_repository",
+      "Observed": "Init destination gate and local destination validation; existing repository routing.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/cloning.rs",
+      "Entry": "clone_repository",
+      "Observed": "Init destination gate, nonempty protection and repeat destination validation before clone.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    },
+    {
+      "File": "rust/core/src/patches.rs",
+      "Entry": "export_selected_patch",
+      "Observed": "Source selection/identity/content validation before and after patch read; validated explicit destination, same-volume atomic write. Does not mutate source index/refs and does not take a GitAction gate.",
+      "EvidenceKind": "source review; not full runtime acceptance"
+    }
+  ],
+  "Checks": [
+    {
+      "Command": "cargo test -j 1 -p shovel-core --test identity --locked -- --test-threads=1 --skip native_identity_and_gate_match_pinned_csharp",
+      "Passed": 3,
+      "Seconds": 6.08,
+      "Cases": 6,
+      "Detail": "Same-content root replacement; .git replacement; linked .git pointer and commondir edits in place; common replacement observed from main and linked worktrees."
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-core --doc working::MutationGate --locked",
+      "Passed": 1,
+      "Seconds": 0.27,
+      "Detail": "Compile-fail contract prevents moving the acquired guard into another thread."
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-core --test identity replaced_identity_rejects_mutation_families_before_native_writes --locked",
+      "Passed": 1,
+      "Seconds": 9.03,
+      "Families": [
+        "branch",
+        "history reset",
+        "network fetch",
+        "remote add",
+        "stash",
+        "selected stash",
+        "discard",
+        "ignore",
+        "external diff",
+        "patch export"
+      ]
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-core -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true,
+      "Seconds": 2.74
+    }
+  ],
+  "Fixture": "Disposable native Git repositories and isolated config. Exact unchanged HEAD/branch/index/config/rows distinguish identity rejection from ordinary stale Git state. Rejected attempts preserve index/config/working/untracked bytes and existing patch output; create no ref, stash, FETCH_HEAD, index.lock or ignore file.",
+  "Correction": "Clippy required expect_err instead of err().expect() in a test assertion. Corrected without changing tested production code.",
+  "Limits": [
+    "No fresh paired C# mutation execution in this batch; the previous Unicode gate evidence remains separate.",
+    "Source review is not exhaustive runtime proof for conflict/recovery/submodule replacement races, path aliases or cross-session ownership; R11 remains open.",
+    "External tools and unrelated Git clients can still change files outside Shovel ownership; existing native Git protections remain authoritative.",
+    "No native app launch, screen capture, normal profile, user repository, local-payload replacement, installation, publication or merge."
+  ]
+}

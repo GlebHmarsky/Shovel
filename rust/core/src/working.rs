@@ -108,8 +108,17 @@ fn command_succeeded(result: &process::Result) -> bool {
             process::Outcome::Exited | process::Outcome::OutputLimit
         )
 }
+/// A Windows mutex must be released by the thread that acquired it.
+/// Keep the guard on that worker through validation and mutation.
+///
+/// ```compile_fail
+/// use shovel_core::working::MutationGate;
+/// let gate = MutationGate::acquire(std::path::Path::new(r"C:\fixture\.git"), false).unwrap();
+/// std::thread::spawn(move || drop(gate));
+/// ```
 pub struct MutationGate {
     handle: OwnedHandle,
+    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl MutationGate {
     pub fn acquire(common: &Path, fetch: bool) -> Result<Self, Error> {
@@ -132,7 +141,10 @@ impl MutationGate {
         }
         let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
         match unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) } {
-            WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Self { handle }),
+            WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Self {
+                handle,
+                _thread: std::marker::PhantomData,
+            }),
             WAIT_TIMEOUT => Err(Error::OtherInstance),
             _ => Err(std::io::Error::last_os_error().into()),
         }
