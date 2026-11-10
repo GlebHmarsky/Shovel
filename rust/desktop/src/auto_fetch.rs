@@ -33,6 +33,11 @@ impl Default for Controller {
     }
 }
 impl Controller {
+    #[cfg(test)]
+    pub(crate) fn due_now(&mut self, path: PathBuf) {
+        self.due
+            .insert(path, Instant::now() - Duration::from_secs(1));
+    }
     pub fn cancel(&self) {
         for cancel in self.active.values() {
             cancel.cancel();

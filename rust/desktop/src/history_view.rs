@@ -11,6 +11,9 @@ struct SavedView {
 #[derive(Default)]
 pub(super) struct State {
     pub generation: u64,
+    pub preview: Option<(shovel_core::git::Snapshot, chrono::DateTime<chrono::Utc>)>,
+    pub last_use: Option<Instant>,
+    pub bytes: usize,
     pub locate_generation: u64,
     pub stale: bool,
     pub identity_blocked: bool,
@@ -97,15 +100,18 @@ fn identity_failure(changed: bool) -> Failure {
         identity: true,
     }
 }
-pub(super) fn read(
+pub(super) fn read_expected(
     git: &Git,
     path: &std::path::Path,
     previous: Option<(&History, &Cursor)>,
     first: bool,
+    expected_identity: Option<&str>,
 ) -> Result<(History, Page, bool), Failure> {
     let cancel = Cancellation::default();
     let identity = shovel_core::identity::read(path).map_err(|_| identity_failure(false))?;
-    if previous.is_some_and(|(history, _)| history.snapshot.identity != identity) {
+    if expected_identity.is_some_and(|expected| expected != identity.fingerprint)
+        || previous.is_some_and(|(history, _)| history.snapshot.identity != identity)
+    {
         return Err(identity_failure(true));
     }
     let result: Result<_, shovel_core::git::Error> = (|| {
@@ -127,6 +133,21 @@ pub(super) fn read(
         return Err(identity_failure(true));
     }
     result.map_err(Into::into)
+}
+#[cfg(test)]
+fn read(
+    git: &Git,
+    path: &std::path::Path,
+    previous: Option<(&History, &Cursor)>,
+    first: bool,
+) -> Result<(History, Page, bool), Failure> {
+    read_expected(
+        git,
+        path,
+        previous,
+        first,
+        previous.map(|(h, _)| h.snapshot.identity.fingerprint.as_str()),
+    )
 }
 pub(super) fn read_page(
     git: &Git,
@@ -194,7 +215,9 @@ impl Workspace {
 }
 impl Tab {
     pub(super) fn publish_history(&mut self, history: History, page: Page, keep: bool) {
-        self.view.remember(self.page.as_ref(), &self.selected);
+        if self.view.preview.is_none() {
+            self.view.remember(self.page.as_ref(), &self.selected);
+        }
         if !keep {
             self.previous.clear();
             self.view.restore(&page, &mut self.selected);
@@ -215,7 +238,10 @@ impl Tab {
         } else {
             self.page = Some(page);
         }
+        self.owner_snapshot = Some(history_cache::metadata(&history.snapshot));
         self.history = Some(history);
+        self.view.preview = None;
+        self.estimate_cache();
         self.loading = false;
         self.view.published();
     }
@@ -230,10 +256,24 @@ impl Tab {
         }
         self.view.restore(&page, &mut self.selected);
         self.page = Some(page);
+        self.estimate_cache();
         self.loading = false;
         self.view.published();
     }
     pub(super) fn history_notice(&self) -> String {
+        if let Some((_, saved_at)) = &self.view.preview {
+            return strings::format(
+                if self.loading {
+                    "HistoryStartupCached"
+                } else {
+                    "RustHistoryStartupRetained"
+                },
+                &[&saved_at
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string()],
+            );
+        }
         if self.loading {
             return strings::text(if self.page.is_some() {
                 "HistoryRefreshing"
@@ -261,4 +301,4 @@ impl Tab {
 
 #[cfg(test)]
 #[path = "history_view_tests.rs"]
-mod tests;
+pub(crate) mod tests;

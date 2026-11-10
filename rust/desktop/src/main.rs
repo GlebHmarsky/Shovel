@@ -11,6 +11,7 @@ mod file_history;
 mod file_picker;
 mod file_shell;
 mod git_identity;
+mod history_cache;
 mod history_row;
 mod history_view;
 mod operations;
@@ -71,6 +72,7 @@ enum Event {
         Option<String>,
     ),
     Open(PathBuf),
+    Preview(u64, u64, Option<Box<shovel_core::history_cache::Preview>>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
     Loaded(u64, u64, Box<History>, Box<Page>, bool),
     Page(u64, u64, Box<Page>, bool),
@@ -84,6 +86,7 @@ struct Tab {
     id: u64,
     path: PathBuf,
     history: Option<History>,
+    owner_snapshot: Option<shovel_core::git::Snapshot>,
     divergence: divergence::Counter,
     page: Option<Page>,
     selected: Option<String>,
@@ -220,6 +223,11 @@ impl Workspace {
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
         let index = self.ensure_tab(path);
+        if self.tabs[index].view.identity_blocked {
+            let path = self.tabs[index].path.clone();
+            self.forget_identity(&path);
+            self.tabs[index].owner_snapshot = None;
+        }
         self.tabs[index].view.identity_blocked = false;
         self.select_tab(index, ctx);
     }
@@ -246,6 +254,7 @@ impl Workspace {
             id,
             path,
             history: None,
+            owner_snapshot: None,
             divergence: Default::default(),
             page: None,
             selected: None,
@@ -278,6 +287,16 @@ impl Workspace {
         }
     }
     fn refresh_history(&mut self, id: u64, first: bool, ctx: &egui::Context) {
+        let known_identity = self
+            .tabs
+            .iter()
+            .chain(self.retained_tabs.iter())
+            .find(|t| t.id == id)
+            .and_then(|t| {
+                t.observed_snapshot()
+                    .map(|s| s.identity.fingerprint.clone())
+                    .or_else(|| self.known_identity(&t.path))
+            });
         let Some(git) = self.git.clone() else {
             return;
         };
@@ -311,8 +330,15 @@ impl Workspace {
         let sender = self.sender.clone();
         let ctx = ctx.clone();
         thread::spawn(move || {
-            let result =
-                history_view::read(&git, &path, previous.as_ref().map(|(h, c)| (h, c)), first);
+            #[cfg(test)]
+            history_cache::tests::wait_for_read(&path);
+            let result = history_view::read_expected(
+                &git,
+                &path,
+                previous.as_ref().map(|(h, c)| (h, c)),
+                first,
+                known_identity.as_deref(),
+            );
             let event = match result {
                 Ok((history, page, keep)) => {
                     Event::Loaded(id, generation, Box::new(history), Box::new(page), keep)
@@ -485,6 +511,7 @@ impl Workspace {
                             id,
                             path,
                             history: None,
+                            owner_snapshot: None,
                             divergence: Default::default(),
                             page: None,
                             selected: None,
@@ -506,6 +533,22 @@ impl Workspace {
                         .and_then(|p| self.tabs.iter().position(|t| t.path == *p))
                         .unwrap_or(0);
                     self.refresh(ctx);
+                    self.restore_startup_preview(ctx);
+                }
+                Event::Preview(id, generation, preview) => {
+                    if !self.closing
+                        && let Some(preview) = preview
+                        && let Some(tab) = self.tabs.get_mut(self.selected)
+                        && tab.id == id
+                        && tab.view.generation == generation
+                        && tab.page.is_none()
+                        && tab.history.is_none()
+                        && tab.owner_snapshot.is_none()
+                        && tab.error.is_none()
+                        && !tab.view.identity_blocked
+                    {
+                        tab.apply_preview(*preview);
+                    }
                 }
                 Event::Open(path) => self.open(path, ctx),
                 Event::Loaded(id, generation, history, page, keep) => {
@@ -517,6 +560,10 @@ impl Workspace {
                     {
                         continue;
                     }
+                    self.remember_identity(
+                        &history.snapshot.worktree,
+                        &history.snapshot.identity.fingerprint,
+                    );
                     if let Some(git) = &self.git {
                         self.operations.resolve_initialization(
                             &history.snapshot.worktree,
@@ -589,6 +636,7 @@ impl Workspace {
                                 tab.previous = previous;
                                 tab.selected = Some(hash);
                                 tab.scroll_selected = true;
+                                tab.estimate_cache();
                             }
                             Err(error) => tab.error = Some(error),
                         }
@@ -623,6 +671,9 @@ impl Workspace {
                             tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
                             tab.divergence = Default::default();
                             tab.history = None;
+                            tab.owner_snapshot = None;
+                            tab.view.preview = None;
+                            tab.view.bytes = 0;
                             tab.page = None;
                             tab.selected = None;
                             tab.previous.clear();
@@ -745,7 +796,7 @@ impl Workspace {
                     .clamp(10, 3600),
                 self.tabs
                     .iter()
-                    .filter_map(|t| t.history.as_ref().map(|h| h.snapshot.clone()))
+                    .filter_map(|t| t.observed_snapshot().cloned())
                     .collect(),
                 self.git.clone(),
                 &self.scheduler,
@@ -795,7 +846,13 @@ impl Workspace {
         }
         for path in changed {
             if let Some(index) = self.tabs.iter().position(|tab| tab.path == path) {
-                self.refresh_at(index, ctx);
+                if index == self.selected {
+                    self.refresh_at(index, ctx);
+                } else {
+                    self.tabs[index].refresh_again = true;
+                    self.tabs[index].view.stale = true;
+                    self.tabs[index].divergence.invalidate();
+                }
             } else if let Some(owner) = self
                 .retained_tabs
                 .iter_mut()
@@ -805,6 +862,7 @@ impl Workspace {
             }
         }
         self.prune_retained_tabs();
+        self.evict_history_caches();
         for tab in &mut self.tabs {
             if let Some(pane) = &mut tab.comparison {
                 pane.poll(ctx);
@@ -815,7 +873,8 @@ impl Workspace {
             .iter_mut()
             .enumerate()
             .filter_map(|(index, tab)| {
-                (!tab.loading && std::mem::take(&mut tab.refresh_again)).then_some(index)
+                (index == self.selected && !tab.loading && std::mem::take(&mut tab.refresh_again))
+                    .then_some(index)
             })
             .collect::<Vec<_>>();
         for index in pending {
@@ -1050,6 +1109,9 @@ impl Workspace {
         }
     }
     fn save_preferences(&mut self, ctx: &egui::Context) {
+        let cache = self
+            .closing
+            .then(|| (self.startup_store(), self.capture_startup_preview()));
         let Some(mut store) = self.store.take() else {
             return;
         };
@@ -1062,6 +1124,11 @@ impl Workspace {
             let result = store
                 .save(&settings)
                 .map_err(|_| strings::text("SettingsSaveFailedStatus"));
+            if result.is_ok()
+                && let Some((Some(cache_store), preview)) = cache
+            {
+                cache_store.save(preview.as_ref());
+            }
             let _ = sender.send(Event::Saved(Box::new(store), result));
             ctx.request_repaint();
         });
@@ -1491,12 +1558,15 @@ impl eframe::App for Workspace {
                                             .truncate(),
                                         )
                                         .on_hover_text(tab.path.to_string_lossy());
-                                        if let Some(history) = &tab.history {
+                                        if let Some(snapshot) =
+                                            tab.history.as_ref().map(|h| &h.snapshot).or_else(
+                                                || tab.view.preview.as_ref().map(|(s, _)| s),
+                                            )
+                                        {
                                             ui.add(
                                                 egui::Label::new(
                                                     RichText::new(
-                                                        history
-                                                            .snapshot
+                                                        snapshot
                                                             .branch
                                                             .as_deref()
                                                             .unwrap_or("HEAD"),
@@ -2020,6 +2090,10 @@ impl eframe::App for Workspace {
                         })
                         .map(|e| e.commit.clone())
                 {
+                    if tab.view.preview.is_some() {
+                        comparison::metadata(ui, &commit);
+                        return;
+                    }
                     if tab.comparison.is_none()
                         && let Some(git) = &self.git
                     {
@@ -2097,6 +2171,9 @@ impl eframe::App for Workspace {
                     });
                     return;
                 };
+                if tab.view.preview.is_some() {
+                    ui.label(tab.history_notice());
+                }
                 if let Some(error) = &tab.error {
                     ui.colored_label(palette.diff_removed_text, error);
                 }
@@ -2468,6 +2545,7 @@ mod tests {
                 id: 1,
                 path: path.clone(),
                 history: None,
+                owner_snapshot: None,
                 divergence: Default::default(),
                 page: None,
                 selected: None,

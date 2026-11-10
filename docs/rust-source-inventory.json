@@ -590,8 +590,8 @@
         "R32"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/main.rs; rust/core/src/scheduler.rs; rust/core/src/divergence.rs; rust/desktop/src/divergence.rs; rust/desktop/src/operations.rs; rust/desktop/src/workspace_style.rs; rust/core/src/git.rs; rust/desktop/src/history_view.rs",
-      "Evidence": "2026-11-10: compared baseline retained-owner and tab-close paths. Native held checkout hook/initialization, bounded idle retirement and headless tab input tests passed. Full command queuing, caches, native window/accessibility and remaining source responsibilities stay open in R09/R15/R19/R70. 2026-11-10 R32 scope: reviewed local immutable counts, per-tab read state, Shell count/help binding and toolbar badges. Ten paired C# states, headless real-history badge/generation checks and native toolbar Push regression pass; see rust-divergence-2026-11-10.json. Other parity scopes in this source remain subject to TODO. 2026-11-10 R19/R31 subset: reviewed baseline unchanged-ref refresh, row reuse, 128 page views/back cursors, 30-second activation and directory identity checks. Six exact native C#/Rust page outcomes and seven headless/native checks pass. Persisted startup preview, three-tab/32-MiB eviction and wider acceptance remain open. See rust-history-2026-11-10.json."
+      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/main.rs; rust/core/src/scheduler.rs; rust/core/src/divergence.rs; rust/desktop/src/divergence.rs; rust/desktop/src/operations.rs; rust/desktop/src/workspace_style.rs; rust/core/src/git.rs; rust/desktop/src/history_view.rs; rust/core/src/history_cache.rs; rust/desktop/src/history_cache.rs",
+      "Evidence": "2026-11-10: compared baseline retained-owner and tab-close paths. Native held checkout hook/initialization, bounded idle retirement and headless tab input tests passed. Full command queuing, caches, native window/accessibility and remaining source responsibilities stay open in R09/R15/R19/R70. 2026-11-10 R32 scope: reviewed local immutable counts, per-tab read state, Shell count/help binding and toolbar badges. Ten paired C# states, headless real-history badge/generation checks and native toolbar Push regression pass; see rust-divergence-2026-11-10.json. Other parity scopes in this source remain subject to TODO. 2026-11-10 R19/R31 subset: reviewed baseline unchanged-ref refresh, row reuse, 128 page views/back cursors, 30-second activation and directory identity checks. Six exact native C#/Rust page outcomes and seven headless/native checks pass. R19 startup/session-cache acceptance was subsequently verified; wider acceptance in other mapped rows remains open. See rust-history-2026-11-10.json. 2026-11-10 R19 verified: bounded selected profile cache, actual identity validation, headless last-known metadata/queue readiness, three-tab/32-MiB eviction and native inactive automatic fetch. Three core/seven desktop cache checks, 14 regressions and both pinned C# startup checks pass; see rust-startup-cache-2026-11-10.json. General native visual/performance acceptance remains in R13/R14/R72."
     },
     {
       "Path": "src/GitGui.App/ViewModels/SettingsPages.cs",
@@ -838,9 +838,9 @@
       "ParityIds": [
         "R19"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/history_cache.rs; rust/desktop/src/history_cache.rs; rust/desktop/src/history_view.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10 R19 verified: bounded selected profile cache, actual identity validation, headless last-known metadata/queue readiness, three-tab/32-MiB eviction and native inactive automatic fetch. Three core/seven desktop cache checks, 14 regressions and both pinned C# startup checks pass; see rust-startup-cache-2026-11-10.json. General native visual/performance acceptance remains in R13/R14/R72."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellStashes.cs",
@@ -876,8 +876,8 @@
         "R32"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/divergence.rs; rust/desktop/src/divergence.rs; rust/desktop/src/main.rs; rust/desktop/src/operations.rs; rust/desktop/src/workspace_style.rs; rust/core/src/git.rs; rust/desktop/src/history_view.rs; rust/desktop/src/workspace_tabs.rs",
-      "Evidence": "2026-11-10 R32 scope: reviewed local immutable counts, per-tab read state, Shell count/help binding and toolbar badges. Ten paired C# states, headless real-history badge/generation checks and native toolbar Push regression pass; see rust-divergence-2026-11-10.json. Other parity scopes in this source remain subject to TODO. 2026-11-10 R19/R31 subset: reviewed baseline unchanged-ref refresh, row reuse, 128 page views/back cursors, 30-second activation and directory identity checks. Six exact native C#/Rust page outcomes and seven headless/native checks pass. Persisted startup preview, three-tab/32-MiB eviction and wider acceptance remain open. See rust-history-2026-11-10.json."
+      "RustImplementation": "rust/core/src/divergence.rs; rust/desktop/src/divergence.rs; rust/desktop/src/main.rs; rust/desktop/src/operations.rs; rust/desktop/src/workspace_style.rs; rust/core/src/git.rs; rust/desktop/src/history_view.rs; rust/desktop/src/workspace_tabs.rs; rust/core/src/history_cache.rs; rust/desktop/src/history_cache.rs",
+      "Evidence": "2026-11-10 R32 scope: reviewed local immutable counts, per-tab read state, Shell count/help binding and toolbar badges. Ten paired C# states, headless real-history badge/generation checks and native toolbar Push regression pass; see rust-divergence-2026-11-10.json. Other parity scopes in this source remain subject to TODO. 2026-11-10 R19/R31 subset: reviewed baseline unchanged-ref refresh, row reuse, 128 page views/back cursors, 30-second activation and directory identity checks. Six exact native C#/Rust page outcomes and seven headless/native checks pass. R19 startup/session-cache acceptance was subsequently verified; wider acceptance in other mapped rows remains open. See rust-history-2026-11-10.json. 2026-11-10 R19 verified: bounded selected profile cache, actual identity validation, headless last-known metadata/queue readiness, three-tab/32-MiB eviction and native inactive automatic fetch. Three core/seven desktop cache checks, 14 regressions and both pinned C# startup checks pass; see rust-startup-cache-2026-11-10.json. General native visual/performance acceptance remains in R13/R14/R72."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellWorkspaceTools.cs",
@@ -1807,9 +1807,9 @@
       "ParityIds": [
         "R19"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/history_cache.rs; rust/desktop/src/history_cache.rs; rust/desktop/src/history_view.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10 R19 verified: bounded selected profile cache, actual identity validation, headless last-known metadata/queue readiness, three-tab/32-MiB eviction and native inactive automatic fetch. Three core/seven desktop cache checks, 14 regressions and both pinned C# startup checks pass; see rust-startup-cache-2026-11-10.json. General native visual/performance acceptance remains in R13/R14/R72."
     },
     {
       "Path": "src/GitGui.Core/Git/HistoryProjection.cs",

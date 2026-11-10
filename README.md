@@ -37,6 +37,8 @@ cargo test -j 1 -p shovel-desktop commit::queue_tests --locked -- --test-threads
 ./scripts/Test-RustDivergenceParity.ps1
 ./scripts/Test-RustHistoryParity.ps1
 cargo test -j 1 -p shovel-desktop --locked history_view::tests -- --test-threads=1
+cargo test -j 1 -p shovel-core --test history_cache --locked -- --test-threads=1
+cargo test -j 1 -p shovel-desktop --locked history_cache::tests -- --test-threads=1
 cargo test -j 1 -p shovel-desktop divergence::tests --locked -- --test-threads=1
 cargo build -j 1 -p shovel-askpass --locked # native helper required by clone UI checks
 cargo test -j 1 -p shovel-desktop repository_init::tests --locked -- --test-threads=1

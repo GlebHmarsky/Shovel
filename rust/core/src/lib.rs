@@ -26,6 +26,8 @@ pub mod graph;
 #[cfg(windows)]
 pub mod history_actions;
 #[cfg(windows)]
+pub mod history_cache;
+#[cfg(windows)]
 pub mod identity;
 #[cfg(windows)]
 pub mod initialization;

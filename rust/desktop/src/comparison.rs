@@ -228,65 +228,7 @@ impl Pane {
             return;
         };
         if self.details_index == 0 {
-            let p = crate::workspace_style::Palette::current(ui);
-            egui::ScrollArea::vertical()
-                .id_salt("metadata")
-                .max_height(125.)
-                .show(ui, |ui| {
-                    ui.horizontal_top(|ui| {
-                        let (avatar, avatar_response) =
-                            ui.allocate_exact_size(egui::vec2(44., 44.), egui::Sense::hover());
-                        crate::history_row::paint_avatar(ui, avatar, &commit, &p);
-                        avatar_response
-                            .on_hover_text(format!("{} <{}>", commit.author, commit.email));
-                        ui.vertical(|ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.strong(&commit.author);
-                                ui.label(
-                                    RichText::new(
-                                        commit.authored.format("%Y-%m-%d %H:%M %:z").to_string(),
-                                    )
-                                    .color(p.muted),
-                                );
-                            });
-                            ui.horizontal_wrapped(|ui| {
-                                ui.monospace(&commit.hash);
-                                if ui.button(text("HistoryCopySha")).clicked() {
-                                    ctx.copy_text(commit.hash.clone());
-                                }
-                            });
-                            ui.add(
-                                egui::Label::new(RichText::new(&commit.message).strong())
-                                    .selectable(true),
-                            );
-                            egui::CollapsingHeader::new(text("CommitMetadata")).show(ui, |ui| {
-                                ui.label(format!(
-                                    "{}: {} <{}> · {}",
-                                    text("HistoryAuthor"),
-                                    commit.author,
-                                    commit.email,
-                                    commit.authored.to_rfc3339()
-                                ));
-                                ui.label(format!(
-                                    "{}: {} <{}> · {}",
-                                    text("Committer"),
-                                    commit.committer,
-                                    commit.committer_email,
-                                    commit.committed.to_rfc3339()
-                                ));
-                                ui.label(format!(
-                                    "{}: {}",
-                                    text("CommitParents"),
-                                    if commit.parents.is_empty() {
-                                        text("RootCommit")
-                                    } else {
-                                        commit.parents.join(", ")
-                                    }
-                                ));
-                            });
-                        });
-                    });
-                });
+            metadata(ui, &commit);
             ui.separator();
         }
         ui.horizontal(|ui| {
@@ -393,6 +335,65 @@ fn error_text(error: working::Error) -> String {
         }
         other => text(&other.to_string()),
     }
+}
+
+pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit) {
+    let ctx = ui.ctx().clone();
+    let p = crate::workspace_style::Palette::current(ui);
+    egui::ScrollArea::vertical()
+        .id_salt("metadata")
+        .max_height(125.)
+        .show(ui, |ui| {
+            ui.horizontal_top(|ui| {
+                let (avatar, avatar_response) =
+                    ui.allocate_exact_size(egui::vec2(44., 44.), egui::Sense::hover());
+                crate::history_row::paint_avatar(ui, avatar, commit, &p);
+                avatar_response.on_hover_text(format!("{} <{}>", commit.author, commit.email));
+                ui.vertical(|ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.strong(&commit.author);
+                        ui.label(
+                            RichText::new(commit.authored.format("%Y-%m-%d %H:%M %:z").to_string())
+                                .color(p.muted),
+                        );
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.monospace(&commit.hash);
+                        if ui.button(text("HistoryCopySha")).clicked() {
+                            ctx.copy_text(commit.hash.clone());
+                        }
+                    });
+                    ui.add(
+                        egui::Label::new(RichText::new(&commit.message).strong()).selectable(true),
+                    );
+                    egui::CollapsingHeader::new(text("CommitMetadata")).show(ui, |ui| {
+                        ui.label(format!(
+                            "{}: {} <{}> · {}",
+                            text("HistoryAuthor"),
+                            commit.author,
+                            commit.email,
+                            commit.authored.to_rfc3339()
+                        ));
+                        ui.label(format!(
+                            "{}: {} <{}> · {}",
+                            text("Committer"),
+                            commit.committer,
+                            commit.committer_email,
+                            commit.committed.to_rfc3339()
+                        ));
+                        ui.label(format!(
+                            "{}: {}",
+                            text("CommitParents"),
+                            if commit.parents.is_empty() {
+                                text("RootCommit")
+                            } else {
+                                commit.parents.join(", ")
+                            }
+                        ));
+                    });
+                });
+            });
+        });
 }
 
 #[cfg(test)]

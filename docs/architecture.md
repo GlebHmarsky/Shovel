@@ -1,5 +1,15 @@
 # Architecture and distribution
 
+## Rust history cache (2026-11-10)
+
+The independent Rust profile owns a disposable history-view.json. Core history_cache validates schema, matching saved/actual directory identity, at most 200 entries, finite nonnegative scroll positions, 64 graph lanes and at most 256 lines per entry. Reads and serialization stop at 4 MiB. A same-directory temporary file is atomically published; failed writes retain the old complete file and never block settings/exit. Absent/invalid/oversized captures remove only this rebuildable cache.
+
+Desktop history_cache saves the selected validated page only after a successful settings save during orderly close. It persists verified identity stamps in the existing RepositoryIdentities setting. Startup reads only the selected page off-thread, discards work exceeding two seconds and rechecks actual directory identity. The preview owns rows/metadata/selection/scroll and a visible last-known label; it never constructs a live History or mutation context. Metadata rendering schedules no file/diff reads. Normal native history replaces it; newer generations, changed selection, failed identity, an existing live page and closing reject late previews. Primary user commands may wait for normal initialization, as required by the existing queue contract.
+
+Session caching keeps three visited pages within a conservative 32-MiB character-data estimate. The selected page, active reads and owners with accepted/waiting work are exempt. Idle eviction releases history/ref/stash/page/comparison allocations and back views, while retaining compact observed repository metadata for ownership and automatic fetch. Evicted pages reload from the first page; identity replacement is still rejected. Inactive fetch/command completion marks history stale rather than preloading it. Thirty-second activation refresh, 128 view/back-cursor limits and generation rejection remain in history_view. This budget covers cached history, not total process memory or active editors.
+
+[Acceptance evidence](rust-rewrite.md#startup-preview-and-session-cache-2026-11-10) separates native file/Git and headless input checks from real Windows presentation and startup benchmarking.
+
 ## Shared state and checkout boundaries (0.47.0)
 
 `HistoryProjection` owns both traversal roots and visible row insertion for paging/ref navigation. Normal topology walks stash bases rather than dated stash tips; bounded stash metadata inserts immediately before each base. Cursors retain raw and intra-group offsets. `CommitGraph` treats a stash as a leaf joining the ordinary base track, so many same-base stashes do not allocate many live lanes. Original commit metadata is unchanged; independently reachable stash internals remain visible. Scope/page limits remain 200 rows and existing bounded lookahead.

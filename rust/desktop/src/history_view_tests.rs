@@ -6,13 +6,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-struct Fixture {
-    _temp: tempfile::TempDir,
-    root: PathBuf,
-    git: Git,
+pub(crate) struct Fixture {
+    pub(crate) _temp: tempfile::TempDir,
+    pub(crate) root: PathBuf,
+    pub(crate) git: Git,
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("history");
         fs::create_dir(&root).unwrap();
@@ -43,7 +43,7 @@ impl Fixture {
         fixture.command(&["fast-import", "--quiet"], stream.as_bytes());
         fixture
     }
-    fn command(&self, args: &[&str], input: &[u8]) -> String {
+    pub(crate) fn command(&self, args: &[&str], input: &[u8]) -> String {
         let mut request = self.git.request(
             &self.root,
             args.iter().copied(),
@@ -58,7 +58,7 @@ impl Fixture {
             .trim_end()
             .to_owned()
     }
-    fn app(&self, ctx: &egui::Context) -> Workspace {
+    pub(crate) fn app(&self, ctx: &egui::Context) -> Workspace {
         let mut app = workspace();
         app.tabs.clear();
         app.settings
@@ -72,7 +72,7 @@ impl Fixture {
         app
     }
 }
-fn wait(app: &mut Workspace, ctx: &egui::Context) {
+pub(crate) fn wait(app: &mut Workspace, ctx: &egui::Context) {
     let start = Instant::now();
     while app
         .tabs
@@ -87,10 +87,10 @@ fn wait(app: &mut Workspace, ctx: &egui::Context) {
         thread::sleep(Duration::from_millis(5));
     }
 }
-fn paint(app: &mut Workspace, ctx: &egui::Context, events: Vec<egui::Event>) {
+pub(crate) fn paint(app: &mut Workspace, ctx: &egui::Context, events: Vec<egui::Event>) {
     frame(ctx, app, events).drop_without_applying_deltas();
 }
-fn page(app: &mut Workspace, ctx: &egui::Context, older: bool) {
+pub(crate) fn page(app: &mut Workspace, ctx: &egui::Context, older: bool) {
     let key = if older {
         egui::Key::PageDown
     } else {
@@ -126,7 +126,7 @@ fn page(app: &mut Workspace, ctx: &egui::Context, older: bool) {
         ],
     );
 }
-fn position(
+pub(crate) fn position(
     app: &mut Workspace,
     ctx: &egui::Context,
     row: usize,
@@ -141,7 +141,7 @@ fn position(
         app.tabs[0].view.offset,
     )
 }
-fn click_label(app: &mut Workspace, ctx: &egui::Context, label: &str) {
+pub(crate) fn click_label(app: &mut Workspace, ctx: &egui::Context, label: &str) {
     let output = frame(ctx, app, vec![]);
     let bounds = output
         .platform_output

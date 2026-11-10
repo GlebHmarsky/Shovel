@@ -1,5 +1,11 @@
 # Product
 
+## Rust history reopening (2026-11-10)
+
+On orderly exit, Rust saves the selected verified history page. The next launch can show that page, selection and scroll position immediately with an explicit last-known timestamp while current data loads. Cached rows do not authorize Git actions or comparison reads. If live reading fails or Git is unavailable, the retained preview remains labelled and Refresh retries normally.
+
+Three visited history pages are retained subject to a memory estimate; active work and the selected page are exempt. Returning to an evicted tab reloads its first page. Automatic fetch can update an inactive repository without loading its history. [Mechanism and bounds](architecture.md#rust-history-cache-2026-11-10); [acceptance](rust-rewrite.md#startup-preview-and-session-cache-2026-11-10).
+
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
 Stashes appear as short leaf connections immediately above their actual base commit. Their timestamps do not reorder ordinary branch history; multiple stashes on one base share a compact connection. Details retain the real stash parents and contents.

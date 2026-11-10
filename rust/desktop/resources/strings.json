@@ -820,6 +820,7 @@
   "ConflictToolMissing": "No external merge tool is configured. Set merge.guitool or merge.tool in Git, or use Shovel's side selection/text editor.",
   "ConflictStillUnmerged": "The tool returned, but this file is still unmerged. Its content and output are retained.",
   "ConflictNoLongerUnmerged": "This file is no longer unmerged. Close this editor and refresh Local Changes.",
+  "RustHistoryStartupRetained": "Last-known view from {0}. Refresh history to load current repository data.",
   "HistoryStartupCached": "Last-known view from {0:g}. Loading current repository data…",
   "ActivityTitle": "Activity log",
   "ActivityLocalStatus": "Local Changes status",

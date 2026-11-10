@@ -1,0 +1,95 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T12:30:05.401874+00:00",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "RustBaseCommit": "62f16c9",
+  "SourceSha256": {
+    "rust/core/src/history_cache.rs": "84598E766EBF529A2C4467455B90A66FC0009CD3E62710BB32F8E2074C8AF1E8",
+    "rust/core/src/lib.rs": "39B99F683416018C02B6A99C4DC2A8AAEAAD70A31E498FDE731B71EA579A3E7B",
+    "rust/core/tests/history_cache.rs": "27367807E2CFF3710D784E06B6E02A8CF99220016C894FD3C88644CA56824571",
+    "rust/desktop/src/history_cache.rs": "B34BCE475E358A12E76CA399AFBD8EA190DF80C3E8D54BE5CC7AB8B1D03351CC",
+    "rust/desktop/src/history_cache_tests.rs": "FDAC2850D0B40E3A59D99449949BBBA04BFDDCBAD6DB5FBBDC4B540C4718689E",
+    "rust/desktop/src/history_view.rs": "F6816E7ABA08E5AB95FBAF97F4A5CC87054D35055EA1B77C01571473EF9C4127",
+    "rust/desktop/src/main.rs": "F39321897E28BAF1366166C1204083CFB86BB3729CAAF791A9B6189B8B8BE241",
+    "rust/desktop/src/comparison.rs": "BA47971D6E4F434782DCDA783F31DA5F9DBFE3C2F5E2CB35D48881F1B6B48F4D",
+    "rust/desktop/src/workspace_tabs.rs": "BB1C4E0343238BC60F4F1CA3F118019A223C7B2177C108D3EE2D3BE82C863469",
+    "rust/desktop/src/auto_fetch.rs": "90FB2B3878ABA7A26784D9E0D955137986317F9EDB1095005C9B27BFF42FC4AC",
+    "rust/desktop/resources/strings.json": "D358383E6DB5C4D480939C97D862299418929D9C4E6467094909645D68BE67FC",
+    "src/GitGui.Core/Git/HistoryCacheStore.cs": "8ED6CEAC2995651B6BE95F94CC836D1008DCD000CF24A79768C5AF9726774878",
+    "src/GitGui.App/ViewModels/ShellStartupCache.cs": "BEAB6816D62E61C60917B306E8A7EDCB0FF5A949AC120F7AEF134193C6CA620E",
+    "src/GitGui.App/ViewModels/RepositoryTab.cs": "9EC91441565A651C55BFB8851945A5C65CD5D6179B9382D6797827848B1D3F62",
+    "src/GitGui.App/ViewModels/ShellViewModel.cs": "6580A0656692AE2A07AC33332CDB8A384ED41CF29884261D1CB37A8AFFA73032",
+    "tests/GitGui.FoundationChecks/UsabilityChecks.cs": "05C3885BF03C771E4402E0B1220BE2281693400FB20A0EC5E8A0A59BC5060E53"
+  },
+  "LogSha256": {
+    "Build/history-cache-desktop-checks.txt": "46312E287D46FB16E405670B713DC59A297108FAC232D3986FF8A57C2D8A898E",
+    "Build/history-cache-fetch-check.txt": "92F08FAF1705092CA1DC9C2925C378E4FB3712DDDB8FCC9DFA453701312EBC9C",
+    "Build/history-cache-refresh-regressions.txt": "354CE72024B34CFF687E7EC99B9E81FF24AB0A456D982DE6EE11054075A56D0B",
+    "Build/history-cache-workspace-regressions.txt": "2A1A06F3734251D29C2D5E7E27F4D5020C22AC5100233474503DE9617DCEF097"
+  },
+  "Checks": [
+    {
+      "Command": "cargo test -j1 -p shovel-core --test history_cache --locked -- --test-threads=1",
+      "Passed": 3,
+      "Seconds": 0.11,
+      "Scope": "Bounded valid/malformed/oversized reads, graph/identity/path checks, Windows atomic replacement and sharing denial, unrelated settings preservation."
+    },
+    {
+      "Command": "cargo test -j1 -p shovel-desktop --locked history_cache::tests -- --test-threads=1",
+      "Passed": 6,
+      "Seconds": 4.81,
+      "Scope": "Profile close/reload, selected page and visible metadata, no action readiness, held native initialization and queued Fetch, eviction/budget/active owner, identity replacement and late previews."
+    },
+    {
+      "Command": "cargo test -j1 -p shovel-desktop --locked automatic_fetch_updates_an_evicted -- --test-threads=1",
+      "Passed": 1,
+      "Seconds": 9.57,
+      "Scope": "Actual Git fetch from disposable local bare remote, updated remote-tracking ref and zero inactive history preload."
+    },
+    {
+      "Command": "cargo test -j1 -p shovel-desktop --locked history_view::tests -- --test-threads=1",
+      "Passed": 7,
+      "Seconds": 27.57,
+      "Scope": "Refresh retention, both scroll axes, row allocation, page bounds, changed/failed/obsolete state, exact native C# page results and activation."
+    },
+    {
+      "Command": "cargo test -j1 -p shovel-desktop --locked workspace_interaction_tests -- --test-threads=1",
+      "Passed": 7,
+      "Seconds": 17.91,
+      "Scope": "Native held checkout hook, initialization/tab closure, retained ownership, stash/tag navigation, tabs and pane input."
+    },
+    {
+      "Command": "dotnet run --project tests/GitGui.FoundationChecks -c Release -- --check-startup",
+      "Passed": 2,
+      "CheckMilliseconds": [
+        2221,
+        15
+      ],
+      "Fixture": "artifacts/check-startup/20261110-121611-a485c0c7e8ff44309d01a14497ea6687",
+      "Scope": "Unchanged pinned C# delayed-read startup preview, no cached mutation readiness, malformed/identity/graph-invalid cache."
+    }
+  ],
+  "Clippy": "core and desktop, all targets, warnings denied: passed",
+  "Build": {
+    "Command": "cargo build -j1 -p shovel-desktop -p shovel-askpass --locked",
+    "Seconds": 24.18,
+    "Type": "Native local development build",
+    "Sha256": {
+      "target/debug/ShovelRust.exe": "DC8617D12036F55ED4E627A41BA0B5FCC401C9CE7D00E6359AB055933A8C6279",
+      "target/debug/ShovelRustAskPass.exe": "6F631C47EA76869E28DD55F609BC9E8FD5E9B2FCAC7210DBDFFF99562D805332"
+    }
+  },
+  "Limits": {
+    "DesktopCapture": false,
+    "NativeDesktopLaunch": false,
+    "NormalProfileTouched": false,
+    "InstallerGenerated": false,
+    "Published": false,
+    "PerformanceBenchmark": false,
+    "Note": "Test durations include setup and are not comparative startup/memory results. Native visual/accessibility and performance acceptance remain separate. Headless input is actual egui event routing; the delayed-read test uses a per-fixture test-only gate before real Git."
+  },
+  "ReferenceCheckout": {
+    "Commit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+    "Status": "clean after final build"
+  }
+}
