@@ -2,6 +2,8 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust zoom geometry, 2026-11-10.** Fixed the source-level 110% width drift by separating native window dimensions from zoomed UI points, deferring startup restoration and retaining normal bounds/pane records. Four focused geometry/profile tests passed (0.56 s); [exact cases and desktop limits](rust-rewrite.md#window-geometry-checkpoint-2026-11-10). The published 0.49.2 binary still has the old behavior; a new final Beta remains pending full goal work.
+
 **Parity reconciliation and retained Rust owners, 2026-11-10.** All 69 open R rows were reconciled with current implementation/test coverage and inventory routing; all 194 pinned source blobs matched 2175458. No acceptance row was closed by this audit. Implemented bounded scheduler completion retention and real tab closure/reopening with retained initialization/accepted-operation results, active-owner exemptions and three idle cached owners. Native held-hook/initialization and headless tab tests passed; [ownership evidence and limits](rust-rewrite.md#repository-ownership-checkpoint-2026-11-10). Full parity, final installed update and paired measurements remain active work.
 
 

@@ -17,6 +17,7 @@ mod settings_ui;
 mod stashes;
 mod strings;
 mod updater;
+mod window_geometry;
 mod workspace_split;
 mod workspace_style;
 mod workspace_tabs;
@@ -106,6 +107,8 @@ struct Workspace {
     git: Option<Arc<Git>>,
     tabs: Vec<Tab>,
     retained_tabs: Vec<Tab>,
+    restore_window_layout: bool,
+    main_geometry: window_geometry::Geometry,
     selected: usize,
     next_id: u64,
     sender: Sender<Event>,
@@ -176,6 +179,8 @@ impl Workspace {
             git: None,
             tabs: vec![],
             retained_tabs: vec![],
+            restore_window_layout: false,
+            main_geometry: Default::default(),
             selected: 0,
             next_id: 1,
             sender,
@@ -418,23 +423,7 @@ impl Workspace {
                     self.initialized = true;
                     self.notice = notice;
                     ctx.set_zoom_factor(self.settings.ui_scale() as f32);
-                    let dimension = |key, default, min| {
-                        self.settings
-                            .get(key)
-                            .and_then(|v| v.as_f64())
-                            .unwrap_or(default)
-                            .clamp(min, 8192.) as f32
-                    };
-                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                        dimension("WindowWidth", 1200., 900.),
-                        dimension("WindowHeight", 800., 620.),
-                    )));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
-                        self.settings
-                            .get("IsMaximized")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false),
-                    ));
+                    self.restore_window_layout = true;
                     theme(
                         ctx,
                         self.settings
@@ -597,6 +586,7 @@ impl Workspace {
                 }
             }
         }
+        self.restore_main_window_layout(ctx);
         if self.initialized {
             self.updater.tick(
                 ctx,
@@ -801,6 +791,9 @@ impl Workspace {
         }
         for editor in &mut self.editors {
             editor.flush(ctx);
+            if editor.open {
+                editor.save_layout(&mut self.settings);
+            }
         }
         if self.editors.iter().any(commit::Editor::blocks_exit) {
             self.notice = Some(
@@ -836,12 +829,23 @@ impl Workspace {
         let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
         self.settings
             .set("IsMaximized", serde_json::json!(maximized));
-        if !maximized && let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
-            self.settings
-                .set("WindowWidth", serde_json::json!(rect.width()));
-            self.settings
-                .set("WindowHeight", serde_json::json!(rect.height()));
-        }
+        let layout = window_geometry::saved_layout(&self.settings, "MainWindow");
+        let size = self.main_geometry.native_size.unwrap_or_else(|| {
+            let value = |key, legacy, fallback| {
+                layout
+                    .and_then(|v| v.get(key))
+                    .or_else(|| self.settings.get(legacy))
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(fallback) as f32
+            };
+            egui::vec2(
+                value("Width", "WindowWidth", 1200.),
+                value("Height", "WindowHeight", 800.),
+            )
+        });
+        self.settings.set("WindowWidth", serde_json::json!(size.x));
+        self.settings.set("WindowHeight", serde_json::json!(size.y));
+        window_geometry::save_layout(&mut self.settings, "MainWindow", size, maximized);
         self.closing = true;
         self.pending_exit = false;
         self.preferences_dirty = true;
@@ -943,6 +947,7 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.main_geometry.observe(&ctx);
         let modal_open = self.settings_dialog.is_some()
             || self.editors.iter().any(|editor| editor.open)
             || self.operations.modal_open()
@@ -2062,6 +2067,8 @@ mod tests {
             git: None,
             tabs: vec![],
             retained_tabs: vec![],
+            restore_window_layout: false,
+            main_geometry: Default::default(),
             selected: 0,
             next_id: 1,
             sender,
@@ -2145,6 +2152,8 @@ mod tests {
                 comparison: None,
             }],
             retained_tabs: vec![],
+            restore_window_layout: false,
+            main_geometry: Default::default(),
             selected: 0,
             next_id: 2,
             sender,

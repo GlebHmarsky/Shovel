@@ -340,6 +340,8 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         git: Some(h.editor.git.clone()),
         tabs: vec![],
         retained_tabs: vec![],
+        restore_window_layout: false,
+        main_geometry: Default::default(),
         selected: 0,
         next_id: 1,
         sender,

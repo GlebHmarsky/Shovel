@@ -28,6 +28,8 @@ pub(super) fn workspace() -> Workspace {
         git: None,
         tabs,
         retained_tabs: vec![],
+        restore_window_layout: false,
+        main_geometry: Default::default(),
         selected: 1,
         next_id: 4,
         sender,

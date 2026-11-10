@@ -259,9 +259,9 @@
         "R17",
         "R20"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/window_geometry.rs; rust/desktop/src/main.rs; rust/desktop/src/commit.rs; rust/desktop/src/workspace_split.rs",
+      "Evidence": "2026-11-10: reviewed baseline scale/layout source. Four focused headless viewport and real profile persistence checks passed across 70/110/200% zoom, simulated DPI, transition/maximized state and main/Commit sizes/panes. Native desktop/mixed-monitor input, all inspector layouts/pane migration and shared scale shortcuts remain R14/R16/R70."
     },
     {
       "Path": "src/GitGui.App/Services/UserInteraction.cs",
@@ -296,9 +296,9 @@
         "R17",
         "R20"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/window_geometry.rs; rust/desktop/src/main.rs; rust/desktop/src/commit.rs; rust/desktop/src/workspace_split.rs",
+      "Evidence": "2026-11-10: reviewed baseline scale/layout source. Four focused headless viewport and real profile persistence checks passed across 70/110/200% zoom, simulated DPI, transition/maximized state and main/Commit sizes/panes. Native desktop/mixed-monitor input, all inspector layouts/pane migration and shared scale shortcuts remain R14/R16/R70."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ActivityJournal.cs",
@@ -2099,9 +2099,9 @@
         "R17",
         "R20"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/window_geometry.rs; rust/desktop/src/main.rs; rust/desktop/src/commit.rs; rust/desktop/src/workspace_split.rs",
+      "Evidence": "2026-11-10: reviewed baseline scale/layout source. Four focused headless viewport and real profile persistence checks passed across 70/110/200% zoom, simulated DPI, transition/maximized state and main/Commit sizes/panes. Native desktop/mixed-monitor input, all inspector layouts/pane migration and shared scale shortcuts remain R14/R16/R70."
     },
     {
       "Path": "src/GitGui.ProcessHost/AskPassClient.cs",

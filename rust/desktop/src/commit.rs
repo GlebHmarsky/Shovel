@@ -62,6 +62,7 @@ pub struct Editor {
     pub output: String,
     pub busy: bool,
     pub size: egui::Vec2,
+    geometry: crate::window_geometry::Geometry,
     files_width: f32,
     message_height: f32,
     pub external_merge_tool: shovel_core::conflicts::ToolSettings,
@@ -135,6 +136,7 @@ impl Editor {
             output: String::new(),
             busy: false,
             size: egui::vec2(1200., 800.),
+            geometry: Default::default(),
             files_width: 380.,
             message_height: 220.,
             external_merge_tool: Default::default(),
@@ -831,6 +833,12 @@ impl Editor {
             self.files_width = value("FilesWidth", 380., 250., 3000.);
             self.message_height = value("MessageHeight", 220., 180., 2000.);
         }
+        if let Some(layout) = crate::window_geometry::saved_layout(settings, "CommitWindow") {
+            self.size = egui::vec2(
+                layout["Width"].as_f64().unwrap().clamp(900., 7680.) as f32,
+                layout["Height"].as_f64().unwrap().clamp(620., 4320.) as f32,
+            );
+        }
     }
     pub fn save_layout(&self, settings: &mut shovel_core::settings::Settings) {
         let mut layout = settings
@@ -847,6 +855,15 @@ impl Editor {
             layout.insert(key.into(), serde_json::json!(value));
         }
         settings.set("CommitLayout", serde_json::Value::Object(layout));
+        crate::window_geometry::save_layout(settings, "CommitWindow", self.size, false);
+    }
+    fn observe_geometry(&mut self, ctx: &egui::Context, class: egui::ViewportClass) {
+        if class != egui::ViewportClass::EmbeddedWindow {
+            self.geometry.observe(ctx);
+            if let Some(size) = self.geometry.native_size {
+                self.size = size;
+            }
+        }
     }
     pub fn show(&mut self, ctx: &egui::Context, enabled: bool) {
         if let Some(inspector) = &mut self.inspector {
@@ -866,11 +883,11 @@ impl Editor {
             id,
             egui::ViewportBuilder::default()
                 .with_title(title)
-                .with_inner_size(self.size)
-                .with_min_inner_size([900., 620.])
+                .with_inner_size(crate::window_geometry::points(ctx, self.size))
+                .with_min_inner_size(crate::window_geometry::points(ctx, egui::vec2(900., 620.)))
                 .with_minimize_button(false)
                 .with_maximize_button(false),
-            |ui, _| {
+            |ui, class| {
                 visible = ui.is_visible();
                 let ctx = ui.ctx().clone();
                 if !enabled {
@@ -880,9 +897,7 @@ impl Editor {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                     self.request_leave(Leave::Close, &ctx);
                 }
-                if let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
-                    self.size = rect.size();
-                }
+                self.observe_geometry(&ctx, class);
                 if enabled && self.leave.is_none() && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
                     self.refresh(&ctx);
                 }
@@ -1322,6 +1337,58 @@ mod tests {
             thread::sleep(Duration::from_millis(15));
         }
     }
+    #[test]
+    fn native_window_geometry_preserves_commit_size_and_panes_across_profile_reload() {
+        use crate::window_geometry::{fixture_input, points};
+        let temp = tempfile::tempdir().unwrap();
+        let git = Arc::new(Git::discover(None, &Cancellation::default()).unwrap());
+        let new_editor = || {
+            Editor::new(
+                temp.path().join("unused-repository"),
+                git.clone(),
+                Scheduler::default(),
+                drafts::Store {
+                    directory: temp.path().join("drafts"),
+                    legacy_directory: None,
+                },
+            )
+        };
+        for zoom in [0.7, 1.1, 2.] {
+            let ctx = egui::Context::default();
+            ctx.set_zoom_factor(zoom);
+            let native = egui::vec2(1188., 792.);
+            let mut editor = new_editor();
+            editor.files_width = 413.;
+            editor.message_height = 237.;
+            for _ in 0..2 {
+                ctx.run_ui(fixture_input(native / zoom, 1.5, false), |ui| {
+                    editor.observe_geometry(ui.ctx(), egui::ViewportClass::Immediate)
+                })
+                .drop_without_applying_deltas();
+            }
+            let mut settings = shovel_core::settings::Settings::default();
+            editor.save_layout(&mut settings);
+            let mut store = shovel_core::settings::SettingsStore::new(
+                temp.path().join(format!("profile-{zoom}")),
+            );
+            store.load().unwrap();
+            store.save(&settings).unwrap();
+            let reloaded = store.load().unwrap();
+            let mut reopened = new_editor();
+            reopened.restore_layout(&reloaded);
+            assert!((reopened.size - native).length() < 0.01);
+            assert_eq!(reopened.files_width, 413.);
+            assert_eq!(reopened.message_height, 237.);
+            assert!((points(&ctx, reopened.size) * zoom - native).length() < 0.01);
+            // Embedded test layouts must not overwrite the native Commit geometry.
+            ctx.run_ui(fixture_input(egui::vec2(400., 300.), 1.5, false), |ui| {
+                reopened.observe_geometry(ui.ctx(), egui::ViewportClass::EmbeddedWindow)
+            })
+            .drop_without_applying_deltas();
+            assert!((reopened.size - native).length() < 0.01);
+        }
+    }
+
     #[test]
     fn branch_changes_refresh_attached_and_reopened_views_without_replacing_drafts() {
         let temporary = tempfile::tempdir().unwrap();
