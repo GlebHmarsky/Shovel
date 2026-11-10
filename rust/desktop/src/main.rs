@@ -76,7 +76,6 @@ enum Event {
         Result<Git, String>,
         Option<String>,
     ),
-    Open(PathBuf),
     SubmoduleOpened(u64, PathBuf, Result<PathBuf, String>),
     Preview(u64, u64, Option<Box<shovel_core::history_cache::Preview>>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
@@ -123,6 +122,7 @@ struct Workspace {
     store: Option<SettingsStore>,
     git: Option<Arc<Git>>,
     git_selection: git_selection::Controller,
+    repository_picker: Option<Receiver<Option<PathBuf>>>,
     tabs: Vec<Tab>,
     retained_tabs: Vec<Tab>,
     restore_window_layout: bool,
@@ -167,8 +167,15 @@ impl Workspace {
         let ctx = context.egui_ctx.clone();
         theme(&ctx, false);
         let font_ctx = ctx.clone();
-        thread::spawn(move || workspace_style::install_windows_font(&font_ctx));
+        let read_workers = read_workers::Workers::default();
+        let font_lease = read_workers.start_required();
         thread::spawn(move || {
+            let _lease = font_lease;
+            workspace_style::install_windows_font(&font_ctx);
+        });
+        let startup_lease = read_workers.start_required();
+        thread::spawn(move || {
+            let _lease = startup_lease;
             let local = std::env::var_os("LOCALAPPDATA")
                 .map(PathBuf::from)
                 .unwrap_or_else(std::env::temp_dir);
@@ -200,6 +207,7 @@ impl Workspace {
             store: None,
             git: None,
             git_selection: Default::default(),
+            repository_picker: None,
             tabs: vec![],
             retained_tabs: vec![],
             restore_window_layout: false,
@@ -215,7 +223,7 @@ impl Workspace {
             closing: false,
             pending_exit: false,
             discard_settings_on_exit: false,
-            read_workers: Default::default(),
+            read_workers,
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
@@ -477,14 +485,39 @@ impl Workspace {
             ctx.request_repaint();
         });
     }
-    fn pick_repository(&self, ctx: &egui::Context) {
-        let sender = self.sender.clone();
+    fn pick_repository(&mut self, ctx: &egui::Context) {
+        self.begin_repository_picker(ctx, || rfd::FileDialog::new().pick_folder());
+    }
+    fn begin_repository_picker(
+        &mut self,
+        ctx: &egui::Context,
+        pick: impl FnOnce() -> Option<PathBuf> + Send + 'static,
+    ) {
+        if self.repository_picker.is_some() || self.closing || self.pending_exit {
+            return;
+        }
+        let (sender, receiver) = mpsc::channel();
+        self.repository_picker = Some(receiver);
+        let lease = self.read_workers.start_required();
         let ctx = ctx.clone();
         thread::spawn(move || {
-            if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                let _ = sender.send(Event::Open(path));
-                ctx.request_repaint();
-            }
+            let _lease = lease;
+            let _ = sender.send(pick());
+            ctx.request_repaint();
+        });
+    }
+    fn begin_tool_handoff(
+        &self,
+        ctx: &egui::Context,
+        launch: impl FnOnce() -> Result<(), String> + Send + 'static,
+    ) {
+        let lease = self.read_workers.start_required();
+        let tx = self.sender.clone();
+        let ctx = ctx.clone();
+        thread::spawn(move || {
+            let _lease = lease;
+            let _ = tx.send(Event::ToolFinished(launch()));
+            ctx.request_repaint();
         });
     }
     fn receive(&mut self, ctx: &egui::Context) {
@@ -498,6 +531,20 @@ impl Workspace {
         }
         self.sync_ui_scale(ctx);
         self.poll_git_selection(ctx);
+        if let Some(result) = self
+            .repository_picker
+            .as_ref()
+            .and_then(|rx| match rx.try_recv() {
+                Ok(path) => Some(path),
+                Err(mpsc::TryRecvError::Disconnected) => Some(None),
+                Err(mpsc::TryRecvError::Empty) => None,
+            })
+        {
+            self.repository_picker = None;
+            if let Some(path) = result {
+                self.open(path, ctx);
+            }
+        }
         while let Ok(event) = self.receiver.try_recv() {
             match event {
                 Event::ToolFinished(result) => {
@@ -604,7 +651,6 @@ impl Workspace {
                         tab.apply_preview(*preview);
                     }
                 }
-                Event::Open(path) => self.open(path, ctx),
                 Event::SubmoduleOpened(owner, parent, result) => {
                     if self.closing {
                         continue;
@@ -1101,7 +1147,7 @@ impl Workspace {
             self.notice = Some(strings::text("RustGitSelecting"));
             return false;
         }
-        if self.initialization.picking {
+        if self.initialization.picking || self.repository_picker.is_some() {
             self.notice = Some(strings::text("RustRepositoryChooserOpen"));
             return false;
         }
@@ -1362,6 +1408,7 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.branches.read_workers = self.read_workers.clone();
         self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
         let modal_open = self.closing
@@ -1887,15 +1934,8 @@ impl eframe::App for Workspace {
                                         if let Some(tab) = self.tabs.get(self.selected) {
                                             let path = tab.path.clone();
                                             let settings = self.settings.clone();
-                                            let tx = self.sender.clone();
-                                            let ctx = ctx.clone();
-                                            thread::spawn(move || {
-                                                let _ = tx.send(Event::ToolFinished(
-                                                    repository_tools::launch(
-                                                        kind, &path, &settings,
-                                                    ),
-                                                ));
-                                                ctx.request_repaint();
+                                            self.begin_tool_handoff(&ctx, move || {
+                                                repository_tools::launch(kind, &path, &settings)
                                             });
                                         }
                                         ui.close();
@@ -2509,7 +2549,9 @@ impl eframe::App for Workspace {
             let git = git.clone();
             let sender = self.sender.clone();
             let ctx = ctx.clone();
+            let lease = self.read_workers.start_required();
             thread::spawn(move || {
+                let _lease = lease;
                 let result = git
                     .open_submodule(&snapshot, &target)
                     .map_err(|e| strings::text(&e.code()));
@@ -2940,6 +2982,7 @@ mod tests {
             store: Some(store),
             git: None,
             git_selection: Default::default(),
+            repository_picker: None,
             tabs: vec![],
             retained_tabs: vec![],
             restore_window_layout: false,
@@ -3016,6 +3059,7 @@ mod tests {
             store: None,
             git: Some(Arc::new(git)),
             git_selection: Default::default(),
+            repository_picker: None,
             tabs: vec![Tab {
                 id: 1,
                 path: path.clone(),

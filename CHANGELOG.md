@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.50.2 - 2026-11-10 (local test build; not published)
+
+- Recheck accepted work before final exit and preserve failed-save choices. Drain automatic fetch, repository reads, draft restoration, conflict previews and updater workers before closing.
+- Track startup, checkout review, repository chooser and tool/submodule handoff workers through completion; keep accepted commands and required writes alive.
+- Bound update HTTP phases without a 30-second whole-download cap.
+- Local Windows x64 payload only. Full parity, native UI acceptance, final installed update and paired benchmarks remain unfinished.
+
 ## Rust 0.50.1 - 2026-11-10 (local test build; not published)
 
 - Match shared Ctrl+Plus/Minus scaling to the C# 70-200% range and 10% steps, ignore held-key repeats, and persist changes without exiting. Keep newer shortcuts when an earlier settings save completes.

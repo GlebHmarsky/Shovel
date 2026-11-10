@@ -32,6 +32,7 @@ pub(super) fn workspace() -> Workspace {
         store: None,
         git: None,
         git_selection: Default::default(),
+        repository_picker: None,
         tabs,
         retained_tabs: vec![],
         restore_window_layout: false,
@@ -1168,4 +1169,61 @@ fn shutdown_drains_real_automatic_fetch_then_preserves_save_or_discard_intent() 
             assert_eq!(saved.repositories(), vec![fixture.root.clone()]);
         }
     }
+}
+
+#[test]
+fn shutdown_waits_for_tool_handoff_completion() {
+    let ctx = egui::Context::default();
+    let mut app = workspace();
+    app.tabs.clear();
+    let profile = tempfile::tempdir().unwrap();
+    let mut store = SettingsStore::new(profile.path().into());
+    app.settings = store.load().unwrap();
+    app.store = Some(store);
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    app.begin_tool_handoff(&ctx, move || {
+        started_tx.send(()).unwrap();
+        release_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap();
+        Ok(())
+    });
+    started_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    app.close(&ctx);
+    assert!(app.pending_exit && !app.exit_ready);
+    assert!(!app.external_tools_opened);
+    release_tx.send(()).unwrap();
+    until(&mut app, &ctx, |app| app.exit_ready);
+    assert!(app.external_tools_opened);
+    assert!(app.read_workers.cancel_and_drained());
+}
+
+#[test]
+fn shutdown_refuses_open_repository_picker_and_keeps_single_picker() {
+    let ctx = egui::Context::default();
+    let mut app = workspace();
+    app.tabs.clear();
+    let profile = tempfile::tempdir().unwrap();
+    let mut store = SettingsStore::new(profile.path().into());
+    app.settings = store.load().unwrap();
+    app.store = Some(store);
+    let (release_tx, release_rx) = mpsc::channel();
+    app.begin_repository_picker(&ctx, move || {
+        release_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap();
+        None
+    });
+    app.begin_repository_picker(&ctx, || panic!("duplicate picker"));
+    app.close(&ctx);
+    assert!(!app.pending_exit && !app.closing && !app.exit_ready);
+    assert_eq!(app.notice, Some(strings::text("RustRepositoryChooserOpen")));
+    release_tx.send(()).unwrap();
+    until(&mut app, &ctx, |app| app.repository_picker.is_none());
+    app.close(&ctx);
+    until(&mut app, &ctx, |app| app.exit_ready);
+    assert!(app.read_workers.cancel_and_drained());
 }

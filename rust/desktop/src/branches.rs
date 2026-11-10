@@ -111,14 +111,27 @@ impl Review {
             Checkout::Detached(hash) => hash.clone(),
         }
     }
-    fn start(&mut self, git: Arc<Git>, snapshot: &Snapshot, ctx: &egui::Context) {
+    fn start(
+        &mut self,
+        git: Arc<Git>,
+        snapshot: &Snapshot,
+        ctx: &egui::Context,
+        workers: &crate::read_workers::Workers,
+    ) {
+        if workers.stopping() {
+            return;
+        }
         self.started = true;
         let (sender, receiver) = mpsc::channel();
         self.receiver = Some(receiver);
         let expected = snapshot.clone();
         let cancel = self.cancel.clone();
         let ctx = ctx.clone();
+        let lease = workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&expected.worktree);
             let result = git
                 .working_copy(&expected.worktree, &cancel)
                 .map_err(|_| text("CheckoutReadFailed"))
@@ -194,6 +207,7 @@ struct Dialog {
 }
 #[derive(Default)]
 pub struct Dialogs {
+    pub(super) read_workers: crate::read_workers::Workers,
     active: Option<Dialog>,
 }
 impl Dialogs {
@@ -910,7 +924,7 @@ impl Dialogs {
             && let Form::Checkout(review) = &mut dialog.form
             && !review.started
         {
-            review.start(git.clone(), snapshot, ctx);
+            review.start(git.clone(), snapshot, ctx, &self.read_workers);
         }
         if close {
             self.active = None;
@@ -958,6 +972,29 @@ mod tests {
         let snapshot = git.inspect(root, &Cancellation::default()).unwrap();
         (temp, Arc::new(git), snapshot)
     }
+    #[test]
+    fn checkout_review_worker_remains_owned_after_review_is_removed() {
+        let (_temp, git, snapshot) = fixture();
+        let ctx = egui::Context::default();
+        let workers = crate::read_workers::Workers::default();
+        let (started, release) = crate::history_cache::tests::hold_read(snapshot.worktree.clone());
+        let mut review = Review::new(Checkout::Detached(command(
+            &git,
+            &snapshot.worktree,
+            &["rev-parse", "HEAD"],
+        )));
+        review.start(git, &snapshot, &ctx, &workers);
+        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        drop(review);
+        assert!(!workers.cancel_and_drained());
+        drop(release);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !workers.cancel_and_drained() {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     struct Harness {
         ctx: egui::Context,
         dialogs: Dialogs,

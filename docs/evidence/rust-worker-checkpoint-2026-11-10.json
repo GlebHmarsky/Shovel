@@ -1,0 +1,104 @@
+{
+  "date": "2026-11-10",
+  "version": "0.50.2",
+  "scope": "Finish current startup, repository picker, checkout review and tool/submodule handoff lifetime batch only",
+  "checks": {
+    "existing_shutdown_tests": 9,
+    "new_worker_tests": 3,
+    "checkout_regression_seconds": 10.23,
+    "clippy": "core/desktop/askpass all targets, warnings denied",
+    "smoke": {
+      "SourceFingerprint": "05BEFD29945B5AE9FA2B627E4F8E85F67BDA9CE78DFF66D276151F695AC3C3CB",
+      "Passed": true,
+      "Count": 18,
+      "Seconds": 49.1186535,
+      "Checks": [
+        {
+          "Name": "updates::tests::accepts_velopack_notes_html_spelling_without_ignoring_unknown_fields",
+          "Seconds": 9.3436505
+        },
+        {
+          "Name": "updates::tests::rust_urls_and_identifiers_are_separate",
+          "Seconds": 0.7216876
+        },
+        {
+          "Name": "updates::tests::verifies_powershell_pss_signature_and_exact_package",
+          "Seconds": 0.7237636
+        },
+        {
+          "Name": "updates::tests::rejects_modified_feed_wrong_key_and_swapped_channel",
+          "Seconds": 0.8303518
+        },
+        {
+          "Name": "updates::tests::rejects_validly_signed_foreign_product_and_unsafe_package",
+          "Seconds": 0.7964149
+        },
+        {
+          "Name": "settings::tests::imports_all_fields_without_modifying_csharp_and_roundtrips",
+          "Seconds": 0.7713069
+        },
+        {
+          "Name": "settings::tests::preserves_bad_or_newer_profiles_and_refuses_saves",
+          "Seconds": 0.7324732
+        },
+        {
+          "Name": "settings::tests::competing_writer_preserved_and_successful_save_keeps_backup",
+          "Seconds": 0.7552157
+        },
+        {
+          "Name": "settings::tests::explicit_fetch_interval_survives_and_channels_cannot_be_csharp",
+          "Seconds": 0.7153794
+        },
+        {
+          "Name": "automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation",
+          "Seconds": 17.5123379
+        },
+        {
+          "Name": "workspace_interaction_tests::tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop",
+          "Seconds": 1.189127
+        },
+        {
+          "Name": "workspace_interaction_tests::details_splitter_reserves_history_and_saves_drag_proportion",
+          "Seconds": 1.1161163
+        },
+        {
+          "Name": "workspace_interaction_tests::reference_navigation_finds_old_tags_and_stashes_beyond_first_page",
+          "Seconds": 5.4594102
+        },
+        {
+          "Name": "operations::tests::network_options_are_modal_persist_on_close_and_do_not_execute",
+          "Seconds": 2.4423563
+        },
+        {
+          "Name": "operations::activity_layout_test::retained_operation_output_does_not_push_down_repository_tabs",
+          "Seconds": 1.1518402
+        },
+        {
+          "Name": "git_identity::tests::global_identity_preserves_other_config_and_rejects_stale_review",
+          "Seconds": 2.6677614
+        },
+        {
+          "Name": "updater::tests::obsolete_update_events_cannot_restore_previous_channel_or_progress",
+          "Seconds": 0.9478793
+        },
+        {
+          "Name": "caption::tests::hidden_window_extends_client_area_and_separates_drag_from_buttons",
+          "Seconds": 0.8555466
+        }
+      ],
+      "DesktopVerified": false,
+      "InstalledUpdatesVerified": false
+    },
+    "diff_check": "passed"
+  },
+  "initial_failures": [
+    "New shutdown fixtures timed out without a SettingsStore; corrected to disposable profile stores",
+    "Checkout read gate test argument borrow corrected before successful compile"
+  ],
+  "limits": [
+    "Controlled picker/tool callbacks do not certify native desktop interaction",
+    "Startup wiring inspected; native startup-close interaction remains open",
+    "Full parity, final installed update and paired benchmarks remain open"
+  ],
+  "delivery": "Local-only payload; no publication, installation, interactive launch or merge"
+}
