@@ -50,6 +50,7 @@ pub struct Completed {
     pub(crate) preserves_worktree: bool,
     pub(crate) unchanged: bool,
     pub updated: Result<Snapshot, Error>,
+    pub related: Vec<std::path::PathBuf>,
     pub authentication_failure: Option<authentication::Failure>,
 }
 impl Completed {
@@ -165,6 +166,7 @@ impl Transcript {
             preserves_worktree: false,
             unchanged: false,
             updated,
+            related: Vec::new(),
             authentication_failure: None,
         })
     }

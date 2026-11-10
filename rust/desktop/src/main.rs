@@ -19,6 +19,7 @@ mod remotes;
 mod repository_init;
 mod repository_tools;
 mod settings_ui;
+mod sidebar;
 mod stashes;
 mod strings;
 mod updater;
@@ -73,6 +74,7 @@ enum Event {
         Option<String>,
     ),
     Open(PathBuf),
+    SubmoduleOpened(u64, PathBuf, Result<PathBuf, String>),
     Preview(u64, u64, Option<Box<shovel_core::history_cache::Preview>>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
     Loaded(u64, u64, Box<History>, Box<Page>, bool),
@@ -90,6 +92,7 @@ struct Tab {
     owner_snapshot: Option<shovel_core::git::Snapshot>,
     divergence: divergence::Counter,
     remotes: remotes::Cache,
+    sidebar: sidebar::Cache,
     page: Option<Page>,
     selected: Option<String>,
     previous: Vec<Cursor>,
@@ -261,6 +264,7 @@ impl Workspace {
             owner_snapshot: None,
             divergence: Default::default(),
             remotes: Default::default(),
+            sidebar: Default::default(),
             page: None,
             selected: None,
             previous: vec![],
@@ -325,6 +329,7 @@ impl Workspace {
         tab.loading = true;
         tab.divergence.invalidate();
         tab.remotes.invalidate();
+        tab.sidebar.invalidate();
         tab.error = None;
         let generation = tab.view.begin();
         let previous = tab
@@ -520,6 +525,7 @@ impl Workspace {
                             owner_snapshot: None,
                             divergence: Default::default(),
                             remotes: Default::default(),
+                            sidebar: Default::default(),
                             page: None,
                             selected: None,
                             previous: vec![],
@@ -558,6 +564,32 @@ impl Workspace {
                     }
                 }
                 Event::Open(path) => self.open(path, ctx),
+                Event::SubmoduleOpened(owner, parent, result) => {
+                    if self.closing {
+                        continue;
+                    }
+                    match result {
+                        Ok(path)
+                            if self.tabs.len() < 20
+                                || self.tabs.iter().any(|t| Self::same_path(&t.path, &path)) =>
+                        {
+                            if self.tabs.get(self.selected).is_some_and(|t| t.id == owner) {
+                                self.open(path, ctx);
+                            } else {
+                                self.ensure_tab(path);
+                                self.remember_tabs();
+                            }
+                        }
+                        result => {
+                            let error = result
+                                .err()
+                                .unwrap_or_else(|| strings::text("TooManyRepositories"));
+                            self.operations
+                                .record_local(parent, error.clone(), String::new());
+                            self.notice = Some(error);
+                        }
+                    }
+                }
                 Event::Loaded(id, generation, history, page, keep) => {
                     if !self
                         .tabs
@@ -600,6 +632,7 @@ impl Workspace {
                         if let (Some(git), Some(history)) = (&self.git, &tab.history) {
                             tab.divergence.start(git.clone(), &history.snapshot, ctx);
                             tab.remotes.start(git.clone(), &history.snapshot, ctx);
+                            tab.sidebar.start(git.clone(), &history.snapshot, ctx);
                         }
                     }
                 }
@@ -679,6 +712,7 @@ impl Workspace {
                             tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
                             tab.divergence = Default::default();
                             tab.remotes = Default::default();
+                            tab.sidebar = Default::default();
                             tab.history = None;
                             tab.owner_snapshot = None;
                             tab.view.preview = None;
@@ -813,7 +847,9 @@ impl Workspace {
         );
         for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
             tab.divergence.poll(ctx);
-            if tab.remotes.poll(ctx) {
+            let remote_changed = tab.remotes.poll(ctx);
+            let sidebar_changed = tab.sidebar.poll(ctx);
+            if remote_changed || sidebar_changed {
                 tab.estimate_cache();
             }
         }
@@ -881,6 +917,7 @@ impl Workspace {
                     self.tabs[index].view.stale = true;
                     self.tabs[index].divergence.invalidate();
                     self.tabs[index].remotes.invalidate();
+                    self.tabs[index].sidebar.invalidate();
                 }
             } else if let Some(owner) = self
                 .retained_tabs
@@ -889,6 +926,7 @@ impl Workspace {
             {
                 owner.refresh_again = true;
                 owner.remotes.invalidate();
+                owner.sidebar.invalidate();
             }
         }
         self.prune_retained_tabs();
@@ -1958,6 +1996,7 @@ impl eframe::App for Workspace {
         use workspace_split::Divider;
         let width = ui.available_width();
         let mut locate_request = None;
+        let mut submodule_open = None;
         let sidebar = egui::Panel::left("sidebar")
             .frame(workspace_style::pane(palette.sidebar, 8, 4))
             .exact_size(Divider::Sidebar.size(ui, &self.settings, width))
@@ -1972,6 +2011,7 @@ impl eframe::App for Workspace {
                             ("Remotes", "refs/remotes/"),
                             ("Tags", "refs/tags/"),
                             ("Stashes", "stash@{"),
+                            ("Submodules", ""),
                         ] {
                             let group_id = format!("{}|{}", tab.path.display(), key);
                             let mut collapsed: Vec<String> = self
@@ -1983,12 +2023,8 @@ impl eframe::App for Workspace {
                                 RichText::new(format!(
                                     "{}  {}",
                                     strings::text(key),
-                                    history
-                                        .snapshot
-                                        .references
-                                        .iter()
-                                        .filter(|r| r.name.starts_with(prefix))
-                                        .count()
+                                    if key == "Submodules" { tab.sidebar.value.as_ref().map_or(0,|v|v.submodules.len()) }
+                                    else { history.snapshot.references.iter().filter(|r|r.name.starts_with(prefix)).count() }
                                 ))
                                 .strong()
                                 .color(palette.muted),
@@ -2002,6 +2038,32 @@ impl eframe::App for Workspace {
                                     .max_height(group_height)
                                     .auto_shrink([false, true])
                                     .show(ui, |ui| {
+                                        if key == "Submodules" {
+                                            if let Some(value) = &tab.sidebar.value {
+                                                for module in &value.submodules {
+                                                    let response = workspace_style::reference_row(ui, false, &module.path, key).on_hover_text(&module.path);
+                                                    if response.clicked() || response.has_focus() && ui.input_mut(|i|i.consume_key(egui::Modifiers::NONE,egui::Key::Enter)) {
+                                                        submodule_open = Some((tab.id, history.snapshot.clone(), module.clone()));
+                                                    }
+                                                    response.context_menu(|ui| {
+                                                        if ui.button(strings::text("SidebarOpenSubmodule")).clicked() {
+                                                            submodule_open=Some((tab.id,history.snapshot.clone(),module.clone())); ui.close();
+                                                        }
+                                                        for (operation,label) in [(shovel_core::submodules::Operation::Update,"ActionTitleSubmoduleUpdate"),
+                                                            (shovel_core::submodules::Operation::Sync,"ActionTitleSubmoduleSync")] {
+                                                            if ui.add_enabled(history.snapshot.operations.is_empty() && self.git.is_some(),egui::Button::new(strings::text(label)))
+                                                                .on_disabled_hover_text(strings::text(if self.git.is_none() { "GitErrorMissingGit" } else { "ActionSequence" })).clicked()
+                                                                && let Some(git)=&self.git {
+                                                                self.operations.submit_submodule(shovel_core::submodules::Action{target:module.clone(),operation},
+                                                                    &history.snapshot,git.clone(),&self.scheduler,&ctx);
+                                                                ui.close();
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            } else if tab.sidebar.pending() { ui.label(strings::text("SidebarLoading")); }
+                                            if let Some(error) = &tab.sidebar.error { ui.label(error); }
+                                        }
                                         if key == "Remotes" {
                                             let names: std::collections::BTreeSet<_> = history
                                                 .snapshot
@@ -2139,7 +2201,7 @@ impl eframe::App for Workspace {
                                         }
                                         for reference in
                                             history.snapshot.references.iter().filter(|r| {
-                                                key != "Remotes" && r.name.starts_with(prefix)
+                                                key != "Remotes" && key != "Submodules" && r.name.starts_with(prefix)
                                             })
                                         {
                                             let short = if key == "Stashes" {
@@ -2162,10 +2224,12 @@ impl eframe::App for Workspace {
                                                     .unwrap_or(&reference.name)
                                                     .to_owned()
                                             };
+                                            let detail = if key == "Branches" { tab.sidebar.tracking(reference) } else { String::new() };
+                                            let label = if detail.is_empty() { short } else { format!("{short}  {detail}") };
                                             let response = workspace_style::reference_row(
                                                 ui,
                                                 tab.selected.as_deref() == Some(&reference.hash),
-                                                &short,
+                                                &label,
                                                 key,
                                             )
                                             .on_hover_text(&reference.name);
@@ -2273,6 +2337,20 @@ impl eframe::App for Workspace {
                     });
                 }
             });
+        if let Some((owner, snapshot, target)) = submodule_open
+            && let Some(git) = &self.git
+        {
+            let git = git.clone();
+            let sender = self.sender.clone();
+            let ctx = ctx.clone();
+            thread::spawn(move || {
+                let result = git
+                    .open_submodule(&snapshot, &target)
+                    .map_err(|e| strings::text(&e.code()));
+                let _ = sender.send(Event::SubmoduleOpened(owner, snapshot.worktree, result));
+                ctx.request_repaint();
+            });
+        }
         if let Some(hash) = locate_request {
             self.locate(hash, &ctx);
         }
@@ -2769,6 +2847,7 @@ mod tests {
                 owner_snapshot: None,
                 divergence: Default::default(),
                 remotes: Default::default(),
+                sidebar: Default::default(),
                 page: None,
                 selected: None,
                 previous: vec![],
@@ -2869,5 +2948,7 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod submodule_tests;
 #[cfg(test)]
 mod workspace_interaction_tests;

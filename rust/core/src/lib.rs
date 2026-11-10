@@ -51,6 +51,10 @@ pub mod recovery;
 pub mod remotes;
 pub mod scheduler;
 #[cfg(windows)]
+pub mod sidebar;
+#[cfg(windows)]
+pub mod submodules;
+#[cfg(windows)]
 mod selected_stash;
 pub mod settings;
 #[cfg(windows)]

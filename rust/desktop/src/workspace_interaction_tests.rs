@@ -13,6 +13,7 @@ pub(super) fn workspace() -> Workspace {
             owner_snapshot: None,
             divergence: Default::default(),
             remotes: Default::default(),
+            sidebar: Default::default(),
             page: None,
             selected: None,
             previous: vec![],
@@ -576,7 +577,7 @@ fn middle_close_and_keyboard_selection_preserve_tab_owner_and_saved_order() {
     assert_eq!(app.tabs[0].id, 1);
 }
 
-fn sidebar_point(
+pub(super) fn sidebar_point(
     ctx: &egui::Context,
     app: &mut Workspace,
     label: &str,
@@ -604,7 +605,7 @@ fn sidebar_point(
     out.drop_without_applying_deltas();
     value
 }
-fn sidebar_click(
+pub(super) fn sidebar_click(
     ctx: &egui::Context,
     app: &mut Workspace,
     label: &str,

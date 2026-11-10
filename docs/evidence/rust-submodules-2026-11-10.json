@@ -1,0 +1,351 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T14:11:07.334801+00:00",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "RustBaseCommit": "851c4514015dac3806e7c7743c7f6348a87786eb",
+  "Scope": "Selected submodule Open/Update/Sync and cached branch tracking; R33/R67 remain partial. Owner requested a local-only 0.50.0 Windows test payload, then pause.",
+  "SourceSha256": {
+    "Cargo.toml": "C63F54DC5FBD7E853E3F2431AB83B5259552FFF420DAA80A9DD8DC285984D55A",
+    "Cargo.lock": "A4F5102827A142F2F06C2E31F81B78F361407926F9A6758055164F1DB59C6AB0",
+    "rust/core/src/sidebar.rs": "2DCE0D78AC60BAB2C651F9E42B6B13E3763FBBA5AE0A387A0E78734F2A70BDF8",
+    "rust/core/src/submodules.rs": "C0A4A187488755A4612075D5203DB45232EF8AD802B50F6D3E9F61A636587195",
+    "rust/core/src/branches.rs": "E3E38AFDEC9CE547D3A6BEB883579D07C10EFF9566808DFC4F68FD75372B57F6",
+    "rust/core/src/network.rs": "72FE9F319032A20104B3341032C6BCCDA6942C636C5A99460F5D3B5558FE802A",
+    "rust/core/src/operation.rs": "40F74889DA52C8E62BEFA52CF4F9FD98D7421D9ACE993F3D9D9A2AD86F9B8180",
+    "rust/core/src/lib.rs": "957AC1BAE94E21F08072FDA57FACCEA1DB7261F7BF318C5EF13C25D3D5B40949",
+    "rust/core/tests/submodules.rs": "ABDFF3CB2F950CE03F3C4DC4E07B6568562F8C915343BE40481861A803A8858C",
+    "rust/desktop/src/sidebar.rs": "031FAB5A36D9D2CBA01422F6D2B7E93F4CBE91D74B8D2EE349DA7D3840F104A1",
+    "rust/desktop/src/submodule_tests.rs": "C8F35108938CA3A768823AA80C028609DF84E03EB4CF6F73A94CF263ACD254EC",
+    "rust/desktop/src/main.rs": "1CA21A26951B39D3712822E16D1BC04383A1281AF24EBD7E1DE18459D7EF3E5F",
+    "rust/desktop/src/history_cache.rs": "05B9EA1E8A5111563EB3B3F048347E0E0539430FF693E67BFCE697972D221948",
+    "rust/desktop/src/operations.rs": "C7811A2F8A77666197C7D53730DDC4D2D86DB74D0F709F2794DF45EEE13512E9",
+    "rust/desktop/src/workspace_interaction_tests.rs": "1052F70F62B604596A326B570F0E9F9418423C57B962F390E6A6EB0E4DF5DD27",
+    "scripts/Test-RustSubmoduleParity.ps1": "73263893A55D98BE444AF5FC48B95000C94A6A4FF45C88D3EDDAEE26E0C64C37",
+    "tests/RustParityBaseline/Program.cs": "D70548339012434AF654060CB34E54D1A38DA81914EE1F74E4E0AC810B26F1D0"
+  },
+  "Checks": [
+    {
+      "Command": "cargo test -j 1 -p shovel-core --test submodules --locked -- --test-threads=1",
+      "Passed": 8,
+      "Seconds": 115.65
+    },
+    {
+      "Command": "scripts/Test-RustSubmoduleParity.ps1",
+      "EqualCases": 5,
+      "Passed": true,
+      "RustCaseSeconds": 44.72
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop submodule_tests --locked -- --test-threads=1",
+      "Passed": 2,
+      "Seconds": 49.12
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop sidebar::tests --locked -- --test-threads=1",
+      "Passed": 1,
+      "Seconds": 5.31
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop operations::queue_tests --locked -- --test-threads=1",
+      "Passed": 4,
+      "Seconds": 30.67
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop history_cache::tests --locked -- --test-threads=1",
+      "Passed": 7,
+      "Seconds": 32.37
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-core -p shovel-askpass -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true
+    },
+    {
+      "Command": "git diff --check",
+      "Passed": true
+    }
+  ],
+  "Smoke": {
+    "SourceFingerprint": "B15BA8476809B07903DC5172D8CA9AC51ED81C615EC0D7C926D67BAC6A379414",
+    "Passed": true,
+    "Count": 18,
+    "Seconds": 40.6060706,
+    "Checks": [
+      {
+        "Name": "updates::tests::accepts_velopack_notes_html_spelling_without_ignoring_unknown_fields",
+        "Seconds": 7.4200082
+      },
+      {
+        "Name": "updates::tests::rust_urls_and_identifiers_are_separate",
+        "Seconds": 0.8707536
+      },
+      {
+        "Name": "updates::tests::verifies_powershell_pss_signature_and_exact_package",
+        "Seconds": 0.7716703
+      },
+      {
+        "Name": "updates::tests::rejects_modified_feed_wrong_key_and_swapped_channel",
+        "Seconds": 0.8520963
+      },
+      {
+        "Name": "updates::tests::rejects_validly_signed_foreign_product_and_unsafe_package",
+        "Seconds": 0.8273591
+      },
+      {
+        "Name": "settings::tests::imports_all_fields_without_modifying_csharp_and_roundtrips",
+        "Seconds": 0.7249644
+      },
+      {
+        "Name": "settings::tests::preserves_bad_or_newer_profiles_and_refuses_saves",
+        "Seconds": 0.7268128
+      },
+      {
+        "Name": "settings::tests::competing_writer_preserved_and_successful_save_keeps_backup",
+        "Seconds": 0.748411
+      },
+      {
+        "Name": "settings::tests::explicit_fetch_interval_survives_and_channels_cannot_be_csharp",
+        "Seconds": 0.7137955
+      },
+      {
+        "Name": "automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation",
+        "Seconds": 9.5000965
+      },
+      {
+        "Name": "workspace_interaction_tests::tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop",
+        "Seconds": 1.0604452
+      },
+      {
+        "Name": "workspace_interaction_tests::details_splitter_reserves_history_and_saves_drag_proportion",
+        "Seconds": 0.96002
+      },
+      {
+        "Name": "workspace_interaction_tests::reference_navigation_finds_old_tags_and_stashes_beyond_first_page",
+        "Seconds": 6.6562835
+      },
+      {
+        "Name": "operations::tests::network_options_are_modal_persist_on_close_and_do_not_execute",
+        "Seconds": 2.2915437
+      },
+      {
+        "Name": "operations::activity_layout_test::retained_operation_output_does_not_push_down_repository_tabs",
+        "Seconds": 1.0257235
+      },
+      {
+        "Name": "git_identity::tests::global_identity_preserves_other_config_and_rejects_stale_review",
+        "Seconds": 3.1221821
+      },
+      {
+        "Name": "updater::tests::obsolete_update_events_cannot_restore_previous_channel_or_progress",
+        "Seconds": 0.7849353
+      },
+      {
+        "Name": "caption::tests::hidden_window_extends_client_area_and_separates_drag_from_buttons",
+        "Seconds": 1.0725958
+      }
+    ],
+    "DesktopVerified": false,
+    "InstalledUpdatesVerified": false
+  },
+  "PairedComparison": {
+    "SchemaVersion": 1,
+    "DateUtc": "2026-11-10T13:52:54.0737688Z",
+    "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+    "RustBaseCommit": "851c4514015dac3806e7c7743c7f6348a87786eb",
+    "GitVersion": "git version 2.51.1.windows.1",
+    "SourceSha256": {
+      "rust/core/src/submodules.rs": "C0A4A187488755A4612075D5203DB45232EF8AD802B50F6D3E9F61A636587195",
+      "rust/core/src/sidebar.rs": "2DCE0D78AC60BAB2C651F9E42B6B13E3763FBBA5AE0A387A0E78734F2A70BDF8",
+      "rust/core/tests/submodules.rs": "56AB233331E534F90DC86E01A289D0226B5613C3EBAA6DCDBE029329ECE353C6",
+      "rust/desktop/src/sidebar.rs": "700D2FB0539C29EAC1CD3AC9F6918D28DDABF34FFEA80F28E186A3D9A7248151",
+      "rust/desktop/src/main.rs": "CFB60D32D130000F3FCD0CED29775775D5C2428DDC9431DA3CA5F93298EA9D33",
+      "rust/desktop/src/operations.rs": "44B6501220283D04FDDE78534B9DDE58E9C1EB9918B02DA44580A681BF21D999",
+      "tests/RustParityBaseline/Program.cs": "D70548339012434AF654060CB34E54D1A38DA81914EE1F74E4E0AC810B26F1D0",
+      "scripts/Test-RustSubmoduleParity.ps1": "73263893A55D98BE444AF5FC48B95000C94A6A4FF45C88D3EDDAEE26E0C64C37"
+    },
+    "Scope": "Selected submodule initialization, indexed commit update, dirty-child rejection, stale-index rejection and URL sync. Compare parent HEAD/index/status/config/file and child HEAD/index/status/file/origin. Only each temporary fixture root is normalized to <fixture>; commit IDs and all other content are exact.",
+    "FixtureClock": "Both drivers fix author/committer dates to 2026-01-01T00:00:00+00:00.",
+    "DesktopCapture": false,
+    "Equal": true,
+    "Baseline": [
+      {
+        "case": "initialize",
+        "success": true,
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 7c13a966be209ef25ab870c6b26eb0fdca905c6c 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "childHead": "7c13a966be209ef25ab870c6b26eb0fdca905c6c",
+        "childIndex": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tfile",
+        "childStatus": "",
+        "parentStatus": "",
+        "childFile": "one\n",
+        "childOrigin": "<fixture>/child-source",
+        "parentFile": "parent\n"
+      },
+      {
+        "case": "indexed-update",
+        "success": true,
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 82e5149c96a1b6dd0a4397116deede66f979b618 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childStatus": "",
+        "parentStatus": "M  modules/child\n M parent-file",
+        "childFile": "two\n",
+        "childOrigin": "<fixture>/child-source",
+        "parentFile": "parent dirty\n"
+      },
+      {
+        "case": "dirty-child",
+        "success": false,
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 7c13a966be209ef25ab870c6b26eb0fdca905c6c 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childStatus": " M file",
+        "parentStatus": " M modules/child\n M parent-file",
+        "childFile": "local child\n",
+        "childOrigin": "<fixture>/child-source",
+        "parentFile": "parent dirty\n"
+      },
+      {
+        "case": "stale-index",
+        "success": false,
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 82e5149c96a1b6dd0a4397116deede66f979b618 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childStatus": " M file",
+        "parentStatus": "MM modules/child\n M parent-file",
+        "childFile": "local child\n",
+        "childOrigin": "<fixture>/child-source",
+        "parentFile": "parent dirty\n"
+      },
+      {
+        "case": "sync",
+        "success": true,
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 82e5149c96a1b6dd0a4397116deede66f979b618 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source-new\n",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source-new",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childStatus": "",
+        "parentStatus": " M .gitmodules\nM  modules/child\n M parent-file",
+        "childFile": "two\n",
+        "childOrigin": "<fixture>/child-source-new",
+        "parentFile": "parent dirty\n"
+      }
+    ],
+    "Rust": [
+      {
+        "case": "initialize",
+        "childFile": "one\n",
+        "childHead": "7c13a966be209ef25ab870c6b26eb0fdca905c6c",
+        "childIndex": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tfile",
+        "childOrigin": "<fixture>/child-source",
+        "childStatus": "",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 7c13a966be209ef25ab870c6b26eb0fdca905c6c 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "parentFile": "parent\n",
+        "parentStatus": "",
+        "success": true
+      },
+      {
+        "case": "indexed-update",
+        "childFile": "two\n",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childOrigin": "<fixture>/child-source",
+        "childStatus": "",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 82e5149c96a1b6dd0a4397116deede66f979b618 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "parentFile": "parent dirty\n",
+        "parentStatus": "M  modules/child\n M parent-file",
+        "success": true
+      },
+      {
+        "case": "dirty-child",
+        "childFile": "local child\n",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childOrigin": "<fixture>/child-source",
+        "childStatus": " M file",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 7c13a966be209ef25ab870c6b26eb0fdca905c6c 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "parentFile": "parent dirty\n",
+        "parentStatus": " M modules/child\n M parent-file",
+        "success": false
+      },
+      {
+        "case": "stale-index",
+        "childFile": "local child\n",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childOrigin": "<fixture>/child-source",
+        "childStatus": " M file",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source",
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 82e5149c96a1b6dd0a4397116deede66f979b618 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source\n",
+        "parentFile": "parent dirty\n",
+        "parentStatus": "MM modules/child\n M parent-file",
+        "success": false
+      },
+      {
+        "case": "sync",
+        "childFile": "two\n",
+        "childHead": "82e5149c96a1b6dd0a4397116deede66f979b618",
+        "childIndex": "100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\tfile",
+        "childOrigin": "<fixture>/child-source-new",
+        "childStatus": "",
+        "config": "submodule.modules/child.active true\nsubmodule.modules/child.url <fixture>/child-source-new",
+        "head": "7fa743554e4476908d7b76bcbf4fa7fdeb2a0b08",
+        "index": "100644 f2f238f196948e9c75f06db4e98c26157dd3359c 0\t.gitmodules\n160000 82e5149c96a1b6dd0a4397116deede66f979b618 0\tmodules/child\n100644 9676f5bfe4a9ea8b7d15ea602e14acd1ef67e3c0 0\tparent-file",
+        "modules": "[submodule \"modules/child\"]\n\tpath = modules/child\n\turl = ../child-source-new\n",
+        "parentFile": "parent dirty\n",
+        "parentStatus": " M .gitmodules\nM  modules/child\n M parent-file",
+        "success": true
+      }
+    ]
+  },
+  "Corrections": [
+    "Global literal flag did not isolate a bracket-name path; explicit :(literal) pathspec passes with unchanged matching sibling.",
+    "Initial headless Activity assertion omitted embedded viewports and AccessKit values. Dropping unconsumed texture output during assertion caused a second panic. Corrected fixture embedding, text lookup and delta disposal; final two workflow tests pass.",
+    "Automatic review rejected a proposed global-config flag in fixture setup. The accepted test names only its disposable config file explicitly.",
+    "Final Clippy replaced two cloned temporary path slices in test assertions with borrowed slices. No execution semantics changed."
+  ],
+  "LocalDelivery": {
+    "Version": "0.50.0",
+    "Publish": false,
+    "Install": false,
+    "Merge": false,
+    "PayloadReceipt": "Build/rust-0.50.0-local-win-x64/VERIFICATION.json",
+    "Note": "Payload is built after this source commit; receipt records actual source commit, clean status, hashes and smoke match. No payload success is inferred from these source checks."
+  },
+  "Isolation": {
+    "DesktopCapture": false,
+    "NativeInteractiveLaunch": false,
+    "CSharpCheckoutClean": true,
+    "NormalProfilesUsed": false,
+    "UserRepositoriesUsed": false
+  },
+  "Limits": [
+    "Native Windows appearance/keyboard/accessibility and scaled-window acceptance remain open.",
+    "Hosted HTTPS/SSH authentication, broader interrupted/partial submodule clone outcomes remain unverified.",
+    "Full required TODO parity, final isolated installed update/failure gates and paired C#/Rust startup/memory/operation benchmarks remain unfinished.",
+    "Focused check durations are not application benchmarks. No installer, publisher signing or public release is certified here."
+  ]
+}

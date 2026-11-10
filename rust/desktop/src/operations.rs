@@ -179,6 +179,7 @@ enum LocalAction {
     Recovery(shovel_core::recovery::Action),
     Stash(shovel_core::stashes::Action),
     Remote(shovel_core::remotes::Action),
+    Submodule(shovel_core::submodules::Action),
 }
 impl LocalAction {
     fn key(&self) -> String {
@@ -194,6 +195,7 @@ impl LocalAction {
             Self::History(action) => format!("history:{action:?}"),
             Self::Recovery(action) => format!("recovery:{action:?}"),
             Self::Stash(action) => format!("stash:{action:?}"),
+            Self::Submodule(action) => format!("submodule:{action:?}"),
             Self::Remote(action) => format!(
                 "remote:{:x}",
                 Sha256::digest(format!("{action:?}").as_bytes())
@@ -237,6 +239,7 @@ struct PendingNetwork {
 pub struct Controller {
     pub divergence: crate::divergence::Display,
     pending: Vec<PendingNetwork>,
+    related_changes: Vec<PathBuf>,
     options: Option<(Options, Snapshot)>,
     next: u64,
     runs: Vec<Run>,
@@ -251,6 +254,7 @@ impl Default for Controller {
         Self {
             divergence: Default::default(),
             pending: vec![],
+            related_changes: vec![],
             options: None,
             next: 1,
             runs: vec![],
@@ -804,6 +808,27 @@ impl Controller {
             ctx,
         );
     }
+    pub fn submit_submodule(
+        &mut self,
+        action: shovel_core::submodules::Action,
+        snapshot: &Snapshot,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        let label = match action.operation {
+            shovel_core::submodules::Operation::Update => "ActionTitleSubmoduleUpdate",
+            shovel_core::submodules::Operation::Sync => "ActionTitleSubmoduleSync",
+        };
+        self.submit_local(
+            label,
+            LocalAction::Submodule(action),
+            snapshot,
+            git,
+            scheduler,
+            ctx,
+        );
+    }
     fn submit_local(
         &mut self,
         label: &'static str,
@@ -816,6 +841,7 @@ impl Controller {
         let sequence = self.next;
         self.next += 1;
         let captured = snapshot.clone();
+        let helper = self.helper.clone();
         let sender = self.sender.clone();
         let discarded = sender.clone();
         let ctx = ctx.clone();
@@ -854,6 +880,34 @@ impl Controller {
                         git.execute_stash(&captured, action, Some(progress))
                     } else if let LocalAction::Remote(action) = &action {
                         git.execute_remote(&captured, action, Some(progress))
+                    } else if let LocalAction::Submodule(action) = &action {
+                        let prepared = git
+                            .prepare_local(&captured, true, &Cancellation::default())
+                            .map_err(|e| text(&e.code()))?;
+                        let auth = if action.operation == shovel_core::submodules::Operation::Update
+                        {
+                            let helper = match &helper {
+                                Some(path) => path.clone(),
+                                None => std::env::current_exe()
+                                    .map_err(|_| text("ActionAskPassMissing"))?
+                                    .with_file_name("ShovelRustAskPass.exe"),
+                            };
+                            let prompt_sender = sender.clone();
+                            let prompt_ctx = ctx.clone();
+                            Some(
+                                authentication::Session::start(
+                                    &helper,
+                                    Arc::new(move |prompt| {
+                                        let _ = prompt_sender.send(Event::Prompt(sequence, prompt));
+                                        prompt_ctx.request_repaint();
+                                    }),
+                                )
+                                .map_err(|_| text("ActionAskPassMissing"))?,
+                            )
+                        } else {
+                            None
+                        };
+                        git.execute_submodule(&prepared, action, auth.as_ref(), Some(progress))
                     } else {
                         let unchanged_refs = !matches!(
                             action,
@@ -871,7 +925,8 @@ impl Controller {
                             }
                             LocalAction::Recovery(_)
                             | LocalAction::Stash(_)
-                            | LocalAction::Remote(_) => unreachable!(),
+                            | LocalAction::Remote(_)
+                            | LocalAction::Submodule(_) => unreachable!(),
                         }
                     };
                     result
@@ -945,6 +1000,7 @@ impl Controller {
                             Stage::DroppingStash => "ActionTitleStashDrop",
                             Stage::UpdatingBranch => "ActionStageUpdatingBranch",
                             Stage::UpdatingRemote => "RemoteManageTitle",
+                            Stage::UpdatingSubmodule => run.label,
                             Stage::Resetting => "ActionStageResetting",
                             Stage::Reverting => "ActionStageReverting",
                             Stage::Recovering => "ActionStageRecovering",
@@ -996,6 +1052,7 @@ impl Controller {
                         run.changed = true;
                         match *result {
                             Ok(result) => {
+                                self.related_changes.extend(result.related.iter().cloned());
                                 let pending = result
                                     .updated
                                     .as_ref()
@@ -1083,10 +1140,13 @@ impl Controller {
         if !self.prompts.is_empty() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
-        self.runs
+        let mut changed: Vec<_> = self
+            .runs
             .iter_mut()
             .filter_map(|r| std::mem::take(&mut r.changed).then(|| r.path.clone()))
-            .collect()
+            .collect();
+        changed.append(&mut self.related_changes);
+        changed
     }
     pub fn record_owned(&mut self, path: PathBuf, activity: crate::commit::OwnedActivity) {
         if let Some(run) = self.runs.iter_mut().find(|r| r.request == activity.request) {

@@ -2,6 +2,8 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust local checkpoint and submodules, 2026-11-10.** The owner requested finishing this batch, a local-only Windows test build and then pausing for testing, with no publication or installation. Selected submodule Open/Update/Sync and tracking details are wired; eight native checks, five exact C#/Rust outcomes and headless menu/cache checks pass. First initialization locks the future child repository, including linked parents and held hooks. [Evidence and remaining R33/R67 acceptance](rust-rewrite.md#selected-submodules-and-sidebar-data-2026-11-10). All broader parity, final update and benchmark work remains open.
+
 **Rust sidebar interactions, 2026-11-10.** Exact-target remote context Fetch now preserves toolbar preferences and separates different queued targets. Branch Enter/double-click opens review and performs confirmed native checkout. Two focused actual-input/native checks, four queue regressions and tag/stash navigation pass; Clippy passes. [Evidence and remaining R33 scope](rust-rewrite.md#sidebar-fetch-and-activation-2026-11-10). R33 stays open.
 
 

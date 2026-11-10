@@ -60,6 +60,7 @@ pub enum Stage {
     DroppingStash,
     UpdatingBranch,
     UpdatingRemote,
+    UpdatingSubmodule,
     Resetting,
     Reverting,
     Recovering,

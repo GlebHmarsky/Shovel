@@ -813,6 +813,7 @@ impl Git {
             preserves_worktree: false,
             unchanged: false,
             updated,
+            related: Vec::new(),
             authentication_failure: auth.and_then(authentication::Session::failure),
         })
     }

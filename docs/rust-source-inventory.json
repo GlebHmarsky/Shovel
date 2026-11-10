@@ -829,8 +829,8 @@
         "R67"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/desktop/src/main.rs sidebar; workspace_style.rs reference focus; operations.rs named-remote Fetch; branches.rs reviewed checkout",
-      "Evidence": "2026-11-10: reviewed cached sidebar and native input baseline. Real headless Enter/double-click -> checkout review -> native switch, named remote Fetch with isolated remotes, distinct-target queues and retained owner pass. R33 remains open for submodules, tracking details, remaining context actions and wider native tree acceptance. See docs/rust-rewrite.md sidebar checkpoint."
+      "RustImplementation": "rust/desktop/src/main.rs sidebar; workspace_style.rs reference focus; operations.rs named-remote Fetch; branches.rs reviewed checkout; rust/core/src/sidebar.rs; rust/core/src/submodules.rs; rust/desktop/src/sidebar.rs; rust/desktop/src/main.rs; rust/desktop/src/operations.rs",
+      "Evidence": "docs/evidence/rust-submodules-2026-11-10.json; docs/rust-rewrite.md#selected-submodules-and-sidebar-data-2026-11-10. Native selected submodule ownership/actions and headless input are verified; R33/R67 retain native/authentication acceptance limits."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellStartupCache.cs",
@@ -1363,8 +1363,8 @@
         "R67"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/desktop/src/main.rs sidebar; workspace_style.rs reference focus; operations.rs named-remote Fetch; branches.rs reviewed checkout",
-      "Evidence": "2026-11-10: reviewed cached sidebar and native input baseline. Real headless Enter/double-click -> checkout review -> native switch, named remote Fetch with isolated remotes, distinct-target queues and retained owner pass. R33 remains open for submodules, tracking details, remaining context actions and wider native tree acceptance. See docs/rust-rewrite.md sidebar checkpoint."
+      "RustImplementation": "rust/desktop/src/main.rs sidebar; workspace_style.rs reference focus; operations.rs named-remote Fetch; branches.rs reviewed checkout; rust/core/src/sidebar.rs; rust/core/src/submodules.rs; rust/desktop/src/sidebar.rs; rust/desktop/src/main.rs; rust/desktop/src/operations.rs",
+      "Evidence": "docs/evidence/rust-submodules-2026-11-10.json; docs/rust-rewrite.md#selected-submodules-and-sidebar-data-2026-11-10. Native selected submodule ownership/actions and headless input are verified; R33/R67 retain native/authentication acceptance limits."
     },
     {
       "Path": "src/GitGui.App/Views/RepositorySidebarView.xaml.cs",
@@ -1374,8 +1374,8 @@
         "R67"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/desktop/src/main.rs sidebar; workspace_style.rs reference focus; operations.rs named-remote Fetch; branches.rs reviewed checkout",
-      "Evidence": "2026-11-10: reviewed cached sidebar and native input baseline. Real headless Enter/double-click -> checkout review -> native switch, named remote Fetch with isolated remotes, distinct-target queues and retained owner pass. R33 remains open for submodules, tracking details, remaining context actions and wider native tree acceptance. See docs/rust-rewrite.md sidebar checkpoint."
+      "RustImplementation": "rust/desktop/src/main.rs sidebar; workspace_style.rs reference focus; operations.rs named-remote Fetch; branches.rs reviewed checkout; rust/core/src/sidebar.rs; rust/core/src/submodules.rs; rust/desktop/src/sidebar.rs; rust/desktop/src/main.rs; rust/desktop/src/operations.rs",
+      "Evidence": "docs/evidence/rust-submodules-2026-11-10.json; docs/rust-rewrite.md#selected-submodules-and-sidebar-data-2026-11-10. Native selected submodule ownership/actions and headless input are verified; R33/R67 retain native/authentication acceptance limits."
     },
     {
       "Path": "src/GitGui.App/Views/SettingsWindow.xaml",
@@ -1956,9 +1956,9 @@
         "R33",
         "R67"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/sidebar.rs; rust/core/src/submodules.rs; rust/desktop/src/sidebar.rs; rust/desktop/src/main.rs; rust/desktop/src/operations.rs",
+      "Evidence": "docs/evidence/rust-submodules-2026-11-10.json; docs/rust-rewrite.md#selected-submodules-and-sidebar-data-2026-11-10. Native selected submodule ownership/actions and headless input are verified; R33/R67 retain native/authentication acceptance limits."
     },
     {
       "Path": "src/GitGui.Core/Git/SequenceRecovery.cs",

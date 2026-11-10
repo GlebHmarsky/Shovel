@@ -1,5 +1,13 @@
 # Changelog
 
+## Rust 0.50.0 - 2026-11-10 (local test build; not published)
+
+- Add selected submodule Open, indexed Update and URL Sync, with literal paths, parent/child ownership, native dirty-file protection and retained Activity output.
+- Show cached sidebar branch tracking details; preserve preparation-free menus and refresh affected child tabs.
+- Include the preceding Rust work: native init/clone and remote management, reviewed branch activation, exact-target sidebar Fetch, ahead/behind badges, startup/history retention and repository-owned queues/draft recovery.
+- Include the source fix for non-default UI-scale geometry; native Windows geometry and wider visual/authentication acceptance remain open.
+- Produce a local-only Windows x64 test payload. No installer execution, GitHub publication, main merge or Rust Stable promotion. Full parity, final installed update and paired performance evidence remain in TODO.
+
 ## Rust 0.49.2 - 2026-11-07 (Rust Beta)
 
 - Publish native Rust installers and signed updates through the existing GitHub credential integration.

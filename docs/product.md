@@ -229,6 +229,8 @@ Opening these menus performs no Git, tool discovery or filesystem preparation. S
 
 ## Repository sidebar (0.23.0)
 
+**Rust selected submodules (2026-11-10):** the cached sidebar shows local branch tracking details and indexed submodule paths after history loads. Selecting a submodule or choosing Open opens its initialized child repository; an unavailable child reports the error in Activity. Update initializes/checks out the indexed commit; Sync updates the selected module URL from .gitmodules. Native Git preserves dirty-file protection and hooks. There is no force, recursive update, remote-latest selection, automatic staging or rollback. Accepted work survives tab closure; affected parent/child tabs refresh or become stale for their next activation. [Evidence and limits](rust-rewrite.md#selected-submodules-and-sidebar-data-2026-11-10).
+
 **Rust interaction checkpoint (2026-11-10):** local branch rows receive keyboard focus on selection. Enter or double-click opens the existing captured-target checkout review; confirmation executes through the repository-owned queue. Remote context Fetch uses exactly the clicked configured remote, without inheriting or changing remembered toolbar flags. Same-target queued clicks coalesce; different remote targets remain distinct requests. Opening menus performs no preparation. [Evidence and remaining sidebar scope](rust-rewrite.md#sidebar-fetch-and-activation-2026-11-10).
 
 

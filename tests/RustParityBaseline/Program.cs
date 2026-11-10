@@ -5,7 +5,7 @@ using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
 
-if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence" or "--history" or "--remotes")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone, --divergence or --history, --remotes.");
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence" or "--history" or "--remotes" or "--submodules")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone, --divergence or --history, --remotes or --submodules.");
 var root = Path.GetFullPath(args[0]);
 var output = Path.GetFullPath(args[1]);
 if (Directory.Exists(root) || File.Exists(root)) throw new IOException("Fixture path must not exist.");
@@ -25,6 +25,71 @@ async Task<string> Git(string path, params string[] arguments)
     var result = await runner.RunAsync(new(git.Executable, path, arguments), default);
     if (result.ExitCode != 0) throw new IOException(Encoding.UTF8.GetString(result.StandardError));
     return Encoding.UTF8.GetString(result.StandardOutput).TrimEnd();
+}
+
+
+if (args.Length == 3 && args[2] == "--submodules")
+{
+    await File.AppendAllTextAsync(config, "[protocol \"file\"]\nallow=always\n");
+    var path = Path.Combine(root, "parent");
+    var source = Path.Combine(root, "child-source");
+    var child = Path.Combine(path, "modules", "child");
+    Directory.CreateDirectory(path); Directory.CreateDirectory(source);
+    await Git(source, "init", "--initial-branch=main");
+    await File.WriteAllTextAsync(Path.Combine(source, "file"), "one\n");
+    await Git(source, "add", "file"); await Git(source, "commit", "-m", "one");
+    var first = await Git(source, "rev-parse", "HEAD");
+    await Git(path, "init", "--initial-branch=main");
+    await File.WriteAllTextAsync(Path.Combine(path, "parent-file"), "parent\n");
+    await Git(path, "add", "parent-file"); await Git(path, "commit", "-m", "parent");
+    await Git(path, "submodule", "add", "--", "../child-source", "modules/child");
+    await Git(path, "commit", "-am", "add child");
+    await File.WriteAllTextAsync(Path.Combine(source, "file"), "two\n");
+    await Git(source, "commit", "-am", "two");
+    var second = await Git(source, "rev-parse", "HEAD");
+    string Normalize(string value) => value.Replace('\\', '/').Replace(root.Replace('\\', '/'), "<fixture>");
+    var records = new List<object>();
+    async Task Record(string name, bool success) {
+        records.Add(new {
+            @case=name, success,
+            head=await Git(path,"rev-parse","HEAD"),
+            index=await Git(path,"ls-files","--stage"),
+            modules=await File.ReadAllTextAsync(Path.Combine(path,".gitmodules")),
+            config=Normalize(await Git(path,"config","--local","--get-regexp",@"^submodule\.")),
+            childHead=await Git(child,"rev-parse","HEAD"),
+            childIndex=await Git(child,"ls-files","--stage"),
+            childStatus=await Git(child,"status","--porcelain=v1"),
+            parentStatus=await Git(path,"status","--porcelain=v1"),
+            childFile=await File.ReadAllTextAsync(Path.Combine(child,"file")),
+            childOrigin=Normalize(await Git(child,"remote","get-url","origin")),
+            parentFile=await File.ReadAllTextAsync(Path.Combine(path,"parent-file"))
+        });
+    }
+    async Task<bool> Execute(GitAction action, string hash) {
+        var context=await actions.PrepareAsync(git,path,default);
+        return (await actions.ExecuteAsync(context,new(action,Branch:"modules/child",StartRef:hash),default)).Success;
+    }
+    await Git(path,"submodule","deinit","--force","--","modules/child");
+    await Record("initialize",await Execute(GitAction.SubmoduleUpdate,first));
+    await Git(path,"update-index","--cacheinfo",$"160000,{second},modules/child");
+    await File.WriteAllTextAsync(Path.Combine(path,"parent-file"),"parent dirty\n");
+    await Record("indexed-update",await Execute(GitAction.SubmoduleUpdate,second));
+    await Git(path,"update-index","--cacheinfo",$"160000,{first},modules/child");
+    await File.WriteAllTextAsync(Path.Combine(child,"file"),"local child\n");
+    await Record("dirty-child",await Execute(GitAction.SubmoduleUpdate,first));
+    var stale = await actions.PrepareAsync(git,path,default);
+    await Git(path,"update-index","--cacheinfo",$"160000,{second},modules/child");
+    try {
+        await actions.ExecuteAsync(stale,new(GitAction.SubmoduleUpdate,Branch:"modules/child",StartRef:first),default);
+        throw new IOException("Expected stale selected gitlink rejection.");
+    } catch(GitActionException e) when(e.Code=="ActionChanged") { }
+    await Record("stale-index",false);
+    await File.WriteAllTextAsync(Path.Combine(child,"file"),"two\n");
+    await Git(path,"config","--file",".gitmodules","submodule.modules/child.url","../child-source-new");
+    await Record("sync",await Execute(GitAction.SubmoduleSync,second));
+    await File.WriteAllTextAsync(Path.Combine(output,"submodules.json"),JsonSerializer.Serialize(records,new JsonSerializerOptions {WriteIndented=true}));
+    Console.WriteLine("C# selected submodule outcomes recorded.");
+    return;
 }
 
 if (args.Length == 3 && args[2] == "--remotes")
