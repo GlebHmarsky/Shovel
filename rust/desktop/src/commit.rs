@@ -57,6 +57,7 @@ enum Leave {
     },
 }
 pub struct Editor {
+    pub(super) read_workers: crate::read_workers::Workers,
     pub path: PathBuf,
     pub open: bool,
     pub context: Option<Arc<Context>>,
@@ -132,6 +133,7 @@ impl Editor {
     pub fn new(path: PathBuf, git: Arc<Git>, scheduler: Scheduler, store: drafts::Store) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            read_workers: Default::default(),
             path,
             open: true,
             context: None,
@@ -358,6 +360,9 @@ impl Editor {
         });
     }
     pub fn refresh(&mut self, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         if self.loading || self.action_busy() {
             self.refresh_pending = true;
             return;
@@ -370,13 +375,21 @@ impl Editor {
         let path = self.path.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let cancel = Cancellation::default();
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
-            let result = git.working_copy(&path, &Cancellation::default());
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&path);
+            let result = git.working_copy(&path, &cancel);
             let _ = tx.send(Event::Loaded(generation, Box::new(result)));
             ctx.request_repaint();
         });
     }
     fn show_diff(&mut self, entry: Change, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         let Some(context) = self.context.clone() else {
             return;
         };
@@ -409,7 +422,9 @@ impl Editor {
         let tx = self.sender.clone();
         let ctx = ctx.clone();
         let options = self.diff_options;
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
             let result = git.file_diff(&context, &entry, options, &cancel);
             let _ = tx.send(Event::Diff(generation, result));
             ctx.request_repaint();

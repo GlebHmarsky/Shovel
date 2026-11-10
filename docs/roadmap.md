@@ -937,3 +937,7 @@ Pending close now cancels and drains automatic fetch, then continues the origina
 ### Rust workspace read ownership at exit — 2026-11-10
 
 Track actual history/metadata worker lifetimes independently of UI generations and cache ownership; cancel and drain them on exit, suppressing new read admission. Five focused registry/held-worker/preview checks and Clippy passed. [Evidence and remaining editor/updater/startup/tool limits](rust-rewrite.md#workspace-read-shutdown-drainage-2026-11-10). R24 remains open and local test payloads are unchanged.
+
+### Rust comparison/editor read drainage — 2026-11-10
+
+Propagate workspace worker ownership through comparison, Commit, stash and file-history views; suspend follow-up reads during shutdown and resume after a cancelled close. Ten focused/regression checks and Clippy passed. [Evidence and remaining draft/conflict/updater/startup/tool limits](rust-rewrite.md#comparison-and-editor-read-drainage-2026-11-10). R24 remains open; existing local builds unchanged.

@@ -35,6 +35,7 @@ struct Event {
     result: Result<ResultData, Error>,
 }
 pub struct Inspector {
+    pub(super) read_workers: crate::read_workers::Workers,
     pub open: bool,
     context: Arc<Context>,
     entry: Change,
@@ -57,10 +58,17 @@ pub struct Inspector {
     size: egui::Vec2,
 }
 impl Inspector {
+    pub fn with_read_workers(mut self, workers: crate::read_workers::Workers) -> Self {
+        self.read_workers = workers;
+        self.comparison.read_workers = self.read_workers.clone();
+        self
+    }
+
     pub fn new(context: Arc<Context>, entry: Change, git: Arc<Git>, blame: bool) -> Self {
         let (sender, receiver) = mpsc::channel();
         let comparison = comparison::Pane::new(context.repository.worktree.clone(), git.clone());
         Self {
+            read_workers: Default::default(),
             context,
             entry,
             git,
@@ -87,6 +95,9 @@ impl Inspector {
         self.page.as_ref().map_or(0, |p| p.offset)
     }
     fn load(&mut self, offset: usize, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         if !self.open {
             return;
         }
@@ -109,7 +120,9 @@ impl Inspector {
             self.sender.clone(),
             ctx.clone(),
         );
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
             let result = match mode {
                 Mode::History => git
                     .file_history(&context, &entry, cursor.as_ref(), &cancel)
@@ -178,7 +191,8 @@ impl Inspector {
                         self.comparison = comparison::Pane::new(
                             self.context.repository.worktree.clone(),
                             self.git.clone(),
-                        );
+                        )
+                        .with_read_workers(self.read_workers.clone());
                     }
                     self.page = Some(page);
                     self.select(selected, ctx);

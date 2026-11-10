@@ -479,3 +479,71 @@ fn shutdown_waits_for_invalidated_metadata_workers_after_cache_replacement() {
         assert!(app.read_workers.cancel_and_drained());
     }
 }
+
+#[test]
+fn shutdown_tracks_removed_comparison_and_commit_reads_and_blocks_new_comparisons() {
+    let fixture = Fixture::new();
+    for editor_read in [false, true] {
+        let ctx = egui::Context::default();
+        let mut app = fixture.app(&ctx);
+        profile(&mut app, fixture._temp.path());
+        settle_save(&mut app, &ctx);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !app.read_workers.cancel_and_drained() {
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(2));
+        }
+        app.read_workers.resume();
+        let git = app.git.clone().unwrap();
+        let commit = app.tabs[0].page.as_ref().unwrap().entries[0].commit.clone();
+        let (ready, started) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        read_gates()
+            .lock()
+            .unwrap()
+            .insert(fixture.root.clone(), (ready, held));
+        if editor_read {
+            let mut editor = crate::commit::Editor::new(
+                fixture.root.clone(),
+                git.clone(),
+                app.scheduler.clone(),
+                shovel_core::drafts::Store {
+                    directory: fixture._temp.path().join("drafts"),
+                    legacy_directory: None,
+                },
+            );
+            editor.read_workers = app.read_workers.clone();
+            editor.refresh(&ctx);
+            started.recv_timeout(Duration::from_secs(5)).unwrap();
+            drop(editor);
+        } else {
+            let mut pane = crate::comparison::Pane::new(fixture.root.clone(), git.clone())
+                .with_read_workers(app.read_workers.clone());
+            pane.select(&commit, &ctx);
+            started.recv_timeout(Duration::from_secs(5)).unwrap();
+            drop(pane);
+        }
+        app.close(&ctx);
+        assert!(app.pending_exit && !app.exit_ready);
+        let mut next = crate::comparison::Pane::new(fixture.root.clone(), git)
+            .with_read_workers(app.read_workers.clone());
+        next.select(&commit, &ctx);
+        assert!(
+            !next.is_loading(),
+            "new comparison must not start while shutdown drains"
+        );
+        release.send(()).unwrap();
+        settle_save(&mut app, &ctx);
+        assert!(app.exit_ready && app.read_workers.cancel_and_drained());
+        // The same registry can admit real reads again after a Stay Open decision.
+        app.read_workers.resume();
+        next.select(&commit, &ctx);
+        assert!(next.is_loading());
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while next.is_loading() {
+            next.poll(&ctx);
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(2));
+        }
+    }
+}

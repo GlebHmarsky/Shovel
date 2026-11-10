@@ -488,6 +488,13 @@ impl Workspace {
         });
     }
     fn receive(&mut self, ctx: &egui::Context) {
+        if !self.closing
+            && !self.pending_exit
+            && !self.confirm_exit_without_save
+            && !self.exit_ready
+        {
+            self.read_workers.resume();
+        }
         self.sync_ui_scale(ctx);
         self.poll_git_selection(ctx);
         while let Ok(event) = self.receiver.try_recv() {
@@ -1048,7 +1055,7 @@ impl Workspace {
             view.activate(&snapshot);
             view
         } else {
-            stashes::View::new(snapshot, git)
+            stashes::View::new(snapshot, git).with_read_workers(self.read_workers.clone())
         };
         self.stash_views.push(view);
         for view in self.stash_views.iter_mut().rev().skip(3) {
@@ -1075,6 +1082,7 @@ impl Workspace {
                 self.scheduler.clone(),
                 store.clone(),
             );
+            editor.read_workers = self.read_workers.clone();
             editor.restore_layout(&self.settings);
             editor.external_merge_tool = self
                 .settings
@@ -2522,7 +2530,8 @@ impl eframe::App for Workspace {
                     if tab.comparison.is_none()
                         && let Some(git) = &self.git
                     {
-                        let mut pane = comparison::Pane::new(tab.path.clone(), git.clone());
+                        let mut pane = comparison::Pane::new(tab.path.clone(), git.clone())
+                            .with_read_workers(self.read_workers.clone());
                         pane.files_width = self
                             .settings
                             .get("HistoryFilesWidth")

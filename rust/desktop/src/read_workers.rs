@@ -8,6 +8,7 @@ use std::{
 #[derive(Default)]
 struct State {
     next: u64,
+    stopping: bool,
     active: BTreeMap<u64, Cancellation>,
 }
 #[derive(Clone, Default)]
@@ -27,8 +28,15 @@ impl Workers {
             id,
         }
     }
+    pub fn stopping(&self) -> bool {
+        self.0.lock().unwrap().stopping
+    }
+    pub fn resume(&self) {
+        self.0.lock().unwrap().stopping = false;
+    }
     pub fn cancel_and_drained(&self) -> bool {
-        let state = self.0.lock().unwrap();
+        let mut state = self.0.lock().unwrap();
+        state.stopping = true;
         for cancel in state.active.values() {
             cancel.cancel();
         }

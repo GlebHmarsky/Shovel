@@ -28,6 +28,7 @@ struct Confirmation {
     entry: Entry,
 }
 pub struct View {
+    pub(super) read_workers: crate::read_workers::Workers,
     pub path: PathBuf,
     pub open: bool,
     snapshot: Snapshot,
@@ -57,6 +58,11 @@ pub struct View {
     pending: Vec<(u64, Option<String>)>,
 }
 impl View {
+    pub fn with_read_workers(mut self, workers: crate::read_workers::Workers) -> Self {
+        self.read_workers = workers;
+        self
+    }
+
     pub fn can_retire(&self) -> bool {
         !self.open && !self.reading && !self.inspecting && self.pending.is_empty()
     }
@@ -68,6 +74,7 @@ impl View {
     pub fn new(snapshot: Snapshot, git: Arc<Git>) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            read_workers: Default::default(),
             path: snapshot.worktree.clone(),
             open: true,
             snapshot,
@@ -118,6 +125,9 @@ impl View {
         self.refresh_needed = true;
     }
     fn refresh(&mut self, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         self.list_cancel.cancel();
         self.list_cancel = Cancellation::default();
         self.list_generation += 1;
@@ -136,13 +146,18 @@ impl View {
             ctx.clone(),
             self.list_generation,
         );
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
             let result = git.stashes(&expected, &cancel).map_err(|e| text(&e.code()));
             let _ = tx.send(Event::List(generation, result));
             ctx.request_repaint();
         });
     }
     fn inspect(&mut self, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         self.inspection_cancel.cancel();
         self.inspection_cancel = Cancellation::default();
         self.inspection_generation += 1;
@@ -161,7 +176,9 @@ impl View {
             ctx.clone(),
             self.inspection_generation,
         );
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
             let result = git
                 .inspect_stash(&expected, &hash, &cancel)
                 .map_err(|e| text(&e.code()));
@@ -186,9 +203,10 @@ impl View {
             3 => vec![],
             _ => vec![data.worktree.parents[0].clone()],
         };
-        let pane = self
-            .pane
-            .get_or_insert_with(|| comparison::Pane::new(self.path.clone(), self.git.clone()));
+        let pane = self.pane.get_or_insert_with(|| {
+            comparison::Pane::new(self.path.clone(), self.git.clone())
+                .with_read_workers(self.read_workers.clone())
+        });
         pane.details_index = 1;
         pane.select(&commit, ctx);
     }

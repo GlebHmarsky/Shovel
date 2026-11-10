@@ -422,12 +422,15 @@ impl Editor {
                 11 => self.begin_patch(menu.selected.clone(), ctx),
                 12 | 13 => self.begin_shell(menu.selected.clone(), action == 13, ctx),
                 14 | 15 => {
-                    self.inspector = Some(crate::file_history::Inspector::new(
-                        menu.selected.context.clone(),
-                        menu.selected.entries[0].clone(),
-                        self.git.clone(),
-                        action == 15,
-                    ));
+                    self.inspector = Some(
+                        crate::file_history::Inspector::new(
+                            menu.selected.context.clone(),
+                            menu.selected.entries[0].clone(),
+                            self.git.clone(),
+                            action == 15,
+                        )
+                        .with_read_workers(self.read_workers.clone()),
+                    );
                     ctx.request_repaint();
                 }
                 _ => unreachable!(),

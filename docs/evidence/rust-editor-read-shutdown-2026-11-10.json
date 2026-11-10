@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-10",
+  "scope": [
+    "comparison files/diffs",
+    "Commit working-copy status and file diff",
+    "stash list/inspection/comparison",
+    "file history/blame/comparison"
+  ],
+  "checks": [
+    {
+      "filter": "shutdown_tracks_removed_comparison",
+      "passed": 1,
+      "seconds": 2.44
+    },
+    {
+      "filter": "comparison_renders_and_retains",
+      "passed": 1,
+      "seconds": 1.94
+    },
+    {
+      "filter": "file_history::tests",
+      "passed": 3,
+      "seconds": 11.3
+    },
+    {
+      "filter": "stashes::tests",
+      "passed": 2,
+      "seconds": 13.07
+    },
+    {
+      "filter": "distinct_stage_requests_and_commit_use_owned_index_after_view_closes",
+      "passed": 1,
+      "seconds": 9.73
+    },
+    {
+      "filter": "shutdown_failed_save_stay_open_and_retry_preserve_competing_profile",
+      "passed": 1,
+      "seconds": 0.08
+    },
+    {
+      "filter": "app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save",
+      "passed": 1,
+      "seconds": 4.84
+    }
+  ],
+  "clippy": "core/desktop all targets passed with warnings denied",
+  "limits": [
+    "Headless worker gates before native reads",
+    "Not desktop/in-flight cancellation certification",
+    "Draft initialization, conflict loading, updater and remaining startup/tool workers still open"
+  ],
+  "delivery": "source batch only; prior 0.50.1 local payload unchanged"
+}

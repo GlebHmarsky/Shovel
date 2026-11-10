@@ -24,6 +24,7 @@ enum Event {
     Diff(u64, String, String, Result<FileDiff, working::Error>),
 }
 pub struct Pane {
+    pub(super) read_workers: crate::read_workers::Workers,
     path: PathBuf,
     git: Arc<Git>,
     selected: Option<Commit>,
@@ -44,9 +45,15 @@ pub struct Pane {
     pub view: diff_view::View,
 }
 impl Pane {
+    pub fn with_read_workers(mut self, workers: crate::read_workers::Workers) -> Self {
+        self.read_workers = workers;
+        self
+    }
+
     pub fn new(path: PathBuf, git: Arc<Git>) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            read_workers: Default::default(),
             path,
             git,
             selected: None,
@@ -68,6 +75,9 @@ impl Pane {
         }
     }
     pub fn select(&mut self, commit: &Commit, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         if self
             .selected
             .as_ref()
@@ -80,6 +90,9 @@ impl Pane {
         self.load_files(ctx);
     }
     pub fn select_file(&mut self, commit: &Commit, path: &str, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         let same = self
             .selected
             .as_ref()
@@ -112,6 +125,9 @@ impl Pane {
         (self.generation, self.cancel.clone())
     }
     fn load_files(&mut self, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         let Some(commit) = self.selected.clone() else {
             return;
         };
@@ -121,13 +137,20 @@ impl Pane {
         let path = self.path.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&path);
             let result = git.commit_files(&path, &commit.hash, parent.as_deref(), &cancel);
             let _ = tx.send(Event::Files(generation, result));
             ctx.request_repaint();
         });
     }
     fn load_diff(&mut self, path: &str, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         let Some(comparison) = self.comparison.clone() else {
             return;
         };
@@ -140,7 +163,11 @@ impl Pane {
         let root = self.path.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&root);
             let result = git.commit_file_diff(&root, &comparison, &entry, &cancel);
             let _ = tx.send(Event::Diff(
                 generation,
