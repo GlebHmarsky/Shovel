@@ -182,6 +182,14 @@ impl Editor {
             patch_picker: Arc::new(|dialog| dialog.save_file()),
         }
     }
+    pub fn can_retire(&self) -> bool {
+        !self.open
+            && !self.loading
+            && !self.blocks_exit()
+            && !self.failed_commit
+            && self.draft_error.is_none()
+            && !self.inspector.as_ref().is_some_and(|v| v.open || v.busy)
+    }
     pub fn activate(&mut self) {
         self.open = true;
     }

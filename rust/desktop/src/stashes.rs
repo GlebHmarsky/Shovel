@@ -57,6 +57,10 @@ pub struct View {
     pending: Vec<(u64, Option<String>)>,
 }
 impl View {
+    pub fn can_retire(&self) -> bool {
+        !self.open && !self.reading && !self.inspecting && self.pending.is_empty()
+    }
+
     pub fn take_navigation(&mut self) -> Option<String> {
         self.navigation.take()
     }

@@ -586,9 +586,9 @@
         "R13",
         "R15"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/main.rs; rust/core/src/scheduler.rs",
+      "Evidence": "2026-11-10: compared baseline retained-owner and tab-close paths. Native held checkout hook/initialization, bounded idle retirement and headless tab input tests passed. Full command queuing, caches, native window/accessibility and remaining source responsibilities stay open in R09/R15/R19/R70."
     },
     {
       "Path": "src/GitGui.App/ViewModels/SettingsPages.cs",
@@ -789,9 +789,9 @@
         "R09",
         "R24"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/main.rs; rust/core/src/scheduler.rs",
+      "Evidence": "2026-11-10: compared baseline retained-owner and tab-close paths. Native held checkout hook/initialization, bounded idle retirement and headless tab input tests passed. Full command queuing, caches, native window/accessibility and remaining source responsibilities stay open in R09/R15/R19/R70."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellRepositoryOperations.cs",
@@ -1230,9 +1230,9 @@
         "R13",
         "R15"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/main.rs; rust/core/src/scheduler.rs",
+      "Evidence": "2026-11-10: compared baseline retained-owner and tab-close paths. Native held checkout hook/initialization, bounded idle retirement and headless tab input tests passed. Full command queuing, caches, native window/accessibility and remaining source responsibilities stay open in R09/R15/R19/R70."
     },
     {
       "Path": "src/GitGui.App/Views/OperationProblemWindow.xaml",

@@ -50,6 +50,14 @@ struct State {
     running: BTreeMap<u64, Record>,
     completed: VecDeque<Record>,
 }
+impl State {
+    fn retain_completed(&mut self, record: Record) {
+        self.completed.push_back(record);
+        while self.completed.len() > 128 {
+            self.completed.pop_front();
+        }
+    }
+}
 #[derive(Clone)]
 pub struct Scheduler {
     state: Arc<Mutex<State>>,
@@ -130,7 +138,7 @@ impl Scheduler {
             };
             let mut work = state.waiting.remove(index).unwrap();
             work.record.outcome = Some(Outcome::Removed);
-            state.completed.push_back(work.record.clone());
+            state.retain_completed(work.record.clone());
             work
         };
         (work.discard)(Outcome::Removed);
@@ -187,17 +195,14 @@ impl Scheduler {
                     if state.waiting[index].record.repository == record.repository {
                         let mut work = state.waiting.remove(index).unwrap();
                         work.record.outcome = Some(Outcome::StoppedAfterFailure);
-                        state.completed.push_back(work.record.clone());
+                        state.retain_completed(work.record.clone());
                         stopped.push(work);
                     } else {
                         index += 1;
                     }
                 }
             }
-            state.completed.push_back(record);
-            while state.completed.len() > 128 {
-                state.completed.pop_front();
-            }
+            state.retain_completed(record);
             stopped
         };
         for work in stopped {
@@ -212,6 +217,74 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
     use std::time::Duration;
+    #[test]
+    fn waiting_removals_bound_completed_history_without_evicting_running_work() {
+        let scheduler = Scheduler::default();
+        let (release, held) = mpsc::channel();
+        let (started, running) = mpsc::channel();
+        let (active, _) = scheduler.submit(
+            "repo".into(),
+            "common".into(),
+            "held".into(),
+            Lane::Exclusive,
+            move || {
+                started.send(()).unwrap();
+                held.recv_timeout(Duration::from_secs(10)).unwrap();
+                Outcome::Succeeded
+            },
+            |_| panic!("running work must never be discarded"),
+        );
+        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (discarded, received) = mpsc::channel();
+        let mut latest = 0;
+        for n in 0..160 {
+            let discarded = discarded.clone();
+            let (id, accepted) = scheduler.submit(
+                "repo".into(),
+                "common".into(),
+                format!("waiting-{n}"),
+                Lane::WorkingCopy,
+                || panic!("removed request must not start"),
+                move |outcome| {
+                    discarded.send(outcome).unwrap();
+                },
+            );
+            assert!(accepted);
+            assert!(scheduler.remove_waiting(id));
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(1)).unwrap(),
+                Outcome::Removed
+            );
+            latest = id;
+            let records = scheduler.records();
+            assert!(records.iter().filter(|r| r.outcome.is_some()).count() <= 128);
+            assert!(records.iter().any(|r| r.id == active && r.running));
+            assert!(scheduler.has_accepted_work());
+        }
+        assert!(!scheduler.remove_waiting(active));
+        let records = scheduler.records();
+        assert_eq!(records.len(), 129);
+        assert!(
+            records
+                .iter()
+                .any(|r| r.id == latest && r.outcome == Some(Outcome::Removed))
+        );
+        assert!(!records.iter().any(|r| r.id == active + 1));
+        release.send(()).unwrap();
+        let start = std::time::Instant::now();
+        while scheduler.has_accepted_work() {
+            assert!(start.elapsed() < Duration::from_secs(5));
+            thread::sleep(Duration::from_millis(5));
+        }
+        let records = scheduler.records();
+        assert_eq!(records.len(), 128);
+        assert!(
+            records
+                .iter()
+                .any(|r| r.id == active && r.outcome == Some(Outcome::Succeeded))
+        );
+    }
+
     #[test]
     fn fetch_overlaps_working_copy_but_conflicting_jobs_wait_and_coalesce() {
         let scheduler = Scheduler::default();

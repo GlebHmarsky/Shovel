@@ -19,6 +19,7 @@ mod strings;
 mod updater;
 mod workspace_split;
 mod workspace_style;
+mod workspace_tabs;
 
 fn main() -> eframe::Result {
     velopack::VelopackApp::build()
@@ -104,6 +105,7 @@ struct Workspace {
     store: Option<SettingsStore>,
     git: Option<Arc<Git>>,
     tabs: Vec<Tab>,
+    retained_tabs: Vec<Tab>,
     selected: usize,
     next_id: u64,
     sender: Sender<Event>,
@@ -173,6 +175,7 @@ impl Workspace {
             store: None,
             git: None,
             tabs: vec![],
+            retained_tabs: vec![],
             selected: 0,
             next_id: 1,
             sender,
@@ -203,8 +206,22 @@ impl Workspace {
         }
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
-        if let Some(index) = self.tabs.iter().position(|t| t.path == path) {
-            self.selected = index;
+        if let Some(index) = self
+            .tabs
+            .iter()
+            .position(|t| Self::same_path(&t.path, &path))
+        {
+            self.select_tab(index, ctx);
+            return;
+        }
+        if let Some(index) = self
+            .retained_tabs
+            .iter()
+            .position(|t| Self::same_path(&t.path, &path))
+        {
+            let owner = self.retained_tabs.remove(index);
+            self.tabs.push(owner);
+            self.select_tab(self.tabs.len() - 1, ctx);
             return;
         }
         let id = self.next_id;
@@ -224,8 +241,7 @@ impl Workspace {
             error: None,
             comparison: None,
         });
-        self.selected = self.tabs.len() - 1;
-        self.refresh(ctx);
+        self.select_tab(self.tabs.len() - 1, ctx);
     }
     fn refresh(&mut self, ctx: &egui::Context) {
         self.refresh_at(self.selected, ctx);
@@ -465,7 +481,12 @@ impl Workspace {
                         self.history_menu = None;
                         self.reference_menu = None;
                     }
-                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+                    if let Some(tab) = self
+                        .tabs
+                        .iter_mut()
+                        .chain(self.retained_tabs.iter_mut())
+                        .find(|t| t.id == id)
+                    {
                         if !page
                             .entries
                             .iter()
@@ -490,7 +511,12 @@ impl Workspace {
                         self.history_menu = None;
                         self.reference_menu = None;
                     }
-                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+                    if let Some(tab) = self
+                        .tabs
+                        .iter_mut()
+                        .chain(self.retained_tabs.iter_mut())
+                        .find(|t| t.id == id)
+                    {
                         if older {
                             if let Some(current) = &tab.page {
                                 tab.previous.push(current.cursor.clone());
@@ -510,7 +536,11 @@ impl Workspace {
                     }
                 }
                 Event::Located(id, hash, result) => {
-                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id)
+                    if let Some(tab) = self
+                        .tabs
+                        .iter_mut()
+                        .chain(self.retained_tabs.iter_mut())
+                        .find(|t| t.id == id)
                         && tab.locating.as_ref() == Some(&hash)
                     {
                         tab.locating = None;
@@ -526,7 +556,12 @@ impl Workspace {
                     }
                 }
                 Event::Failed(id, error) => {
-                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+                    if let Some(tab) = self
+                        .tabs
+                        .iter_mut()
+                        .chain(self.retained_tabs.iter_mut())
+                        .find(|t| t.id == id)
+                    {
                         tab.loading = false;
                         tab.error = Some(error);
                     }
@@ -541,7 +576,11 @@ impl Workspace {
                                     self.updater.apply(
                                         ctx,
                                         self.git.clone(),
-                                        self.tabs.iter().map(|t| t.path.clone()).collect(),
+                                        self.tabs
+                                            .iter()
+                                            .chain(self.retained_tabs.iter())
+                                            .map(|t| t.path.clone())
+                                            .collect(),
                                     );
                                     continue;
                                 }
@@ -630,8 +669,15 @@ impl Workspace {
         for path in changed {
             if let Some(index) = self.tabs.iter().position(|tab| tab.path == path) {
                 self.refresh_at(index, ctx);
+            } else if let Some(owner) = self
+                .retained_tabs
+                .iter_mut()
+                .find(|t| Self::same_path(&t.path, &path))
+            {
+                owner.refresh_again = true;
             }
         }
+        self.prune_retained_tabs();
         for tab in &mut self.tabs {
             if let Some(pane) = &mut tab.comparison {
                 pane.poll(ctx);
@@ -948,6 +994,19 @@ impl eframe::App for Workspace {
                     == Some(1),
             );
         }
+        if !modal_open && !self.tabs.is_empty() {
+            if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::W)) {
+                self.close_tab(self.tabs[self.selected].id, &ctx);
+            } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Tab)) {
+                let count = self.tabs.len();
+                let step = if ctx.input(|i| i.modifiers.shift) {
+                    count - 1
+                } else {
+                    1
+                };
+                self.select_tab((self.selected + step) % count, &ctx);
+            }
+        }
         let palette = workspace_style::Palette::current(ui);
         egui::Panel::top("toolbar")
             .frame(workspace_style::pane(palette.chrome, 6, 2))
@@ -960,6 +1019,16 @@ impl eframe::App for Workspace {
                         }
                         if ui.button(strings::text("OpenRepository")).clicked() {
                             self.pick_repository(&ctx);
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(
+                                !self.tabs.is_empty(),
+                                egui::Button::new(strings::text("CloseTab")),
+                            )
+                            .clicked()
+                        {
+                            self.close_tab(self.tabs[self.selected].id, &ctx);
                             ui.close();
                         }
                     });
@@ -1035,13 +1104,8 @@ impl eframe::App for Workspace {
                                     )
                                     .clicked()
                                 {
-                                    self.selected = index;
-                                    self.history_menu = None;
-                                    self.reference_menu = None;
                                     ui.close();
-                                    if self.tabs[index].history.is_none() {
-                                        self.refresh(&ctx);
-                                    }
+                                    self.select_tab(index, &ctx);
                                     break;
                                 }
                             }
@@ -1267,6 +1331,8 @@ impl eframe::App for Workspace {
             });
         if self.activity_open {
             let mut open = true;
+            let mut reopen = None;
+            let selected_path = self.tabs.get(self.selected).map(|t| t.path.clone());
             egui::Window::new(strings::text("ActivityTitle"))
                 .open(&mut open)
                 .enabled(!modal_open && !self.closing)
@@ -1290,24 +1356,28 @@ impl eframe::App for Workspace {
                                     }
                                 },
                             );
-                            if let Some(tab) = self.tabs.get(self.selected) {
+                            if self.activity_all || selected_path.is_some() {
                                 self.operations.status(
                                     ui,
                                     if self.activity_all {
                                         None
                                     } else {
-                                        Some(&tab.path)
+                                        selected_path.as_ref()
                                     },
                                     &self.scheduler,
                                 );
                             }
-                            if let Some(tab) = self.tabs.get(self.selected)
-                                && let Some(editor) = self
-                                    .editors
-                                    .iter_mut()
-                                    .find(|editor| editor.path == tab.path)
-                                && (editor.status.is_some() || !editor.output.is_empty())
-                            {
+                            for editor in self.editors.iter_mut().filter(|editor| {
+                                (self.activity_all || selected_path.as_ref() == Some(&editor.path))
+                                    && (editor.status.is_some() || !editor.output.is_empty())
+                            }) {
+                                ui.label(
+                                    editor
+                                        .path
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy(),
+                                );
                                 ui.horizontal(|ui| {
                                     if let Some(status) = &editor.status {
                                         ui.label(status);
@@ -1316,6 +1386,7 @@ impl eframe::App for Workspace {
                                         && ui.button(strings::text("ReopenCommit")).clicked()
                                     {
                                         editor.activate();
+                                        reopen = Some(editor.path.clone());
                                     }
                                     if !editor.output.is_empty() {
                                         egui::CollapsingHeader::new(strings::text(
@@ -1341,6 +1412,9 @@ impl eframe::App for Workspace {
                         });
                 });
             self.activity_open = open;
+            if let Some(path) = reopen {
+                self.open(path, &ctx);
+            }
         }
         egui::Panel::top("repository-tabs")
             .frame(workspace_style::pane(palette.tab_strip, 4, 0))
@@ -1354,6 +1428,7 @@ impl eframe::App for Workspace {
                 };
                 let mut selected = None;
                 let mut target = None;
+                let mut action = None;
                 ui.horizontal(|ui| {
                     for (index, tab) in self.tabs.iter().enumerate() {
                         let label = tab.path.file_name().unwrap_or_default().to_string_lossy();
@@ -1387,6 +1462,27 @@ impl eframe::App for Workspace {
                         if response.clicked() {
                             selected = Some(index);
                         }
+                        if response.clicked_by(egui::PointerButton::Middle) {
+                            action = Some(workspace_tabs::TabAction::Close(tab.id));
+                        }
+                        response.context_menu(|ui| {
+                            use workspace_tabs::TabAction;
+                            for (key, command, enabled) in [
+                                ("RefreshRepository", TabAction::Refresh(tab.id), true),
+                                ("MoveLeft", TabAction::Move(tab.id, -1), index > 0),
+                                ("MoveRight", TabAction::Move(tab.id, 1), index + 1 < count),
+                                ("CloseTab", TabAction::Close(tab.id), true),
+                                ("CloseOtherTabs", TabAction::CloseOthers(tab.id), count > 1),
+                            ] {
+                                if ui
+                                    .add_enabled(enabled, egui::Button::new(strings::text(key)))
+                                    .clicked()
+                                {
+                                    action = Some(command);
+                                    ui.close();
+                                }
+                            }
+                        });
                         response.on_hover_text(tab.path.to_string_lossy());
                     }
                 });
@@ -1424,14 +1520,10 @@ impl eframe::App for Workspace {
                     }
                     selected = None;
                 }
-                if let Some(index) = selected {
-                    egui::Popup::close_all(&ctx);
-                    self.history_menu = None;
-                    self.reference_menu = None;
-                    self.selected = index;
-                    if self.tabs[index].history.is_none() {
-                        self.refresh(&ctx);
-                    }
+                if let Some(action) = action {
+                    self.tab_action(action, &ctx);
+                } else if let Some(index) = selected {
+                    self.select_tab(index, &ctx);
                 }
             });
         use workspace_split::Divider;
@@ -1969,6 +2061,7 @@ mod tests {
             store: Some(store),
             git: None,
             tabs: vec![],
+            retained_tabs: vec![],
             selected: 0,
             next_id: 1,
             sender,
@@ -2051,6 +2144,7 @@ mod tests {
                 error: None,
                 comparison: None,
             }],
+            retained_tabs: vec![],
             selected: 0,
             next_id: 2,
             sender,

@@ -339,6 +339,7 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         store: Some(store),
         git: Some(h.editor.git.clone()),
         tabs: vec![],
+        retained_tabs: vec![],
         selected: 0,
         next_id: 1,
         sender,
