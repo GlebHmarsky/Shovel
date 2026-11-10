@@ -2,6 +2,8 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust failed Commit retirement, 2026-11-10.** Completed Activity entries retain explicit reopening after a saved failed editor leaves the three-owner cache. Real failed-hook/eviction/reopen and failed-draft-save retention checks passed; [evidence and remaining acceptance](rust-rewrite.md#failed-commit-retirement-checkpoint-2026-11-10). Pending or failed draft IO continues to retain its owner.
+
 **Rust working-copy queue, 2026-11-10.** Distinct Stage/Unstage/Commit requests now retain ordered execution, individual Activity removal, original drafts and native stale-state checks. Four exact C#/Rust native outcome comparisons, 11 pinned C# lifetime checks, two additional Rust output/draft checks and Clippy passed. [Evidence, corrected completed-batch regression and remaining limits](rust-rewrite.md#working-copy-queue-checkpoint-2026-11-10). No parity row or final delivery gate was closed.
 
 **Rust initialization queue, 2026-11-10.** Primary network requests now wait for their repository owner, survive closed tabs and preserve branch targets while allowing prior accepted commits. Five scheduler and four native-Git/headless queue checks passed; [evidence and remaining queue gaps](rust-rewrite.md#initialization-queue-checkpoint-2026-11-10). No parity row was closed.

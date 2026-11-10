@@ -193,7 +193,7 @@ impl Editor {
         !self.open
             && !self.loading
             && !self.blocks_exit()
-            && !self.failed_commit
+            && (!self.initialized || self.draft_loaded)
             && self.draft_error.is_none()
             && !self.inspector.as_ref().is_some_and(|v| v.open || v.busy)
     }

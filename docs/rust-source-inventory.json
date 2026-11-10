@@ -671,9 +671,9 @@
         "R40",
         "R41"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/commit.rs; rust/desktop/src/commit_queue.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10 failed Commit retirement checkpoint: reviewed retained/recreated editor and journal reopening paths. Native failed-hook eviction and headless Activity reopening restored durable drafts/actual index; failed draft save/recovery retains owner. Native attention/focus, pre-initialization dialogs and broader lifetime acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellCheckout.cs",
@@ -790,8 +790,8 @@
         "R24"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/main.rs; rust/core/src/scheduler.rs",
-      "Evidence": "2026-11-10: compared baseline retained-owner and tab-close paths. Native held checkout hook/initialization, bounded idle retirement and headless tab input tests passed. Full command queuing, caches, native window/accessibility and remaining source responsibilities stay open in R09/R15/R19/R70."
+      "RustImplementation": "rust/desktop/src/workspace_tabs.rs; rust/desktop/src/commit.rs; rust/desktop/src/commit_queue.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10 failed Commit retirement checkpoint: reviewed retained/recreated editor and journal reopening paths. Native failed-hook eviction and headless Activity reopening restored durable drafts/actual index; failed draft save/recovery retains owner. Native attention/focus, pre-initialization dialogs and broader lifetime acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellRepositoryOperations.cs",

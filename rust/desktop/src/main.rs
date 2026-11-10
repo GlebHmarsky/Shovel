@@ -1417,7 +1417,7 @@ impl eframe::App for Workspace {
                                 },
                             );
                             if self.activity_all || selected_path.is_some() {
-                                self.operations.status(
+                                reopen = self.operations.status(
                                     ui,
                                     if self.activity_all {
                                         None
@@ -1429,6 +1429,7 @@ impl eframe::App for Workspace {
                             }
                             for editor in self.editors.iter_mut().filter(|editor| {
                                 (self.activity_all || selected_path.as_ref() == Some(&editor.path))
+                                    && !editor.failed_commit
                                     && (editor.status.is_some() || !editor.output.is_empty())
                             }) {
                                 ui.label(
@@ -1441,12 +1442,6 @@ impl eframe::App for Workspace {
                                 ui.horizontal(|ui| {
                                     if let Some(status) = &editor.status {
                                         ui.label(status);
-                                    }
-                                    if editor.failed_commit
-                                        && ui.button(strings::text("ReopenCommit")).clicked()
-                                    {
-                                        editor.activate();
-                                        reopen = Some(editor.path.clone());
                                     }
                                     if !editor.output.is_empty() {
                                         egui::CollapsingHeader::new(strings::text(
@@ -1474,6 +1469,7 @@ impl eframe::App for Workspace {
             self.activity_open = open;
             if let Some(path) = reopen {
                 self.open(path, &ctx);
+                self.open_commit();
             }
         }
         egui::Panel::top("repository-tabs")

@@ -212,6 +212,7 @@ struct Run {
     output: String,
     done: bool,
     changed: bool,
+    reopen_commit: bool,
 }
 struct Question {
     run: u64,
@@ -455,6 +456,7 @@ impl Controller {
             output: String::new(),
             done: false,
             changed: false,
+            reopen_commit: false,
         });
         Some((request, sequence))
     }
@@ -823,6 +825,7 @@ impl Controller {
                 output: String::new(),
                 done: false,
                 changed: false,
+                reopen_commit: false,
             });
         }
         accepted.then_some(request)
@@ -975,6 +978,7 @@ impl Controller {
             run.status = activity.status;
             run.output = activity.output;
             run.done = activity.done;
+            run.reopen_commit = activity.reopen_commit;
         } else {
             let sequence = self.next;
             self.next += 1;
@@ -987,6 +991,7 @@ impl Controller {
                 output: activity.output,
                 done: activity.done,
                 changed: false,
+                reopen_commit: activity.reopen_commit,
             });
         }
     }
@@ -1002,6 +1007,7 @@ impl Controller {
             output: network::redact(&output).chars().take(32768).collect(),
             done: true,
             changed: false,
+            reopen_commit: false,
         });
     }
     pub fn summary(&self, path: &std::path::Path) -> Option<String> {
@@ -1011,7 +1017,13 @@ impl Controller {
             .or_else(|| runs.next())
             .map(|r| format!("{} · {}", text(r.label), r.status))
     }
-    pub fn status(&self, ui: &mut egui::Ui, path: Option<&PathBuf>, scheduler: &Scheduler) {
+    pub fn status(
+        &self,
+        ui: &mut egui::Ui,
+        path: Option<&PathBuf>,
+        scheduler: &Scheduler,
+    ) -> Option<PathBuf> {
+        let mut reopen = None;
         let records = scheduler.records();
         for run in self
             .runs
@@ -1034,6 +1046,9 @@ impl Controller {
                 {
                     scheduler.remove_waiting(run.request);
                 }
+                if run.reopen_commit && ui.button(text("ReopenCommit")).clicked() {
+                    reopen = Some(run.path.clone());
+                }
                 if !run.output.is_empty() {
                     egui::CollapsingHeader::new(text("ActionOutput"))
                         .id_salt(run.sequence)
@@ -1048,6 +1063,7 @@ impl Controller {
                 }
             });
         }
+        reopen
     }
     pub fn show_prompt(&mut self, ctx: &egui::Context) {
         let Some(question) = self.prompts.front_mut() else {
@@ -1473,6 +1489,7 @@ mod activity_layout_test {
                 output: "command output\n".repeat(20),
                 done: true,
                 changed: false,
+                reopen_commit: false,
             });
         }
         let after = tab_y(&mut app);

@@ -46,7 +46,7 @@ cargo build -j 1 -p shovel-desktop -p shovel-askpass --locked
 ./scripts/Test-RustReleasePolicy.ps1
 ```
 
-The optional working-queue parity script builds a reference-only C# probe from unchanged pinned Core/ProcessHost sources, runs four Rust editor queue checks, and compares exact native outcomes under ignored Build/parity-queue. It uses disposable repositories and no desktop capture; it is separate from routine smoke and does not package C# with Rust.
+The optional working-queue parity script builds a reference-only C# probe from unchanged pinned Core/ProcessHost sources, runs the focused Rust editor queue checks, and compares four exact native outcomes under ignored Build/parity-queue. It uses disposable repositories and no desktop capture; it is separate from routine smoke and does not package C# with Rust.
 
 Toolchain: Rust 1.99.1 MSVC, pinned by `rust-toolchain.toml`; Visual Studio C++ tools and Windows SDK. These are focused development checks, not full parity or installer acceptance. The C# commands and release evidence below are the baseline reference.
 

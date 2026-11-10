@@ -11,6 +11,7 @@ pub(crate) struct OwnedActivity {
     pub status: String,
     pub output: String,
     pub done: bool,
+    pub reopen_commit: bool,
 }
 struct Entry {
     activity: OwnedActivity,
@@ -209,6 +210,7 @@ impl Editor {
                     status: text("OperationWaiting"),
                     output: String::new(),
                     done: false,
+                    reopen_commit: false,
                 },
                 stage: matches!(action, Action::Stage(_)),
                 dirty: true,
@@ -292,6 +294,10 @@ impl Editor {
         ctx: &egui::Context,
     ) {
         self.refresh_history = true;
+        if let Some(entry) = self.queue.entries.get_mut(&id) {
+            entry.activity.reopen_commit =
+                submitted.is_some() && !result.as_ref().is_ok_and(|r| r.succeeded());
+        }
         match result {
             Ok(result) => {
                 if result.succeeded() {

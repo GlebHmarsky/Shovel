@@ -426,3 +426,151 @@ fn distinct_unstage_requests_adopt_only_prior_owned_index() {
     );
     h.export("unstage");
 }
+
+#[test]
+fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_index() {
+    use crate::workspace_interaction_tests::{frame, workspace};
+    let mut h = Harness::new();
+    h.git(&["add", "one.txt"]);
+    h.editor.refresh(&h.ctx);
+    h.until(|e| !e.loading);
+    h.editor.draft.subject = "retain failed subject".into();
+    h.editor.draft.description = "retain failed body".into();
+    h.editor.edited();
+    fs::write(
+        h.editor.path.join(".git/hooks/pre-commit"),
+        "#!/bin/sh\necho retired-fixture-failure >&2\nexit 1\n",
+    )
+    .unwrap();
+    let head = h.git(&["rev-parse", "HEAD"]);
+    let index = h.git(&["ls-files", "--stage", "-z"]);
+    let config = fs::read(h.editor.path.join(".git/config")).unwrap();
+    h.editor.request_commit(&h.ctx);
+    h.until(|e| !e.busy && !e.draft_dirty && !e.draft_saving);
+    assert!(h.editor.failed_commit);
+    assert!(h.editor.can_retire());
+    let root = h.editor.path.clone();
+    let ctx = h.ctx.clone();
+    let git = h.editor.git.clone();
+    let mut app = workspace();
+    app.tabs.clear();
+    app.selected = 0;
+    app.git = Some(git.clone());
+    app.draft_store = Some(h.editor.store.clone());
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    app.operations = std::mem::take(&mut h.activity);
+    app.editors.push(h.editor);
+    app.open(root.clone(), &ctx);
+    let start = Instant::now();
+    while app.tabs[0].loading {
+        app.receive(&ctx);
+        assert!(start.elapsed() < Duration::from_secs(20));
+        thread::sleep(Duration::from_millis(10));
+    }
+    let owner = app.tabs[0].id;
+    app.close_tab(owner, &ctx);
+    // Add three newer idle closed owners, without reading any other repository.
+    app.git = None;
+    for mut tab in workspace().tabs {
+        tab.id += 100;
+        tab.path = h._temp.path().join(format!("unused-cache-{}", tab.id));
+        let id = tab.id;
+        app.tabs.push(tab);
+        app.close_tab(id, &ctx);
+    }
+    app.git = Some(git.clone());
+    assert_eq!(app.retained_tabs.len(), 3);
+    assert!(!app.retained_tabs.iter().any(|tab| tab.id == owner));
+    assert!(
+        app.editors.is_empty(),
+        "saved failed editors must not grow without bound"
+    );
+    assert!(app.tabs.is_empty());
+    app.activity_open = true;
+    app.activity_all = true;
+    let mut point = None;
+    for _ in 0..3 {
+        let out = frame(&ctx, &mut app, vec![]);
+        for (_, node) in &out.platform_output.accesskit_update.as_ref().unwrap().nodes {
+            if node.label() == Some(text("ReopenCommit").as_str()) {
+                assert!(!node.is_disabled());
+                let r = node.bounds().unwrap();
+                point = Some(egui::pos2(
+                    (r.x0 + r.x1) as f32 / 2.,
+                    (r.y0 + r.y1) as f32 / 2.,
+                ));
+            }
+        }
+        out.drop_without_applying_deltas();
+    }
+    let pos = point.expect("completed Activity retains Reopen after editor retirement");
+    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            }],
+        )
+        .drop_without_applying_deltas();
+    }
+    assert_eq!(app.tabs[app.selected].path, root);
+    assert_eq!(app.editors.len(), 1);
+    assert!(app.editors[0].open);
+    let start = Instant::now();
+    while !app.editors[0].draft_loaded || app.editors[0].loading {
+        app.receive(&ctx);
+        frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        assert!(start.elapsed() < Duration::from_secs(20));
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(app.editors[0].draft.subject, "retain failed subject");
+    assert_eq!(app.editors[0].draft.description, "retain failed body");
+    assert_eq!(command(&git, &root, &["rev-parse", "HEAD"]), head);
+    assert_eq!(command(&git, &root, &["ls-files", "--stage", "-z"]), index);
+    assert_eq!(fs::read(root.join(".git/config")).unwrap(), config);
+    assert_eq!(fs::read(root.join("one.txt")).unwrap(), b"one\n");
+    assert_eq!(fs::read(root.join("two.txt")).unwrap(), b"two\n");
+    assert!(
+        app.editors[0]
+            .context
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|entry| entry.group == Group::Staged && entry.path == "one.txt")
+    );
+}
+
+#[test]
+fn retirement_keeps_failed_or_pending_draft_writes_and_unfinished_initialization() {
+    let mut h = Harness::new();
+    h.editor.open = false;
+    assert!(h.editor.can_retire());
+    h.editor.draft_loaded = false;
+    assert!(
+        !h.editor.can_retire(),
+        "an unresolved draft load retains its owner"
+    );
+    h.editor.draft_loaded = true;
+    let blocked = h._temp.path().join("blocked-profile");
+    fs::write(&blocked, "existing file").unwrap();
+    h.editor.store.directory = blocked.clone();
+    h.editor.draft.subject = "unsaved text must remain".into();
+    h.editor.edited();
+    assert!(!h.editor.can_retire());
+    h.editor.flush(&h.ctx);
+    assert!(!h.editor.can_retire());
+    h.until(|e| !e.draft_saving && e.draft_error.is_some());
+    assert!(
+        !h.editor.can_retire(),
+        "failed save/recovery must keep the only in-memory text"
+    );
+    assert_eq!(h.editor.draft.subject, "unsaved text must remain");
+    assert_eq!(fs::read_to_string(blocked).unwrap(), "existing file");
+}
