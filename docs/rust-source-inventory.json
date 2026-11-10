@@ -1697,8 +1697,8 @@
         "R20"
       ],
       "ReviewState": "Partial",
-      "RustImplementation": "rust/core/src/conflicts.rs; rust/desktop/src/conflict.rs (full preferences UI remains pending)",
-      "Evidence": "2026-11-05: reviewed baseline conflict source; native Git/codec and headless pointer/close-lifetime fixtures. See roadmap conflict checkpoint; R62-R64 and geometry/preferences acceptance remain open."
+      "RustImplementation": "rust/core/src/conflicts.rs; rust/desktop/src/conflict.rs; rust/desktop/src/settings_ui.rs",
+      "Evidence": "2026-11-10 reconciliation: saved default/named/path/custom preferences are wired; native per-process override tests exist in rust/core/tests/conflicts.rs. R64 remains open for complete native tool and desktop acceptance."
     },
     {
       "Path": "src/GitGui.Core/Git/FileDiff.cs",

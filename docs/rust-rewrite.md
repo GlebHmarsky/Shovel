@@ -24,7 +24,7 @@ History menus capture the row's full commit hash without Git preparation. Reset 
 
 Snapshots include bounded sequence metadata for merge/rebase/cherry-pick/revert. Fixed state files are limited to 256 KiB each; mailbox, ambiguous and oversized state has no enabled recovery target. Only validated hashes and branch names enter target labels. Continue rejects unresolved stages, preserves the existing message and native hooks/signing/rebase exec commands. Skip/Abort require specific repository/sequence/target confirmations. Execution compares identity, HEAD, branch, sequence state and a freshly observed semantic index; staging resolutions does not invalidate the displayed sequence. No refs, remotes or whole-worktree scan is required before a recovery command. Accepted work survives dialog closure; remaining sequence/conflict state is retained visibly after reconciliation.
 
-These paths have focused native-Git and headless confirmation evidence, not complete R60/R61 acceptance. Native menu/keyboard/focus/appearance, broader filter/LFS/submodule/signing/account scenarios and other sidebar/Repository-menu entry points remain open. The goal remains active and unpublished.
+These paths have focused native-Git and headless confirmation evidence, not complete R60/R61 acceptance. Native menu/keyboard/focus/appearance, broader filter/LFS/submodule/signing/account scenarios and other sidebar/Repository-menu entry points remain open. The goal remains active; the published 0.49.2 Rust Beta is partial and does not certify these remaining acceptance cases.
 
 ## Saved stashes
 
@@ -74,7 +74,7 @@ R66 remains open: native ownership/focus/appearance/accessibility, persisted win
 
 ## Independent channels
 
-`distribution/rust-channels.json` defines `ShovelRust`, `ShovelRust.exe`, the independent `ShovelRust/Foundation` profile, `codex/rust-rewrite` development and `codex/rust-beta` / `codex/rust-stable` release branches. All three branches exist locally; the release branches initially point to foundation commit `01c7593`. Beta is the initial channel. Importing C# preferences copies into the Rust profile and translates the update preference; it never writes the C# profile or shares updater trust files. Draft import copies into independent Rust storage; complete nested preference normalization remains pending.
+`distribution/rust-channels.json` defines `ShovelRust`, `ShovelRust.exe`, the independent `ShovelRust/Foundation` profile, `codex/rust-rewrite` development and `codex/rust-beta` / `codex/rust-stable` release branches. Both release branches are reserved independently: the published Beta branch points to `370e987`; Stable remains at foundation `01c7593` with no published feed. Beta is the initial channel. Importing C# preferences copies into the Rust profile and translates the update preference; it never writes the C# profile or shares updater trust files. Draft import copies into independent Rust storage; complete nested preference normalization remains pending.
 
 | Identity | Rust Beta | Rust Stable |
 | --- | --- | --- |
