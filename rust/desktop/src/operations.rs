@@ -231,10 +231,26 @@ struct Question {
     response: Zeroizing<String>,
     focus: bool,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeferredDialog {
+    Fetch,
+    NewBranch,
+}
+pub struct DialogLease {
+    request: u64,
+    _release: Sender<()>,
+}
+impl DialogLease {
+    pub fn continue_with(&self, scheduler: &Scheduler, command: Option<u64>) {
+        if let Some(command) = command {
+            scheduler.inherit_dialog_order(self.request, command);
+        }
+    }
+}
 struct ReadyOptions {
-    options: Options,
+    options: Option<Options>,
     snapshot: Snapshot,
-    release: Sender<()>,
+    lease: DialogLease,
 }
 struct PendingNetwork {
     sequence: u64,
@@ -242,7 +258,7 @@ struct PendingNetwork {
     path: PathBuf,
     kind: Kind,
     settings: Settings,
-    options_only: bool,
+    dialog: Option<DeferredDialog>,
 }
 pub struct Controller {
     pub divergence: crate::divergence::Display,
@@ -250,7 +266,7 @@ pub struct Controller {
     related_changes: Vec<PathBuf>,
     options: Option<(Options, Snapshot)>,
     ready_options: VecDeque<ReadyOptions>,
-    options_hold: Option<Sender<()>>,
+    options_hold: Option<DialogLease>,
     next: u64,
     runs: Vec<Run>,
     prompts: VecDeque<Question>,
@@ -306,8 +322,23 @@ impl Controller {
     pub(crate) fn set_authentication_helper(&mut self, helper: PathBuf) {
         self.helper = Some(helper);
     }
+    pub fn active_modal_open(&self) -> bool {
+        !self.prompts.is_empty() || self.options.is_some()
+    }
     pub fn modal_open(&self) -> bool {
-        !self.prompts.is_empty() || self.options.is_some() || !self.ready_options.is_empty()
+        self.active_modal_open() || !self.ready_options.is_empty()
+    }
+    pub fn open_ready_branch(&mut self, branches: &mut crate::branches::Dialogs) {
+        if !self.active_modal_open()
+            && !branches.is_open()
+            && self
+                .ready_options
+                .front()
+                .is_some_and(|ready| ready.options.is_none())
+        {
+            let ready = self.ready_options.pop_front().unwrap();
+            branches.create_queued(&ready.snapshot, ready.lease);
+        }
     }
     pub fn toolbar(
         &mut self,
@@ -380,10 +411,14 @@ impl Controller {
         scheduler: &Scheduler,
     ) -> bool {
         if self.options.is_none()
-            && let Some(ready) = self.ready_options.pop_front()
+            && self
+                .ready_options
+                .front()
+                .is_some_and(|ready| ready.options.is_some())
         {
-            self.options = Some((ready.options, ready.snapshot));
-            self.options_hold = Some(ready.release);
+            let ready = self.ready_options.pop_front().unwrap();
+            self.options = Some((ready.options.unwrap(), ready.snapshot));
+            self.options_hold = Some(ready.lease);
         }
         let Some((mut options, snapshot)) = self.options.take() else {
             return false;
@@ -469,7 +504,16 @@ impl Controller {
                     }
                     if ui.button(text(kind.key())).clicked() {
                         if let Some(git) = git {
-                            self.submit(options.clone(), &snapshot, git.clone(), scheduler, ctx);
+                            let command = self.submit(
+                                options.clone(),
+                                &snapshot,
+                                git.clone(),
+                                scheduler,
+                                ctx,
+                            );
+                            if let Some(lease) = &self.options_hold {
+                                lease.continue_with(scheduler, command);
+                            }
                         }
                         close = true;
                     }
@@ -560,7 +604,7 @@ impl Controller {
                 path: path.to_path_buf(),
                 kind,
                 settings: settings.clone(),
-                options_only: false,
+                dialog: None,
             });
         }
     }
@@ -572,23 +616,65 @@ impl Controller {
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) {
+        self.defer_dialog(DeferredDialog::Fetch, path, settings, scheduler, ctx);
+    }
+
+    pub fn defer_new_branch(
+        &mut self,
+        path: &Path,
+        settings: &Settings,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        self.defer_dialog(DeferredDialog::NewBranch, path, settings, scheduler, ctx);
+    }
+
+    fn defer_dialog(
+        &mut self,
+        dialog: DeferredDialog,
+        path: &Path,
+        settings: &Settings,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
         let owner = Self::pending_owner(path);
-        if let Some((request, sequence)) = self.reserve_run(
-            Kind::Fetch,
-            path,
-            (&owner, &owner),
-            Some("options"),
-            scheduler,
-            ctx,
-        ) {
-            self.runs.last_mut().unwrap().label = "RustFetchOptions";
+        let sequence = self.next;
+        self.next += 1;
+        let sender = self.sender.clone();
+        let wake = ctx.clone();
+        let (label, lane) = match dialog {
+            DeferredDialog::Fetch => ("RustFetchOptions", Lane::Fetch),
+            DeferredDialog::NewBranch => ("ActionTitleNewBranch", Lane::Exclusive),
+        };
+        let (request, accepted) = scheduler.reserve(
+            owner.clone(),
+            owner,
+            format!("dialog:{dialog:?}"),
+            lane,
+            move |outcome| {
+                let _ = sender.send(Event::Removed(sequence, outcome));
+                wake.request_repaint();
+            },
+        );
+        if accepted {
+            self.runs.push(Run {
+                sequence,
+                request,
+                path: path.to_path_buf(),
+                label,
+                status: text("OperationWaiting"),
+                output: String::new(),
+                done: false,
+                changed: false,
+                reopen_commit: false,
+            });
             self.pending.push(PendingNetwork {
                 request,
                 sequence,
                 path: path.to_path_buf(),
                 kind: Kind::Fetch,
                 settings: settings.clone(),
-                options_only: true,
+                dialog: Some(dialog),
             });
         }
     }
@@ -635,16 +721,32 @@ impl Controller {
             Ok(snapshot) => {
                 self.bind_initialization(path, snapshot, scheduler);
                 for request in pending {
-                    if request.options_only {
+                    if let Some(dialog) = request.dialog {
+                        if dialog == DeferredDialog::NewBranch && !snapshot.operations.is_empty() {
+                            if let Some(run) = self
+                                .runs
+                                .iter_mut()
+                                .find(|r| r.sequence == request.sequence)
+                            {
+                                run.output = text("ActionSequence");
+                            }
+                            scheduler.fail_reserved(request.request);
+                            continue;
+                        }
                         let sender = self.sender.clone();
                         let ctx = ctx.clone();
                         let snapshot = snapshot.clone();
                         scheduler.activate(request.request, move || {
                             let (release, held) = mpsc::channel();
                             let ready = ReadyOptions {
-                                options: Options::load(&request.settings, &snapshot, request.kind),
+                                options: (dialog == DeferredDialog::Fetch).then(|| {
+                                    Options::load(&request.settings, &snapshot, Kind::Fetch)
+                                }),
                                 snapshot,
-                                release,
+                                lease: DialogLease {
+                                    request: request.request,
+                                    _release: release,
+                                },
                             };
                             let _ =
                                 sender.send(Event::OptionsReady(request.sequence, Box::new(ready)));
@@ -690,7 +792,7 @@ impl Controller {
         git: Arc<Git>,
         scheduler: &Scheduler,
         ctx: &egui::Context,
-    ) {
+    ) -> Option<u64> {
         let common = snapshot.common_directory.to_string_lossy().to_uppercase();
         if let Some(ticket) = self.reserve_run(
             options.kind,
@@ -701,6 +803,9 @@ impl Controller {
             ctx,
         ) {
             self.activate_network(ticket, options, snapshot, git, scheduler, ctx);
+            Some(ticket.0)
+        } else {
+            None
         }
     }
 
@@ -805,7 +910,7 @@ impl Controller {
         git: Arc<Git>,
         scheduler: &Scheduler,
         ctx: &egui::Context,
-    ) {
+    ) -> Option<u64> {
         self.submit_local(
             label,
             LocalAction::Branch(action),
@@ -813,7 +918,7 @@ impl Controller {
             git,
             scheduler,
             ctx,
-        );
+        )
     }
     pub fn submit_history(
         &mut self,

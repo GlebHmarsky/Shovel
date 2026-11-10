@@ -1728,13 +1728,22 @@ impl eframe::App for Workspace {
                         {
                             self.activity_open = true;
                         }
-                        self.branches.toolbar(
+                        if self.branches.toolbar(
                             ui,
                             self.tabs
                                 .get(self.selected)
                                 .and_then(|t| t.history.as_ref())
                                 .map(|h| &h.snapshot),
-                        );
+                            self.git.is_some() && self.tabs.get(self.selected).is_some(),
+                        ) && let Some(tab) = self.tabs.get(self.selected)
+                        {
+                            self.operations.defer_new_branch(
+                                &tab.path,
+                                &self.settings,
+                                &self.scheduler,
+                                &ctx,
+                            );
+                        }
                         ui.add_space((ui.available_width() - 85.).max(0.));
                         ui.add_enabled_ui(!self.tabs.is_empty(), |ui| {
                             ui.menu_button(strings::text("WorkspaceOpenIn"), |ui| {
@@ -2747,14 +2756,19 @@ impl eframe::App for Workspace {
             self.close(&ctx);
         }
 
-        self.preferences_dirty |= self.operations.options_dialog(
-            &ctx,
-            &mut self.settings,
-            self.git.as_ref(),
-            &self.scheduler,
-        );
+        if !self.remotes.is_open() {
+            self.operations.open_ready_branch(&mut self.branches);
+        }
+        if !self.branches.is_open() && !self.remotes.is_open() {
+            self.preferences_dirty |= self.operations.options_dialog(
+                &ctx,
+                &mut self.settings,
+                self.git.as_ref(),
+                &self.scheduler,
+            );
+        }
         let allow_remote_input =
-            !self.closing && !self.operations.modal_open() && !self.branches.is_open();
+            !self.closing && !self.operations.active_modal_open() && !self.branches.is_open();
         self.remotes.show(
             &ctx,
             self.git.as_ref(),
@@ -2763,7 +2777,7 @@ impl eframe::App for Workspace {
             allow_remote_input,
         );
         let allow_branch_input =
-            !self.closing && !self.operations.modal_open() && !self.remotes.is_open();
+            !self.closing && !self.operations.active_modal_open() && !self.remotes.is_open();
         self.branches.show(
             &ctx,
             self.git.as_ref(),

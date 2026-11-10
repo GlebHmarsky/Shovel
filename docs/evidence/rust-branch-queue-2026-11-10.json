@@ -1,0 +1,62 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T15:23:08.671376+00:00",
+  "RustBaseCommit": "006ffdbdf4ec0d4b079cb480ce1ed7cf305d94e7",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "SourceSha256": {
+    "rust/core/src/scheduler.rs": "1f142cb7a17a56420680d5c7f0920b619f3c413add220271774c9ea3903cc83d",
+    "rust/desktop/src/operations.rs": "738d2f13d5692b8c0a4b24a34cc216e7f7c060753052f142c731f5a06baa96ac",
+    "rust/desktop/src/branches.rs": "244b73fadbe8e41a6d59d17123b5615317905886ef6a9427b164a3da643cca68",
+    "rust/desktop/src/main.rs": "e7b157698bf738b26ab4bfbe1e177286516320bf1647ccdfa387db5beacfa1f2",
+    "rust/desktop/src/operation_queue_tests.rs": "1c5b829be2dcc24beaf1b3ac870e76d4b4ebc9a9d4c8346178d6b6ddd21d2935"
+  },
+  "Scope": "New Branch before initialization, retained repository/dialog ownership through checkout review, submitted-command queue handoff, cancellation and active-sequence rejection; ready dialog arbitration.",
+  "Checks": [
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop initializing_new_branch --locked -- --test-threads=1",
+      "Passed": 2,
+      "Seconds": 13.93
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-core scheduler::tests --lib --locked",
+      "Passed": 6,
+      "Seconds": 0.04
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop operations::queue_tests --locked -- --test-threads=1 --skip initializing_new_branch",
+      "Passed": 6,
+      "Seconds": 40.32
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop branches::tests --locked -- --test-threads=1",
+      "Passed": 4,
+      "Failed": 1,
+      "Seconds": 34.59,
+      "Failure": "Tracked-discard test clicked a clipped confirmation at y=373..393; no command was submitted. Isolated reproduction failed identically."
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop tracked_discard_lists_exact_paths_and_runs_only_after_specific_confirmation --locked",
+      "Passed": 1,
+      "Seconds": 8.94,
+      "Correction": "Use actual wheel input to bring the confirmation into view before clicking. Native tracked discard and untracked preservation then pass. Initial wheel fixture compile lacked phase/source; fixed against pinned egui source."
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop initializing_new_branch_removal_sequence_failure_and_cancel_do_not_mutate --locked",
+      "Passed": 1,
+      "Seconds": 2.95,
+      "Reason": "Expanded to prove an existing Remote editor and then a Branch editor remain dismissible when independent options become ready."
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-core -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true,
+      "Seconds": 11.43
+    }
+  ],
+  "NativeFixture": "Actual headless Branch click before initial result publication; duplicate coalescing; close owner; type branch name and submit into clean/dirty review; confirm native checkout. HEAD/index preserved and new branch created. Push queued after the original dialog refuses branch drift and remote remains empty, proving command ordering.",
+  "BaselineReview": "Pinned ShellActions NewBranchCommand accepts requests before initialization, QueueAction owns captured tab and retains its action through ShowGitAction and RunningTask. Native checkout review remains after display. This is source-contract and Rust native/headless evidence, not a newly executed C# UI differential.",
+  "Limits": [
+    "R09 remains open for broader cross-process ownership and complete acceptance.",
+    "No native Windows visual/keyboard/accessibility acceptance or performance claim.",
+    "No screen capture, interactive app launch, normal profile, working repository, installer, publication or merge. Prior local 0.50.0 payload unchanged."
+  ]
+}

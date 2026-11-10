@@ -289,6 +289,10 @@ fn click_label(ctx: &egui::Context, app: &mut crate::Workspace, label: &str) {
         if let Some(update) = &output.platform_output.accesskit_update {
             for (_, node) in &update.nodes {
                 if node.label() == Some(label)
+                    && matches!(
+                        node.role(),
+                        egui::Role::Button | egui::Role::CheckBox | egui::Role::RadioButton
+                    )
                     && !node.is_disabled()
                     && let Some(r) = node.bounds()
                 {
@@ -342,7 +346,10 @@ fn initializing_fetch_options_survive_closure_save_without_fetch_and_hold_queue_
     }
     assert_eq!(app.operations.pending.len(), 1);
     assert_eq!(app.operations.runs.len(), 1);
-    assert!(app.operations.pending[0].options_only);
+    assert_eq!(
+        app.operations.pending[0].dialog,
+        Some(DeferredDialog::Fetch)
+    );
     assert!(app.operations.options.is_none());
     app.close_tab(owner, &ctx);
     wait(|| {
@@ -448,4 +455,240 @@ fn initializing_fetch_options_removal_failure_and_multiple_owners_are_scoped() {
     assert!(!a.git_directory.join("FETCH_HEAD").exists());
     assert!(!b.git_directory.join("FETCH_HEAD").exists());
     assert!(ops.runs.iter().all(|r| r.done));
+}
+
+fn enter_branch_name(ctx: &egui::Context, app: &mut crate::Workspace, value: &str) {
+    let mut point = None;
+    for _ in 0..4 {
+        let output = frame(ctx, app, vec![]);
+        if let Some(update) = &output.platform_output.accesskit_update {
+            for (_, node) in &update.nodes {
+                if node.role() == egui::Role::TextInput
+                    && !node.is_disabled()
+                    && let Some(r) = node.bounds()
+                {
+                    point = Some(egui::pos2(
+                        ((r.x0 + r.x1) / 2.) as f32,
+                        ((r.y0 + r.y1) / 2.) as f32,
+                    ));
+                }
+            }
+        }
+        output.drop_without_applying_deltas();
+    }
+    let pos = point.expect("branch name input");
+    frame(ctx, app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
+    for pressed in [true, false] {
+        frame(
+            ctx,
+            app,
+            vec![egui::Event::PointerButton {
+                pos,
+                pressed,
+                button: egui::PointerButton::Primary,
+                modifiers: Default::default(),
+            }],
+        )
+        .drop_without_applying_deltas();
+    }
+    frame(ctx, app, vec![egui::Event::Text(value.into())]).drop_without_applying_deltas();
+}
+
+#[test]
+fn initializing_new_branch_keeps_owner_and_submission_order_through_checkout_review() {
+    let (_temp, git, snapshot) = fixture();
+    let index = command(&git, &snapshot.worktree, &["ls-files", "--stage", "-z"]);
+    let mut app = workspace();
+    app.tabs.clear();
+    app.selected = 0;
+    app.git = Some(git.clone());
+    app.operations = controller();
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    ctx.set_embed_viewports(true);
+    app.open(snapshot.worktree.clone(), &ctx);
+    let owner = app.tabs[0].id;
+    for _ in 0..2 {
+        click_label(&ctx, &mut app, &text("BranchToolbar"));
+    }
+    assert_eq!(app.operations.pending.len(), 1);
+    assert_eq!(
+        app.operations.pending[0].dialog,
+        Some(DeferredDialog::NewBranch)
+    );
+    // Submitted after the options request but before initialization resolves.
+    app.operations.defer_network(
+        Kind::Push,
+        &snapshot.worktree,
+        &app.settings,
+        &app.scheduler,
+        &ctx,
+    );
+    app.close_tab(owner, &ctx);
+    wait(|| {
+        app.receive(&ctx);
+        !app.operations.ready_options.is_empty()
+    });
+    frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+    assert!(app.branches.is_open());
+    assert!(app.tabs.is_empty());
+    assert_eq!(
+        command(&git, &snapshot.worktree, &["branch", "--show-current"]),
+        "main"
+    );
+    assert_eq!(
+        command(
+            &git,
+            &snapshot.worktree,
+            &["for-each-ref", "--format=%(refname)", "refs/heads"]
+        ),
+        "refs/heads/main"
+    );
+    enter_branch_name(&ctx, &mut app, "queued-branch");
+    click_label(&ctx, &mut app, &text("ActionTitleNewBranch"));
+    // Creating with checkout first opens real clean/dirty review.
+    wait(|| {
+        app.receive(&ctx);
+        let output = frame(&ctx, &mut app, vec![]);
+        let ready = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .is_some_and(|u| {
+                u.nodes.iter().any(|(_, n)| {
+                    n.role() == egui::Role::Button
+                        && n.label() == Some(text("ActionTitleSwitchBranch").as_str())
+                        && !n.is_disabled()
+                })
+            });
+        output.drop_without_applying_deltas();
+        ready
+    });
+    assert_eq!(
+        command(&git, &snapshot.worktree, &["branch", "--show-current"]),
+        "main"
+    );
+    click_label(&ctx, &mut app, &text("ActionTitleSwitchBranch"));
+    assert!(!app.branches.is_open());
+    wait(|| {
+        app.receive(&ctx);
+        !app.scheduler.has_accepted_work()
+    });
+    app.receive(&ctx);
+    assert_eq!(
+        command(&git, &snapshot.worktree, &["branch", "--show-current"]),
+        "queued-branch"
+    );
+    assert_eq!(
+        command(&git, &snapshot.worktree, &["rev-parse", "HEAD"]),
+        snapshot.head.unwrap()
+    );
+    assert_eq!(
+        command(&git, &snapshot.worktree, &["ls-files", "--stage", "-z"]),
+        index
+    );
+    // Branch command inherited the dialog's earlier place. The later Push
+    // sees branch drift and refuses; it must never have published main first.
+    assert_eq!(app.operations.runs[1].status, text("ActionFailedShort"));
+    assert!(
+        app.operations.runs[1]
+            .output
+            .contains(&text("ActionChanged"))
+    );
+    assert_eq!(
+        app.operations.runs[2].status,
+        text("ActionCompletedShort"),
+        "{}",
+        app.operations.runs[2].output
+    );
+    assert_eq!(
+        command(
+            &git,
+            &snapshot.worktree.join("remote.git"),
+            &["for-each-ref", "--format=%(refname)", "refs/heads"]
+        ),
+        ""
+    );
+}
+
+#[test]
+fn initializing_new_branch_removal_sequence_failure_and_cancel_do_not_mutate() {
+    let (_temp, git, snapshot) = fixture();
+    let mut ops = controller();
+    let scheduler = Scheduler::default();
+    let ctx = egui::Context::default();
+    let settings = Settings::default();
+    ops.defer_new_branch(&snapshot.worktree, &settings, &scheduler, &ctx);
+    assert!(scheduler.remove_waiting(ops.pending[0].request));
+    ops.resolve_initialization(&snapshot.worktree, Ok(&snapshot), &git, &scheduler, &ctx);
+    ops.poll(&ctx);
+    assert!(ops.ready_options.is_empty());
+    ops.defer_new_branch(&snapshot.worktree, &settings, &scheduler, &ctx);
+    let mut sequence = snapshot.clone();
+    sequence.operations.push("merge".into());
+    ops.resolve_initialization(&snapshot.worktree, Ok(&sequence), &git, &scheduler, &ctx);
+    ops.poll(&ctx);
+    assert_eq!(ops.runs[1].status, text("ActionFailedShort"));
+    assert_eq!(ops.runs[1].output, text("ActionSequence"));
+    assert!(ops.ready_options.is_empty());
+
+    let mut app = workspace();
+    app.tabs.clear();
+    app.git = Some(git.clone());
+    app.operations = ops;
+    app.scheduler = scheduler;
+    ctx.enable_accesskit();
+    ctx.set_embed_viewports(true);
+    app.operations
+        .defer_new_branch(&snapshot.worktree, &settings, &app.scheduler, &ctx);
+    app.operations.resolve_initialization(
+        &snapshot.worktree,
+        Ok(&snapshot),
+        &git,
+        &app.scheduler,
+        &ctx,
+    );
+    wait(|| {
+        app.operations.poll(&ctx);
+        !app.operations.ready_options.is_empty()
+    });
+    // A ready dialog must not disable an already open remote editor.
+    app.remotes.add(&snapshot);
+    click_label(&ctx, &mut app, &text("ActionCancel"));
+    assert!(!app.remotes.is_open());
+    // Branch now opens. An independent ready Fetch must not disable it either.
+    frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+    assert!(app.branches.is_open());
+    let (_other_temp, other_git, other) = fixture();
+    app.operations
+        .defer_fetch_options(&other.worktree, &settings, &app.scheduler, &ctx);
+    app.operations.resolve_initialization(
+        &other.worktree,
+        Ok(&other),
+        &other_git,
+        &app.scheduler,
+        &ctx,
+    );
+    wait(|| {
+        app.operations.poll(&ctx);
+        !app.operations.ready_options.is_empty()
+    });
+    click_label(&ctx, &mut app, &text("ActionCancel"));
+    assert!(!app.branches.is_open());
+    click_label(&ctx, &mut app, &text("Close"));
+    wait(|| {
+        app.operations.poll(&ctx);
+        !app.scheduler.has_accepted_work()
+    });
+    assert!(!app.branches.is_open());
+    assert_eq!(
+        command(
+            &git,
+            &snapshot.worktree,
+            &["for-each-ref", "--format=%(refname)", "refs/heads"]
+        ),
+        "refs/heads/main"
+    );
 }

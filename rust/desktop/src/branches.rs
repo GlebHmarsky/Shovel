@@ -190,6 +190,7 @@ struct Dialog {
     snapshot: Snapshot,
     form: Form,
     viewport: egui::ViewportId,
+    queue_hold: Option<operations::DialogLease>,
 }
 #[derive(Default)]
 pub struct Dialogs {
@@ -215,6 +216,10 @@ impl Dialogs {
                 checkout: true,
             },
         );
+    }
+    pub fn create_queued(&mut self, snapshot: &Snapshot, lease: operations::DialogLease) {
+        self.create(snapshot);
+        self.active.as_mut().unwrap().queue_hold = Some(lease);
     }
     pub fn checkout(&mut self, snapshot: &Snapshot, target: Checkout) {
         self.set(snapshot, Form::Checkout(Review::new(target)));
@@ -296,39 +301,39 @@ impl Dialogs {
             snapshot: snapshot.clone(),
             form,
             viewport: egui::ViewportId::from_hash_of(("branch-options", uuid::Uuid::new_v4())),
+            queue_hold: None,
         });
     }
-    pub fn toolbar(&mut self, ui: &mut egui::Ui, snapshot: Option<&Snapshot>) {
-        ui.add_enabled_ui(snapshot.is_some_and(|s| s.operations.is_empty()), |ui| {
-            if crate::workspace_style::action(ui, "BranchToolbar", snapshot.is_some()).clicked()
-                && let Some(snapshot) = snapshot
-            {
-                self.create(snapshot);
-            }
-            crate::workspace_style::options_menu(ui, text("BranchMenu"), |ui| {
-                let Some(snapshot) = snapshot else {
-                    return;
-                };
-                if ui.button(text("ActionTitleNewBranch")).clicked() {
-                    self.create(snapshot);
-                    ui.close();
-                }
-                ui.separator();
-                for reference in snapshot
-                    .references
-                    .iter()
-                    .filter(|r| r.name.starts_with("refs/heads/"))
-                {
-                    if ui
-                        .button(reference.name.trim_start_matches("refs/heads/"))
-                        .clicked()
-                    {
-                        self.checkout(snapshot, Checkout::Branch(reference.clone()));
-                        ui.close();
+    pub fn toolbar(
+        &mut self,
+        ui: &mut egui::Ui,
+        snapshot: Option<&Snapshot>,
+        can_request: bool,
+    ) -> bool {
+        let mut deferred = false;
+        ui.add_enabled_ui(
+            can_request && snapshot.is_none_or(|s| s.operations.is_empty()),
+            |ui| {
+                if crate::workspace_style::action(ui, "BranchToolbar", can_request).clicked() {
+                    if let Some(snapshot) = snapshot {
+                        self.create(snapshot);
+                    } else {
+                        deferred = true;
                     }
                 }
-                ui.separator();
-                ui.menu_button(text("BranchManageTitleDeleteBranch"), |ui| {
+                crate::workspace_style::options_menu(ui, text("BranchMenu"), |ui| {
+                    if ui.button(text("ActionTitleNewBranch")).clicked() {
+                        if let Some(snapshot) = snapshot {
+                            self.create(snapshot);
+                        } else {
+                            deferred = true;
+                        }
+                        ui.close();
+                    }
+                    let Some(snapshot) = snapshot else {
+                        return;
+                    };
+                    ui.separator();
                     for reference in snapshot
                         .references
                         .iter()
@@ -338,20 +343,36 @@ impl Dialogs {
                             .button(reference.name.trim_start_matches("refs/heads/"))
                             .clicked()
                         {
-                            self.confirm_delete(snapshot, reference);
+                            self.checkout(snapshot, Checkout::Branch(reference.clone()));
                             ui.close();
                         }
                     }
-                });
-                for action in [Management::SetUpstream, Management::UnsetUpstream] {
-                    if ui.button(text(action.title())).clicked() {
-                        self.manage(snapshot, action, None);
-                        ui.close();
+                    ui.separator();
+                    ui.menu_button(text("BranchManageTitleDeleteBranch"), |ui| {
+                        for reference in snapshot
+                            .references
+                            .iter()
+                            .filter(|r| r.name.starts_with("refs/heads/"))
+                        {
+                            if ui
+                                .button(reference.name.trim_start_matches("refs/heads/"))
+                                .clicked()
+                            {
+                                self.confirm_delete(snapshot, reference);
+                                ui.close();
+                            }
+                        }
+                    });
+                    for action in [Management::SetUpstream, Management::UnsetUpstream] {
+                        if ui.button(text(action.title())).clicked() {
+                            self.manage(snapshot, action, None);
+                            ui.close();
+                        }
                     }
-                }
-            })
-            .on_disabled_hover_text(text("ActionInspectionNeeded"));
-        })
+                })
+                .on_disabled_hover_text(text("ActionInspectionNeeded"));
+            },
+        )
         .response
         .on_disabled_hover_text(text(
             if snapshot.is_some_and(|s| !s.operations.is_empty()) {
@@ -360,6 +381,7 @@ impl Dialogs {
                 "ActionInspectionNeeded"
             },
         ));
+        deferred
     }
     pub fn ref_menu(&mut self, ui: &mut egui::Ui, snapshot: &Snapshot, reference: &Reference) {
         if reference.name.starts_with("refs/heads/") {
@@ -554,12 +576,13 @@ impl Dialogs {
                                         checkout,
                                     } => {
                                         ui.label(text("RustNewBranchHelp"));
-                                        ui.label(text("ActionBranchNameLabel"));
+                                        let name_label = ui.label(text("ActionBranchNameLabel"));
                                         ui.add(
                                             egui::TextEdit::singleline(name)
                                                 .char_limit(1024)
                                                 .desired_width(f32::INFINITY),
-                                        );
+                                        )
+                                        .labelled_by(name_label.id);
                                         ui.label(text("ActionStart"));
                                         egui::ComboBox::from_id_salt("branch-start")
                                             .selected_text(start.as_str())
@@ -872,7 +895,11 @@ impl Dialogs {
             close = true;
         }
         if let Some(action) = submitted {
-            operations.submit_branch(title, action, snapshot, git.clone(), scheduler, ctx);
+            let command =
+                operations.submit_branch(title, action, snapshot, git.clone(), scheduler, ctx);
+            if let Some(lease) = &dialog.queue_hold {
+                lease.continue_with(scheduler, command);
+            }
             close = true;
         }
         if let Some(target) = next_review {
@@ -1322,6 +1349,23 @@ mod tests {
             fs::read_to_string(root.join("tracked.txt")).unwrap(),
             "discarded\n"
         );
+        // The exact-path explanation makes this action scroll below the
+        // viewport's body. Scroll it into view before clicking; accessibility
+        // bounds alone include clipped controls and can overlap Cancel.
+        h.render(vec![
+            egui::Event::PointerMoved(egui::pos2(200., 300.)),
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                delta: egui::vec2(0., -240.),
+                modifiers: egui::Modifiers::NONE,
+            },
+        ])
+        .drop_without_applying_deltas();
+        for _ in 0..8 {
+            h.render(vec![]).drop_without_applying_deltas();
+        }
         h.click(&text("RustConfirmDiscardCheckout"));
         h.settled();
         assert_eq!(

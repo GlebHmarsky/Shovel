@@ -242,6 +242,38 @@ impl Scheduler {
         self.dispatch();
         true
     }
+    /// A queued options dialog already owns its place. Its submitted command
+    /// must inherit that place before the dialog releases the conflicting lane.
+    /// Independent repositories retain their ordering; running work is untouched.
+    pub fn inherit_dialog_order(&self, dialog: u64, command: u64) -> bool {
+        let mut state = self.state.lock().unwrap();
+        let Some(owner) = state.running.get(&dialog) else {
+            return false;
+        };
+        if !owner.key.starts_with("dialog:") {
+            return false;
+        }
+        let Some(index) = state.waiting.iter().position(|w| {
+            w.record.id == command
+                && w.record.repository == owner.repository
+                && w.record.common == owner.common
+                && w.record.lane == owner.lane
+        }) else {
+            return false;
+        };
+        let work = state.waiting.remove(index).unwrap();
+        let first = state
+            .waiting
+            .iter()
+            .position(|other| {
+                other.record.common == work.record.common
+                    && conflicts(other.record.lane, work.record.lane)
+            })
+            .unwrap_or(state.waiting.len());
+        state.waiting.insert(first, work);
+        true
+    }
+
     fn dispatch(&self) {
         let ready = {
             let mut state = self.state.lock().unwrap();
@@ -317,6 +349,69 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
     use std::time::Duration;
+    #[test]
+    fn dialog_submission_inherits_order_without_reordering_other_owners() {
+        let scheduler = Scheduler::default();
+        let (release, held) = mpsc::channel();
+        let (entered, started) = mpsc::channel();
+        let (order, received) = mpsc::channel();
+        let (dialog, _) = scheduler.submit(
+            "repo".into(),
+            "common".into(),
+            "dialog:NewBranch".into(),
+            Lane::Exclusive,
+            move || {
+                entered.send(()).unwrap();
+                held.recv_timeout(Duration::from_secs(5)).unwrap();
+                Outcome::Succeeded
+            },
+            |_| panic!("dialog discarded"),
+        );
+        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        let later = order.clone();
+        scheduler.submit(
+            "repo".into(),
+            "common".into(),
+            "later".into(),
+            Lane::Exclusive,
+            move || {
+                later.send("later").unwrap();
+                Outcome::Succeeded
+            },
+            |_| {},
+        );
+        let (other, _) = scheduler.reserve(
+            "other".into(),
+            "common".into(),
+            "other".into(),
+            Lane::Exclusive,
+            |_| {},
+        );
+        assert!(!scheduler.inherit_dialog_order(dialog, other));
+        let (command, _) = scheduler.submit(
+            "repo".into(),
+            "common".into(),
+            "create".into(),
+            Lane::Exclusive,
+            move || {
+                order.send("create").unwrap();
+                Outcome::Succeeded
+            },
+            |_| {},
+        );
+        assert!(scheduler.inherit_dialog_order(dialog, command));
+        release.send(()).unwrap();
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(5)).unwrap(),
+            "create"
+        );
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(5)).unwrap(),
+            "later"
+        );
+        assert!(scheduler.remove_waiting(other));
+    }
+
     #[test]
     fn reserved_initialization_coalesces_removes_and_orders_bound_linked_work() {
         let scheduler = Scheduler::default();
