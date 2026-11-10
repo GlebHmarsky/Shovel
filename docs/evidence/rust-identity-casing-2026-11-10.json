@@ -1,0 +1,105 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T15:37:38.003127+00:00",
+  "RustBaseCommit": "ff5f8f00266d678e7256d56385cfe4b8e175d397",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "SourceSha256": {
+    "rust/core/Cargo.toml": "091e6ad34356db10c6952f5fab0a5658183cc4403a88f977b38acd59fe376844",
+    "rust/core/src/git.rs": "9d92db96992dc20e60df58a1f4ce397c83ede76dc09fa0f196b06e22117059aa",
+    "rust/core/src/history_cache.rs": "27afe9ce8c275fb79127ad1e34787a353fcb33d92c77d0c6e671fb637d5b57f5",
+    "rust/core/src/identity.rs": "db305956cc3e6ace91b650cefc5e7dd1ba8f3d03a8c0c03155effbc49d9344fb",
+    "rust/core/src/lib.rs": "fc39d0a202c09d7bff3a2c167552cae45d0756a27fc2462dc305a2d8e4cc30a3",
+    "rust/core/src/patches.rs": "4cbf5b617f3a5955434963b8d56736bc85b5636bf3f472d430d2288b535bc9a6",
+    "rust/core/src/working.rs": "3b339f4eef424cbb045a87e3aab81db4186f33489b28ef4d7a5e13a55f622114",
+    "rust/desktop/src/auto_fetch.rs": "6ea6b2d4002c62b27ec8e6989157f4c931a34a3dcadc321bfd7542707ea39344",
+    "rust/desktop/src/commit_file_menu.rs": "517e24335fe9aee089666068d20a280845e061f5195f59a96f333a0a3f1d666f",
+    "rust/desktop/src/commit_patch.rs": "bb08723e7221234f65d7027073822af5de21b648106803fc4547f7397f6a7795",
+    "rust/desktop/src/commit_queue.rs": "e5c9cac3b04c663bcd8dbe172fd50c0eb77bbaf22cf9d3d4f1d2e8527991abee",
+    "rust/desktop/src/commit_shell.rs": "8d4c6f45135abc0b3c3516386eb5915049e087225db30eeda866d7c905b64b7b",
+    "rust/desktop/src/conflict.rs": "766a3a2d9cdbbba966a382cba44777dfbff6ef5e1fa627f86187cb03279d5506",
+    "rust/desktop/src/git_selection.rs": "3c4e4c5c099cef451e27ca5465977e23f740e26fab7b68e7d9f797be45785ce1",
+    "rust/desktop/src/operations.rs": "72a9be916da87806643e68a9520bb6ae64383b0003beab657cdc3de33562f7fe",
+    "rust/desktop/src/repository_init.rs": "ae9b4e14e47821b93c0c00a757d24d13fedb84596bd7a5b0218664ab9fa91c1e",
+    "rust/desktop/src/workspace_interaction_tests.rs": "c6d2cc8e178aeed6735ab4a5ab28e2ceb7c8b38d319804f5862748cf3cc094d3",
+    "rust/desktop/src/workspace_tabs.rs": "454a900b5164280941ae1b8fe6b6db70005c70a7c14381efdc5b2a9d98a09b11",
+    "tests/RustParityBaseline/Program.cs": "d61f177beaa3f41bd3d23dfb02b162577caae48100067fef0cdbdc94155a8c3e",
+    "rust/core/src/case.rs": "22c18b20b9db9fdd01274542d585249e344a05b40c6307173bfbc46acd0d48db",
+    "rust/core/tests/identity.rs": "80c292dab2934e87b07f198cb5511928e88e7f28f40231afb5a422ff12b3544f",
+    "scripts/Test-RustIdentityParity.ps1": "a1b27a9477524ed7ea05fd29a21a10c1bf44fdfe86dac509ac9ce8ef5f29ff13"
+  },
+  "Scope": "Correct cross-product native mutex names and session path grouping for Unicode paths without changing published Rust identity/draft keys.",
+  "ReproducedFailure": {
+    "PathCase": "straße",
+    "Category": "GitAction",
+    "Observed": "Pinned C# private EnterMutationGate acquired in another process; Rust MutationGate still succeeded before the correction.",
+    "Cause": "Rust full Unicode uppercase expands characters; pinned .NET ToUpperInvariant uses simple OS casing.",
+    "InitialFingerprintProbe": "Five of nine opaque Rust v1 fingerprints differ from C#. These are not a cross-product wire contract; preserved rather than migrated to avoid invalidating existing drafts."
+  },
+  "PairedVerification": {
+    "Command": "./scripts/Test-RustIdentityParity.ps1",
+    "Passed": true,
+    "RustCheckSeconds": 5.09,
+    "ProbeDirectory": "Build/parity-identity/b9f562a7791d43a2855c13979e6ef6f9",
+    "NativeRootGitCommonCases": [
+      "ascii",
+      "straße",
+      "ﬃ",
+      "ᾀ",
+      "ı",
+      "ſ",
+      "𐐨",
+      "שלום",
+      "linked-ß"
+    ],
+    "CrossProcessGateCases": 18,
+    "NativeStageBlocked": true,
+    "IndexAndWorkingFileUnchanged": true,
+    "UnicodeScalarsCompared": 1112064,
+    "UppercaseSha256": "C753AAD02CEDE98350D250DB65FD0FC3C0C13B51815A2CCB4580C7FB37EADB90",
+    "LockHolder": "Actual pinned GitActions.EnterMutationGate called by reference-only .NET 10 probe; same worker thread through release, separate process, disposable repositories.",
+    "OppositeLaneAndReleasedGateAvailable": true
+  },
+  "Checks": [
+    {
+      "Command": "cargo test -j 1 -p shovel-core case::tests --lib --locked",
+      "Passed": 2,
+      "Seconds": 0.0
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop distinct_unicode_repository_paths --locked",
+      "Passed": 1,
+      "Seconds": 0.01
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-core --test drafts --locked",
+      "Passed": 3,
+      "Seconds": 0.17
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-core --test working_copy linked_worktree_gate_conflicts_on_another_thread --locked",
+      "Passed": 1,
+      "Seconds": 0.95
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop history_cache::tests --locked -- --test-threads=1",
+      "Passed": 7,
+      "Seconds": 32.72
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-core -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true,
+      "Seconds": 19.25
+    }
+  ],
+  "DesignSources": [
+    "https://raw.githubusercontent.com/dotnet/runtime/v10.0.0/src/native/libs/System.Globalization.Native/pal_casing.c",
+    "https://learn.microsoft.com/en-us/windows/win32/intl/international-components-for-unicode--icu-",
+    "https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-lcmapstringex"
+  ],
+  "Limits": [
+    "Current Windows system ICU and default pinned C# globalization configuration verified; nondefault C# app-local ICU/NLS overrides and older Windows runtime not certified. NLS fallback exercised directly on current Windows.",
+    "Existing Rust v1 file-ID-backed fingerprints remain unchanged, including full-uppercase encoding, for persisted draft/profile compatibility.",
+    "All write-entry-point, replacement-alias and cross-session acceptance remains open in R11.",
+    "No screen capture, interactive app launch, normal profile, working repository, installation, publication, merge or replacement of the existing local 0.50.0 test payload."
+  ]
+}

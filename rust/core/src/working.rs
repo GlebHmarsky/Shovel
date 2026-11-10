@@ -119,10 +119,7 @@ impl MutationGate {
         let key = format!(
             "{:X}",
             Sha256::digest(
-                common
-                    .to_string_lossy()
-                    .replace('/', "\\")
-                    .to_uppercase()
+                crate::case::invariant_upper(&common.to_string_lossy().replace('/', "\\"))?
                     .as_bytes()
             )
         );

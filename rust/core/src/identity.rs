@@ -145,6 +145,9 @@ pub fn read(path: &Path) -> std::io::Result<Identity> {
         if low | high == 0 {
             return Err(unavailable());
         }
+        // Published Rust v1 fingerprint encoding: preserve it for existing
+        // draft/profile identities. Native shared locks use case::invariant_upper;
+        // this opaque, file-ID-backed digest is not a C# interchange field.
         append(&mut digest, &path.to_string_lossy().to_uppercase());
         append(
             &mut digest,

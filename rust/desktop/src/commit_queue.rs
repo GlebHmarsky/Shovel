@@ -177,11 +177,7 @@ impl Editor {
         let key = action_key(&action);
         let (request, accepted) = self.scheduler.reserve(
             context.repository.identity.fingerprint.clone(),
-            context
-                .repository
-                .common_directory
-                .to_string_lossy()
-                .to_uppercase(),
+            shovel_core::case::path_key(&context.repository.common_directory),
             key,
             Lane::WorkingCopy,
             move |outcome| {

@@ -376,7 +376,7 @@ impl Controller {
             .unwrap_or_else(|_| options.directory().to_path_buf());
         let owner = format!(
             "init:{:x}",
-            Sha256::digest(target.to_string_lossy().to_uppercase().as_bytes())
+            Sha256::digest(shovel_core::case::path_key(&target).as_bytes())
         );
         let tx = self.sender.clone();
         let drop_ctx = ctx.clone();

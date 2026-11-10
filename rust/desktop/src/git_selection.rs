@@ -244,7 +244,7 @@ mod tests {
         let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
         let (id, _) = app.scheduler.reserve(
             snapshot.identity.fingerprint.clone(),
-            snapshot.common_directory.to_string_lossy().to_uppercase(),
+            shovel_core::case::path_key(&snapshot.common_directory),
             "held".into(),
             shovel_core::scheduler::Lane::Exclusive,
             |_| {},

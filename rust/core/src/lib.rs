@@ -62,3 +62,5 @@ pub mod stashes;
 pub mod updates;
 #[cfg(windows)]
 pub mod working;
+#[cfg(windows)]
+pub mod case;

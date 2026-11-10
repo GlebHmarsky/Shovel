@@ -869,3 +869,54 @@ fn sidebar_enter_and_double_click_open_review_then_switch_the_captured_branch() 
         );
     }
 }
+
+#[test]
+fn distinct_unicode_repository_paths_keep_separate_tabs_and_pending_owners() {
+    let temporary = tempfile::tempdir().unwrap();
+    let mut app = workspace();
+    app.tabs.clear();
+    for name in ["straße", "strasse", "ﬃ", "ffi", "ı", "i"] {
+        let path = temporary.path().join(name);
+        std::fs::create_dir(&path).unwrap();
+        app.ensure_tab(path);
+    }
+    assert_eq!(
+        app.tabs.len(),
+        6,
+        "full uppercase must not collapse distinct directories"
+    );
+    let first = app.tabs[0].id;
+    app.ensure_tab(temporary.path().join("STRAßE"));
+    assert_eq!(app.tabs.len(), 6);
+    assert_eq!(app.tabs[0].id, first);
+    app.remember_tabs();
+    assert_eq!(
+        app.settings
+            .get("RepositoryPaths")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        6
+    );
+    let ctx = egui::Context::default();
+    for tab in &app.tabs {
+        app.operations
+            .defer_new_branch(&tab.path, &app.settings, &app.scheduler, &ctx);
+    }
+    assert_eq!(app.scheduler.records().len(), 6);
+    let mut owners: Vec<_> = app
+        .scheduler
+        .records()
+        .into_iter()
+        .map(|r| r.repository)
+        .collect();
+    owners.sort();
+    owners.dedup();
+    assert_eq!(owners.len(), 6);
+    for record in app.scheduler.records() {
+        assert!(app.scheduler.remove_waiting(record.id));
+    }
+    app.operations.poll(&ctx);
+    assert!(!app.scheduler.has_accepted_work());
+}

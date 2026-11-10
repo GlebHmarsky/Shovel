@@ -5,7 +5,20 @@ using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
 
-if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence" or "--history" or "--remotes" or "--submodules")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone, --divergence or --history, --remotes or --submodules.");
+if (args.Length == 5 && args[0] == "--hold-gate")
+{
+    var identity = await new WindowsRepositoryIdentity().ReadAsync(Path.GetFullPath(args[1]), default);
+    var method = typeof(GitActions).GetMethod("EnterMutationGate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+    // No await after acquisition: the baseline mutex is thread-owned.
+    using var gate = (Mutex)method.Invoke(null, [identity, args[2]])!;
+    File.WriteAllText(args[3], "held");
+    var until = DateTime.UtcNow.AddSeconds(20);
+    while (!File.Exists(args[4]) && DateTime.UtcNow < until) Thread.Sleep(10);
+    gate.ReleaseMutex();
+    return;
+}
+
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence" or "--history" or "--remotes" or "--submodules" or "--identity")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone, --divergence or --history, --remotes, --submodules or --identity.");
 var root = Path.GetFullPath(args[0]);
 var output = Path.GetFullPath(args[1]);
 if (Directory.Exists(root) || File.Exists(root)) throw new IOException("Fixture path must not exist.");
@@ -27,6 +40,33 @@ async Task<string> Git(string path, params string[] arguments)
     return Encoding.UTF8.GetString(result.StandardOutput).TrimEnd();
 }
 
+
+if (args.Length == 3 && args[2] == "--identity")
+{
+    var identities = new List<object>();
+    foreach (var name in new[] { "ascii", "straße", "ﬃ", "ᾀ", "ı", "ſ", "𐐨", "שלום" })
+    {
+        var path = Path.Combine(root, name);
+        Directory.CreateDirectory(path);
+        await Git(path, "init", "--initial-branch=main");
+        await Git(path, "commit", "--allow-empty", "-m", "base");
+        var identity = await new WindowsRepositoryIdentity().ReadAsync(path, default);
+        identities.Add(new { path, fingerprint=identity.Fingerprint, common=identity.CommonDirectory, git=identity.GitDirectory });
+    }
+    var linked = Path.Combine(root, "linked-ß");
+    await Git(Path.Combine(root, "straße"), "worktree", "add", "-b", "linked", linked);
+    var linkedIdentity = await new WindowsRepositoryIdentity().ReadAsync(linked, default);
+    identities.Add(new { path=linked, fingerprint=linkedIdentity.Fingerprint, common=linkedIdentity.CommonDirectory, git=linkedIdentity.GitDirectory });
+    await File.WriteAllTextAsync(Path.Combine(output, "identities.json"), JsonSerializer.Serialize(identities));
+    var scalars = new StringBuilder();
+    for (int value=0; value<=0x10ffff; value++)
+        if (value<0xd800 || value>0xdfff) scalars.Append(char.ConvertFromUtf32(value));
+    var upper = scalars.ToString().ToUpperInvariant();
+    await File.WriteAllTextAsync(Path.Combine(output, "casing-sha256.txt"),
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(upper))));
+    Console.WriteLine("Exported nine native identities and full Unicode scalar casing digest.");
+    return;
+}
 
 if (args.Length == 3 && args[2] == "--submodules")
 {

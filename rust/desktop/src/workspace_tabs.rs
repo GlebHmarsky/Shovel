@@ -11,8 +11,7 @@ pub(super) enum TabAction {
 
 impl Workspace {
     pub(super) fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
-        a.to_string_lossy().replace('/', "\\").to_uppercase()
-            == b.to_string_lossy().replace('/', "\\").to_uppercase()
+        shovel_core::case::path_key(a) == shovel_core::case::path_key(b)
     }
 
     pub(super) fn remember_tabs(&mut self) {

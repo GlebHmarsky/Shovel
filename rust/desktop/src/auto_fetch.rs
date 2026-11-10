@@ -112,7 +112,7 @@ impl Controller {
             let dp = path.clone();
             let (_, accepted) = scheduler.submit(
                 snapshot.identity.fingerprint.clone(),
-                snapshot.common_directory.to_string_lossy().to_uppercase(),
+                shovel_core::case::path_key(&snapshot.common_directory),
                 format!("automatic-fetch:{}", path.display()),
                 Lane::Exclusive,
                 move || {

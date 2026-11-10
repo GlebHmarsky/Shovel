@@ -296,12 +296,7 @@ impl Pane {
         );
         let (_, accepted) = self.scheduler.submit(
             preview.context.repository.identity.fingerprint.clone(),
-            preview
-                .context
-                .repository
-                .common_directory
-                .to_string_lossy()
-                .to_uppercase(),
+            shovel_core::case::path_key(&preview.context.repository.common_directory),
             format!("resolve:{}", self.path),
             Lane::WorkingCopy,
             move || {

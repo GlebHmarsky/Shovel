@@ -533,10 +533,7 @@ impl Controller {
         changed
     }
     fn pending_owner(path: &std::path::Path) -> String {
-        format!(
-            "initializing:{}",
-            path.to_string_lossy().replace('/', "\\").to_uppercase()
-        )
+        format!("initializing:{}", shovel_core::case::path_key(path))
     }
 
     fn reserve_run(
@@ -698,7 +695,7 @@ impl Controller {
         scheduler.bind_repository(
             &Self::pending_owner(path),
             &snapshot.identity.fingerprint,
-            &snapshot.common_directory.to_string_lossy().to_uppercase(),
+            &shovel_core::case::path_key(&snapshot.common_directory),
         );
     }
 
@@ -793,7 +790,7 @@ impl Controller {
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) -> Option<u64> {
-        let common = snapshot.common_directory.to_string_lossy().to_uppercase();
+        let common = shovel_core::case::path_key(&snapshot.common_directory);
         if let Some(ticket) = self.reserve_run(
             options.kind,
             &snapshot.worktree,
@@ -823,7 +820,7 @@ impl Controller {
         options.remote = name.to_owned();
         options.explicit = true;
         options.all_remotes = false;
-        let common = snapshot.common_directory.to_string_lossy().to_uppercase();
+        let common = shovel_core::case::path_key(&snapshot.common_directory);
         if let Some(ticket) = self.reserve_run(
             Kind::Fetch,
             &snapshot.worktree,
@@ -1046,7 +1043,7 @@ impl Controller {
         };
         let (request, accepted) = scheduler.submit(
             captured.identity.fingerprint.clone(),
-            captured.common_directory.to_string_lossy().to_uppercase(),
+            shovel_core::case::path_key(&captured.common_directory),
             key,
             Lane::Exclusive,
             move || {

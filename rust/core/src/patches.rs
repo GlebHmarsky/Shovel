@@ -40,7 +40,7 @@ pub fn key(context: &Context, entries: &[Change], destination: &Path) -> String 
 }
 
 fn spelling(path: &Path) -> String {
-    path.to_string_lossy().replace('/', "\\").to_uppercase()
+    crate::case::path_key(path)
 }
 fn destination(
     context: &Context,

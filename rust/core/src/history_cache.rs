@@ -55,8 +55,7 @@ impl Preview {
     }
 }
 fn same_path(a: &Path, b: &Path) -> bool {
-    a.to_string_lossy().replace('/', "\\").to_uppercase()
-        == b.to_string_lossy().replace('/', "\\").to_uppercase()
+    crate::case::path_key(a) == crate::case::path_key(b)
 }
 #[derive(Clone)]
 pub struct Store {

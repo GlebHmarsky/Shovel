@@ -38,6 +38,7 @@ cargo test -j 1 -p shovel-desktop commit::queue_tests --locked -- --test-threads
 ./scripts/Test-RustHistoryParity.ps1
 ./scripts/Test-RustRemoteParity.ps1
 ./scripts/Test-RustSubmoduleParity.ps1
+./scripts/Test-RustIdentityParity.ps1
 cargo test -j 1 -p shovel-core --test submodules --locked -- --test-threads=1
 cargo test -j 1 -p shovel-desktop submodule_tests --locked -- --test-threads=1
 cargo test -j 1 -p shovel-desktop sidebar::tests --locked -- --test-threads=1

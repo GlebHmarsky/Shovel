@@ -562,11 +562,7 @@ impl Editor {
         let entries = selection.entries;
         let (_, accepted) = self.scheduler.submit(
             context.repository.identity.fingerprint.clone(),
-            context
-                .repository
-                .common_directory
-                .to_string_lossy()
-                .to_uppercase(),
+            shovel_core::case::path_key(&context.repository.common_directory),
             match action {
                 FileAction::Discard => files::discard_key(&context, &entries),
                 FileAction::Stash => files::stash_key(&context, &entries, &message),

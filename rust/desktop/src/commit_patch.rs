@@ -52,11 +52,7 @@ impl Editor {
         let entries = selected.entries;
         let (_, accepted) = self.scheduler.submit(
             context.repository.identity.fingerprint.clone(),
-            context
-                .repository
-                .common_directory
-                .to_string_lossy()
-                .to_uppercase(),
+            shovel_core::case::path_key(&context.repository.common_directory),
             patches::key(&context, &entries, &target),
             Lane::Read,
             move || {

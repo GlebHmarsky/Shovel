@@ -285,12 +285,7 @@ impl Git {
         {
             return Err(Error::NotWorktree);
         }
-        let normalize = |p: &Path| {
-            p.to_string_lossy()
-                .replace('/', "\\")
-                .trim_end_matches('\\')
-                .to_uppercase()
-        };
+        let normalize = |p: &Path| crate::case::path_key(p).trim_end_matches('\\').to_owned();
         if normalize(&identity.root) != normalize(Path::new(&dirs[1]))
             || normalize(&identity.git) != normalize(Path::new(&dirs[2]))
             || normalize(&identity.common) != normalize(Path::new(&dirs[3]))
