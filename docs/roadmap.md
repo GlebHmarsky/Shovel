@@ -941,3 +941,7 @@ Track actual history/metadata worker lifetimes independently of UI generations a
 ### Rust comparison/editor read drainage — 2026-11-10
 
 Propagate workspace worker ownership through comparison, Commit, stash and file-history views; suspend follow-up reads during shutdown and resume after a cancelled close. Ten focused/regression checks and Clippy passed. [Evidence and remaining draft/conflict/updater/startup/tool limits](rust-rewrite.md#comparison-and-editor-read-drainage-2026-11-10). R24 remains open; existing local builds unchanged.
+
+### Rust draft/conflict exit drainage — 2026-11-10
+
+Wait for required draft restoration, preserve newer typing and continue exit after saves; retain cancellable conflict preview workers after pane removal. Failed draft writes leave the workspace usable for recovery. Six focused checks and Clippy passed. [Evidence and remaining updater/startup/tool limits](rust-rewrite.md#draft-restoration-and-conflict-shutdown-drainage-2026-11-10). R24 remains open; no delivery rebuild.

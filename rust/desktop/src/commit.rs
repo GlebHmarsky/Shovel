@@ -206,7 +206,11 @@ impl Editor {
         self.refresh_pending = true;
     }
     pub fn blocks_exit(&self) -> bool {
-        self.draft_dirty || self.draft_saving || self.action_busy() || self.unsaved_conflict()
+        (self.initialized && !self.draft_loaded)
+            || self.draft_dirty
+            || self.draft_saving
+            || self.action_busy()
+            || self.unsaved_conflict()
     }
     pub fn native_picker_open(&self) -> bool {
         self.patch_picking
@@ -329,25 +333,35 @@ impl Editor {
         self.diff_generation += 1;
         self.diff = None;
         self.diff_error = None;
-        self.conflict = Some(crate::conflict::Pane::new(
-            context,
-            change,
-            self.git.clone(),
-            self.scheduler.clone(),
-            self.external_merge_tool.clone(),
-        ));
+        self.conflict = Some(
+            crate::conflict::Pane::new(
+                context,
+                change,
+                self.git.clone(),
+                self.scheduler.clone(),
+                self.external_merge_tool.clone(),
+            )
+            .with_read_workers(self.read_workers.clone()),
+        );
     }
     pub fn draft_problem(&self) -> Option<&str> {
         self.draft_error.as_deref()
     }
     fn initialize(&mut self, ctx: &egui::Context) {
+        if self.read_workers.stopping() {
+            return;
+        }
         self.initialized = true;
         self.refresh(ctx);
         let path = self.path.clone();
         let store = self.store.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let lease = self.read_workers.start_required();
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&store.directory);
             let cancel = Cancellation::default();
             let result = identity::read(&path)
                 .map_err(drafts::Error::Io)

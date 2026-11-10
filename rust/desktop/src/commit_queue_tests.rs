@@ -573,4 +573,77 @@ fn retirement_keeps_failed_or_pending_draft_writes_and_unfinished_initialization
     );
     assert_eq!(h.editor.draft.subject, "unsaved text must remain");
     assert_eq!(fs::read_to_string(blocked).unwrap(), "existing file");
+    let mut app = crate::workspace_interaction_tests::workspace();
+    app.tabs.clear();
+    app.editors.push(h.editor);
+    app.close(&h.ctx);
+    assert!(
+        !app.pending_exit && !app.closing && !app.exit_ready,
+        "a failed draft write must leave the workspace usable for recovery"
+    );
+    assert!(app.notice.is_some());
+}
+
+#[test]
+fn shutdown_waits_for_required_draft_restore_and_saves_newer_typing_before_exit() {
+    let h = Harness::new();
+    let identity = h.editor.identity.clone().unwrap();
+    let old = drafts::Text {
+        subject: "restored subject".into(),
+        description: "saved body".into(),
+    };
+    h.editor
+        .store
+        .save(
+            &identity,
+            h.editor.revision.as_deref(),
+            &old,
+            &Cancellation::default(),
+        )
+        .unwrap();
+    let head = h.git(&["rev-parse", "HEAD"]);
+    let index = h.git(&["ls-files", "--stage"]);
+    let mut app = crate::workspace_interaction_tests::workspace();
+    app.tabs.clear();
+    app.git = Some(h.editor.git.clone());
+    let mut profile = crate::SettingsStore::new(h._temp.path().join("profile"));
+    app.settings = profile.load().unwrap();
+    app.store = Some(profile);
+    let mut editor = Editor::new(
+        h.editor.path.clone(),
+        h.editor.git.clone(),
+        app.scheduler.clone(),
+        h.editor.store.clone(),
+    );
+    editor.read_workers = app.read_workers.clone();
+    let (started, release) = crate::history_cache::tests::hold_read(editor.store.directory.clone());
+    editor.initialize(&h.ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    editor.draft.subject = "newer typing during restore".into();
+    editor.draft.description = "Unicode \u{05e9}\u{05dc}\u{05d5}\u{05dd}".into();
+    editor.edited();
+    let expected = editor.draft.clone();
+    app.editors.push(editor);
+    app.close(&h.ctx);
+    assert!(app.pending_exit && !app.exit_ready);
+    assert!(!app.editors[0].draft_loaded);
+    assert!(!app.read_workers.cancel_and_drained());
+    release.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !app.exit_ready {
+        app.receive(&h.ctx);
+        assert!(Instant::now() < deadline, "{:?}", app.notice);
+        thread::sleep(Duration::from_millis(3));
+    }
+    assert!(app.editors[0].draft_loaded);
+    assert!(!app.editors[0].draft_dirty && !app.editors[0].draft_saving);
+    assert!(app.editors[0].draft_error.is_none());
+    let actual = h
+        .editor
+        .store
+        .load(&identity, &Cancellation::default())
+        .unwrap();
+    assert_eq!(actual.text, expected);
+    assert_eq!(h.git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(h.git(&["ls-files", "--stage"]), index);
 }

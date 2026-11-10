@@ -1156,6 +1156,15 @@ impl Workspace {
             }
         }
         if self.editors.iter().any(commit::Editor::blocks_exit) {
+            // Continue the same close after a load/save/result delivery finishes.
+            // A failed draft write instead returns control for explicit recovery.
+            self.pending_exit = !self
+                .editors
+                .iter()
+                .any(|editor| editor.draft_problem().is_some());
+            if self.pending_exit {
+                ctx.request_repaint_after(std::time::Duration::from_millis(25));
+            }
             self.notice = Some(
                 self.editors
                     .iter()

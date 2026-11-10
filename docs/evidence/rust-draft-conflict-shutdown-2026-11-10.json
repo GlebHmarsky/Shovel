@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-10",
+  "scope": [
+    "Required draft restoration before final save",
+    "Cancellable conflict previews",
+    "Automatic close continuation after draft saves",
+    "Recovery control after failed draft writes"
+  ],
+  "checks": [
+    {
+      "filter": "shutdown_waits_for_required_draft_restore",
+      "passed": 1,
+      "seconds": 2.33
+    },
+    {
+      "filter": "shutdown_waits_for_removed_conflict_preview",
+      "passed": 1,
+      "seconds": 3.22
+    },
+    {
+      "filter": "retirement_keeps_failed_or_pending_draft_writes",
+      "passed": 1,
+      "seconds": 1.91
+    },
+    {
+      "filter": "typed_text_survives_cancelled_navigation_failed_stage_and_exit_confirmation",
+      "passed": 1,
+      "seconds": 10.08
+    },
+    {
+      "filter": "accepted_external_merge_finishes_after_commit_window_closes",
+      "passed": 1,
+      "seconds": 9.4
+    },
+    {
+      "filter": "app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save",
+      "passed": 1,
+      "seconds": 4.54
+    }
+  ],
+  "clippy": "core/desktop all targets passed with warnings denied",
+  "limits": [
+    "Test-only held worker gates and headless interaction",
+    "Native desktop acceptance remains open",
+    "Updater and remaining startup/tool workers remain open"
+  ],
+  "delivery": "source batch only; local payloads unchanged"
+}

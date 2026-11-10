@@ -42,6 +42,7 @@ pub struct Refresh {
     pub output: String,
 }
 pub struct Pane {
+    read_workers: crate::read_workers::Workers,
     pub path: String,
     pub busy: bool,
     pub mutating: bool,
@@ -69,6 +70,10 @@ pub struct Pane {
     receiver: Receiver<Event>,
 }
 impl Pane {
+    pub fn with_read_workers(mut self, workers: crate::read_workers::Workers) -> Self {
+        self.read_workers = workers;
+        self
+    }
     pub fn new(
         context: Arc<Context>,
         change: Change,
@@ -86,6 +91,7 @@ impl Pane {
         };
         let (sender, receiver) = mpsc::channel();
         Self {
+            read_workers: Default::default(),
             path: change.path.clone(),
             busy: false,
             mutating: false,
@@ -140,7 +146,7 @@ impl Pane {
         }
     }
     fn load(&mut self, fresh: bool, ctx: &egui::Context) {
-        if self.mutating {
+        if self.mutating || self.read_workers.stopping() {
             return;
         }
         self.cancel.cancel();
@@ -159,7 +165,11 @@ impl Pane {
             self.sender.clone(),
             ctx.clone(),
         );
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&context.repository.worktree);
             let result = (|| -> Result<Loaded, String> {
                 if fresh {
                     context = Arc::new(

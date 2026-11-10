@@ -9,7 +9,7 @@ use std::{
 struct State {
     next: u64,
     stopping: bool,
-    active: BTreeMap<u64, Cancellation>,
+    active: BTreeMap<u64, Option<Cancellation>>,
 }
 #[derive(Clone, Default)]
 pub(super) struct Workers(Arc<Mutex<State>>);
@@ -19,6 +19,14 @@ pub(super) struct Lease {
 }
 impl Workers {
     pub fn start(&self, cancel: Cancellation) -> Lease {
+        self.register(Some(cancel))
+    }
+    // Draft restoration supplies the revision needed for safe subsequent writes.
+    // Wait for it without cancelling or discarding the recovery information.
+    pub fn start_required(&self) -> Lease {
+        self.register(None)
+    }
+    fn register(&self, cancel: Option<Cancellation>) -> Lease {
         let mut state = self.0.lock().unwrap();
         state.next += 1;
         let id = state.next;
@@ -37,7 +45,7 @@ impl Workers {
     pub fn cancel_and_drained(&self) -> bool {
         let mut state = self.0.lock().unwrap();
         state.stopping = true;
-        for cancel in state.active.values() {
+        for cancel in state.active.values().flatten() {
             cancel.cancel();
         }
         state.active.is_empty()

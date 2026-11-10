@@ -398,3 +398,57 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
             .contains("<<<<<<<")
     );
 }
+
+#[test]
+fn shutdown_waits_for_removed_conflict_preview_without_resolving_files() {
+    let mut h = Harness::new();
+    h.until(|e| e.draft_loaded && e.context.is_some() && !e.loading);
+    let mut app = crate::workspace_interaction_tests::workspace();
+    app.tabs.clear();
+    app.git = Some(h.editor.git.clone());
+    app.scheduler = h.editor.scheduler.clone();
+    let mut profile = crate::SettingsStore::new(h._temp.path().join("profile"));
+    app.settings = profile.load().unwrap();
+    app.store = Some(profile);
+    h.editor.read_workers = app.read_workers.clone();
+    let change = h
+        .editor
+        .context
+        .as_ref()
+        .unwrap()
+        .entries
+        .iter()
+        .find(|e| e.group == Group::Conflicted)
+        .unwrap()
+        .clone();
+    let before = fs::read(h.editor.path.join(&change.path)).unwrap();
+    let index = command(
+        &h.editor.git,
+        &h.editor.path,
+        &["ls-files", "--stage", "-z"],
+    )
+    .stdout;
+    h.editor.focused = Some(change);
+    h.editor.open_conflict();
+    let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
+    h.render(vec![]).drop_without_applying_deltas();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    h.editor.conflict = None;
+    app.editors.push(h.editor);
+    app.close(&h.ctx);
+    assert!(app.pending_exit && !app.exit_ready);
+    release.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !app.exit_ready {
+        app.receive(&h.ctx);
+        assert!(Instant::now() < deadline, "{:?}", app.notice);
+        thread::sleep(Duration::from_millis(3));
+    }
+    let editor = &app.editors[0];
+    assert_eq!(fs::read(editor.path.join("conflict.txt")).unwrap(), before);
+    assert_eq!(
+        command(&editor.git, &editor.path, &["ls-files", "--stage", "-z"]).stdout,
+        index
+    );
+    assert!(app.read_workers.cancel_and_drained());
+}

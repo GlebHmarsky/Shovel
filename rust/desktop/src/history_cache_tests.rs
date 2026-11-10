@@ -278,6 +278,12 @@ fn read_gates() -> &'static std::sync::Mutex<std::collections::HashMap<PathBuf, 
     > = std::sync::OnceLock::new();
     GATES.get_or_init(Default::default)
 }
+pub(crate) fn hold_read(path: PathBuf) -> (mpsc::Receiver<()>, mpsc::Sender<()>) {
+    let (ready, started) = mpsc::channel();
+    let (release, held) = mpsc::channel();
+    read_gates().lock().unwrap().insert(path, (ready, held));
+    (started, release)
+}
 pub(crate) fn wait_for_read(path: &std::path::Path) {
     let gate = read_gates().lock().unwrap().remove(path);
     if let Some((started, release)) = gate {
