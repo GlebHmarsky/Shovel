@@ -54,6 +54,7 @@ pub(super) fn workspace() -> Workspace {
         draft_store: None,
         operations: Default::default(),
         branches: Default::default(),
+        initialization: Default::default(),
         stash_views: vec![],
         history_menu: None,
         reference_menu: None,

@@ -575,9 +575,9 @@
       "ParityIds": [
         "R26"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/initialization.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed pinned native init, form/view model, chooser and shell opening. Four native, five headless interaction and one canonical destination-mutex checks passed. Three paired C# exact HEAD/index/worktree/config/template outcomes match; see rust-initialization-2026-11-10.json. Native chooser/focus/accessibility, UNC/junction/cross-process races and broader failure acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/RepositoryTab.cs",
@@ -733,9 +733,9 @@
       "ParityIds": [
         "R26"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/initialization.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed pinned native init, form/view model, chooser and shell opening. Four native, five headless interaction and one canonical destination-mutex checks passed. Three paired C# exact HEAD/index/worktree/config/template outcomes match; see rust-initialization-2026-11-10.json. Native chooser/focus/accessibility, UNC/junction/cross-process races and broader failure acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellNetworkPreferences.cs",
@@ -1333,9 +1333,9 @@
       "ParityIds": [
         "R26"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/initialization.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed pinned native init, form/view model, chooser and shell opening. Four native, five headless interaction and one canonical destination-mutex checks passed. Three paired C# exact HEAD/index/worktree/config/template outcomes match; see rust-initialization-2026-11-10.json. Native chooser/focus/accessibility, UNC/junction/cross-process races and broader failure acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/Views/RepositoryInitWindow.xaml.cs",
@@ -1343,9 +1343,9 @@
       "ParityIds": [
         "R26"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/initialization.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed pinned native init, form/view model, chooser and shell opening. Four native, five headless interaction and one canonical destination-mutex checks passed. Three paired C# exact HEAD/index/worktree/config/template outcomes match; see rust-initialization-2026-11-10.json. Native chooser/focus/accessibility, UNC/junction/cross-process races and broader failure acceptance remain open."
     },
     {
       "Path": "src/GitGui.App/Views/RepositorySidebarView.xaml",
@@ -1927,9 +1927,9 @@
       "ParityIds": [
         "R26"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/initialization.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed pinned native init, form/view model, chooser and shell opening. Four native, five headless interaction and one canonical destination-mutex checks passed. Three paired C# exact HEAD/index/worktree/config/template outcomes match; see rust-initialization-2026-11-10.json. Native chooser/focus/accessibility, UNC/junction/cross-process races and broader failure acceptance remain open."
     },
     {
       "Path": "src/GitGui.Core/Git/RepositoryReader.cs",

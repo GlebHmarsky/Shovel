@@ -5,7 +5,7 @@ using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
 
-if (args.Length != 2) throw new ArgumentException("Expected new fixture directory and output directory.");
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] != "--init") throw new ArgumentException("Expected new fixture directory, output directory and optional --init.");
 var root = Path.GetFullPath(args[0]);
 var output = Path.GetFullPath(args[1]);
 if (Directory.Exists(root) || File.Exists(root)) throw new IOException("Fixture path must not exist.");
@@ -26,6 +26,61 @@ async Task<string> Git(string path, params string[] arguments)
     if (result.ExitCode != 0) throw new IOException(Encoding.UTF8.GetString(result.StandardError));
     return Encoding.UTF8.GetString(result.StandardOutput).TrimEnd();
 }
+
+if (args.Length == 3)
+{
+    foreach (var scenario in new[] { "configured", "existing", "partial" })
+    {
+        await File.WriteAllTextAsync(config, "[user]\nname=Fixture\nemail=fixture@example.invalid\n[commit]\ngpgsign=false\n[core]\nautocrlf=false\n[init]\ndefaultBranch=team-default\n");
+        var templates = Path.Combine(root, scenario + "-templates");
+        Directory.CreateDirectory(templates);
+        if (scenario != "existing")
+        {
+            await File.WriteAllBytesAsync(Path.Combine(templates, "fixture-marker"), Encoding.UTF8.GetBytes("copied template"));
+            if (scenario == "partial") await File.WriteAllBytesAsync(Path.Combine(templates, "objects"), Encoding.UTF8.GetBytes("blocked native object directory"));
+            await Git(root, "config", "--file", config, "init.templateDir", templates);
+        }
+        var path = Path.Combine(root, scenario == "existing" ? "-new 日本語/child" : scenario == "configured" ? "-populated 日本語 folder" : "partial");
+        if (scenario != "existing")
+        {
+            Directory.CreateDirectory(path);
+            await File.WriteAllBytesAsync(Path.Combine(path, "keep.bin"), [0, 255, 1, 2]);
+        }
+        using var lifetime = ProcessLifetime.CompleteStartedCommands();
+        var result = await actions.InitializeRepositoryAsync(git,
+            new(path, scenario == "configured" ? "" : scenario == "existing" ? "work/start" : "main"), default);
+        if (scenario == "existing")
+        {
+            await Git(path, "commit", "--allow-empty", "-m", "base");
+            await File.WriteAllBytesAsync(Path.Combine(path, "kept"), Encoding.UTF8.GetBytes("untouched"));
+            result = await actions.InitializeRepositoryAsync(git, new(path, "--ignored-invalid"), default);
+        }
+        var expectedMessage = scenario == "existing" ? "InitAlreadyExists" : scenario == "partial" ? "InitIncomplete" : "InitSucceeded";
+        if (result.Action.MessageCode != expectedMessage || result.Repository is null)
+            throw new InvalidOperationException("Unexpected initialization result: " + result.Action.MessageCode);
+        async Task<string> Bytes(string name) => File.Exists(Path.Combine(path, name))
+            ? Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, name))) : "";
+        var files = new SortedDictionary<string, string>();
+        var file = scenario == "existing" ? "kept" : "keep.bin";
+        files[file] = await Bytes(file);
+        var state = new {
+            message = result.Action.MessageCode,
+            repositoryObserved = result.Repository is not null,
+            headFile = await Bytes(".git/HEAD"),
+            indexExists = File.Exists(Path.Combine(path, ".git", "index")),
+            index = scenario == "partial" ? "" : await Git(path, "ls-files", "--stage", "-z"),
+            status = scenario == "partial" ? "" : await Git(path, "status", "--porcelain", "-z"),
+            tip = scenario == "existing" ? await Git(path, "rev-parse", "HEAD") : "",
+            config = await Bytes(".git/config"),
+            templateMarker = await Bytes(".git/fixture-marker"),
+            worktree = files
+        };
+        await File.WriteAllTextAsync(Path.Combine(output, scenario + ".json"), JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine("PASS baseline initialization: " + scenario);
+    }
+    return;
+}
+
 foreach (var scenario in new[] { "stage-commit", "removed-commit", "external-index", "unstage" })
 {
     var path = Path.Combine(root, scenario); Directory.CreateDirectory(path);

@@ -1,0 +1,333 @@
+//! Local repository creation owns its worker independently of any visible tab.
+use crate::{commit::OwnedActivity, strings::text};
+use eframe::egui;
+use sha2::{Digest, Sha256};
+use shovel_core::{
+    git::Git,
+    initialization::{self, Options},
+    operation::Error,
+    scheduler::{Lane, Outcome, Scheduler},
+};
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, Sender},
+    },
+    thread,
+};
+
+enum Event {
+    Picked(Option<PathBuf>),
+    Started,
+    Completed(Box<Result<initialization::Completed, Error>>),
+    Removed,
+}
+struct Form {
+    directory: String,
+    branch: String,
+}
+pub struct Controller {
+    form: Option<Form>,
+    pub busy: bool,
+    pub picking: bool,
+    pub summary: Option<String>,
+    activity: Option<OwnedActivity>,
+    path: PathBuf,
+    request_id: u64,
+    origin: Option<u64>,
+    sender: Sender<Event>,
+    receiver: Receiver<Event>,
+    picker: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>,
+}
+pub struct Completion {
+    pub path: Option<PathBuf>,
+    pub origin: Option<u64>,
+    pub notice: Option<String>,
+}
+impl Default for Controller {
+    fn default() -> Self {
+        let (sender, receiver) = mpsc::channel();
+        Self {
+            form: None,
+            busy: false,
+            picking: false,
+            summary: None,
+            activity: None,
+            path: PathBuf::new(),
+            request_id: 0,
+            origin: None,
+            sender,
+            receiver,
+            picker: Arc::new(|| {
+                rfd::FileDialog::new()
+                    .set_title(text("InitChooseFolder"))
+                    .pick_folder()
+            }),
+        }
+    }
+}
+impl Controller {
+    pub fn is_open(&self) -> bool {
+        self.form.is_some() || self.picking
+    }
+    pub fn open(&mut self) {
+        if !self.busy {
+            self.form = Some(Form {
+                directory: String::new(),
+                branch: String::new(),
+            });
+        }
+    }
+    pub fn take_activity(&mut self) -> Option<(PathBuf, OwnedActivity)> {
+        self.activity.take().map(|a| (self.path.clone(), a))
+    }
+    pub fn poll(&mut self, ctx: &egui::Context) -> Option<Completion> {
+        let mut completed = None;
+        while let Ok(event) = self.receiver.try_recv() {
+            match event {
+                Event::Picked(path) => {
+                    self.picking = false;
+                    if let (Some(form), Some(path)) = (&mut self.form, path) {
+                        form.directory = path.to_string_lossy().into_owned();
+                    }
+                }
+                Event::Started => {
+                    self.summary = Some(text("ActionTitleInit"));
+                    self.activity = Some(OwnedActivity {
+                        request: self.request(),
+                        label: "ActionTitleInit",
+                        status: text("ActionTitleInit"),
+                        output: String::new(),
+                        done: false,
+                        reopen_commit: false,
+                    });
+                }
+                Event::Completed(result) => {
+                    self.busy = false;
+                    let (path, status, output, notice) = match *result {
+                        Ok(result) => {
+                            let status = text(result.message);
+                            let notice = (!result.succeeded || result.repository.is_none())
+                                .then(|| status.clone());
+                            (
+                                result.repository.map(|r| r.worktree),
+                                status,
+                                result.output,
+                                notice,
+                            )
+                        }
+                        Err(error) => {
+                            let output = if let Error::Git(shovel_core::git::Error::Command {
+                                output,
+                                ..
+                            }) = &error
+                            {
+                                output.clone()
+                            } else {
+                                String::new()
+                            };
+                            let status = text(&error.code());
+                            (None, status.clone(), output, Some(status))
+                        }
+                    };
+                    self.summary = Some(status.clone());
+                    if let Some(activity) = &mut self.activity {
+                        activity.done = true;
+                        activity.status = status;
+                        activity.output = output.chars().take(32768).collect();
+                    } else {
+                        // The pending record may already have been forwarded to Activity.
+                        self.activity = Some(OwnedActivity {
+                            request: self.request(),
+                            label: "ActionTitleInit",
+                            status,
+                            output: output.chars().take(32768).collect(),
+                            done: true,
+                            reopen_commit: false,
+                        });
+                    }
+                    completed = Some(Completion {
+                        path,
+                        origin: self.origin,
+                        notice,
+                    });
+                }
+                Event::Removed => {
+                    self.busy = false;
+                    self.summary = Some(text("QueuedRequestCancelled"));
+                    self.activity = Some(OwnedActivity {
+                        request: self.request(),
+                        label: "ActionTitleInit",
+                        status: text("QueuedRequestCancelled"),
+                        output: String::new(),
+                        done: true,
+                        reopen_commit: false,
+                    });
+                }
+            }
+        }
+        if self.busy || self.picking {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
+        completed
+    }
+    fn request(&self) -> u64 {
+        self.request_id
+    }
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        git: Option<&Arc<Git>>,
+        scheduler: &Scheduler,
+        origin: Option<u64>,
+    ) {
+        let Some(mut form) = self.form.take() else {
+            return;
+        };
+        let mut close = false;
+        let mut create = false;
+        let ready = PathBuf::from(&form.directory).is_absolute()
+            && !form
+                .directory
+                .chars()
+                .any(|c| matches!(c, '\0' | '"' | '<' | '>' | '|'));
+        let response =
+            egui::Modal::new(egui::Id::unique("initialize_repository")).show(ctx, |ui| {
+                ui.set_width(560.);
+                ui.heading(text("ActionTitleInit"));
+                ui.label(text("ActionExplainInit"));
+                ui.separator();
+                let directory_label = ui.label(text("InitDirectory"));
+                ui.horizontal(|ui| {
+                    ui.add_enabled(
+                        !self.picking,
+                        egui::TextEdit::singleline(&mut form.directory).desired_width(440.),
+                    )
+                    .labelled_by(directory_label.id);
+                    if ui
+                        .add_enabled(!self.picking, egui::Button::new(text("InitBrowse")))
+                        .clicked()
+                    {
+                        self.picking = true;
+                        let picker = self.picker.clone();
+                        let tx = self.sender.clone();
+                        let ctx = ctx.clone();
+                        thread::spawn(move || {
+                            let _ = tx.send(Event::Picked(picker()));
+                            ctx.request_repaint();
+                        });
+                    }
+                });
+                let branch_label = ui.label(text("InitBranch"));
+                ui.add_enabled(
+                    !self.picking,
+                    egui::TextEdit::singleline(&mut form.branch).desired_width(f32::INFINITY),
+                )
+                .labelled_by(branch_label.id);
+                ui.label(text("InitBranchHelp"));
+                ui.label(text(if ready {
+                    "InitReady"
+                } else {
+                    "InitEnterDirectory"
+                }));
+                ui.separator();
+                ui.horizontal(|ui| {
+                    create = ui
+                        .add_enabled(
+                            ready && !self.picking && git.is_some(),
+                            egui::Button::new(text("InitCreate")),
+                        )
+                        .clicked();
+                    close = ui
+                        .add_enabled(!self.picking, egui::Button::new(text("ActionCancel")))
+                        .clicked();
+                });
+            });
+        if !self.picking && ready && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            create = true;
+        }
+        if create && let Some(git) = git {
+            self.submit(
+                Options {
+                    directory: form.directory.into(),
+                    initial_branch: form.branch,
+                },
+                origin,
+                git.clone(),
+                scheduler,
+                ctx,
+            );
+        } else if !close && (!response.should_close() || self.picking) {
+            self.form = Some(form);
+        }
+    }
+    fn submit(
+        &mut self,
+        options: Options,
+        origin: Option<u64>,
+        git: Arc<Git>,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        if self.busy {
+            return;
+        }
+        let target = initialization::destination(&options.directory)
+            .unwrap_or_else(|_| options.directory.clone());
+        let owner = format!(
+            "init:{:x}",
+            Sha256::digest(target.to_string_lossy().to_uppercase().as_bytes())
+        );
+        let tx = self.sender.clone();
+        let drop_ctx = ctx.clone();
+        let (request, accepted) = scheduler.reserve(
+            owner.clone(),
+            owner,
+            "init".into(),
+            Lane::Exclusive,
+            move |_| {
+                let _ = tx.send(Event::Removed);
+                drop_ctx.request_repaint();
+            },
+        );
+        if !accepted {
+            return;
+        }
+        self.request_id = request;
+        self.path = target;
+        self.origin = origin;
+        self.busy = true;
+        self.summary = Some(text("OperationWaiting"));
+        self.activity = Some(OwnedActivity {
+            request,
+            label: "ActionTitleInit",
+            status: text("OperationWaiting"),
+            output: String::new(),
+            done: false,
+            reopen_commit: false,
+        });
+        let tx = self.sender.clone();
+        let ctx = ctx.clone();
+        scheduler.activate(request, move || {
+            let _ = tx.send(Event::Started);
+            ctx.request_repaint();
+            let result = git.initialize_repository(&options);
+            let outcome = if result
+                .as_ref()
+                .is_ok_and(|r| r.succeeded && r.repository.is_some())
+            {
+                Outcome::Succeeded
+            } else {
+                Outcome::Failed
+            };
+            let _ = tx.send(Event::Completed(Box::new(result)));
+            ctx.request_repaint();
+            outcome
+        });
+    }
+}
+
+#[cfg(test)]
+#[path = "repository_init_tests.rs"]
+mod tests;

@@ -12,6 +12,7 @@ mod file_shell;
 mod git_identity;
 mod history_row;
 mod operations;
+mod repository_init;
 mod repository_tools;
 mod settings_ui;
 mod stashes;
@@ -133,6 +134,7 @@ struct Workspace {
     draft_store: Option<shovel_core::drafts::Store>,
     operations: operations::Controller,
     branches: branches::Dialogs,
+    initialization: repository_init::Controller,
     stash_views: Vec<stashes::View>,
     history_menu: Option<HistoryMenu>,
     reference_menu: Option<ReferenceMenu>,
@@ -205,19 +207,23 @@ impl Workspace {
             draft_store: None,
             operations: Default::default(),
             branches: Default::default(),
+            initialization: Default::default(),
             stash_views: vec![],
             history_menu: None,
             reference_menu: None,
         }
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
+        let index = self.ensure_tab(path);
+        self.select_tab(index, ctx);
+    }
+    fn ensure_tab(&mut self, path: PathBuf) -> usize {
         if let Some(index) = self
             .tabs
             .iter()
             .position(|t| Self::same_path(&t.path, &path))
         {
-            self.select_tab(index, ctx);
-            return;
+            return index;
         }
         if let Some(index) = self
             .retained_tabs
@@ -226,8 +232,7 @@ impl Workspace {
         {
             let owner = self.retained_tabs.remove(index);
             self.tabs.push(owner);
-            self.select_tab(self.tabs.len() - 1, ctx);
-            return;
+            return self.tabs.len() - 1;
         }
         let id = self.next_id;
         self.next_id += 1;
@@ -246,7 +251,7 @@ impl Workspace {
             error: None,
             comparison: None,
         });
-        self.select_tab(self.tabs.len() - 1, ctx);
+        self.tabs.len() - 1
     }
     fn refresh(&mut self, ctx: &egui::Context) {
         self.refresh_at(self.selected, ctx);
@@ -647,6 +652,24 @@ impl Workspace {
         {
             self.closing = false;
         }
+        if let Some(result) = self.initialization.poll(ctx) {
+            if let Some(notice) = result.notice {
+                self.notice = Some(notice);
+            }
+            if let Some(path) = result.path {
+                if self.tabs.is_empty()
+                    || self.tabs.get(self.selected).map(|t| t.id) == result.origin
+                {
+                    self.open(path, ctx);
+                } else {
+                    self.ensure_tab(path);
+                    self.remember_tabs();
+                }
+            }
+        }
+        if let Some((path, activity)) = self.initialization.take_activity() {
+            self.operations.record_owned(path, activity);
+        }
         let mut changed = self.operations.poll(ctx);
         changed.extend(
             self.auto_fetch.tick(
@@ -816,6 +839,10 @@ impl Workspace {
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         if self.closing {
+            return;
+        }
+        if self.initialization.picking {
+            self.notice = Some(strings::text("RustRepositoryChooserOpen"));
             return;
         }
         if self.editors.iter().any(commit::Editor::native_picker_open) {
@@ -1006,6 +1033,7 @@ impl eframe::App for Workspace {
             || self.editors.iter().any(|editor| editor.open)
             || self.operations.modal_open()
             || self.branches.is_open()
+            || self.initialization.is_open()
             || self.stash_views.iter().any(|view| view.open);
         if modal_open || self.closing {
             ui.disable();
@@ -1072,6 +1100,28 @@ impl eframe::App for Workspace {
             .show(ui, |ui| {
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button(strings::text("FileMenu"), |ui| {
+                        if ui
+                            .add_enabled(
+                                self.git.is_some()
+                                    && self.tabs.len() < 20
+                                    && !self.initialization.busy,
+                                egui::Button::new(strings::text("NewRepository")),
+                            )
+                            .on_hover_text(strings::text(if self.git.is_none() {
+                                "GitErrorMissingGit"
+                            } else if self.tabs.len() >= 20 {
+                                "TooManyRepositories"
+                            } else if self.initialization.busy {
+                                "RustRepositoryCreationBusy"
+                            } else {
+                                "ActionExplainInit"
+                            }))
+                            .clicked()
+                        {
+                            self.initialization.open();
+                            ui.close();
+                        }
+
                         if ui.button(strings::text("SettingsMenu")).clicked() {
                             self.settings_dialog = Some(settings_ui::Dialog::new(&self.settings));
                             ui.close();
@@ -1130,6 +1180,28 @@ impl eframe::App for Workspace {
                         }
                     });
                     ui.menu_button(strings::text("RepositoryMenu"), |ui| {
+                        if ui
+                            .add_enabled(
+                                self.git.is_some()
+                                    && self.tabs.len() < 20
+                                    && !self.initialization.busy,
+                                egui::Button::new(strings::text("NewRepository")),
+                            )
+                            .on_hover_text(strings::text(if self.git.is_none() {
+                                "GitErrorMissingGit"
+                            } else if self.tabs.len() >= 20 {
+                                "TooManyRepositories"
+                            } else if self.initialization.busy {
+                                "RustRepositoryCreationBusy"
+                            } else {
+                                "ActionExplainInit"
+                            }))
+                            .clicked()
+                        {
+                            self.initialization.open();
+                            ui.close();
+                        }
+
                         if ui
                             .add_enabled(
                                 !self.tabs.is_empty(),
@@ -1333,6 +1405,11 @@ impl eframe::App for Workspace {
                         });
                     },
                 );
+                if self.initialization.busy
+                    && let Some(summary) = &self.initialization.summary
+                {
+                    ui.label(summary);
+                }
                 if let Some(notice) = &self.notice {
                     ui.colored_label(palette.diff_removed_text, notice);
                 }
@@ -2071,8 +2148,15 @@ impl eframe::App for Workspace {
                 self.preferences_dirty = true;
             }
         }
+        self.initialization.show(
+            &ctx,
+            self.git.as_ref(),
+            &self.scheduler,
+            self.tabs.get(self.selected).map(|t| t.id),
+        );
         self.settings_window(&ctx);
-        let update_blocked = self.scheduler.has_accepted_work()
+        let update_blocked = self.initialization.picking
+            || self.scheduler.has_accepted_work()
             || self.saving
             || self
                 .editors
@@ -2144,6 +2228,7 @@ mod tests {
             draft_store: None,
             operations: Default::default(),
             branches: Default::default(),
+            initialization: Default::default(),
             stash_views: vec![],
             history_menu: None,
             reference_menu: None,
@@ -2232,6 +2317,7 @@ mod tests {
             }),
             operations: Default::default(),
             branches: Default::default(),
+            initialization: Default::default(),
             stash_views: vec![],
             history_menu: None,
             reference_menu: None,

@@ -1085,5 +1085,7 @@
   "RustUpdateInstances": "Close other Shovel Rust instances before restarting. Other Windows sessions are included.",
   "RustUpdateRepositoryState": "Finish repository merge/rebase operations and refresh unavailable repositories before installing an update.",
   "RustAutoFetchDone": "Automatic fetch completed.",
-  "RustAutoFetchFailed": "Automatic fetch did not complete. Manual Fetch can show authentication prompts."
+  "RustAutoFetchFailed": "Automatic fetch did not complete. Manual Fetch can show authentication prompts.",
+  "RustRepositoryChooserOpen": "Close the repository folder chooser before exiting or restarting Shovel.",
+  "RustRepositoryCreationBusy": "A repository is being created. Wait for it to finish before creating another."
 }

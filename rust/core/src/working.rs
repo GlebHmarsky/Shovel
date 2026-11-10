@@ -113,6 +113,9 @@ pub struct MutationGate {
 }
 impl MutationGate {
     pub fn acquire(common: &Path, fetch: bool) -> Result<Self, Error> {
+        Self::acquire_named(common, if fetch { "Fetch" } else { "GitAction" })
+    }
+    pub(crate) fn acquire_named(common: &Path, scope: &str) -> Result<Self, Error> {
         let key = format!(
             "{:X}",
             Sha256::digest(
@@ -124,10 +127,7 @@ impl MutationGate {
             )
         );
         // Share the baseline's native lock to coordinate C# and Rust profiles.
-        let name = format!(
-            "Local\\Shovel.{}.{key}",
-            if fetch { "Fetch" } else { "GitAction" }
-        );
+        let name = format!("Local\\Shovel.{scope}.{key}");
         let wide = name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
         let raw = unsafe { CreateMutexW(std::ptr::null(), 0, wide.as_ptr()) };
         if raw.is_null() {

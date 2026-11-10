@@ -32,6 +32,9 @@ cargo test -p shovel-askpass --test git_helper --locked
 cargo test -p shovel-core scheduler::tests --lib --locked
 cargo test -j 1 -p shovel-desktop commit::queue_tests --locked -- --test-threads=1
 ./scripts/Test-RustWorkingQueueParity.ps1
+./scripts/Test-RustInitializationParity.ps1
+cargo test -j 1 -p shovel-desktop repository_init::tests --locked -- --test-threads=1
+cargo test -j 1 -p shovel-core --lib initialization::tests --locked -- --test-threads=1
 cargo build -p shovel-askpass --locked
 cargo test -p shovel-desktop operations::tests --locked
 cargo test -p shovel-desktop branches::tests --locked

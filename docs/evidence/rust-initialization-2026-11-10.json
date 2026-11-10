@@ -1,0 +1,141 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T10:56:06.9981210Z",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "RustBaseCommit": "3d119afd3363bdc63ca0006f14a72c8d855bb930",
+  "GitVersion": "git version 2.51.1.windows.1",
+  "SourceSha256": {
+    "rust/core/src/initialization.rs": "165D7F9EA80BB1463AD15874C93B0F58C62E46310FCA22C180604D51FAAA095C",
+    "rust/core/src/working.rs": "BBD705E42D0DD4DABC60806D61DDD3F7C5D94B3F37EE085257EC9F94AD85670E",
+    "rust/core/tests/initialization.rs": "8D396579890834EFB4A2B3D5C7121CAF59E82BCA3D4A4FEB2CE204EAB8547606",
+    "rust/desktop/src/repository_init.rs": "B332E7168C9DC1E29152F7F2EF5BC3329DFDB4835CBA7D235EB279ACBAC40C1F",
+    "rust/desktop/src/repository_init_tests.rs": "20E6506B3259AE6FA1593ABBB3C3BE62698E7CE30E70FE36BFFC404B9A32BF23",
+    "rust/desktop/src/main.rs": "980A0B63D53604DD71A051597139461A0E0333A1A618C82188527C7CE14A370C",
+    "tests/RustParityBaseline/Program.cs": "98FE234F0E6F0D2D9C4CF9CE21CC5880DC37A74B45488B834FCD2ECFF9368719",
+    "scripts/Test-RustInitializationParity.ps1": "86F4C1B68D6183807CCF1D0C63B4E01700E2B3B1F6E7C50C91DE3B17E1D48D6B"
+  },
+  "Scope": "Three native initialization outcomes: configured default/template/populated directory; explicit missing destination and existing-repository no-op; failed native template with retained partial metadata. Headless Rust menu/form/scheduler and persistence checks are separate.",
+  "FixtureClock": "Both drivers fix only GIT_AUTHOR_DATE and GIT_COMMITTER_DATE to 2026-01-01T00:00:00+00:00 for exact commit hashes.",
+  "IndexComparison": "Exact staged path/mode/blob/stage entries and index absence before first staging. Raw index stat cache and timestamps are not compared across fixtures.",
+  "DesktopCapture": false,
+  "Cases": [
+    {
+      "Scenario": "configured",
+      "Equal": true,
+      "Baseline": {
+        "message": "InitSucceeded",
+        "repositoryObserved": true,
+        "headFile": "7265663A20726566732F68656164732F7465616D2D64656661756C740A",
+        "indexExists": false,
+        "index": "",
+        "status": "?? keep.bin\u0000",
+        "tip": "",
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "templateMarker": "636F706965642074656D706C617465",
+        "worktree": {
+          "keep.bin": "00FF0102"
+        }
+      },
+      "Rust": {
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "headFile": "7265663A20726566732F68656164732F7465616D2D64656661756C740A",
+        "index": "",
+        "indexExists": false,
+        "message": "InitSucceeded",
+        "repositoryObserved": true,
+        "status": "?? keep.bin\u0000",
+        "templateMarker": "636F706965642074656D706C617465",
+        "tip": "",
+        "worktree": {
+          "keep.bin": "00FF0102"
+        }
+      }
+    },
+    {
+      "Scenario": "existing",
+      "Equal": true,
+      "Baseline": {
+        "message": "InitAlreadyExists",
+        "repositoryObserved": true,
+        "headFile": "7265663A20726566732F68656164732F776F726B2F73746172740A",
+        "indexExists": true,
+        "index": "",
+        "status": "?? kept\u0000",
+        "tip": "8d99e013f6fd31044110084ee8396264f15d6961",
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "templateMarker": "",
+        "worktree": {
+          "kept": "756E746F7563686564"
+        }
+      },
+      "Rust": {
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "headFile": "7265663A20726566732F68656164732F776F726B2F73746172740A",
+        "index": "",
+        "indexExists": true,
+        "message": "InitAlreadyExists",
+        "repositoryObserved": true,
+        "status": "?? kept\u0000",
+        "templateMarker": "",
+        "tip": "8d99e013f6fd31044110084ee8396264f15d6961",
+        "worktree": {
+          "kept": "756E746F7563686564"
+        }
+      }
+    },
+    {
+      "Scenario": "partial",
+      "Equal": true,
+      "Baseline": {
+        "message": "InitIncomplete",
+        "repositoryObserved": true,
+        "headFile": "7265663A20726566732F68656164732F6D61696E0A",
+        "indexExists": false,
+        "index": "",
+        "status": "",
+        "tip": "",
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "templateMarker": "636F706965642074656D706C617465",
+        "worktree": {
+          "keep.bin": "00FF0102"
+        }
+      },
+      "Rust": {
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "headFile": "7265663A20726566732F68656164732F6D61696E0A",
+        "index": "",
+        "indexExists": false,
+        "message": "InitIncomplete",
+        "repositoryObserved": true,
+        "status": "",
+        "templateMarker": "636F706965642074656D706C617465",
+        "tip": "",
+        "worktree": {
+          "keep.bin": "00FF0102"
+        }
+      }
+    }
+  ],
+  "AdditionalChecks": {
+    "NativeIntegration": {
+      "Count": 4,
+      "Seconds": 20.08
+    },
+    "HeadlessInteraction": {
+      "Count": 5,
+      "Seconds": 13.95,
+      "NativePicker": "Injected; no native dialog shown"
+    },
+    "NamedDestinationMutex": {
+      "Count": 1,
+      "Seconds": 0.19,
+      "Scope": "Same process, different OS thread, native Windows named mutex"
+    },
+    "Clippy": "core and desktop all targets; warnings denied",
+    "UiSourcesAtVerification": {
+      "rust/desktop/src/repository_init_tests.rs": "8D222E42D6F1EB1AF7DD5C4B063B992C80C7C442C6EC1E28B77BD546FEC785FD",
+      "rust/desktop/src/repository_init.rs": "B332E7168C9DC1E29152F7F2EF5BC3329DFDB4835CBA7D235EB279ACBAC40C1F",
+      "rust/desktop/resources/strings.json": "DB2C053704EE5C8EE4CF74E55E15FE2882F65A64854A43947B26ADAB09A990A8"
+    }
+  }
+}
