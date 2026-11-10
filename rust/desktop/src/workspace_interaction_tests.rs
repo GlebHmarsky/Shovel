@@ -14,6 +14,7 @@ pub(super) fn workspace() -> Workspace {
             page: None,
             selected: None,
             previous: vec![],
+            view: Default::default(),
             loading: false,
             refresh_again: false,
             locating: None,
@@ -478,7 +479,14 @@ fn idle_retirement_never_evicts_initializing_owner_and_keeps_recent_three() {
     assert_eq!(app.retained_tabs.len(), 4);
     assert_eq!(app.retained_tabs[0].id, 1);
     app.sender
-        .send(Event::Failed(1, "fixture failure".into()))
+        .send(Event::Failed(
+            1,
+            0,
+            history_view::Failure {
+                message: "fixture failure".into(),
+                identity: false,
+            },
+        ))
         .unwrap();
     app.receive(&ctx);
     assert_eq!(app.retained_tabs.len(), 3);

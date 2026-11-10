@@ -5,7 +5,7 @@ using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
 
-if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone or --divergence.");
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence" or "--history")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone, --divergence or --history.");
 var root = Path.GetFullPath(args[0]);
 var output = Path.GetFullPath(args[1]);
 if (Directory.Exists(root) || File.Exists(root)) throw new IOException("Fixture path must not exist.");
@@ -25,6 +25,56 @@ async Task<string> Git(string path, params string[] arguments)
     var result = await runner.RunAsync(new(git.Executable, path, arguments), default);
     if (result.ExitCode != 0) throw new IOException(Encoding.UTF8.GetString(result.StandardError));
     return Encoding.UTF8.GetString(result.StandardOutput).TrimEnd();
+}
+
+if (args.Length == 3 && args[2] == "--history")
+{
+    var path = Path.Combine(root, "history");
+    Directory.CreateDirectory(path);
+    await Git(path, "init", "--initial-branch=main");
+    var stream = new StringBuilder();
+    for (var i = 1; i <= 610; i++) {
+        var message = $"Commit {i}\n\nFull retained metadata";
+        stream.Append($"commit refs/heads/main\nmark :{i}\ncommitter Fixture <fixture@example.invalid> {1600000000+i} +0000\ndata {Encoding.UTF8.GetByteCount(message)}\n{message}\n\n");
+    }
+    stream.Append("done\n");
+    var input = Path.Combine(root, "history.fi");
+    await File.WriteAllTextAsync(input, stream.ToString(), new UTF8Encoding(false));
+    var imported = await runner.RunAsync(new(git.Executable, path, ["fast-import", "--quiet"]) { StandardInputFile = input }, default);
+    if (imported.ExitCode != 0) throw new IOException("Import failed.");
+    var configBefore = Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "config")));
+    var headBefore = await Git(path, "rev-parse", "HEAD");
+    var records = new List<object>();
+    async Task Record(string name, CommitHistory page) {
+        var config = Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "config")));
+        if (config != configBefore || File.Exists(Path.Combine(path, ".git", "index"))) throw new InvalidOperationException("Read changed config or index.");
+        records.Add(new { @case = name, offset = page.Cursor.Offset, next = page.Next?.Offset,
+            hashes = string.Join("\n", page.Entries.Select(e => e.Commit.Hash)), head = await Git(path, "rev-parse", "HEAD"),
+            config, indexExists = false, status = await Git(path, "status", "--porcelain", "-z") });
+    }
+    var first = await reader.ReadInitialHistoryAsync(git, await reader.InspectAsync(git, path, default), HistoryScope.AllCommits, default);
+    await Record("first", first);
+    var second = await reader.ReadHistoryPageAsync(git, first.Session, first.Next!, default);
+    await Record("older", second);
+    var refreshed = await reader.ReadRefreshedHistoryAsync(git, await reader.InspectAsync(git, path, default), second, default);
+    await Record("unchanged-refresh", refreshed);
+    var last = refreshed;
+    while (last.Next is not null) last = await reader.ReadHistoryPageAsync(git, last.Session, last.Next, default);
+    await Record("end", last);
+    var newer = await reader.ReadHistoryPageAsync(git, second.Session, first.Cursor, default);
+    await Record("newer", newer);
+    if (headBefore != await Git(path, "rev-parse", "HEAD")) throw new InvalidOperationException("Read changed HEAD.");
+    // Move the ref to an existing immutable tip so no clock/worktree/index affects this read comparison.
+    await Git(path, "update-ref", "refs/heads/main", first.Entries[1].Commit.Hash);
+    try {
+        await reader.ReadHistoryPageAsync(git, second.Session, second.Next!, default);
+        throw new InvalidOperationException("Changed boundary accepted.");
+    } catch (GitReadException e) when (e.Failure == GitFailure.ChangedDuringRead) { }
+    var changed = await reader.ReadRefreshedHistoryAsync(git, await reader.InspectAsync(git, path, default), second, default);
+    await Record("changed-refresh", changed);
+    await File.WriteAllTextAsync(Path.Combine(output, "history.json"), JsonSerializer.Serialize(records, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine("PASS baseline history refresh, paging and exact read preservation");
+    return;
 }
 
 if (args.Length == 3 && args[2] == "--divergence")

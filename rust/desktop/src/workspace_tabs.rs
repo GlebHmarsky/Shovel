@@ -36,12 +36,7 @@ impl Workspace {
         self.history_menu = None;
         self.reference_menu = None;
         // Reattach to the same initialization; reopening is not a second request.
-        if !self.tabs[index].loading
-            && (self.tabs[index].history.is_none() || self.tabs[index].refresh_again)
-        {
-            self.tabs[index].refresh_again = false;
-            self.refresh_at(index, ctx);
-        }
+        self.activate_history(index, ctx);
         self.remember_tabs();
     }
 

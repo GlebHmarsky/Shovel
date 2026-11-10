@@ -2,6 +2,8 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust history retention, 2026-11-10.** Unchanged refresh retains page/rows/selection/both scroll axes; failed reads retain useful content, changed identities require reopening, and View First/range/status plus bounded page views are wired. Fresh activation checks identity without Git; stale activation refreshes after 30 seconds. Seven focused checks and seven workspace regressions pass; six exact C#/Rust native page outcomes match. [Evidence and remaining cache acceptance](rust-rewrite.md#history-retention-checkpoint-2026-11-10). R19/R28/R31 remain open.
+
 **Rust ahead/behind counts, 2026-11-10.** R32 is verified: local immutable Pull-upstream counts now drive accessible Pull/Push badges after history publication, with unavailable/stale states and generation rejection. Ten C#/Rust states match; native read preservation, headless real-history input and actual toolbar Push regression pass. [Evidence and corrected test-harness failure](rust-rewrite.md#aheadbehind-counts-checkpoint-2026-11-10). Other UI and release acceptance remains open.
 
 **Rust repository cloning, 2026-11-10.** Native Clone is wired through options, Rust authentication/progress, retained failed checkout/filter results and automatic opening. Five native and four headless interaction checks passed; four exact C#/Rust clone outcomes matched. Core/desktop Clippy and both native development builds passed. [Evidence and remaining hosted/native acceptance](rust-rewrite.md#repository-cloning-checkpoint-2026-11-10). R27 remains open.

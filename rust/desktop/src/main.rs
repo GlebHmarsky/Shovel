@@ -12,6 +12,7 @@ mod file_picker;
 mod file_shell;
 mod git_identity;
 mod history_row;
+mod history_view;
 mod operations;
 mod repository_init;
 mod repository_tools;
@@ -70,10 +71,11 @@ enum Event {
         Option<String>,
     ),
     Open(PathBuf),
-    Loaded(u64, Box<History>, Box<Page>),
-    Page(u64, Box<Page>, bool),
-    Located(u64, String, Result<(Page, Vec<Cursor>), String>),
-    Failed(u64, String),
+    CachedIdentity(u64, u64, Result<(), history_view::Failure>),
+    Loaded(u64, u64, Box<History>, Box<Page>, bool),
+    Page(u64, u64, Box<Page>, bool),
+    Located(u64, u64, String, Result<(Page, Vec<Cursor>), String>),
+    Failed(u64, u64, history_view::Failure),
     Saved(Box<SettingsStore>, Result<(), String>),
     PreferencesSaved(Box<SettingsStore>, Box<Settings>, Result<(), String>),
     ToolFinished(Result<(), String>),
@@ -86,6 +88,7 @@ struct Tab {
     page: Option<Page>,
     selected: Option<String>,
     previous: Vec<Cursor>,
+    view: history_view::State,
     loading: bool,
     refresh_again: bool,
     locating: Option<String>,
@@ -217,6 +220,7 @@ impl Workspace {
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
         let index = self.ensure_tab(path);
+        self.tabs[index].view.identity_blocked = false;
         self.select_tab(index, ctx);
     }
     fn ensure_tab(&mut self, path: PathBuf) -> usize {
@@ -246,6 +250,7 @@ impl Workspace {
             page: None,
             selected: None,
             previous: vec![],
+            view: Default::default(),
             loading: false,
             refresh_again: false,
             locating: None,
@@ -265,6 +270,14 @@ impl Workspace {
         }
     }
     fn refresh_owner(&mut self, id: u64, ctx: &egui::Context) {
+        self.refresh_history(id, false, ctx);
+    }
+    fn first_page(&mut self, ctx: &egui::Context) {
+        if let Some(tab) = self.tabs.get(self.selected) {
+            self.refresh_history(tab.id, true, ctx);
+        }
+    }
+    fn refresh_history(&mut self, id: u64, first: bool, ctx: &egui::Context) {
         let Some(git) = self.git.clone() else {
             return;
         };
@@ -276,6 +289,9 @@ impl Workspace {
         else {
             return;
         };
+        if tab.view.identity_blocked {
+            return;
+        }
         if tab.loading {
             tab.refresh_again = true;
             return;
@@ -285,22 +301,23 @@ impl Workspace {
         tab.loading = true;
         tab.divergence.invalidate();
         tab.error = None;
+        let generation = tab.view.begin();
+        let previous = tab
+            .history
+            .clone()
+            .zip(tab.page.as_ref().map(|p| p.cursor.clone()));
         let path = tab.path.clone();
         let id = tab.id;
         let sender = self.sender.clone();
         let ctx = ctx.clone();
         thread::spawn(move || {
-            let cancel = Cancellation::default();
-            let result = git
-                .inspect(&path, &cancel)
-                .and_then(|snapshot| git.history(snapshot, &cancel))
-                .and_then(|history| {
-                    git.page(&history, &Cursor::default(), &cancel)
-                        .map(|page| (history, page))
-                });
+            let result =
+                history_view::read(&git, &path, previous.as_ref().map(|(h, c)| (h, c)), first);
             let event = match result {
-                Ok((history, page)) => Event::Loaded(id, Box::new(history), Box::new(page)),
-                Err(error) => Event::Failed(id, error_text(error)),
+                Ok((history, page, keep)) => {
+                    Event::Loaded(id, generation, Box::new(history), Box::new(page), keep)
+                }
+                Err(error) => Event::Failed(id, generation, error),
             };
             let _ = sender.send(event);
             ctx.request_repaint();
@@ -313,7 +330,7 @@ impl Workspace {
         let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
-        if tab.loading {
+        if tab.loading || tab.view.stale || tab.view.identity_blocked {
             return;
         }
         let (Some(history), Some(page)) = (&tab.history, &tab.page) else {
@@ -333,15 +350,16 @@ impl Workspace {
         tab.locate_cancel.cancel();
         tab.locating = None;
         tab.loading = true;
+        let generation = tab.view.begin();
         let history = history.clone();
         let id = tab.id;
         let sender = self.sender.clone();
         let ctx = ctx.clone();
         thread::spawn(move || {
-            let result = git.page(&history, &cursor, &Cancellation::default());
+            let result = history_view::read_page(&git, &history, &cursor, &Cancellation::default());
             let _ = sender.send(match result {
-                Ok(page) => Event::Page(id, Box::new(page), older),
-                Err(error) => Event::Failed(id, error_text(error)),
+                Ok(page) => Event::Page(id, generation, Box::new(page), older),
+                Err(error) => Event::Failed(id, generation, error),
             });
             ctx.request_repaint();
         });
@@ -350,6 +368,11 @@ impl Workspace {
         let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
+        if tab.loading || tab.view.stale || tab.view.identity_blocked {
+            return;
+        }
+        tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
+        let generation = tab.view.locate_generation;
         tab.locate_cancel.cancel();
         tab.locating = None;
         if tab
@@ -382,11 +405,11 @@ impl Workspace {
                     let Some(next) = page.next else {
                         return Err(strings::text("RustRefNotFound"));
                     };
-                    previous.push(cursor);
+                    history_view::push_cursor(&mut previous, cursor);
                     cursor = next;
                 }
             })();
-            let _ = tx.send(Event::Located(id, hash, result));
+            let _ = tx.send(Event::Located(id, generation, hash, result));
             ctx.request_repaint();
         });
     }
@@ -466,6 +489,7 @@ impl Workspace {
                             page: None,
                             selected: None,
                             previous: vec![],
+                            view: Default::default(),
                             loading: false,
                             refresh_again: false,
                             locating: None,
@@ -484,7 +508,15 @@ impl Workspace {
                     self.refresh(ctx);
                 }
                 Event::Open(path) => self.open(path, ctx),
-                Event::Loaded(id, history, page) => {
+                Event::Loaded(id, generation, history, page, keep) => {
+                    if !self
+                        .tabs
+                        .iter()
+                        .chain(self.retained_tabs.iter())
+                        .any(|t| t.id == id && t.view.generation == generation)
+                    {
+                        continue;
+                    }
                     if let Some(git) = &self.git {
                         self.operations.resolve_initialization(
                             &history.snapshot.worktree,
@@ -505,28 +537,26 @@ impl Workspace {
                         .chain(self.retained_tabs.iter_mut())
                         .find(|t| t.id == id)
                     {
-                        if !page
-                            .entries
-                            .iter()
-                            .any(|e| Some(&e.commit.hash) == tab.selected.as_ref())
-                        {
-                            tab.selected = page.entries.first().map(|e| e.commit.hash.clone());
-                        }
                         for view in &mut self.stash_views {
                             if view.path == history.snapshot.worktree {
                                 view.observe(&history.snapshot);
                             }
                         }
-                        tab.history = Some(*history);
-                        tab.page = Some(*page);
-                        tab.previous.clear();
-                        tab.loading = false;
+                        tab.publish_history(*history, *page, keep);
                         if let (Some(git), Some(history)) = (&self.git, &tab.history) {
                             tab.divergence.start(git.clone(), &history.snapshot, ctx);
                         }
                     }
                 }
-                Event::Page(id, page, older) => {
+                Event::Page(id, generation, page, older) => {
+                    if !self
+                        .tabs
+                        .iter()
+                        .chain(self.retained_tabs.iter())
+                        .any(|t| t.id == id && t.view.generation == generation)
+                    {
+                        continue;
+                    }
                     if self.tabs.get(self.selected).is_some_and(|tab| tab.id == id) {
                         egui::Popup::close_all(ctx);
                         self.history_menu = None;
@@ -538,35 +568,23 @@ impl Workspace {
                         .chain(self.retained_tabs.iter_mut())
                         .find(|t| t.id == id)
                     {
-                        if older {
-                            if let Some(current) = &tab.page {
-                                tab.previous.push(current.cursor.clone());
-                            }
-                        } else {
-                            tab.previous.pop();
-                        }
-                        if !page
-                            .entries
-                            .iter()
-                            .any(|e| Some(&e.commit.hash) == tab.selected.as_ref())
-                        {
-                            tab.selected = page.entries.first().map(|e| e.commit.hash.clone());
-                        }
-                        tab.page = Some(*page);
-                        tab.loading = false;
+                        tab.publish_page(*page, older);
                     }
                 }
-                Event::Located(id, hash, result) => {
+                Event::Located(id, generation, hash, result) => {
                     if let Some(tab) = self
                         .tabs
                         .iter_mut()
                         .chain(self.retained_tabs.iter_mut())
                         .find(|t| t.id == id)
                         && tab.locating.as_ref() == Some(&hash)
+                        && tab.view.locate_generation == generation
                     {
                         tab.locating = None;
                         match result {
                             Ok((page, previous)) => {
+                                tab.view.remember(tab.page.as_ref(), &tab.selected);
+                                tab.view.restore(&page, &mut tab.selected);
                                 tab.page = Some(page);
                                 tab.previous = previous;
                                 tab.selected = Some(hash);
@@ -576,14 +594,45 @@ impl Workspace {
                         }
                     }
                 }
-                Event::Failed(id, error) => {
+                Event::CachedIdentity(id, generation, result) => {
                     if let Some(tab) = self
                         .tabs
                         .iter_mut()
                         .chain(self.retained_tabs.iter_mut())
-                        .find(|t| t.id == id)
+                        .find(|t| t.id == id && t.view.generation == generation)
+                    {
+                        tab.view.checking_identity = false;
+                        if let Err(failure) = result {
+                            let _ = self.sender.send(Event::Failed(id, generation, failure));
+                        }
+                    }
+                }
+                Event::Failed(id, generation, failure) => {
+                    if let Some(tab) = self
+                        .tabs
+                        .iter_mut()
+                        .chain(self.retained_tabs.iter_mut())
+                        .find(|t| t.id == id && t.view.generation == generation)
                     {
                         tab.loading = false;
+                        tab.view.checking_identity = false;
+                        let error = failure.message;
+                        if failure.identity {
+                            tab.locate_cancel.cancel();
+                            tab.locating = None;
+                            tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
+                            tab.divergence = Default::default();
+                            tab.history = None;
+                            tab.page = None;
+                            tab.selected = None;
+                            tab.previous.clear();
+                            tab.comparison = None;
+                            tab.view.clear_views();
+                            tab.view.identity_blocked = true;
+                            tab.refresh_again = false;
+                        }
+                        tab.view.stale = true;
+                        tab.view.validated = None;
                         if tab.history.is_none()
                             && let Some(git) = &self.git
                         {
@@ -630,12 +679,12 @@ impl Workspace {
             }
         }
         for path in self.operations.pending_paths() {
-            if let Some(owner) = self
-                .tabs
-                .iter()
-                .chain(self.retained_tabs.iter())
-                .find(|t| Self::same_path(&t.path, &path) && t.history.is_none() && !t.loading)
-            {
+            if let Some(owner) = self.tabs.iter().chain(self.retained_tabs.iter()).find(|t| {
+                Self::same_path(&t.path, &path)
+                    && t.history.is_none()
+                    && !t.loading
+                    && !t.view.identity_blocked
+            }) {
                 self.refresh_owner(owner.id, ctx);
             }
         }
@@ -1084,6 +1133,13 @@ impl eframe::App for Workspace {
                 .iter()
                 .any(|event| matches!(event, egui::Event::WindowFocused(true)))
         }) {
+            if self.tabs.get(self.selected).is_some_and(|tab| {
+                tab.view
+                    .validated
+                    .is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(30))
+            }) {
+                self.activate_history(self.selected, &ctx);
+            }
             theme(
                 &ctx,
                 self.settings
@@ -1203,13 +1259,84 @@ impl eframe::App for Workspace {
                             self.refresh(&ctx);
                             ui.close();
                         }
-                        if ui.button(strings::text("LoadOlderCommits")).clicked() {
+                        let ready = self
+                            .tabs
+                            .get(self.selected)
+                            .is_some_and(|t| !t.loading && !t.view.stale);
+                        let older = ready
+                            && self
+                                .tabs
+                                .get(self.selected)
+                                .is_some_and(|t| t.page.as_ref().is_some_and(|p| p.next.is_some()));
+                        let newer = ready
+                            && self
+                                .tabs
+                                .get(self.selected)
+                                .is_some_and(|t| !t.previous.is_empty());
+                        let unavailable = self
+                            .tabs
+                            .get(self.selected)
+                            .map(|t| t.history_notice())
+                            .unwrap_or_else(|| strings::text("HistoryNotLoaded"));
+                        if ui
+                            .add_enabled(
+                                older,
+                                egui::Button::new(strings::text("LoadOlderCommits")),
+                            )
+                            .on_disabled_hover_text(&unavailable)
+                            .clicked()
+                        {
                             self.page(true, &ctx);
                             ui.close();
                         }
-                        if ui.button(strings::text("NewerCommits")).clicked() {
+                        if ui
+                            .add_enabled(newer, egui::Button::new(strings::text("NewerCommits")))
+                            .on_disabled_hover_text(if ready {
+                                strings::text("RustHistoryNoNewer")
+                            } else {
+                                unavailable.clone()
+                            })
+                            .clicked()
+                        {
                             self.page(false, &ctx);
                             ui.close();
+                        }
+                        let first = self.tabs.get(self.selected).is_some_and(|t| {
+                            !t.loading && !t.view.identity_blocked && t.page.is_some()
+                        });
+                        if ui
+                            .add_enabled(
+                                first,
+                                egui::Button::new(strings::text("FirstHistoryPage")),
+                            )
+                            .on_disabled_hover_text(
+                                self.tabs
+                                    .get(self.selected)
+                                    .and_then(|t| t.error.as_ref())
+                                    .unwrap_or(&unavailable),
+                            )
+                            .clicked()
+                        {
+                            self.first_page(&ctx);
+                            ui.close();
+                        }
+                        if let Some(tab) = self.tabs.get(self.selected) {
+                            ui.separator();
+                            if let Some(page) = &tab.page {
+                                let start = if page.entries.is_empty() {
+                                    0
+                                } else {
+                                    page.cursor.offset + 1
+                                };
+                                ui.label(strings::format(
+                                    "HistoryRange",
+                                    &[
+                                        &start.to_string(),
+                                        &(page.cursor.offset + page.entries.len()).to_string(),
+                                    ],
+                                ));
+                            }
+                            ui.label(tab.history_notice());
                         }
                     });
                     ui.menu_button(strings::text("RepositoryMenu"), |ui| {
@@ -1998,6 +2125,9 @@ impl eframe::App for Workspace {
                     .unwrap_or(false);
                 ui.spacing_mut().item_spacing.y = 0.;
                 let mut scroll = egui::ScrollArea::both().id_salt(tab.id);
+                if let Some(offset) = tab.view.restore_offset.take() {
+                    scroll = scroll.scroll_offset(offset);
+                }
                 if std::mem::take(&mut tab.scroll_selected)
                     && let Some(index) = page
                         .entries
@@ -2006,7 +2136,7 @@ impl eframe::App for Workspace {
                 {
                     scroll = scroll.vertical_scroll_offset((index as f32 * 23. - 46.).max(0.));
                 }
-                scroll.show_rows(ui, 23., page.entries.len(), |ui, range| {
+                let scroll_output = scroll.show_rows(ui, 23., page.entries.len(), |ui, range| {
                     for index in range {
                         let entry = &page.entries[index];
                         {
@@ -2179,6 +2309,7 @@ impl eframe::App for Workspace {
                         }
                     }
                 });
+                tab.view.offset = scroll_output.state.clamped_offset();
             });
         let stash_input =
             !self.closing && !self.operations.modal_open() && !self.branches.is_open();
@@ -2341,6 +2472,7 @@ mod tests {
                 page: None,
                 selected: None,
                 previous: vec![],
+                view: Default::default(),
                 loading: true,
                 refresh_again: false,
                 locating: None,
