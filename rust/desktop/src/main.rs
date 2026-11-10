@@ -494,6 +494,7 @@ impl Workspace {
             && !self.exit_ready
         {
             self.read_workers.resume();
+            self.updater.resume();
         }
         self.sync_ui_scale(ctx);
         self.poll_git_selection(ctx);
@@ -1132,6 +1133,12 @@ impl Workspace {
         if !self.auto_fetch.drained() || work.iter().any(|record| record.outcome.is_none()) {
             self.pending_exit = true;
             self.notice = Some(strings::text("RustShutdownBackground"));
+            ctx.request_repaint_after(std::time::Duration::from_millis(25));
+            return false;
+        }
+        if !self.updater.stop_and_drained() {
+            self.pending_exit = true;
+            self.notice = Some(strings::text("RustShutdownUpdates"));
             ctx.request_repaint_after(std::time::Duration::from_millis(25));
             return false;
         }

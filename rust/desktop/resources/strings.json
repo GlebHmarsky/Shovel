@@ -1097,6 +1097,7 @@
   "RustRepositoryCreationBusy": "A repository is being created. Wait for it to finish before creating another.",
   "RustGitSelectionBusy": "Finish repository loading and accepted work, then close repository dialogs before changing Git.",
   "RustGitSelecting": "Choose a Git executable and wait for its version check to finish.",
+  "RustShutdownUpdates": "Waiting for the update check or download to stop before closing.",
   "RustShutdownReads": "Waiting for repository reads to finish before closing.",
   "RustShutdownBackground": "Waiting for automatic fetch to stop before closing.",
   "RustGitExecutableFilter": "Executable files"

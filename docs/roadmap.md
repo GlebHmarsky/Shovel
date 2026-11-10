@@ -945,3 +945,7 @@ Propagate workspace worker ownership through comparison, Commit, stash and file-
 ### Rust draft/conflict exit drainage — 2026-11-10
 
 Wait for required draft restoration, preserve newer typing and continue exit after saves; retain cancellable conflict preview workers after pane removal. Failed draft writes leave the workspace usable for recovery. Six focused checks and Clippy passed. [Evidence and remaining updater/startup/tool limits](rust-rewrite.md#draft-restoration-and-conflict-shutdown-drainage-2026-11-10). R24 remains open; no delivery rebuild.
+
+### Rust updater worker exit drainage — 2026-11-10
+
+Track discovery/download workers across channel changes, drain progress forwarding on failure, and pause/resume updater admission around shutdown. Correct the HTTP whole-body versus per-read timeout distinction using pinned dependency source. Five controlled checks and Clippy passed; [network/installed-update limits](rust-rewrite.md#updater-worker-shutdown-drainage-2026-11-10) remain explicit. R08/R24 stay open; no delivery rebuild.

@@ -35,11 +35,18 @@ fn transfer(
     cancel: &Cancellation,
     progress: Option<&mpsc::Sender<i16>>,
 ) -> Result<(), String> {
+    if cancel.is_cancelled() {
+        return Err(text("ActionResultCancelled"));
+    }
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .https_only(true)
         .max_redirects(5)
         .timeout_global(Some(Duration::from_secs(600)))
-        .timeout_recv_body(Some(Duration::from_secs(30)))
+        .timeout_resolve(Some(Duration::from_secs(30)))
+        .timeout_connect(Some(Duration::from_secs(30)))
+        .timeout_send_request(Some(Duration::from_secs(30)))
+        .timeout_recv_response(Some(Duration::from_secs(30)))
+        .timeout_per_read(Some(Duration::from_secs(30)))
         .build()
         .into();
     let mut response = agent
@@ -68,6 +75,20 @@ fn transfer(
         }
     }
     Ok(())
+}
+fn with_progress(
+    run: impl FnOnce(mpsc::Sender<i16>) -> Result<(), String>,
+    report: impl Fn(i16) + Send + 'static,
+) -> Result<(), String> {
+    let (progress, rx) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        while let Ok(value) = rx.recv() {
+            report(value);
+        }
+    });
+    let result = run(progress);
+    worker.join().map_err(|_| text("RustUpdateFailed"))?;
+    result
 }
 fn trusted_directory() -> PathBuf {
     std::env::var_os("LOCALAPPDATA")
@@ -225,6 +246,7 @@ pub struct Controller {
     tx: mpsc::Sender<Event>,
     rx: mpsc::Receiver<Event>,
     last: Option<Instant>,
+    workers: crate::read_workers::Workers,
 }
 impl Default for Controller {
     fn default() -> Self {
@@ -241,6 +263,7 @@ impl Default for Controller {
             status: String::new(),
             busy: false,
             cancel: Default::default(),
+            workers: Default::default(),
             tx,
             rx,
             last: if cfg!(test) {
@@ -252,6 +275,13 @@ impl Default for Controller {
     }
 }
 impl Controller {
+    pub fn stop_and_drained(&self) -> bool {
+        self.cancel();
+        self.workers.cancel_and_drained()
+    }
+    pub fn resume(&self) {
+        self.workers.resume();
+    }
     pub fn cancel(&self) {
         self.cancel.cancel();
     }
@@ -315,7 +345,7 @@ impl Controller {
                 && self
                     .last
                     .is_some_and(|t| t.elapsed() > Duration::from_secs(4 * 3600)));
-        if due && !self.busy {
+        if due && !self.busy && !self.workers.stopping() {
             self.check(ctx);
         }
         if periodic {
@@ -323,7 +353,14 @@ impl Controller {
         }
     }
     pub fn check(&mut self, ctx: &egui::Context) {
-        if self.busy {
+        self.begin_check(ctx, |channel, cancel| check(channel, &cancel));
+    }
+    fn begin_check(
+        &mut self,
+        ctx: &egui::Context,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Offer>, String> + Send + 'static,
+    ) {
+        if self.busy || self.workers.stopping() {
             return;
         }
         self.generation += 1;
@@ -338,8 +375,10 @@ impl Controller {
         let ctx = ctx.clone();
         let channel = self.channel;
         let cancel = self.cancel.clone();
+        let lease = self.workers.start(cancel.clone());
         std::thread::spawn(move || {
-            let _ = tx.send(Event::Checked(generation, check(channel, &cancel)));
+            let _lease = lease;
+            let _ = tx.send(Event::Checked(generation, run(channel, cancel)));
             ctx.request_repaint();
         });
     }
@@ -350,7 +389,7 @@ impl Controller {
         let mut open = true;
         egui::Window::new(text("RustUpdatesTitle"))
             .open(&mut open)
-            .enabled(!self.restart_requested)
+            .enabled(!self.restart_requested && !self.workers.stopping())
             .default_width(510.)
             .collapsible(false)
             .show(ctx, |ui| {
@@ -397,7 +436,9 @@ impl Controller {
                         let cancel = self.cancel.clone();
                         let tx = self.tx.clone();
                         let ctx = ctx.clone();
+                        let lease = self.workers.start(cancel.clone());
                         std::thread::spawn(move || {
+                            let _lease = lease;
                             let result = (|| {
                                 let manager = manager(&offer, cancel)?;
                                 let target = package_path(&offer)?;
@@ -407,25 +448,25 @@ impl Controller {
                                         .verify_package(File::open(&target).map_err(failure)?)
                                         .map_err(|_| text("RustUpdateInvalid"))?;
                                 }
-                                let (progress, rx) = mpsc::channel();
                                 let pt = tx.clone();
                                 let pc = ctx.clone();
-                                let worker = std::thread::spawn(move || {
-                                    while let Ok(p) = rx.recv() {
+                                with_progress(
+                                    |progress| {
+                                        manager
+                                            .download_updates(
+                                                &UpdateInfo {
+                                                    TargetFullRelease: offer.asset.clone(),
+                                                    ..Default::default()
+                                                },
+                                                Some(progress),
+                                            )
+                                            .map_err(failure)
+                                    },
+                                    move |p| {
                                         let _ = pt.send(Event::Progress(generation, p));
                                         pc.request_repaint();
-                                    }
-                                });
-                                manager
-                                    .download_updates(
-                                        &UpdateInfo {
-                                            TargetFullRelease: offer.asset.clone(),
-                                            ..Default::default()
-                                        },
-                                        Some(progress),
-                                    )
-                                    .map_err(failure)?;
-                                let _ = worker.join();
+                                    },
+                                )?;
                                 offer
                                     .release
                                     .verify_package(File::open(target).map_err(failure)?)
@@ -549,5 +590,117 @@ mod tests {
         assert_eq!(controller.status, "current");
         assert!(!controller.ready);
         assert!(controller.offer.is_none());
+    }
+
+    #[test]
+    fn cancelled_transport_returns_before_url_or_network_preparation() {
+        let cancel = Cancellation::default();
+        cancel.cancel();
+        let mut output = Vec::new();
+        assert_eq!(
+            transfer("not a URL", &mut output, 100, &cancel, None),
+            Err(text("ActionResultCancelled"))
+        );
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn progress_forwarder_finishes_on_download_failure_and_success() {
+        use std::sync::{Arc, Mutex};
+        for fail in [false, true] {
+            let seen = Arc::new(Mutex::new(Vec::new()));
+            let output = seen.clone();
+            let result = with_progress(
+                move |tx| {
+                    tx.send(12).unwrap();
+                    tx.send(47).unwrap();
+                    if fail {
+                        Err("controlled download failure".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                move |value| output.lock().unwrap().push(value),
+            );
+            assert_eq!(*seen.lock().unwrap(), vec![12, 47]);
+            assert_eq!(result.is_err(), fail);
+        }
+    }
+
+    #[test]
+    fn shutdown_drains_held_update_check_before_final_close() {
+        let ctx = egui::Context::default();
+        let mut app = crate::workspace_interaction_tests::workspace();
+        app.tabs.clear();
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = crate::SettingsStore::new(temp.path().into());
+        app.settings = store.load().unwrap();
+        app.store = Some(store);
+        let (started, token) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        app.updater.begin_check(&ctx, move |_, cancel| {
+            started.send(cancel.clone()).unwrap();
+            held.recv_timeout(Duration::from_secs(10)).unwrap();
+            assert!(cancel.is_cancelled());
+            Err(text("ActionResultCancelled"))
+        });
+        let cancel = token.recv_timeout(Duration::from_secs(5)).unwrap();
+        app.close(&ctx);
+        assert!(cancel.is_cancelled());
+        assert!(app.pending_exit && !app.exit_ready && !app.closing);
+        assert_eq!(app.notice, Some(text("RustShutdownUpdates")));
+        app.receive(&ctx);
+        assert!(!app.exit_ready);
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !app.exit_ready {
+            app.receive(&ctx);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(app.updater.stop_and_drained());
+        assert!(!app.updater.ready);
+    }
+
+    #[test]
+    fn channel_change_cannot_forget_old_worker_and_checks_resume_after_drain() {
+        let ctx = egui::Context::default();
+        let mut controller = Controller::default();
+        let (started, token) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        controller.begin_check(&ctx, move |channel, cancel| {
+            assert_eq!(channel, Channel::Beta);
+            started.send(cancel).unwrap();
+            held.recv_timeout(Duration::from_secs(10)).unwrap();
+            Err("obsolete beta failure".into())
+        });
+        let cancel = token.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(!controller.stop_and_drained());
+        controller.tick(&ctx, Channel::Stable, false);
+        assert!(cancel.is_cancelled());
+        assert!(!controller.busy);
+        assert!(
+            !controller.stop_and_drained(),
+            "presentation idle is not worker completion"
+        );
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !controller.stop_and_drained() {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        controller.tick(&ctx, Channel::Stable, false);
+        assert_ne!(controller.status, "obsolete beta failure");
+        controller.resume();
+        controller.begin_check(&ctx, |channel, _| {
+            assert_eq!(channel, Channel::Stable);
+            Ok(None)
+        });
+        while controller.busy {
+            controller.tick(&ctx, Channel::Stable, false);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(controller.status, text("RustUpdateCurrent"));
     }
 }

@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-10",
+  "scope": [
+    "Discovery/download worker ownership",
+    "Obsolete channel worker drainage",
+    "Progress forwarding join",
+    "Pre-cancelled network preparation"
+  ],
+  "tests": {
+    "filter": "updater::tests",
+    "passed": 5,
+    "seconds": 0.03
+  },
+  "clippy": "core/desktop all targets passed with warnings denied",
+  "pinned_source_review": [
+    "ureq 3.5.1 config timeout semantics",
+    "velopack 1.2.161 download progress sender ownership"
+  ],
+  "limits": [
+    "Controlled worker callbacks; no live network fixture",
+    "Blocking network phases only cancel after return/timeout",
+    "Live interrupted download and installer recovery still required",
+    "No installed update, publication or local payload replacement"
+  ]
+}
