@@ -933,3 +933,7 @@ Recheck accepted work and editor/native-dialog state after asynchronous settings
 ### Rust automatic-fetch exit drainage — 2026-11-10
 
 Pending close now cancels and drains automatic fetch, then continues the original save/discard decision. New background fetches stay suspended during shutdown decisions. Five focused checks and Clippy passed; [native transport evidence and remaining read-drain limits](rust-rewrite.md#automatic-fetch-shutdown-drainage-2026-11-10). No local payload replacement or publication.
+
+### Rust workspace read ownership at exit — 2026-11-10
+
+Track actual history/metadata worker lifetimes independently of UI generations and cache ownership; cancel and drain them on exit, suppressing new read admission. Five focused registry/held-worker/preview checks and Clippy passed. [Evidence and remaining editor/updater/startup/tool limits](rust-rewrite.md#workspace-read-shutdown-drainage-2026-11-10). R24 remains open and local test payloads are unchanged.

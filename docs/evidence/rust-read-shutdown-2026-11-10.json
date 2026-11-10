@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-10",
+  "scope": [
+    "history refresh",
+    "paging",
+    "ref location",
+    "cached identity",
+    "startup preview",
+    "sidebar",
+    "remote configuration",
+    "divergence"
+  ],
+  "checks": [
+    {
+      "filter": "read_workers::tests",
+      "passed": 1,
+      "seconds": 0.0
+    },
+    {
+      "filter": "shutdown_waits_for_",
+      "passed": 2,
+      "seconds": 4.16
+    },
+    {
+      "filter": "orderly_close_reloads_selected_preview",
+      "passed": 1,
+      "seconds": 3.09
+    },
+    {
+      "filter": "preview_publishes_before_held_native_initialization",
+      "passed": 1,
+      "seconds": 2.37
+    }
+  ],
+  "clippy": "core/desktop all targets passed with warnings denied",
+  "limits": [
+    "Headless worker gates before native Git reads; not live desktop proof",
+    "This test does not measure in-flight process cancellation",
+    "Diff/editor/updater and remaining startup/tool reads still open",
+    "No publication, installation or delivery rebuild"
+  ]
+}

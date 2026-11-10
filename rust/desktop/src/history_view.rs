@@ -106,8 +106,8 @@ pub(super) fn read_expected(
     previous: Option<(&History, &Cursor)>,
     first: bool,
     expected_identity: Option<&str>,
+    cancel: &Cancellation,
 ) -> Result<(History, Page, bool), Failure> {
-    let cancel = Cancellation::default();
     let identity = shovel_core::identity::read(path).map_err(|_| identity_failure(false))?;
     if expected_identity.is_some_and(|expected| expected != identity.fingerprint)
         || previous.is_some_and(|(history, _)| history.snapshot.identity != identity)
@@ -115,7 +115,7 @@ pub(super) fn read_expected(
         return Err(identity_failure(true));
     }
     let result: Result<_, shovel_core::git::Error> = (|| {
-        let history = git.history(git.inspect(path, &cancel)?, &cancel)?;
+        let history = git.history(git.inspect(path, cancel)?, cancel)?;
         let keep = !first
             && previous.is_some_and(|(old, _)| {
                 old.snapshot.fingerprint == history.snapshot.fingerprint
@@ -126,7 +126,7 @@ pub(super) fn read_expected(
         } else {
             Cursor::default()
         };
-        let page = git.page(&history, &cursor, &cancel)?;
+        let page = git.page(&history, &cursor, cancel)?;
         Ok((history, page, keep))
     })();
     if shovel_core::identity::read(path).ok().as_ref() != Some(&identity) {
@@ -147,6 +147,7 @@ fn read(
         previous,
         first,
         previous.map(|(h, _)| h.snapshot.identity.fingerprint.as_str()),
+        &Cancellation::default(),
     )
 }
 pub(super) fn read_page(
@@ -167,6 +168,9 @@ pub(super) fn read_page(
 }
 impl Workspace {
     pub(super) fn activate_history(&mut self, index: usize, ctx: &egui::Context) {
+        if self.closing || self.pending_exit || self.confirm_exit_without_save {
+            return;
+        }
         let Some(tab) = self.tabs.get_mut(index) else {
             return;
         };
@@ -198,7 +202,9 @@ impl Workspace {
         let expected = tab.history.as_ref().unwrap().snapshot.identity.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let lease = self.read_workers.start(Cancellation::default());
         thread::spawn(move || {
+            let _lease = lease;
             let result = shovel_core::identity::read(&path)
                 .map_err(|_| identity_failure(false))
                 .and_then(|identity| {

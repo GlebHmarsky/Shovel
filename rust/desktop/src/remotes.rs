@@ -35,7 +35,13 @@ impl Cache {
         self.cancel.cancel();
         self.receiver = None; // old workers cannot publish into a new generation
     }
-    pub fn start(&mut self, git: Arc<Git>, snapshot: &Snapshot, ctx: &egui::Context) {
+    pub fn start(
+        &mut self,
+        git: Arc<Git>,
+        snapshot: &Snapshot,
+        ctx: &egui::Context,
+        workers: &crate::read_workers::Workers,
+    ) {
         self.invalidate();
         self.cancel = Cancellation::default();
         let cancel = self.cancel.clone();
@@ -44,7 +50,11 @@ impl Cache {
         self.receiver = Some(receiver);
         self.error = None;
         let ctx = ctx.clone();
+        let lease = workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&snapshot.worktree);
             let result = git
                 .remote_configuration(&snapshot, &cancel)
                 .map_err(|e| text(&e.code()));

@@ -165,6 +165,9 @@ impl Workspace {
         })
     }
     pub(super) fn restore_startup_preview(&self, ctx: &egui::Context) {
+        if self.closing || self.pending_exit || self.confirm_exit_without_save {
+            return;
+        }
         let Some(tab) = self.tabs.get(self.selected) else {
             return;
         };
@@ -175,7 +178,9 @@ impl Workspace {
         let (path, id, generation) = (tab.path.clone(), tab.id, tab.view.generation);
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let lease = self.read_workers.start(Cancellation::default());
         thread::spawn(move || {
+            let _lease = lease;
             let started = Instant::now();
             let preview = store.read(&path, &identity).filter(|_| {
                 started.elapsed() < Duration::from_secs(2)

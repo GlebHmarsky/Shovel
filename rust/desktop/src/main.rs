@@ -16,6 +16,7 @@ mod history_cache;
 mod history_row;
 mod history_view;
 mod operations;
+mod read_workers;
 mod remotes;
 mod repository_init;
 mod repository_tools;
@@ -137,6 +138,7 @@ struct Workspace {
     closing: bool,
     pending_exit: bool,
     discard_settings_on_exit: bool,
+    read_workers: read_workers::Workers,
     exit_ready: bool,
     confirm_exit_without_save: bool,
     activity_open: bool,
@@ -213,6 +215,7 @@ impl Workspace {
             closing: false,
             pending_exit: false,
             discard_settings_on_exit: false,
+            read_workers: Default::default(),
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
@@ -302,6 +305,9 @@ impl Workspace {
         }
     }
     fn refresh_history(&mut self, id: u64, first: bool, ctx: &egui::Context) {
+        if self.closing || self.pending_exit || self.confirm_exit_without_save {
+            return;
+        }
         let known_identity = self
             .tabs
             .iter()
@@ -346,7 +352,10 @@ impl Workspace {
         let id = tab.id;
         let sender = self.sender.clone();
         let ctx = ctx.clone();
+        let cancel = Cancellation::default();
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
             #[cfg(test)]
             history_cache::tests::wait_for_read(&path);
             let result = history_view::read_expected(
@@ -355,6 +364,7 @@ impl Workspace {
                 previous.as_ref().map(|(h, c)| (h, c)),
                 first,
                 known_identity.as_deref(),
+                &cancel,
             );
             let event = match result {
                 Ok((history, page, keep)) => {
@@ -367,6 +377,9 @@ impl Workspace {
         });
     }
     fn page(&mut self, older: bool, ctx: &egui::Context) {
+        if self.closing || self.pending_exit || self.confirm_exit_without_save {
+            return;
+        }
         let Some(git) = self.git.clone() else {
             return;
         };
@@ -398,8 +411,11 @@ impl Workspace {
         let id = tab.id;
         let sender = self.sender.clone();
         let ctx = ctx.clone();
+        let cancel = Cancellation::default();
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
-            let result = history_view::read_page(&git, &history, &cursor, &Cancellation::default());
+            let _lease = lease;
+            let result = history_view::read_page(&git, &history, &cursor, &cancel);
             let _ = sender.send(match result {
                 Ok(page) => Event::Page(id, generation, Box::new(page), older),
                 Err(error) => Event::Failed(id, generation, error),
@@ -408,6 +424,9 @@ impl Workspace {
         });
     }
     fn locate(&mut self, hash: String, ctx: &egui::Context) {
+        if self.closing || self.pending_exit || self.confirm_exit_without_save {
+            return;
+        }
         let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
@@ -436,7 +455,9 @@ impl Workspace {
         let id = tab.id;
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
             let result = (|| {
                 let mut cursor = Cursor::default();
                 let mut previous = Vec::new();
@@ -641,10 +662,29 @@ impl Workspace {
                             }
                         }
                         tab.publish_history(*history, *page, keep);
-                        if let (Some(git), Some(history)) = (&self.git, &tab.history) {
-                            tab.divergence.start(git.clone(), &history.snapshot, ctx);
-                            tab.remotes.start(git.clone(), &history.snapshot, ctx);
-                            tab.sidebar.start(git.clone(), &history.snapshot, ctx);
+                        if !self.closing
+                            && !self.pending_exit
+                            && !self.confirm_exit_without_save
+                            && let (Some(git), Some(history)) = (&self.git, &tab.history)
+                        {
+                            tab.divergence.start(
+                                git.clone(),
+                                &history.snapshot,
+                                ctx,
+                                &self.read_workers,
+                            );
+                            tab.remotes.start(
+                                git.clone(),
+                                &history.snapshot,
+                                ctx,
+                                &self.read_workers,
+                            );
+                            tab.sidebar.start(
+                                git.clone(),
+                                &history.snapshot,
+                                ctx,
+                                &self.read_workers,
+                            );
                         }
                     }
                 }
@@ -1084,6 +1124,12 @@ impl Workspace {
         if !self.auto_fetch.drained() || work.iter().any(|record| record.outcome.is_none()) {
             self.pending_exit = true;
             self.notice = Some(strings::text("RustShutdownBackground"));
+            ctx.request_repaint_after(std::time::Duration::from_millis(25));
+            return false;
+        }
+        if !self.read_workers.cancel_and_drained() {
+            self.pending_exit = true;
+            self.notice = Some(strings::text("RustShutdownReads"));
             ctx.request_repaint_after(std::time::Duration::from_millis(25));
             return false;
         }
@@ -2884,6 +2930,7 @@ mod tests {
             closing: false,
             pending_exit: false,
             discard_settings_on_exit: false,
+            read_workers: Default::default(),
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,
@@ -2978,6 +3025,7 @@ mod tests {
             closing: false,
             pending_exit: false,
             discard_settings_on_exit: false,
+            read_workers: Default::default(),
             exit_ready: false,
             confirm_exit_without_save: false,
             activity_open: false,

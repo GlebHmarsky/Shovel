@@ -466,7 +466,7 @@ fn cache_discards_late_generation_and_preserves_values_on_read_failure() {
     );
     let mut missing = f.git.clone();
     missing.executable = f.root.join("missing-git.exe");
-    cache.start(Arc::new(missing), &snapshot, &ctx);
+    cache.start(Arc::new(missing), &snapshot, &ctx, &Default::default());
     let deadline = Instant::now() + Duration::from_secs(5);
     while cache.receiver.is_some() {
         cache.poll(&ctx);

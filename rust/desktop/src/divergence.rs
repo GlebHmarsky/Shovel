@@ -70,7 +70,13 @@ impl Counter {
         self.busy = false;
         self.stale = true;
     }
-    pub fn start(&mut self, git: Arc<Git>, snapshot: &Snapshot, ctx: &egui::Context) {
+    pub fn start(
+        &mut self,
+        git: Arc<Git>,
+        snapshot: &Snapshot,
+        ctx: &egui::Context,
+        workers: &crate::read_workers::Workers,
+    ) {
         self.invalidate();
         self.state = State::Pending;
         self.error = None;
@@ -84,7 +90,11 @@ impl Counter {
         let sender = self.sender.clone();
         let generation = self.generation;
         let ctx = ctx.clone();
+        let lease = workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&snapshot.worktree);
             let result = git
                 .divergence(&snapshot, &cancel)
                 .map_err(crate::error_text);

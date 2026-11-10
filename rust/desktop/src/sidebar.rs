@@ -30,7 +30,13 @@ impl Cache {
         self.cancel.cancel();
         self.receiver = None;
     }
-    pub fn start(&mut self, git: Arc<Git>, snapshot: &Snapshot, ctx: &egui::Context) {
+    pub fn start(
+        &mut self,
+        git: Arc<Git>,
+        snapshot: &Snapshot,
+        ctx: &egui::Context,
+        workers: &crate::read_workers::Workers,
+    ) {
         self.invalidate();
         self.cancel = Cancellation::default();
         self.error = None;
@@ -39,7 +45,11 @@ impl Cache {
         let (sender, receiver) = mpsc::channel();
         self.receiver = Some(receiver);
         let ctx = ctx.clone();
+        let lease = workers.start(cancel.clone());
         thread::spawn(move || {
+            let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&snapshot.worktree);
             let result = git.sidebar(&snapshot, &cancel).map_err(|e| text(&e.code()));
             let _ = sender.send(result);
             ctx.request_repaint();
@@ -175,7 +185,7 @@ mod tests {
         let cache = &mut app.tabs[0].sidebar;
         let mut missing = f.git.clone();
         missing.executable = f.root.join("missing-git.exe");
-        cache.start(Arc::new(missing), &snapshot, &ctx);
+        cache.start(Arc::new(missing), &snapshot, &ctx, &Default::default());
         let end = Instant::now() + Duration::from_secs(5);
         while cache.pending() {
             cache.poll(&ctx);

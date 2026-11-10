@@ -47,6 +47,7 @@ pub(super) fn workspace() -> Workspace {
         closing: false,
         pending_exit: false,
         discard_settings_on_exit: false,
+        read_workers: Default::default(),
         exit_ready: false,
         confirm_exit_without_save: false,
         activity_open: false,

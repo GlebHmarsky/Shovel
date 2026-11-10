@@ -12,7 +12,7 @@ fn profile(app: &mut Workspace, root: &std::path::Path) {
 }
 fn settle_save(app: &mut Workspace, ctx: &egui::Context) {
     let deadline = Instant::now() + Duration::from_secs(10);
-    while app.saving || app.preferences_dirty {
+    while app.saving || app.preferences_dirty || app.pending_exit {
         app.receive(ctx);
         assert!(Instant::now() < deadline, "save did not settle");
         thread::sleep(Duration::from_millis(5));
@@ -388,4 +388,94 @@ fn automatic_fetch_updates_an_evicted_repository_without_preloading_inactive_his
             .iter()
             .any(|r| r.name == "refs/remotes/origin/main")
     );
+}
+
+#[test]
+fn shutdown_waits_for_closed_tab_history_worker_and_blocks_new_history_reads() {
+    let fixture = Fixture::new();
+    let ctx = egui::Context::default();
+    let mut app = fixture.app(&ctx);
+    profile(&mut app, fixture._temp.path());
+    settle_save(&mut app, &ctx);
+    let owner = app.tabs[0].id;
+    let (ready, started) = mpsc::channel();
+    let (release, held) = mpsc::channel();
+    read_gates()
+        .lock()
+        .unwrap()
+        .insert(fixture.root.clone(), (ready, held));
+    app.refresh(&ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    app.close_tab(owner, &ctx);
+    assert!(app.tabs.is_empty());
+    app.close(&ctx);
+    assert!(app.pending_exit && !app.exit_ready && !app.closing);
+    assert_eq!(app.notice, Some(strings::text("RustShutdownReads")));
+    let generation = app.retained_tabs[0].view.generation;
+    // Even a stale refresh request cannot replace the tracked pending worker.
+    app.refresh_owner(owner, &ctx);
+    for _ in 0..3 {
+        app.receive(&ctx);
+    }
+    assert_eq!(app.retained_tabs[0].view.generation, generation);
+    assert!(app.pending_exit && !app.exit_ready);
+    release.send(()).unwrap();
+    settle_save(&mut app, &ctx);
+    assert!(app.exit_ready);
+    assert!(app.read_workers.cancel_and_drained());
+    assert!(!app.retained_tabs[0].loading);
+    let saved = SettingsStore::new(fixture._temp.path().join("rust-profile"))
+        .load()
+        .unwrap();
+    assert!(saved.repositories().is_empty());
+}
+
+#[test]
+fn shutdown_waits_for_invalidated_metadata_workers_after_cache_replacement() {
+    let fixture = Fixture::new();
+    for kind in 0..3 {
+        let ctx = egui::Context::default();
+        let mut app = fixture.app(&ctx);
+        profile(&mut app, fixture._temp.path());
+        settle_save(&mut app, &ctx);
+        // Drain preceding startup workers before introducing the controlled read.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !app.read_workers.cancel_and_drained() {
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(2));
+        }
+        let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
+        let (ready, started) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        read_gates()
+            .lock()
+            .unwrap()
+            .insert(fixture.root.clone(), (ready, held));
+        let git = app.git.clone().unwrap();
+        match kind {
+            0 => app.tabs[0]
+                .sidebar
+                .start(git, &snapshot, &ctx, &app.read_workers),
+            1 => app.tabs[0]
+                .remotes
+                .start(git, &snapshot, &ctx, &app.read_workers),
+            _ => app.tabs[0]
+                .divergence
+                .start(git, &snapshot, &ctx, &app.read_workers),
+        }
+        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        // Eviction/replacement loses presentation state but must retain ownership.
+        match kind {
+            0 => app.tabs[0].sidebar = Default::default(),
+            1 => app.tabs[0].remotes = Default::default(),
+            _ => app.tabs[0].divergence = Default::default(),
+        }
+        app.close(&ctx);
+        assert!(app.pending_exit && !app.exit_ready && !app.closing);
+        assert_eq!(app.notice, Some(strings::text("RustShutdownReads")));
+        release.send(()).unwrap();
+        settle_save(&mut app, &ctx);
+        assert!(app.exit_ready);
+        assert!(app.read_workers.cancel_and_drained());
+    }
 }

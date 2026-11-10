@@ -354,6 +354,7 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         closing: false,
         pending_exit: false,
         discard_settings_on_exit: false,
+        read_workers: Default::default(),
         exit_ready: false,
         confirm_exit_without_save: false,
         activity_open: false,
