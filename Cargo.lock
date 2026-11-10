@@ -3351,6 +3351,7 @@ dependencies = [
 name = "shovel-desktop"
 version = "0.49.2"
 dependencies = [
+ "chrono",
  "eframe",
  "raw-window-handle",
  "rfd",

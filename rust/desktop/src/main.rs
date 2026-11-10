@@ -6,6 +6,7 @@ mod commit;
 mod comparison;
 mod conflict;
 mod diff_view;
+mod divergence;
 mod file_history;
 mod file_picker;
 mod file_shell;
@@ -81,6 +82,7 @@ struct Tab {
     id: u64,
     path: PathBuf,
     history: Option<History>,
+    divergence: divergence::Counter,
     page: Option<Page>,
     selected: Option<String>,
     previous: Vec<Cursor>,
@@ -240,6 +242,7 @@ impl Workspace {
             id,
             path,
             history: None,
+            divergence: Default::default(),
             page: None,
             selected: None,
             previous: vec![],
@@ -280,6 +283,7 @@ impl Workspace {
         tab.locate_cancel.cancel();
         tab.locating = None;
         tab.loading = true;
+        tab.divergence.invalidate();
         tab.error = None;
         let path = tab.path.clone();
         let id = tab.id;
@@ -458,6 +462,7 @@ impl Workspace {
                             id,
                             path,
                             history: None,
+                            divergence: Default::default(),
                             page: None,
                             selected: None,
                             previous: vec![],
@@ -516,6 +521,9 @@ impl Workspace {
                         tab.page = Some(*page);
                         tab.previous.clear();
                         tab.loading = false;
+                        if let (Some(git), Some(history)) = (&self.git, &tab.history) {
+                            tab.divergence.start(git.clone(), &history.snapshot, ctx);
+                        }
                     }
                 }
                 Event::Page(id, page, older) => {
@@ -694,6 +702,9 @@ impl Workspace {
                 &self.scheduler,
             ),
         );
+        for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
+            tab.divergence.poll(ctx);
+        }
         for editor in &mut self.editors {
             if changed.iter().any(|path| path == &editor.path) {
                 editor.external_changed();
@@ -1303,6 +1314,11 @@ impl eframe::App for Workspace {
                         if workspace_style::action(ui, "OpenRepository", true).clicked() {
                             self.pick_repository(&ctx);
                         }
+                        self.operations.divergence = self
+                            .tabs
+                            .get(self.selected)
+                            .map(|t| t.divergence.display())
+                            .unwrap_or_default();
                         self.preferences_dirty |= self.operations.toolbar(
                             ui,
                             &mut self.settings,
@@ -2321,6 +2337,7 @@ mod tests {
                 id: 1,
                 path: path.clone(),
                 history: None,
+                divergence: Default::default(),
                 page: None,
                 selected: None,
                 previous: vec![],

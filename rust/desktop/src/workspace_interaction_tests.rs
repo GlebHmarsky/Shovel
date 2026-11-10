@@ -10,6 +10,7 @@ pub(super) fn workspace() -> Workspace {
             id: i as u64 + 1,
             path: PathBuf::from(name),
             history: None,
+            divergence: Default::default(),
             page: None,
             selected: None,
             previous: vec![],

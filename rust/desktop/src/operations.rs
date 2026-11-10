@@ -229,6 +229,7 @@ struct PendingNetwork {
     settings: Settings,
 }
 pub struct Controller {
+    pub divergence: crate::divergence::Display,
     pending: Vec<PendingNetwork>,
     options: Option<(Options, Snapshot)>,
     next: u64,
@@ -242,6 +243,7 @@ impl Default for Controller {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            divergence: Default::default(),
             pending: vec![],
             options: None,
             next: 1,
@@ -299,7 +301,16 @@ impl Controller {
             ui.push_id(kind.number(), |ui| {
                 let available = path.is_some() && git.is_some();
                 ui.spacing_mut().item_spacing.x = 0.;
-                let button = crate::workspace_style::action(ui, kind.key(), available);
+                let count = match kind {
+                    Kind::Pull => Some((&self.divergence.behind[..], "BehindCount")),
+                    Kind::Push => Some((&self.divergence.ahead[..], "AheadCount")),
+                    Kind::Fetch => None,
+                };
+                let button =
+                    crate::workspace_style::action_with_count(ui, kind.key(), available, count);
+                if count.is_some() {
+                    button.clone().on_hover_text(&self.divergence.help);
+                }
                 if !available {
                     button
                         .clone()

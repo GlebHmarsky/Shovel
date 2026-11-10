@@ -32,6 +32,8 @@ pub mod initialization;
 #[cfg(windows)]
 pub mod cloning;
 #[cfg(windows)]
+pub mod divergence;
+#[cfg(windows)]
 mod lfs;
 #[cfg(windows)]
 pub mod network;

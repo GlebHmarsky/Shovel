@@ -5,7 +5,7 @@ using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
 
-if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init or --clone.");
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone" or "--divergence")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init, --clone or --divergence.");
 var root = Path.GetFullPath(args[0]);
 var output = Path.GetFullPath(args[1]);
 if (Directory.Exists(root) || File.Exists(root)) throw new IOException("Fixture path must not exist.");
@@ -25,6 +25,68 @@ async Task<string> Git(string path, params string[] arguments)
     var result = await runner.RunAsync(new(git.Executable, path, arguments), default);
     if (result.ExitCode != 0) throw new IOException(Encoding.UTF8.GetString(result.StandardError));
     return Encoding.UTF8.GetString(result.StandardOutput).TrimEnd();
+}
+
+if (args.Length == 3 && args[2] == "--divergence")
+{
+    var path = Path.Combine(root, "repository");
+    Directory.CreateDirectory(path);
+    await Git(path, "init", "--initial-branch=main");
+    var tree = await Git(path, "mktree");
+    var basis = await Git(path, "commit-tree", tree, "-m", "Root");
+    var left = await Git(path, "commit-tree", tree, "-p", basis, "-m", "Local one");
+    var tip = await Git(path, "commit-tree", tree, "-p", left, "-m", "Local two");
+    var right = await Git(path, "commit-tree", tree, "-p", basis, "-m", "Upstream one");
+    foreach (var (key, value) in new[] {
+        ("remote.team.url", "https://example.invalid/never-contact"),
+        ("remote.team.fetch", "+refs/heads/*:refs/remotes/team/*"),
+        ("branch.main.remote", "team"), ("branch.main.merge", "refs/heads/topic"),
+        ("branch.main.pushRemote", "different-destination") })
+        await Git(path, "config", key, value);
+    async Task<HistorySession> Session(string directory) => await reader.OpenHistoryAsync(git,
+        await reader.InspectAsync(git, directory, default), HistoryScope.AllCommits, default);
+    var records = new List<object>();
+    foreach (var (name, head, upstream, ahead, behind) in new[] {
+        ("sync", basis, basis, 0L, 0L), ("ahead", tip, basis, 2L, 0L),
+        ("behind", basis, right, 0L, 1L), ("diverged", tip, right, 2L, 1L) })
+    {
+        await Git(path, "update-ref", "refs/heads/main", head);
+        await Git(path, "update-ref", "refs/remotes/team/topic", upstream);
+        var session = await Session(path);
+        var headFile = Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "HEAD")));
+        var configBytes = Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "config")));
+        var status = await Git(path, "status", "--porcelain", "-z");
+        var counts = await reader.ReadDivergenceAsync(git, session, default);
+        if (counts != new BranchDivergence(DivergenceState.Available, ahead, behind) ||
+            headFile != Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "HEAD"))) ||
+            configBytes != Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "config"))) ||
+            File.Exists(Path.Combine(path, ".git", "index")) || status != await Git(path, "status", "--porcelain", "-z"))
+            throw new InvalidOperationException("Divergence/state preservation failed.");
+        records.Add(new { @case = name, state = "Available", ahead, behind, head, upstream, config = configBytes, headFile, status, indexExists = false });
+    }
+    var captured = await Session(path);
+    await Git(path, "update-ref", "refs/remotes/team/topic", tip);
+    if (await reader.ReadDivergenceAsync(git, captured, default) != new BranchDivergence(DivergenceState.Available, 2, 1)) throw new InvalidOperationException("Mixed snapshot tips.");
+    records.Add(new { @case = "immutable", state = "Available", ahead = 2, behind = 1 });
+    async Task Require(string directory, DivergenceState state) {
+        if ((await reader.ReadDivergenceAsync(git, await Session(directory), default)).State != state) throw new InvalidOperationException("Wrong divergence state: " + state);
+        records.Add(new { @case = state.ToString(), state = state.ToString() });
+    }
+    await File.WriteAllTextAsync(Path.Combine(path, ".git", "shallow"), tip + "\n");
+    await Require(path, DivergenceState.Shallow);
+    File.Delete(Path.Combine(path, ".git", "shallow"));
+    await Git(path, "update-ref", "-d", "refs/remotes/team/topic");
+    await Require(path, DivergenceState.MissingUpstream);
+    await Git(path, "config", "--unset", "branch.main.remote");
+    await Require(path, DivergenceState.NoUpstream);
+    await Git(path, "checkout", "--detach", tip);
+    var empty = Path.Combine(root, "empty"); Directory.CreateDirectory(empty);
+    await Git(empty, "init", "--initial-branch=main");
+    await Require(path, DivergenceState.Detached);
+    await Require(empty, DivergenceState.Unborn);
+    await File.WriteAllTextAsync(Path.Combine(output, "divergence.json"), JsonSerializer.Serialize(records, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine("PASS baseline divergence: 10 states and exact read-only preservation");
+    return;
 }
 
 if (args.Length == 3 && args[2] == "--clone")

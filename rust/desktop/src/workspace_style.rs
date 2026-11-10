@@ -237,14 +237,30 @@ pub fn lower_tab(ui: &mut egui::Ui, active: bool, label: String) -> egui::Respon
 
 /// A single keyboard/accessibility target for the icon and its caption.
 pub fn action(ui: &mut egui::Ui, key: &str, enabled: bool) -> egui::Response {
+    action_with_count(ui, key, enabled, None)
+}
+pub fn action_with_count(
+    ui: &mut egui::Ui,
+    key: &str,
+    enabled: bool,
+    count: Option<(&str, &str)>,
+) -> egui::Response {
     let label = crate::strings::text(key);
     ui.add_enabled(enabled, |ui: &mut egui::Ui| {
         let font = egui::FontId::proportional(12.);
         let galley = ui
             .painter()
             .layout_no_wrap(label.clone(), font, ui.visuals().text_color());
+        let count_galley = count.map(|(value, _)| {
+            ui.painter().layout_no_wrap(
+                value.to_owned(),
+                egui::FontId::proportional(10.),
+                ui.visuals().text_color(),
+            )
+        });
+        let count_width = count_galley.as_ref().map_or(0., |g| g.size().x + 16.);
         let (rect, response) = ui.allocate_exact_size(
-            egui::vec2((galley.size().x + 12.).max(43.), 44.),
+            egui::vec2((galley.size().x + 12.).max(43.).max(count_width), 44.),
             egui::Sense::click(),
         );
         response
@@ -308,6 +324,33 @@ pub fn action(ui: &mut egui::Ui, key: &str, enabled: bool) -> egui::Response {
                 .collect();
             ui.painter()
                 .add(egui::Shape::line(points, Stroke::new(1.65, color)));
+        }
+        if let (Some((value, name)), Some(badge)) = (count, count_galley) {
+            let size = egui::vec2((badge.size().x + 8.).max(15.), 15.);
+            let badge_rect = egui::Rect::from_min_size(
+                egui::pos2(rect.right() - size.x - 1., rect.top() + 1.),
+                size,
+            );
+            ui.painter().rect_filled(badge_rect, 7., p.raised);
+            ui.painter().rect_stroke(
+                badge_rect,
+                7.,
+                Stroke::new(1., p.border),
+                egui::StrokeKind::Inside,
+            );
+            ui.painter().galley_with_override_text_color(
+                badge_rect.center() - badge.size() / 2.,
+                badge,
+                color,
+            );
+            ui.interact(badge_rect, response.id.with("count"), egui::Sense::hover())
+                .widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::Role::Label,
+                        ui.is_enabled(),
+                        format!("{}: {value}", crate::strings::text(name)),
+                    )
+                });
         }
         ui.painter().galley_with_override_text_color(
             egui::pos2(

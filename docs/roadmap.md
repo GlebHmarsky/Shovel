@@ -2,6 +2,8 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust ahead/behind counts, 2026-11-10.** R32 is verified: local immutable Pull-upstream counts now drive accessible Pull/Push badges after history publication, with unavailable/stale states and generation rejection. Ten C#/Rust states match; native read preservation, headless real-history input and actual toolbar Push regression pass. [Evidence and corrected test-harness failure](rust-rewrite.md#aheadbehind-counts-checkpoint-2026-11-10). Other UI and release acceptance remains open.
+
 **Rust repository cloning, 2026-11-10.** Native Clone is wired through options, Rust authentication/progress, retained failed checkout/filter results and automatic opening. Five native and four headless interaction checks passed; four exact C#/Rust clone outcomes matched. Core/desktop Clippy and both native development builds passed. [Evidence and remaining hosted/native acceptance](rust-rewrite.md#repository-cloning-checkpoint-2026-11-10). R27 remains open.
 
 **Rust repository initialization, 2026-11-10.** File/Repository New repository now performs native creation, retained partial-result/error handling, automatic opening and tab persistence. Four native, five headless interaction and one destination-mutex checks passed; three exact C#/Rust native outcomes matched. [Evidence, fixture corrections and acceptance limits](rust-rewrite.md#repository-initialization-checkpoint-2026-11-10). R26 remains open for native/edge-case acceptance.
