@@ -517,6 +517,36 @@ mod tests {
                 b"finished",
             )
             .unwrap();
+        } else if mode == "descendant-root" {
+            use std::os::windows::process::CommandExt;
+            // Deliberately outlive this fixture root: the outer Windows job
+            // must terminate the descendant, verified through its process handle.
+            #[allow(clippy::zombie_processes)]
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "process::tests::child_fixture", "--nocapture"])
+                .env("SHOVEL_PROCESS_FIXTURE", "descendant-leaf")
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn()
+                .unwrap();
+            std::fs::write("descendant-pid", child.id().to_string()).unwrap();
+            let end = Instant::now() + Duration::from_secs(20);
+            while !std::path::Path::new("root-release").exists() && Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
+        } else if mode == "descendant-leaf" {
+            println!("descendant owns stdout");
+            eprintln!("descendant owns stderr");
+            std::fs::write("descendant-started", "").unwrap();
+            thread::sleep(Duration::from_secs(30));
+            std::fs::write("descendant-finished", "").unwrap();
+        } else if mode == "inherited-event" {
+            let handle = std::env::var("SHOVEL_FIXTURE_HANDLE")
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+            unsafe {
+                SetEvent(handle as *mut std::ffi::c_void);
+            }
         } else if mode == "reject-input" {
             eprintln!("fixture rejected input");
             std::process::exit(7);
@@ -611,6 +641,73 @@ mod tests {
                 );
             }
         }
+    }
+    #[test]
+    fn root_exit_terminates_pipe_inheriting_descendant_and_drains_output() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut request = request(temp.path(), "descendant-root");
+        request.lifetime = Lifetime::AcceptedCommand;
+        struct Release(PathBuf);
+        impl Drop for Release {
+            fn drop(&mut self) {
+                let _ = std::fs::write(&self.0, "");
+            }
+        }
+        let release = Release(temp.path().join("root-release"));
+        let worker = thread::spawn(move || run(&request, &Cancellation::default(), None));
+        let end = Instant::now() + Duration::from_secs(10);
+        while !temp.path().join("descendant-started").exists() {
+            assert!(Instant::now() < end, "descendant did not start");
+            thread::sleep(Duration::from_millis(5));
+        }
+        let pid = std::fs::read_to_string(temp.path().join("descendant-pid"))
+            .unwrap()
+            .parse::<u32>()
+            .unwrap();
+        let descendant = owned(unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) }).unwrap();
+        assert_eq!(
+            unsafe { WaitForSingleObject(descendant.as_raw_handle(), 0) },
+            WAIT_TIMEOUT
+        );
+        drop(release);
+        let result = worker.join().unwrap().unwrap();
+        assert!(result.success(), "{result:?}");
+        assert_eq!(
+            unsafe { WaitForSingleObject(descendant.as_raw_handle(), 2000) },
+            WAIT_OBJECT_0
+        );
+        assert!(!temp.path().join("descendant-finished").exists());
+        assert!(
+            String::from_utf8(result.stdout)
+                .unwrap()
+                .contains("descendant owns stdout")
+        );
+        assert!(
+            String::from_utf8(result.stderr)
+                .unwrap()
+                .contains("descendant owns stderr")
+        );
+    }
+    #[test]
+    fn unrelated_inheritable_handle_is_excluded_from_child() {
+        let temp = tempfile::tempdir().unwrap();
+        let attributes = SECURITY_ATTRIBUTES {
+            nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: std::ptr::null_mut(),
+            bInheritHandle: 1,
+        };
+        let event = owned(unsafe { CreateEventW(&attributes, 1, 0, std::ptr::null()) }).unwrap();
+        let mut request = request(temp.path(), "inherited-event");
+        request.environment.insert(
+            "SHOVEL_FIXTURE_HANDLE".into(),
+            Some((event.as_raw_handle() as usize).to_string().into()),
+        );
+        let result = run(&request, &Cancellation::default(), None).unwrap();
+        assert!(result.success());
+        assert_eq!(
+            unsafe { WaitForSingleObject(event.as_raw_handle(), 0) },
+            WAIT_TIMEOUT
+        );
     }
     #[test]
     fn bounded_capture_drains_accepted_commands() {
