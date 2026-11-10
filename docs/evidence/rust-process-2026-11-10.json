@@ -4,7 +4,7 @@
   "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
   "RustBaseCommit": "44e5fb5b774de4ac78beced18b5a7800eb602153",
   "SourceSha256": {
-    "rust/core/src/process.rs": "be45f27a4f53c453598f0679edc8a1b4e389828e63ee89229cd54b2767b0ada5",
+    "rust/core/src/process.rs": "8359b3d1d7ee45073a8ff6fd7e20cbbb69764f3ececdd9b14a3dad477715bb73",
     "src/GitGui.ProcessHost/WindowsProcessRunner.cs": "ec679b1dd52572303948691825972322a4c39fd3070123513ade2e5c341b15a8"
   },
   "RegressionBefore": {
@@ -26,6 +26,11 @@
     {
       "Command": "cargo clippy -j 1 -p shovel-core --lib --tests --locked -- -D warnings",
       "Passed": true
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-core --lib actual_unicode_empty --locked -- --test-threads=1",
+      "Passed": 1,
+      "Seconds": 0.14
     }
   ],
   "Scope": [
@@ -36,11 +41,13 @@
     "Incomplete stdin cannot report success; native rejecting status/output preserved",
     "Two read slots and four user-command slots progress independently",
     "Cancelled admission requests never start",
-    "Execution timeout excludes admission wait; elapsed reporting includes it"
+    "Execution timeout excludes admission wait; elapsed reporting includes it",
+    "Actual native child receives exact UTF-16 argv, including empty, Hebrew/emoji, quotes, trailing backslashes, leading dashes and shell-looking text."
   ],
   "Limits": [
     "Not a paired runtime benchmark or complete R10 acceptance. C# source establishes the timeout boundary; no new C# runtime test was run.",
-    "Actual argv round-trip, broader handle/error races, custom Git, native auth/tools remain.",
+    "Broader handle/error races, custom Git, native auth/tools remain.",
     "No desktop capture, interactive app launch, user repository, installation or publication. Existing local payload is unchanged."
-  ]
+  ],
+  "VerificationSequence": "Ten-test process suite followed by one additional argument round-trip check; production process code unchanged between these runs."
 }

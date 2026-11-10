@@ -563,6 +563,13 @@ mod tests {
             std::process::exit(0);
         } else if mode == "overflow" {
             println!("{}", "x".repeat(65536));
+        } else if mode == "arguments" {
+            let arguments: Vec<Vec<u16>> = std::env::args_os()
+                .skip_while(|arg| arg != "--")
+                .skip(1)
+                .map(|arg| arg.encode_wide().collect())
+                .collect();
+            println!("\nARGV:{}", serde_json::to_string(&arguments).unwrap());
         } else if mode == "environment" {
             println!("{}", std::env::var("SHOVEL_LITERAL_VALUE").unwrap());
         }
@@ -831,6 +838,40 @@ mod tests {
         let result = run(&request, &Cancellation::default(), None).unwrap();
         assert_eq!(result.outcome, Outcome::OutputLimit);
         assert_eq!(result.stdout.len(), 128);
+    }
+    #[test]
+    fn actual_unicode_empty_quoted_and_trailing_slash_arguments_roundtrip() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut request = request(temp.path(), "arguments");
+        let arguments = [
+            "",
+            "a b",
+            "שלום 😀",
+            "--leading",
+            "quote\"inside",
+            "C:\\space dir\\",
+            "two\\\\\"quotes",
+            "& $() ; %PATH%",
+        ];
+        // libtest accepts multiple exact filters after --. None of these
+        // payload filters names a test; the earlier exact fixture filter does.
+        request.arguments.push("--".into());
+        request
+            .arguments
+            .extend(arguments.iter().map(OsString::from));
+        let result = run(&request, &Cancellation::default(), None).unwrap();
+        assert!(result.success(), "{result:?}");
+        let output = String::from_utf8(result.stdout).unwrap();
+        let line = output
+            .lines()
+            .find_map(|line| line.strip_prefix("ARGV:"))
+            .expect("native fixture did not report arguments");
+        let observed: Vec<Vec<u16>> = serde_json::from_str(line).unwrap();
+        let expected: Vec<Vec<u16>> = arguments
+            .iter()
+            .map(|s| OsStr::new(s).encode_wide().collect())
+            .collect();
+        assert_eq!(observed, expected);
     }
     #[test]
     fn environment_is_literal_and_argument_quoting_matches_crt() {
