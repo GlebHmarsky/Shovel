@@ -1,0 +1,162 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T10:22:09.6953949Z",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "RustBaseCommit": "f94386721f4ea04516941157d98194bdd5b4d2c3",
+  "GitVersion": "git version 2.51.1.windows.1",
+  "SourceSha256": {
+    "rust/desktop/src/commit.rs": "7512322808BD133B3A893C842ABC4C2B42CEE3D934BF92EFBC07B7DB817FFBC8",
+    "rust/desktop/src/commit_queue.rs": "E10C9B754B31556F44DDE0F815C67ADC48F6B0F681A07668900A06D22BFA33DC",
+    "rust/desktop/src/commit_queue_tests.rs": "19A39570E04F399147D65F5A6513231368DFF5428A16E14B18A509B64D4C0ADF",
+    "rust/desktop/src/operations.rs": "6C2A1A7B3B8E53BBBA5428CD49BD58EB13E316826FFB7A605293A659B40311AE",
+    "rust/desktop/src/main.rs": "ABC7200150EF697598ED80D05A97C8356B371B83D72446C115E67BD8F2EBA996",
+    "rust/core/src/working.rs": "2BD8475D733EF706C1478ECC8245BFC62C04AC3ED5C36389C8D66A3E644CD9C5",
+    "rust/core/src/scheduler.rs": "4294CA85BB3148C60C320E307D83E91C9153B95A863CDA782BD8DA769944A66E",
+    "tests/RustParityBaseline/Program.cs": "4B71ECDE87DD07965484928B66564AC1995471E4B886FA786CE1618963CC58A0",
+    "scripts/Test-RustWorkingQueueParity.ps1": "B5CB242A1C4918CB4A7DF509204BFDEEAE2594997A6F09AE6D2BE7989164A495"
+  },
+  "Scope": "Four native working-copy outcomes. Rust uses actual editor input, scheduler and Activity removal; C# probe uses pinned native actions sequentially. Pinned C# UI queue behavior is checked separately by --check-operation-lifetimes.",
+  "FixtureClock": "Both drivers fix only GIT_AUTHOR_DATE and GIT_COMMITTER_DATE to 2026-01-01T00:00:00+00:00 for exact commit hashes.",
+  "IndexComparison": "Exact staged path/mode/blob/stage entries. Raw index stat cache and filesystem timestamps are intentionally not compared across separate fixtures.",
+  "DesktopCapture": false,
+  "Cases": [
+    {
+      "Scenario": "stage-commit",
+      "Equal": true,
+      "Baseline": {
+        "head": "b0cbcebc748be6b490a995f13fa493546d426669",
+        "index": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\ttwo.txt\u0000",
+        "status": "",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        },
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A"
+      },
+      "Rust": {
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "head": "b0cbcebc748be6b490a995f13fa493546d426669",
+        "index": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\ttwo.txt\u0000",
+        "status": "",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        }
+      }
+    },
+    {
+      "Scenario": "removed-commit",
+      "Equal": true,
+      "Baseline": {
+        "head": "feb29a42267b0ac51d779d7f6e81d23d4d5479c0",
+        "index": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\ttwo.txt\u0000",
+        "status": "M  one.txt\u0000 M two.txt\u0000",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        },
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A"
+      },
+      "Rust": {
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "head": "feb29a42267b0ac51d779d7f6e81d23d4d5479c0",
+        "index": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\ttwo.txt\u0000",
+        "status": "M  one.txt\u0000 M two.txt\u0000",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        }
+      }
+    },
+    {
+      "Scenario": "external-index",
+      "Equal": true,
+      "Baseline": {
+        "head": "feb29a42267b0ac51d779d7f6e81d23d4d5479c0",
+        "index": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\ttwo.txt\u0000",
+        "status": "M  one.txt\u0000M  two.txt\u0000",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        },
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A"
+      },
+      "Rust": {
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "head": "feb29a42267b0ac51d779d7f6e81d23d4d5479c0",
+        "index": "100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 f719efd430d52bcfc8566a43b2eb655688d38871 0\ttwo.txt\u0000",
+        "status": "M  one.txt\u0000M  two.txt\u0000",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        }
+      }
+    },
+    {
+      "Scenario": "unstage",
+      "Equal": true,
+      "Baseline": {
+        "head": "feb29a42267b0ac51d779d7f6e81d23d4d5479c0",
+        "index": "100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\ttwo.txt\u0000",
+        "status": " M one.txt\u0000 M two.txt\u0000",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        },
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A"
+      },
+      "Rust": {
+        "config": "5B636F72655D0A097265706F7369746F7279666F726D617476657273696F6E203D20300A0966696C656D6F6465203D2066616C73650A0962617265203D2066616C73650A096C6F67616C6C72656675706461746573203D20747275650A0973796D6C696E6B73203D2066616C73650A0969676E6F726563617365203D20747275650A",
+        "head": "feb29a42267b0ac51d779d7f6e81d23d4d5479c0",
+        "index": "100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tone.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\tother.txt\u0000100644 df967b96a579e45a18b8251732d16804b2e56a55 0\ttwo.txt\u0000",
+        "status": " M one.txt\u0000 M two.txt\u0000",
+        "worktree": {
+          "one.txt": "6F6E650A",
+          "other.txt": "626173650A",
+          "two.txt": "74776F0A"
+        }
+      }
+    }
+  ],
+  "PinnedCSharpLifetimeSuite": {
+    "Command": "dotnet run --project tests/GitGui.FoundationChecks/GitGui.FoundationChecks.csproj --configuration Release --no-build -- --check-operation-lifetimes",
+    "Passed": 11,
+    "Failed": 0,
+    "Checks": [
+      "PASS Commit opens during initial history loading without cancelling repository initialization (2133 ms)",
+      "PASS Switching and closing a loading tab keep its initialization alive and reconnect on reopen (4165 ms)",
+      "PASS Submitted Commit closes its view, survives tab closure and records actual committed content (6149 ms)",
+      "PASS Failed detached commit preserves the message and actual index and offers repository-specific reopening (3891 ms)",
+      "PASS Individual waiting requests can be removed while manual Fetch remains uncancellable (7103 ms)",
+      "PASS Failure clears that repository's waiting requests with an explanation (1901 ms)",
+      "PASS Distinct staging requests and Commit queue in order and commit the submitted files (5499 ms)",
+      "PASS Removing a waiting Commit preserves its draft and lets accepted staging finish (1950 ms)",
+      "PASS Closing Stashes leaves an accepted stash command running and records its result (1545 ms)",
+      "PASS Returning from a blocked shutdown reopens a usable editor with its saved draft (1209 ms)",
+      "PASS Started native user commands finish despite timeout and cancellation while read processes remain bounded (805 ms)"
+    ],
+    "LogSha256": "D3B0AC1225EC7442187F933057024F006327CC865348C16B5F0E4E2068E30FEF",
+    "Limit": "Headless WPF/native process fixtures; no desktop capture or window input."
+  },
+  "AdditionalRustChecks": [
+    {
+      "Name": "commit::queue::tests::streamed_activity_redacts_chunked_urls_and_never_publishes_truncated_lines",
+      "Passed": true,
+      "Seconds": 0.01
+    },
+    {
+      "Name": "commit::tests::accepted_commit_closes_window_preserves_new_typing_and_reopens_failed_draft",
+      "Passed": true,
+      "Seconds": 10.6
+    }
+  ],
+  "RustQueueTestsSeconds": 36.11,
+  "Limit": "This proves four bounded native outcomes plus the named queue/UI checks, not complete R09/R38/R40/R69 parity, all metadata/index flags, native desktop acceptance or performance."
+}

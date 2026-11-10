@@ -30,6 +30,8 @@ cargo test -p shovel-core recovery::tests --lib --locked
 cargo test -p shovel-core authentication::tests --lib --locked
 cargo test -p shovel-askpass --test git_helper --locked
 cargo test -p shovel-core scheduler::tests --lib --locked
+cargo test -j 1 -p shovel-desktop commit::queue_tests --locked -- --test-threads=1
+./scripts/Test-RustWorkingQueueParity.ps1
 cargo build -p shovel-askpass --locked
 cargo test -p shovel-desktop operations::tests --locked
 cargo test -p shovel-desktop branches::tests --locked
@@ -43,6 +45,8 @@ cargo clippy -p shovel-core -p shovel-askpass -p shovel-desktop --all-targets --
 cargo build -j 1 -p shovel-desktop -p shovel-askpass --locked
 ./scripts/Test-RustReleasePolicy.ps1
 ```
+
+The optional working-queue parity script builds a reference-only C# probe from unchanged pinned Core/ProcessHost sources, runs four Rust editor queue checks, and compares exact native outcomes under ignored Build/parity-queue. It uses disposable repositories and no desktop capture; it is separate from routine smoke and does not package C# with Rust.
 
 Toolchain: Rust 1.99.1 MSVC, pinned by `rust-toolchain.toml`; Visual Studio C++ tools and Windows SDK. These are focused development checks, not full parity or installer acceptance. The C# commands and release evidence below are the baseline reference.
 

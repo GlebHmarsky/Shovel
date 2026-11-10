@@ -676,6 +676,7 @@ impl Workspace {
                 editor.external_changed();
             }
             let was_busy = editor.busy;
+            let owned_work = editor.has_working_queue();
             if editor.poll(ctx) {
                 changed.push(editor.path.clone());
             }
@@ -688,7 +689,11 @@ impl Workspace {
                     &self.scheduler,
                 );
             }
+            for activity in editor.take_activity() {
+                self.operations.record_owned(editor.path.clone(), activity);
+            }
             if was_busy
+                && !owned_work
                 && !editor.busy
                 && let Some(status) = &editor.status
             {

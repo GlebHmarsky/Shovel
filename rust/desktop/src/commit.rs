@@ -2,6 +2,7 @@
 //! closing it never drops accepted work, draft saves, or reconciliation.
 use crate::strings::{self, text};
 use eframe::egui;
+pub(crate) use queue::OwnedActivity;
 use shovel_core::{
     drafts,
     git::Git,
@@ -22,16 +23,18 @@ use std::{
 };
 
 enum Event {
-    Loaded(u64, Result<Context, working::Error>),
+    Loaded(u64, Box<Result<Context, working::Error>>),
     Diff(u64, Result<shovel_core::diff::FileDiff, working::Error>),
     DraftLoaded(Result<(Identity, Result<drafts::Snapshot, drafts::Error>), drafts::Error>),
     DraftSaved(u64, Result<drafts::Snapshot, String>),
-    Started,
-    Output(bool, Vec<u8>),
-    Completed(
-        Result<working::Completed, working::Error>,
+    WorkingStarted(u64),
+    WorkingOutput(u64, bool, Vec<u8>),
+    WorkingCompleted(
+        u64,
+        Box<Result<working::Completed, working::Error>>,
         Option<drafts::Text>,
     ),
+    WorkingRemoved(u64, Outcome),
     Removed,
     FileStarted(file_menu::FileAction),
     PatchPicked(file_menu::Selection, Option<PathBuf>),
@@ -61,6 +64,7 @@ pub struct Editor {
     pub status: Option<String>,
     pub output: String,
     pub busy: bool,
+    queue: queue::Queue,
     pub size: egui::Vec2,
     geometry: crate::window_geometry::Geometry,
     files_width: f32,
@@ -135,6 +139,7 @@ impl Editor {
             status: None,
             output: String::new(),
             busy: false,
+            queue: queue::Queue::default(),
             size: egui::vec2(1200., 800.),
             geometry: Default::default(),
             files_width: 380.,
@@ -242,7 +247,9 @@ impl Editor {
             }
             return;
         }
-        if matches!(next, Leave::Select { .. } | Leave::Menu(_)) && self.action_busy() {
+        if (matches!(next, Leave::Select { .. }) && self.working_blocked())
+            || (matches!(next, Leave::Menu(_)) && self.action_busy())
+        {
             return;
         }
         let leaving = match &next {
@@ -365,7 +372,7 @@ impl Editor {
         let ctx = ctx.clone();
         thread::spawn(move || {
             let result = git.working_copy(&path, &Cancellation::default());
-            let _ = tx.send(Event::Loaded(generation, result));
+            let _ = tx.send(Event::Loaded(generation, Box::new(result)));
             ctx.request_repaint();
         });
     }
@@ -380,7 +387,11 @@ impl Editor {
         self.diff = None;
         self.diff_view.reset();
         self.diff_error = None;
-        if self.file_menu.is_some() || self.file_confirmation.is_some() || self.patch_picking {
+        if self.file_menu.is_some()
+            || self.file_confirmation.is_some()
+            || self.patch_picking
+            || self.has_working_queue()
+        {
             self.diff_deferred = true;
             return;
         }
@@ -450,7 +461,7 @@ impl Editor {
             match event {
                 Event::Loaded(generation, result) if generation == self.generation => {
                     self.loading = false;
-                    match result {
+                    match *result {
                         Ok(context) => self.apply(context, ctx),
                         Err(error) => self.status = Some(error_text(error)),
                     }
@@ -507,70 +518,18 @@ impl Editor {
                         Err(error) => self.draft_error = Some(error),
                     }
                 }
-                Event::Started => {}
+                Event::WorkingStarted(id) => self.working_started(id),
+                Event::WorkingOutput(id, stderr, bytes) => self.working_output(id, stderr, &bytes),
+                Event::WorkingCompleted(id, result, submitted) => {
+                    self.working_completed(id, *result, submitted, ctx)
+                }
+                Event::WorkingRemoved(id, outcome) => self.working_removed(id, outcome),
                 Event::FileStarted(action) => self.status = Some(text(action.phase())),
                 Event::FileCompleted(action, result) => self.file_completed(action, *result, ctx),
                 Event::PatchPicked(selected, target) => self.patch_picked(selected, target, ctx),
                 Event::PatchStarted => self.status = Some(text("FilePatchWriting")),
                 Event::ShellCompleted(result) => self.shell_completed(result),
                 Event::PatchCompleted(result) => self.patch_completed(result, ctx),
-                Event::Output(stderr, bytes) => {
-                    if self.output.len() < 1024 * 1024 {
-                        let value = String::from_utf8_lossy(&bytes);
-                        self.output.push_str(&value);
-                        if stderr && !value.ends_with('\n') {
-                            self.output.push('\n');
-                        }
-                    }
-                }
-                Event::Completed(result, submitted) => {
-                    self.busy = false;
-                    self.refresh_history = true;
-                    match result {
-                        Ok(result) => {
-                            if result.succeeded() {
-                                self.status = Some(
-                                    if result.command.outcome
-                                        == shovel_core::process::Outcome::OutputLimit
-                                    {
-                                        format!(
-                                            "{} {}",
-                                            text("ActionCompletedShort"),
-                                            text("ActivityOutputLimit")
-                                        )
-                                    } else {
-                                        text("ActionCompletedShort")
-                                    },
-                                );
-                                self.failed_commit = false;
-                                if let Some(submitted) = submitted
-                                    && self.draft == submitted
-                                {
-                                    self.draft = drafts::Text::default();
-                                    self.edited();
-                                    self.amend = false;
-                                }
-                            } else {
-                                self.status = Some(text("ActionFailedShort"));
-                                self.failed_commit = submitted.is_some();
-                            }
-                            match result.updated {
-                                Ok(context) => self.apply(context, ctx),
-                                Err(error) => {
-                                    self.status = Some(format!(
-                                        "{}\n{}",
-                                        self.status.clone().unwrap_or_default(),
-                                        error_text(error)
-                                    ))
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            self.status = Some(error_text(error));
-                            self.failed_commit = submitted.is_some();
-                        }
-                    }
-                }
                 Event::Removed => {
                     self.busy = false;
                     self.status = Some(text("ActionStoppedShort"));
@@ -665,88 +624,6 @@ impl Editor {
             self.diff_error = None;
         }
     }
-    fn submit(&mut self, action: Action, ctx: &egui::Context) {
-        if self.action_busy() {
-            return;
-        }
-        let Some(context) = self.context.clone() else {
-            return;
-        };
-        self.busy = true;
-        self.status = Some(text(match &action {
-            Action::Stage(_) => "CommitPhaseStage",
-            Action::Unstage(_) => "CommitPhaseUnstage",
-            Action::Commit { .. } => "CommitPhaseCommit",
-            Action::Hunks { preview, .. } => {
-                if preview.staged() {
-                    "CommitPhaseUnstage"
-                } else {
-                    "CommitPhaseStage"
-                }
-            }
-        }));
-        self.output.clear();
-        let committing = matches!(action, Action::Commit { .. });
-        let submitted = if committing {
-            self.flush(ctx);
-            Some(self.draft.clone())
-        } else {
-            None
-        };
-        let key = match &action {
-            Action::Stage(_) => "stage",
-            Action::Unstage(_) => "unstage",
-            Action::Commit { .. } => "commit",
-            Action::Hunks { .. } => "hunks",
-        }
-        .to_owned();
-        let git = self.git.clone();
-        let tx = self.sender.clone();
-        let dropped = tx.clone();
-        let ctx = ctx.clone();
-        let drop_ctx = ctx.clone();
-        let (_, accepted) = self.scheduler.submit(
-            context.repository.identity.fingerprint.clone(),
-            context
-                .repository
-                .common_directory
-                .to_string_lossy()
-                .to_uppercase(),
-            key,
-            Lane::WorkingCopy,
-            move || {
-                let _ = tx.send(Event::Started);
-                ctx.request_repaint();
-                let output_tx = tx.clone();
-                let output_ctx = ctx.clone();
-                let callback: OutputCallback = Arc::new(move |stderr, bytes| {
-                    let _ = output_tx.send(Event::Output(stderr, bytes.to_vec()));
-                    output_ctx.request_repaint();
-                });
-                let result = git.execute_working(&context, &action, Some(callback));
-                let outcome = if result.as_ref().is_ok_and(|r| r.succeeded()) {
-                    Outcome::Succeeded
-                } else {
-                    Outcome::Failed
-                };
-                let _ = tx.send(Event::Completed(result, submitted));
-                ctx.request_repaint();
-                outcome
-            },
-            move |_| {
-                let _ = dropped.send(Event::Removed);
-                drop_ctx.request_repaint();
-            },
-        );
-        if accepted {
-            if committing {
-                self.open = false;
-            }
-        } else {
-            self.busy = false;
-            self.status = Some(text("OperationWaiting"));
-        }
-    }
     fn stage(&mut self, unstage: bool, all: bool, ctx: &egui::Context) {
         let Some(context) = &self.context else {
             return;
@@ -778,7 +655,7 @@ impl Editor {
         let Some(context) = &self.context else {
             return Some("CommitWaitForRead");
         };
-        if self.action_busy() || self.loading {
+        if !self.working_ready() {
             Some("CommitWaitForRead")
         } else if self.draft.subject.trim().is_empty() {
             Some("CommitMessageRequired")
@@ -793,6 +670,7 @@ impl Editor {
         } else if !self.amend
             && context.repository.operations != ["merge"]
             && !context.entries.iter().any(|e| e.group == Group::Staged)
+            && !self.queue.has_stage()
         {
             Some("CommitNothingStaged")
         } else {
@@ -968,7 +846,7 @@ impl Editor {
                             });
                             if ui
                                 .add_enabled(
-                                    allow_amend && !self.action_busy(),
+                                    allow_amend && self.working_ready(),
                                     egui::Checkbox::new(&mut self.amend, text("CommitAmend")),
                                 )
                                 .changed()
@@ -1050,8 +928,7 @@ impl Editor {
                                 let all = ui.input(|i| i.modifiers.shift);
                                 if ui
                                     .add_enabled(
-                                        !self.action_busy()
-                                            && !self.loading
+                                        self.working_ready()
                                             && (selected || all && !rows.is_empty()),
                                         egui::Button::new(text(if staged {
                                             "CommitUnstage"
@@ -1065,7 +942,7 @@ impl Editor {
                                 }
                                 if ui
                                     .add_enabled(
-                                        !self.action_busy() && !self.loading && !rows.is_empty(),
+                                        self.working_ready() && !rows.is_empty(),
                                         egui::Button::new(text(if staged {
                                             "CommitUnstageAll"
                                         } else {
@@ -1090,7 +967,7 @@ impl Editor {
                                         let key = (entry.group, entry.path.clone());
                                         let selected = self.selection.contains(&key);
                                         let response = ui.add_enabled(
-                                            !self.action_busy(),
+                                            !self.working_blocked(),
                                             egui::Button::selectable(
                                                 selected,
                                                 format!("{}  {}", entry.code, entry.path),
@@ -1293,6 +1170,11 @@ mod file_menu;
 mod file_menu_tests;
 #[path = "commit_patch.rs"]
 mod patch;
+#[path = "commit_queue.rs"]
+mod queue;
+#[cfg(test)]
+#[path = "commit_queue_tests.rs"]
+mod queue_tests;
 #[path = "commit_shell.rs"]
 mod shell;
 fn error_text(error: working::Error) -> String {

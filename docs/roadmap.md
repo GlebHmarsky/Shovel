@@ -2,6 +2,8 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust working-copy queue, 2026-11-10.** Distinct Stage/Unstage/Commit requests now retain ordered execution, individual Activity removal, original drafts and native stale-state checks. Four exact C#/Rust native outcome comparisons, 11 pinned C# lifetime checks, two additional Rust output/draft checks and Clippy passed. [Evidence, corrected completed-batch regression and remaining limits](rust-rewrite.md#working-copy-queue-checkpoint-2026-11-10). No parity row or final delivery gate was closed.
+
 **Rust initialization queue, 2026-11-10.** Primary network requests now wait for their repository owner, survive closed tabs and preserve branch targets while allowing prior accepted commits. Five scheduler and four native-Git/headless queue checks passed; [evidence and remaining queue gaps](rust-rewrite.md#initialization-queue-checkpoint-2026-11-10). No parity row was closed.
 
 **Rust zoom geometry, 2026-11-10.** Fixed the source-level 110% width drift by separating native window dimensions from zoomed UI points, deferring startup restoration and retaining normal bounds/pane records. Four focused geometry/profile tests passed (0.56 s); [exact cases and desktop limits](rust-rewrite.md#window-geometry-checkpoint-2026-11-10). The published 0.49.2 binary still has the old behavior; a new final Beta remains pending full goal work.

@@ -429,9 +429,9 @@
         "R40",
         "R41"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/desktop/src/commit.rs; rust/desktop/src/commit_queue.rs; rust/core/src/working.rs",
+      "Evidence": "2026-11-10 working-copy queue checkpoint: reviewed native queue/context adoption/draft lifecycle; four native/headless queue checks and exact paired C# outcomes, failed/successful background draft regression and 11 pinned C# lifetime checks passed. Remaining Commit actions, targeted reconciliation, desktop/attention and complete parity remain open."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ConflictViewModel.cs",

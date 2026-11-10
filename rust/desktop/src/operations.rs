@@ -970,6 +970,26 @@ impl Controller {
             .filter_map(|r| std::mem::take(&mut r.changed).then(|| r.path.clone()))
             .collect()
     }
+    pub fn record_owned(&mut self, path: PathBuf, activity: crate::commit::OwnedActivity) {
+        if let Some(run) = self.runs.iter_mut().find(|r| r.request == activity.request) {
+            run.status = activity.status;
+            run.output = activity.output;
+            run.done = activity.done;
+        } else {
+            let sequence = self.next;
+            self.next += 1;
+            self.runs.push(Run {
+                sequence,
+                request: activity.request,
+                path,
+                label: activity.label,
+                status: activity.status,
+                output: activity.output,
+                done: activity.done,
+                changed: false,
+            });
+        }
+    }
     pub fn record_local(&mut self, path: PathBuf, status: String, output: String) {
         let sequence = self.next;
         self.next += 1;
