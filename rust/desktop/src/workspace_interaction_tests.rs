@@ -920,3 +920,175 @@ fn distinct_unicode_repository_paths_keep_separate_tabs_and_pending_owners() {
     app.operations.poll(&ctx);
     assert!(!app.scheduler.has_accepted_work());
 }
+
+#[test]
+fn shutdown_save_completion_and_failed_save_exit_recheck_accepted_native_work() {
+    use shovel_core::branches::{Action, Changes, Checkout};
+    let fixture = RepositoryFixture::new();
+    let mut app = fixture.workspace();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    app.open(fixture.root.clone(), &ctx);
+    until(&mut app, &ctx, |app| !app.tabs[0].loading);
+    let profile = fixture._temp.path().join("profile");
+    let mut store = SettingsStore::new(profile.clone());
+    store.load().unwrap();
+    store.save(&app.settings).unwrap();
+    app.store = Some(store);
+
+    // Start the shutdown save, then accept work before processing its completion.
+    app.closing = true;
+    app.save_preferences(&ctx);
+    std::fs::write(fixture.root.join(".git/hooks/post-checkout"),
+        "#!/bin/sh\ntouch .git/exit-hook-started\nwhile test ! -f .git/exit-hook-release; do sleep .05; done\ntouch .git/exit-hook-finished\n").unwrap();
+    struct Release(PathBuf);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            let _ = std::fs::write(&self.0, b"");
+        }
+    }
+    let release = Release(fixture.root.join(".git/exit-hook-release"));
+    let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
+    let start = snapshot
+        .references
+        .iter()
+        .find(|r| r.name == "refs/heads/main")
+        .unwrap()
+        .clone();
+    let review = Arc::new(
+        fixture
+            .git
+            .working_copy(&fixture.root, &Cancellation::default())
+            .unwrap(),
+    );
+    app.operations.submit_branch(
+        "ActionTitleSwitchBranch",
+        Action::Checkout {
+            target: Checkout::New {
+                name: "shutdown-held".into(),
+                start,
+            },
+            review,
+            changes: Changes::Keep,
+            stash_message: String::new(),
+        },
+        &snapshot,
+        fixture.git.clone(),
+        &app.scheduler,
+        &ctx,
+    );
+    until(&mut app, &ctx, |_| {
+        fixture.root.join(".git/exit-hook-started").exists()
+    });
+    until(&mut app, &ctx, |app| !app.saving);
+    assert!(!app.exit_ready && !app.closing);
+    assert_eq!(
+        app.notice.as_deref(),
+        Some(strings::text("AppCommandRunningClose").as_str())
+    );
+    assert!(app.scheduler.has_accepted_work());
+
+    // A competing writer causes a real failed save; the choice must not bypass
+    // accepted work even if it was already open when a separate view submitted.
+    let foreign = b"preserve competing profile bytes";
+    std::fs::write(profile.join("settings.json"), foreign).unwrap();
+    app.closing = true;
+    app.save_preferences(&ctx);
+    until(&mut app, &ctx, |app| !app.saving);
+    assert!(app.confirm_exit_without_save);
+    let loading = app.tabs[0].loading;
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Key {
+            key: egui::Key::F5,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+    )
+    .drop_without_applying_deltas();
+    assert_eq!(
+        app.tabs[0].loading, loading,
+        "failed-save decision must gate workspace shortcuts"
+    );
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("RustExitWithoutSaving"),
+        egui::PointerButton::Primary,
+    );
+    assert!(!app.exit_ready && !app.confirm_exit_without_save);
+    assert!(app.scheduler.has_accepted_work());
+    assert_eq!(
+        std::fs::read(profile.join("settings.json")).unwrap(),
+        foreign
+    );
+    assert!(!fixture.root.join(".git/exit-hook-finished").exists());
+
+    drop(release);
+    until(&mut app, &ctx, |app| !app.scheduler.has_accepted_work());
+    assert!(fixture.root.join(".git/exit-hook-finished").exists());
+    assert_eq!(
+        fixture.command(&["symbolic-ref", "--short", "HEAD"]),
+        b"shutdown-held\n"
+    );
+    assert_eq!(std::fs::read(fixture.root.join("file")).unwrap(), b"base\n");
+    app.confirm_exit_without_save = true;
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("RustExitWithoutSaving"),
+        egui::PointerButton::Primary,
+    );
+    assert!(app.exit_ready);
+    assert_eq!(
+        std::fs::read(profile.join("settings.json")).unwrap(),
+        foreign
+    );
+}
+
+#[test]
+fn shutdown_failed_save_stay_open_and_retry_preserve_competing_profile() {
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = workspace();
+    app.tabs.clear();
+    let mut store = SettingsStore::new(temp.path().into());
+    app.settings = store.load().unwrap();
+    store.save(&app.settings).unwrap();
+    app.store = Some(store);
+    let foreign = b"other writer";
+    std::fs::write(temp.path().join("settings.json"), foreign).unwrap();
+    app.close(&ctx);
+    until(&mut app, &ctx, |app| !app.saving);
+    assert!(app.confirm_exit_without_save);
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("RustStayOpen"),
+        egui::PointerButton::Primary,
+    );
+    assert!(!app.confirm_exit_without_save && !app.exit_ready && !app.closing);
+    // A deliberate second close retries, but cannot overwrite another writer.
+    app.close(&ctx);
+    until(&mut app, &ctx, |app| !app.saving);
+    assert!(app.confirm_exit_without_save);
+    assert_eq!(
+        std::fs::read(temp.path().join("settings.json")).unwrap(),
+        foreign
+    );
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("RustExitWithoutSaving"),
+        egui::PointerButton::Primary,
+    );
+    assert!(app.exit_ready);
+    assert_eq!(
+        std::fs::read(temp.path().join("settings.json")).unwrap(),
+        foreign
+    );
+}

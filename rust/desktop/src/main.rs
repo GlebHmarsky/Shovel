@@ -757,6 +757,11 @@ impl Workspace {
                     match result {
                         Ok(()) => {
                             if self.closing && !self.preferences_dirty {
+                                if !self.prepare_exit(ctx) {
+                                    self.closing = false;
+                                    self.updater.restart_requested = false;
+                                    continue;
+                                }
                                 if self.updater.restart_requested {
                                     self.updater.apply(
                                         ctx,
@@ -1031,26 +1036,21 @@ impl Workspace {
             self.editors.push(editor);
         }
     }
-    fn close(&mut self, ctx: &egui::Context) {
-        if self.exit_ready {
-            return;
-        }
-        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        if self.closing {
-            return;
-        }
+    // Recheck immediately before every final close: saving settings yields to
+    // other views and must never turn a previously safe exit into a command kill.
+    fn prepare_exit(&mut self, ctx: &egui::Context) -> bool {
         if self.git_selection.busy() {
             self.notice = Some(strings::text("RustGitSelecting"));
-            return;
+            return false;
         }
         if self.initialization.picking {
             self.notice = Some(strings::text("RustRepositoryChooserOpen"));
-            return;
+            return false;
         }
         if self.editors.iter().any(commit::Editor::native_picker_open) {
             self.pending_exit = false;
             self.notice = Some(strings::text("RustPatchChooserOpen"));
-            return;
+            return false;
         }
         self.auto_fetch.cancel();
         if self
@@ -1059,18 +1059,18 @@ impl Workspace {
             .is_some_and(|d| d.identity.busy)
         {
             self.notice = Some(strings::text("SettingsIdentityWorking"));
-            return;
+            return false;
         }
         if self.scheduler.has_accepted_work() {
             self.pending_exit = false;
             self.notice = Some(strings::text("AppCommandRunningClose"));
             self.updater.restart_requested = false;
-            return;
+            return false;
         }
         if let Some(editor) = self.editors.iter_mut().find(|e| e.unsaved_conflict()) {
             self.pending_exit = true;
             editor.confirm_exit(ctx);
-            return;
+            return false;
         }
         for editor in &mut self.editors {
             editor.flush(ctx);
@@ -1085,9 +1085,35 @@ impl Workspace {
                     .find_map(|editor| editor.draft_problem().map(str::to_owned))
                     .unwrap_or_else(|| strings::text("CommitDraftSaving")),
             );
-            return;
+            return false;
         }
         if !self.initialized {
+            return false;
+        }
+        true
+    }
+    fn exit_without_saving(&mut self, ctx: &egui::Context) {
+        if self.saving {
+            return;
+        }
+        self.confirm_exit_without_save = false;
+        self.updater.restart_requested = false;
+        if !self.prepare_exit(ctx) {
+            self.closing = false;
+            return;
+        }
+        self.exit_ready = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+    fn close(&mut self, ctx: &egui::Context) {
+        if self.exit_ready {
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if self.closing {
+            return;
+        }
+        if !self.prepare_exit(ctx) {
             return;
         }
         self.settings.set(
@@ -1242,7 +1268,9 @@ impl eframe::App for Workspace {
         let ctx = ui.ctx().clone();
         self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
-        let modal_open = self.git_selection.busy()
+        let modal_open = self.closing
+            || self.confirm_exit_without_save
+            || self.git_selection.busy()
             || self.settings_dialog.is_some()
             || self.editors.iter().any(|editor| editor.open)
             || self.operations.modal_open()
@@ -1261,9 +1289,7 @@ impl eframe::App for Workspace {
                     ui.label(strings::text("SettingsSaveFailedQuestion"));
                     ui.horizontal(|ui| {
                         if ui.button(strings::text("RustExitWithoutSaving")).clicked() {
-                            self.exit_ready = true;
-                            self.confirm_exit_without_save = false;
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            self.exit_without_saving(&ctx);
                         }
                         if ui.button(strings::text("RustStayOpen")).clicked() {
                             self.confirm_exit_without_save = false;

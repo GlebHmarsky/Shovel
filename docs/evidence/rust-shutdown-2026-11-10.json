@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-10",
+  "baseline": "2175458",
+  "scope": "Final settings-save shutdown and failed-save decision",
+  "tests": [
+    {
+      "filter": "shutdown_",
+      "passed": 2,
+      "seconds": 7.2
+    },
+    {
+      "filter": "native_window_geometry",
+      "passed": 4,
+      "seconds": 0.55
+    },
+    {
+      "filter": "accepted_checkout_hook_finishes_with_no_tabs_and_reopening_observes_result",
+      "passed": 1,
+      "seconds": 7.8
+    },
+    {
+      "filter": "app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save",
+      "passed": 1,
+      "seconds": 4.04
+    }
+  ],
+  "clippy": "core and desktop all targets, warnings denied, passed",
+  "evidence": [
+    "Real held native post-checkout hook remains active after denied final exit",
+    "Real competing settings writer bytes preserved",
+    "Real headless Stay Open and Exit without saving pointer actions",
+    "Workspace F5 gated during failed-save decision"
+  ],
+  "limits": [
+    "No native desktop interaction",
+    "Read and background-task drainage still open",
+    "Updater handoff races remain open"
+  ],
+  "published": false,
+  "installed": false
+}

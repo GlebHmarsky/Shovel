@@ -32,7 +32,7 @@ Current partial implementation includes selected submodule Open/Update/Sync with
 
 **Owner checkpoint (2026-11-10), completed:** delivered local-only Windows Rust 0.50.0 from 3e42466 and paused for testing without publication, installation or merge. The owner subsequently resumed the goal. The existing test payload remains unchanged; all unfinished R rows remain required.
 
-**Local checkpoint 0.50.1 (2026-11-10):** finish the shared UI-scale batch, run focused checks and bounded smoke, and build a separate local Windows payload; then pause for owner testing. No new parity item, publication, installation or merge is part of this checkpoint.
+**Local checkpoint 0.50.1 (2026-11-10), completed:** source cc5f2a7, 18 smoke checks and all 19 payload hashes verified; separate local Windows payload delivered and goal paused. The owner subsequently resumed the goal. Preserve this test payload; no publication, installation or merge occurred.
 
 #### P0 — isolation, architecture and delivery
 
@@ -82,7 +82,7 @@ Current partial implementation includes selected submodule Open/Update/Sync with
 - [ ] **R23** Activity user/background/all-repository filters, 128 bounded entries/active exemption, actual command/output details and individual waiting removal; retained static outcomes and explicit Reopen Commit. User failure/warning attention and inactive taskbar flash; background stays quiet.
   **Audit Partial:** operations.rs/main.rs expose retained output, all-repository scope, waiting removal and Reopen Commit; auto_fetch.rs retains quiet background outcomes. Failed Commit Activity now survives closed-owner/editor eviction and reopens its durable draft/actual index through real headless pointer input. Exact 128-entry bounds, command detail and notification/taskbar acceptance remain. Inventory routing: 12 baseline files.
 - [ ] **R24** Shutdown/save/error handling: refuse exit during accepted work, settled conflicts alone do not block ordinary exit; drain obsolete reads/background work, save layouts/drafts, preserve failures and explain retry/exit-without-save. No surprise autostart/tray behavior.
-  **Audit Partial:** main.rs close guards accepted work and draft/settings writes; commit_conflict_tests cover unsaved text. Read/background drainage, late work during failed-save decisions and retry/exit-without-save need audit. Inventory routing: 19 baseline files.
+  **Audit Partial:** main.rs close guards accepted work and draft/settings writes; commit_conflict_tests cover unsaved text. Final successful-save and Exit without saving decisions now recheck accepted work, pickers, identity writes, conflicts and draft state; failed-save decisions gate workspace input. Two native/headless shutdown checks verify held checkout completion, competing-writer preservation, Stay Open, retry and explicit exit; existing conflict, lifetime and geometry regressions pass (2026-11-10). Read/background drainage, native shutdown interaction and broader updater handoff races remain open. Inventory routing: 19 baseline files.
 
 #### P1 — repositories, history, graph and comparisons
 
