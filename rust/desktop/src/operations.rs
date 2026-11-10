@@ -211,6 +211,8 @@ enum Event {
     ExternalPrompt(u64, authentication::Prompt),
     Completed(u64, Box<Result<network::Completed, String>>),
     Removed(u64, Outcome),
+    OptionsReady(u64, Box<ReadyOptions>),
+    OptionsClosed(u64),
 }
 struct Run {
     sequence: u64,
@@ -229,18 +231,26 @@ struct Question {
     response: Zeroizing<String>,
     focus: bool,
 }
+struct ReadyOptions {
+    options: Options,
+    snapshot: Snapshot,
+    release: Sender<()>,
+}
 struct PendingNetwork {
     sequence: u64,
     request: u64,
     path: PathBuf,
     kind: Kind,
     settings: Settings,
+    options_only: bool,
 }
 pub struct Controller {
     pub divergence: crate::divergence::Display,
     pending: Vec<PendingNetwork>,
     related_changes: Vec<PathBuf>,
     options: Option<(Options, Snapshot)>,
+    ready_options: VecDeque<ReadyOptions>,
+    options_hold: Option<Sender<()>>,
     next: u64,
     runs: Vec<Run>,
     prompts: VecDeque<Question>,
@@ -256,6 +266,8 @@ impl Default for Controller {
             pending: vec![],
             related_changes: vec![],
             options: None,
+            ready_options: VecDeque::new(),
+            options_hold: None,
             next: 1,
             runs: vec![],
             prompts: VecDeque::new(),
@@ -295,7 +307,7 @@ impl Controller {
         self.helper = Some(helper);
     }
     pub fn modal_open(&self) -> bool {
-        !self.prompts.is_empty() || self.options.is_some()
+        !self.prompts.is_empty() || self.options.is_some() || !self.ready_options.is_empty()
     }
     pub fn toolbar(
         &mut self,
@@ -344,13 +356,17 @@ impl Controller {
                 if crate::workspace_style::options_button(
                     ui,
                     strings::format("RustNetworkOptions", &[&text(kind.key())]),
-                    snapshot.is_some() && git.is_some(),
+                    available && (snapshot.is_some() || kind == Kind::Fetch),
                 )
                 .clicked()
-                    && let Some(snapshot) = snapshot
+                    && let Some(path) = path
                 {
-                    self.options =
-                        Some((Options::load(settings, snapshot, kind), snapshot.clone()));
+                    if let Some(snapshot) = snapshot {
+                        self.options =
+                            Some((Options::load(settings, snapshot, kind), snapshot.clone()));
+                    } else {
+                        self.defer_fetch_options(path, settings, scheduler, ui.ctx());
+                    }
                 }
             });
         }
@@ -363,6 +379,12 @@ impl Controller {
         git: Option<&Arc<Git>>,
         scheduler: &Scheduler,
     ) -> bool {
+        if self.options.is_none()
+            && let Some(ready) = self.ready_options.pop_front()
+        {
+            self.options = Some((ready.options, ready.snapshot));
+            self.options_hold = Some(ready.release);
+        }
         let Some((mut options, snapshot)) = self.options.take() else {
             return false;
         };
@@ -377,6 +399,7 @@ impl Controller {
             .resizable(false)
             .default_width(480.)
             .show(ctx, |ui| {
+                ui.label(snapshot.worktree.display().to_string());
                 ui.label(text("NetworkRememberOptions"));
                 ui.label(text(if options.explicit {
                     "ActionCachedTargets"
@@ -458,6 +481,10 @@ impl Controller {
         }
         if open && !close && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.options = Some((options, snapshot));
+        } else {
+            // Release the repository lane only after remembered choices are saved
+            // and any explicit submission has entered the queue.
+            self.options_hold.take();
         }
         changed
     }
@@ -533,6 +560,35 @@ impl Controller {
                 path: path.to_path_buf(),
                 kind,
                 settings: settings.clone(),
+                options_only: false,
+            });
+        }
+    }
+
+    fn defer_fetch_options(
+        &mut self,
+        path: &Path,
+        settings: &Settings,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        let owner = Self::pending_owner(path);
+        if let Some((request, sequence)) = self.reserve_run(
+            Kind::Fetch,
+            path,
+            (&owner, &owner),
+            Some("options"),
+            scheduler,
+            ctx,
+        ) {
+            self.runs.last_mut().unwrap().label = "RustFetchOptions";
+            self.pending.push(PendingNetwork {
+                request,
+                sequence,
+                path: path.to_path_buf(),
+                kind: Kind::Fetch,
+                settings: settings.clone(),
+                options_only: true,
             });
         }
     }
@@ -579,6 +635,29 @@ impl Controller {
             Ok(snapshot) => {
                 self.bind_initialization(path, snapshot, scheduler);
                 for request in pending {
+                    if request.options_only {
+                        let sender = self.sender.clone();
+                        let ctx = ctx.clone();
+                        let snapshot = snapshot.clone();
+                        scheduler.activate(request.request, move || {
+                            let (release, held) = mpsc::channel();
+                            let ready = ReadyOptions {
+                                options: Options::load(&request.settings, &snapshot, request.kind),
+                                snapshot,
+                                release,
+                            };
+                            let _ =
+                                sender.send(Event::OptionsReady(request.sequence, Box::new(ready)));
+                            ctx.request_repaint();
+                            // No Git or preparation. The dialog owns this queue slot
+                            // until dismissal, including while another dialog is shown.
+                            let _ = held.recv();
+                            let _ = sender.send(Event::OptionsClosed(request.sequence));
+                            ctx.request_repaint();
+                            Outcome::Succeeded
+                        });
+                        continue;
+                    }
                     self.activate_network(
                         (request.request, request.sequence),
                         Options::load(&request.settings, snapshot, request.kind),
@@ -644,7 +723,7 @@ impl Controller {
             Kind::Fetch,
             &snapshot.worktree,
             (&snapshot.identity.fingerprint, &common),
-            Some(name),
+            Some(&format!("remote:{name}")),
             scheduler,
             ctx,
         ) {
@@ -1114,6 +1193,18 @@ impl Controller {
                                 run.output = error;
                             }
                         }
+                    }
+                }
+                Event::OptionsReady(id, ready) => {
+                    if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
+                        run.status = text("RustOptionsOpen");
+                    }
+                    self.ready_options.push_back(*ready);
+                }
+                Event::OptionsClosed(id) => {
+                    if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
+                        run.done = true;
+                        run.status = text("RustOptionsClosed");
                     }
                 }
                 Event::Removed(id, outcome) => {

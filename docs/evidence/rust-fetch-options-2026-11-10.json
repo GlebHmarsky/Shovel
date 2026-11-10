@@ -1,0 +1,47 @@
+{
+  "SchemaVersion": 1,
+  "DateUtc": "2026-11-10T15:11:25.641060+00:00",
+  "RustBaseCommit": "362656bac561642cb40b5c52a2485fe5c0e32aa2",
+  "BaselineCommit": "2175458d97a447e7b1a01b7d5a64f68316010fd9",
+  "SourceSha256": {
+    "rust/desktop/src/operations.rs": "b553418818d621b22a28f569d9b3dca6ea9a73ca0c72569134078d4232e72c34",
+    "rust/desktop/src/operation_queue_tests.rs": "7ec4dd19ee5c00fc5c3fb8f275b9768dc60b411e63128ddb6cb4c748713e8149",
+    "rust/desktop/resources/strings.json": "9a7d343f70cee6e014600effc440b01243e11454c2ef96cbd5901fdda44cb5f0"
+  },
+  "Scope": "Fetch options requested before initialization: original owner, deduplication, waiting removal, scoped failure, cached dialog with no preparation, saved flags, dialog-lifetime queue ordering and independent ready dialogs.",
+  "Checks": [
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop initializing_fetch_options --locked -- --test-threads=1",
+      "Passed": 2,
+      "Seconds": 9.35
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop operations::queue_tests --locked -- --test-threads=1 --skip initializing_fetch_options",
+      "Passed": 4,
+      "Seconds": 29.1
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop network_options_are_modal_persist_on_close_and_do_not_execute --locked",
+      "Passed": 1,
+      "Seconds": 1.59
+    },
+    {
+      "Command": "cargo test -j 1 -p shovel-desktop initializing_fetch_options_removal_failure_and_multiple_owners_are_scoped --locked",
+      "Passed": 1,
+      "Seconds": 3.19,
+      "Reason": "Added named-remote options key collision regression after initial checks."
+    },
+    {
+      "Command": "cargo clippy -j 1 -p shovel-desktop --all-targets --locked -- -D warnings",
+      "Passed": true,
+      "Seconds": 2.73
+    }
+  ],
+  "Fixture": "Actual headless pointer input through Fetch arrow, All remotes and Close; real disposable Git repositories with isolated config. Initial history result is held unpublished until the request is queued and tab closed. FETCH_HEAD absent and config unchanged while editing; explicit later Fetch waits then succeeds after dismissal.",
+  "BaselineReview": "ShellActions.cs FetchCommand CanRequestAction, captured target, ShowGitAction and RememberNetworkOptions retain the action through dismissal. Pull/Push options require cached branch metadata. This batch is source-contract plus native/headless evidence, not an executed C# UI comparison.",
+  "Limits": [
+    "R09 remains open for pre-initialization branch dialogs, broader cross-process ownership and complete acceptance.",
+    "No native Windows appearance, keyboard or accessibility acceptance claimed.",
+    "No screen capture, interactive app launch, normal profile, working repository, install, publication or merge. Existing local 0.50.0 payload remains unchanged."
+  ]
+}

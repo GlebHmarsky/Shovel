@@ -23,6 +23,8 @@ Sidebar group expansion persists through refresh/fetch and restarts. Resizable w
 
 ## Repository-owned work (0.46.0 Beta)
 
+**Rust Fetch options (2026-11-10):** the arrow is available during initialization and queues against its original repository. Duplicate requests coalesce; waiting requests can be removed in Activity. The dialog identifies its repository, survives tab closure and saves choices on dismissal without fetching. Later conflicting work waits until dismissal. Pull/Push options still require their cached metadata. Pre-initialization branch options remain unfinished in TODO R09.
+
 Opening Commit shows cached content immediately and starts its own local scan without cancelling repository initialization. Commit remains one modal editor. Submitting Commit closes it immediately; the command, hooks and reconciliation continue in the background. Closing a repository tab or Stashes view also leaves accepted work running. Reopening a repository reconnects to its retained owner and result.
 
 Independent repository work, history reads and working-copy actions during Fetch can proceed concurrently. Conflicting index/worktree/ref mutations wait in repository order; duplicate requests share one attempt. Controls require actual data/targets, not general application idleness. Requests made before initialization wait for valid repository context. Views retain useful rows and drafts while fresh data loads.
