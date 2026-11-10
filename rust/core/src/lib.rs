@@ -30,6 +30,8 @@ pub mod identity;
 #[cfg(windows)]
 pub mod initialization;
 #[cfg(windows)]
+pub mod cloning;
+#[cfg(windows)]
 mod lfs;
 #[cfg(windows)]
 pub mod network;

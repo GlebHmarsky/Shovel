@@ -3341,6 +3341,7 @@ dependencies = [
  "subtle",
  "tempfile",
  "thiserror 2.0.21",
+ "url",
  "uuid",
  "windows-sys 0.61.2",
  "zeroize",

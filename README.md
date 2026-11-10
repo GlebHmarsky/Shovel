@@ -33,6 +33,8 @@ cargo test -p shovel-core scheduler::tests --lib --locked
 cargo test -j 1 -p shovel-desktop commit::queue_tests --locked -- --test-threads=1
 ./scripts/Test-RustWorkingQueueParity.ps1
 ./scripts/Test-RustInitializationParity.ps1
+./scripts/Test-RustCloneParity.ps1
+cargo build -j 1 -p shovel-askpass --locked # native helper required by clone UI checks
 cargo test -j 1 -p shovel-desktop repository_init::tests --locked -- --test-threads=1
 cargo test -j 1 -p shovel-core --lib initialization::tests --locked -- --test-threads=1
 cargo build -p shovel-askpass --locked

@@ -41,7 +41,7 @@ pub fn destination(path: &Path) -> Result<PathBuf, Error> {
         .map(|p| p.components().collect())
         .map_err(|_| Error::Code("InitInvalidDirectory"))
 }
-fn validate(target: &Path) -> Result<PathBuf, Error> {
+pub(crate) fn validate(target: &Path) -> Result<PathBuf, Error> {
     let mut nearest = None;
     for part in target.ancestors() {
         if part
@@ -86,7 +86,7 @@ fn metadata_ancestor(path: &Path) -> Result<bool, Error> {
     }
     Ok(false)
 }
-fn same(a: &Path, b: &Path) -> bool {
+pub(crate) fn same(a: &Path, b: &Path) -> bool {
     a.to_string_lossy()
         .replace('/', "\\")
         .trim_end_matches('\\')

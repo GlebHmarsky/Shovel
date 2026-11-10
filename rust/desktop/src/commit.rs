@@ -2,7 +2,7 @@
 //! closing it never drops accepted work, draft saves, or reconciliation.
 use crate::strings::{self, text};
 use eframe::egui;
-pub(crate) use queue::OwnedActivity;
+pub(crate) use queue::{Capture, OwnedActivity};
 use shovel_core::{
     drafts,
     git::Git,

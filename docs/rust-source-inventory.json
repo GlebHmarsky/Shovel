@@ -565,9 +565,9 @@
       "ParityIds": [
         "R27"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/cloning.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed clone core, form/view model, native chooser and shell ownership. Five native and four headless interaction checks passed, including actual loopback HTTP credentials/Decline and a held native hook surviving tab closure. Four C# exact HEAD/index/worktree/config outcomes match; see rust-cloning-2026-11-10.json. Hosted HTTPS/SSH, native dialogs/accessibility, races and broader failure acceptance remain."
     },
     {
       "Path": "src/GitGui.App/ViewModels/RepositoryInitViewModel.cs",
@@ -691,9 +691,9 @@
       "ParityIds": [
         "R27"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/cloning.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed clone core, form/view model, native chooser and shell ownership. Five native and four headless interaction checks passed, including actual loopback HTTP credentials/Decline and a held native hook surviving tab closure. Four C# exact HEAD/index/worktree/config outcomes match; see rust-cloning-2026-11-10.json. Hosted HTTPS/SSH, native dialogs/accessibility, races and broader failure acceptance remain."
     },
     {
       "Path": "src/GitGui.App/ViewModels/ShellCommitFiles.cs",
@@ -1313,9 +1313,9 @@
       "ParityIds": [
         "R27"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/cloning.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed clone core, form/view model, native chooser and shell ownership. Five native and four headless interaction checks passed, including actual loopback HTTP credentials/Decline and a held native hook surviving tab closure. Four C# exact HEAD/index/worktree/config outcomes match; see rust-cloning-2026-11-10.json. Hosted HTTPS/SSH, native dialogs/accessibility, races and broader failure acceptance remain."
     },
     {
       "Path": "src/GitGui.App/Views/RepositoryCloneWindow.xaml.cs",
@@ -1323,9 +1323,9 @@
       "ParityIds": [
         "R27"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/cloning.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed clone core, form/view model, native chooser and shell ownership. Five native and four headless interaction checks passed, including actual loopback HTTP credentials/Decline and a held native hook surviving tab closure. Four C# exact HEAD/index/worktree/config outcomes match; see rust-cloning-2026-11-10.json. Hosted HTTPS/SSH, native dialogs/accessibility, races and broader failure acceptance remain."
     },
     {
       "Path": "src/GitGui.App/Views/RepositoryInitWindow.xaml",
@@ -1907,9 +1907,9 @@
       "ParityIds": [
         "R27"
       ],
-      "ReviewState": "Pending",
-      "RustImplementation": null,
-      "Evidence": null
+      "ReviewState": "Partial",
+      "RustImplementation": "rust/core/src/cloning.rs; rust/desktop/src/repository_init.rs; rust/desktop/src/operations.rs; rust/desktop/src/main.rs",
+      "Evidence": "2026-11-10: reviewed clone core, form/view model, native chooser and shell ownership. Five native and four headless interaction checks passed, including actual loopback HTTP credentials/Decline and a held native hook surviving tab closure. Four C# exact HEAD/index/worktree/config outcomes match; see rust-cloning-2026-11-10.json. Hosted HTTPS/SSH, native dialogs/accessibility, races and broader failure acceptance remain."
     },
     {
       "Path": "src/GitGui.Core/Git/RepositoryIdentity.cs",

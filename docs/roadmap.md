@@ -2,6 +2,8 @@
 
 ## Independent Rust rewrite — active (2026-11-05)
 
+**Rust repository cloning, 2026-11-10.** Native Clone is wired through options, Rust authentication/progress, retained failed checkout/filter results and automatic opening. Five native and four headless interaction checks passed; four exact C#/Rust clone outcomes matched. Core/desktop Clippy and both native development builds passed. [Evidence and remaining hosted/native acceptance](rust-rewrite.md#repository-cloning-checkpoint-2026-11-10). R27 remains open.
+
 **Rust repository initialization, 2026-11-10.** File/Repository New repository now performs native creation, retained partial-result/error handling, automatic opening and tab persistence. Four native, five headless interaction and one destination-mutex checks passed; three exact C#/Rust native outcomes matched. [Evidence, fixture corrections and acceptance limits](rust-rewrite.md#repository-initialization-checkpoint-2026-11-10). R26 remains open for native/edge-case acceptance.
 
 **Rust failed Commit retirement, 2026-11-10.** Completed Activity entries retain explicit reopening after a saved failed editor leaves the three-owner cache. Real failed-hook/eviction/reopen and failed-draft-save retention checks passed; [evidence and remaining acceptance](rust-rewrite.md#failed-commit-retirement-checkpoint-2026-11-10). Pending or failed draft IO continues to retain its owner.

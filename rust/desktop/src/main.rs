@@ -1122,6 +1122,28 @@ impl eframe::App for Workspace {
                             ui.close();
                         }
 
+                        if ui
+                            .add_enabled(
+                                self.git.is_some()
+                                    && self.tabs.len() < 20
+                                    && !self.initialization.busy,
+                                egui::Button::new(strings::text("ActionTitleClone")),
+                            )
+                            .on_hover_text(strings::text(if self.git.is_none() {
+                                "GitErrorMissingGit"
+                            } else if self.tabs.len() >= 20 {
+                                "TooManyRepositories"
+                            } else if self.initialization.busy {
+                                "RustRepositoryCreationBusy"
+                            } else {
+                                "CloneReady"
+                            }))
+                            .clicked()
+                        {
+                            self.initialization.open_clone();
+                            ui.close();
+                        }
+
                         if ui.button(strings::text("SettingsMenu")).clicked() {
                             self.settings_dialog = Some(settings_ui::Dialog::new(&self.settings));
                             ui.close();
@@ -1199,6 +1221,28 @@ impl eframe::App for Workspace {
                             .clicked()
                         {
                             self.initialization.open();
+                            ui.close();
+                        }
+
+                        if ui
+                            .add_enabled(
+                                self.git.is_some()
+                                    && self.tabs.len() < 20
+                                    && !self.initialization.busy,
+                                egui::Button::new(strings::text("ActionTitleClone")),
+                            )
+                            .on_hover_text(strings::text(if self.git.is_none() {
+                                "GitErrorMissingGit"
+                            } else if self.tabs.len() >= 20 {
+                                "TooManyRepositories"
+                            } else if self.initialization.busy {
+                                "RustRepositoryCreationBusy"
+                            } else {
+                                "CloneReady"
+                            }))
+                            .clicked()
+                        {
+                            self.initialization.open_clone();
                             ui.close();
                         }
 
@@ -2153,6 +2197,7 @@ impl eframe::App for Workspace {
             self.git.as_ref(),
             &self.scheduler,
             self.tabs.get(self.selected).map(|t| t.id),
+            &self.operations,
         );
         self.settings_window(&ctx);
         let update_blocked = self.initialization.picking

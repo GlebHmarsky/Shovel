@@ -39,21 +39,21 @@ impl Queue {
 /// Redact complete lines, preserving independent stdout/stderr chunk boundaries.
 /// Never expose an incomplete bounded line: a URL credential may span chunks.
 #[derive(Default)]
-struct Capture {
+pub(crate) struct Capture {
     lines: [Vec<u8>; 2],
     captured: usize,
     overflow: bool,
-    text: String,
+    pub(crate) text: String,
 }
 impl Capture {
-    fn append(&mut self, stderr: bool, bytes: &[u8]) {
+    pub(crate) fn append(&mut self, stderr: bool, bytes: &[u8]) {
         let room = (1024 * 1024usize).saturating_sub(self.captured);
         self.overflow |= bytes.len() > room;
         let bytes = &bytes[..bytes.len().min(room)];
         self.captured += bytes.len();
         let pending = &mut self.lines[usize::from(stderr)];
         pending.extend_from_slice(bytes);
-        if let Some(end) = pending.iter().rposition(|b| *b == b'\n') {
+        if let Some(end) = pending.iter().rposition(|b| matches!(b, b'\r' | b'\n')) {
             let complete: Vec<_> = pending.drain(..=end).collect();
             self.publish(&complete);
         }
@@ -67,7 +67,7 @@ impl Capture {
         }
         self.text.push_str(&redacted[..end]);
     }
-    fn finish(&mut self) {
+    pub(crate) fn finish(&mut self) {
         if !self.overflow {
             for index in 0..2 {
                 let bytes = std::mem::take(&mut self.lines[index]);

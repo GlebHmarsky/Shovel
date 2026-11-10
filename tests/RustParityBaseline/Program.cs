@@ -5,7 +5,7 @@ using GitGui.Core.Git;
 using GitGui.Core.Processes;
 using GitGui.ProcessHost;
 
-if (args.Length is not (2 or 3) || args.Length == 3 && args[2] != "--init") throw new ArgumentException("Expected new fixture directory, output directory and optional --init.");
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] is not ("--init" or "--clone")) throw new ArgumentException("Expected new fixture directory, output directory and optional --init or --clone.");
 var root = Path.GetFullPath(args[0]);
 var output = Path.GetFullPath(args[1]);
 if (Directory.Exists(root) || File.Exists(root)) throw new IOException("Fixture path must not exist.");
@@ -25,6 +25,55 @@ async Task<string> Git(string path, params string[] arguments)
     var result = await runner.RunAsync(new(git.Executable, path, arguments), default);
     if (result.ExitCode != 0) throw new IOException(Encoding.UTF8.GetString(result.StandardError));
     return Encoding.UTF8.GetString(result.StandardOutput).TrimEnd();
+}
+
+if (args.Length == 3 && args[2] == "--clone")
+{
+    var source = Path.Combine(root, "-source 日本語");
+    Directory.CreateDirectory(source);
+    await Git(source, "init", "--initial-branch=main");
+    await File.WriteAllBytesAsync(Path.Combine(source, "file.txt"), Encoding.UTF8.GetBytes("base\n"));
+    await File.WriteAllBytesAsync(Path.Combine(source, "asset.dat"), [0, 255, 1, 2]);
+    await File.WriteAllBytesAsync(Path.Combine(source, ".gitattributes"), Encoding.UTF8.GetBytes("*.dat filter=fixture\n"));
+    await Git(source, "add", "."); await Git(source, "commit", "-m", "base"); await Git(source, "tag", "v1");
+    await Git(source, "checkout", "-b", "feature/topic");
+    await File.WriteAllBytesAsync(Path.Combine(source, "file.txt"), Encoding.UTF8.GetBytes("feature\n"));
+    await Git(source, "commit", "-am", "feature");
+    await Git(source, "checkout", "main");
+    await File.WriteAllBytesAsync(Path.Combine(source, "file.txt"), Encoding.UTF8.GetBytes("main\n"));
+    await Git(source, "commit", "-am", "main");
+    await File.WriteAllTextAsync(Path.Combine(output, "source-path.txt"), source);
+    foreach (var scenario in new[] { "default", "branch", "tag", "hook-failure" })
+    {
+        var branch = scenario == "branch" ? "feature/topic" : scenario == "tag" ? "v1" : "";
+        if (scenario == "hook-failure")
+        {
+            var hooks = Path.Combine(root, "hooks"); Directory.CreateDirectory(hooks);
+            await File.WriteAllBytesAsync(Path.Combine(hooks, "post-checkout"), Encoding.UTF8.GetBytes("#!/bin/sh\nprintf 'ran\\n' > hook-ran\nexit 1\n"));
+            await Git(root, "config", "--file", config, "core.hooksPath", hooks);
+        }
+        var path = Path.Combine(root, scenario);
+        using var lifetime = ProcessLifetime.CompleteStartedCommands();
+        var result = await actions.CloneRepositoryAsync(git, new(source, path, branch), default);
+        var message = scenario == "hook-failure" ? "CloneIncomplete" : "CloneSucceeded";
+        if (result.Action.MessageCode != message || result.Repository is null)
+            throw new InvalidOperationException("Unexpected clone result: " + result.Action.MessageCode);
+        var files = new SortedDictionary<string, string>();
+        foreach (var name in new[] { ".gitattributes", "asset.dat", "file.txt", "hook-ran" })
+            if (File.Exists(Path.Combine(path, name))) files[name] = Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, name)));
+        var state = new {
+            message = result.Action.MessageCode,
+            headFile = Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "HEAD"))),
+            head = await Git(path, "rev-parse", "HEAD"),
+            index = await Git(path, "ls-files", "--stage", "-z"),
+            status = await Git(path, "status", "--porcelain", "-z"),
+            config = Convert.ToHexString(await File.ReadAllBytesAsync(Path.Combine(path, ".git", "config"))),
+            worktree = files
+        };
+        await File.WriteAllTextAsync(Path.Combine(output, scenario + ".json"), JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine("PASS baseline clone: " + scenario);
+    }
+    return;
 }
 
 if (args.Length == 3)

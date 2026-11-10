@@ -1,8 +1,12 @@
 //! Local repository creation owns its worker independently of any visible tab.
-use crate::{commit::OwnedActivity, strings::text};
+use crate::{
+    commit::{Capture, OwnedActivity},
+    strings::text,
+};
 use eframe::egui;
 use sha2::{Digest, Sha256};
 use shovel_core::{
+    cloning,
     git::Git,
     initialization::{self, Options},
     operation::Error,
@@ -20,14 +24,45 @@ use std::{
 enum Event {
     Picked(Option<PathBuf>),
     Started,
+    Output(bool, Vec<u8>),
     Completed(Box<Result<initialization::Completed, Error>>),
     Removed,
 }
+#[derive(Clone, Copy, Default, PartialEq)]
+enum Kind {
+    #[default]
+    Initialize,
+    Clone,
+}
+impl Kind {
+    fn title(self) -> &'static str {
+        if self == Self::Clone {
+            "ActionTitleClone"
+        } else {
+            "ActionTitleInit"
+        }
+    }
+}
+enum Request {
+    Initialize(Options),
+    Clone(cloning::Options),
+}
+impl Request {
+    fn directory(&self) -> &std::path::Path {
+        match self {
+            Self::Initialize(o) => &o.directory,
+            Self::Clone(o) => &o.directory,
+        }
+    }
+}
 struct Form {
+    source: String,
     directory: String,
     branch: String,
 }
 pub struct Controller {
+    kind: Kind,
+    capture: Capture,
     form: Option<Form>,
     pub busy: bool,
     pub picking: bool,
@@ -49,6 +84,8 @@ impl Default for Controller {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            kind: Kind::Initialize,
+            capture: Default::default(),
             form: None,
             busy: false,
             picking: false,
@@ -72,8 +109,16 @@ impl Controller {
         self.form.is_some() || self.picking
     }
     pub fn open(&mut self) {
+        self.open_kind(Kind::Initialize);
+    }
+    pub fn open_clone(&mut self) {
+        self.open_kind(Kind::Clone);
+    }
+    fn open_kind(&mut self, kind: Kind) {
         if !self.busy {
+            self.kind = kind;
             self.form = Some(Form {
+                source: String::new(),
                 directory: String::new(),
                 branch: String::new(),
             });
@@ -93,12 +138,23 @@ impl Controller {
                     }
                 }
                 Event::Started => {
-                    self.summary = Some(text("ActionTitleInit"));
+                    self.summary = Some(text(self.kind.title()));
                     self.activity = Some(OwnedActivity {
                         request: self.request(),
-                        label: "ActionTitleInit",
-                        status: text("ActionTitleInit"),
+                        label: self.kind.title(),
+                        status: text(self.kind.title()),
                         output: String::new(),
+                        done: false,
+                        reopen_commit: false,
+                    });
+                }
+                Event::Output(stderr, bytes) => {
+                    self.capture.append(stderr, &bytes);
+                    self.activity = Some(OwnedActivity {
+                        request: self.request(),
+                        label: self.kind.title(),
+                        status: text(self.kind.title()),
+                        output: self.capture.text.clone(),
                         done: false,
                         reopen_commit: false,
                     });
@@ -140,7 +196,7 @@ impl Controller {
                         // The pending record may already have been forwarded to Activity.
                         self.activity = Some(OwnedActivity {
                             request: self.request(),
-                            label: "ActionTitleInit",
+                            label: self.kind.title(),
                             status,
                             output: output.chars().take(32768).collect(),
                             done: true,
@@ -158,7 +214,7 @@ impl Controller {
                     self.summary = Some(text("QueuedRequestCancelled"));
                     self.activity = Some(OwnedActivity {
                         request: self.request(),
-                        label: "ActionTitleInit",
+                        label: self.kind.title(),
                         status: text("QueuedRequestCancelled"),
                         output: String::new(),
                         done: true,
@@ -181,24 +237,46 @@ impl Controller {
         git: Option<&Arc<Git>>,
         scheduler: &Scheduler,
         origin: Option<u64>,
+        operations: &crate::operations::Controller,
     ) {
         let Some(mut form) = self.form.take() else {
             return;
         };
         let mut close = false;
         let mut create = false;
-        let ready = PathBuf::from(&form.directory).is_absolute()
-            && !form
-                .directory
-                .chars()
-                .any(|c| matches!(c, '\0' | '"' | '<' | '>' | '|'));
+        let ready = if self.kind == Kind::Clone {
+            cloning::Options {
+                source: form.source.trim().into(),
+                directory: form.directory.trim().into(),
+                branch: form.branch.trim().into(),
+            }
+            .valid()
+        } else {
+            initialization::destination(&PathBuf::from(&form.directory)).is_ok()
+        };
         let response =
             egui::Modal::new(egui::Id::unique("initialize_repository")).show(ctx, |ui| {
                 ui.set_width(560.);
-                ui.heading(text("ActionTitleInit"));
-                ui.label(text("ActionExplainInit"));
+                ui.heading(text(self.kind.title()));
+                ui.label(text(if self.kind == Kind::Clone {
+                    "ActionExplainClone"
+                } else {
+                    "ActionExplainInit"
+                }));
                 ui.separator();
-                let directory_label = ui.label(text("InitDirectory"));
+                if self.kind == Kind::Clone {
+                    let source_label = ui.label(text("CloneSource"));
+                    ui.add_enabled(
+                        !self.picking,
+                        egui::TextEdit::singleline(&mut form.source).desired_width(f32::INFINITY),
+                    )
+                    .labelled_by(source_label.id);
+                }
+                let directory_label = ui.label(text(if self.kind == Kind::Clone {
+                    "CloneDirectory"
+                } else {
+                    "InitDirectory"
+                }));
                 ui.horizontal(|ui| {
                     ui.add_enabled(
                         !self.picking,
@@ -219,24 +297,35 @@ impl Controller {
                         });
                     }
                 });
-                let branch_label = ui.label(text("InitBranch"));
+                let branch_label = ui.label(text(if self.kind == Kind::Clone {
+                    "CloneBranch"
+                } else {
+                    "InitBranch"
+                }));
                 ui.add_enabled(
                     !self.picking,
                     egui::TextEdit::singleline(&mut form.branch).desired_width(f32::INFINITY),
                 )
                 .labelled_by(branch_label.id);
-                ui.label(text("InitBranchHelp"));
-                ui.label(text(if ready {
-                    "InitReady"
-                } else {
-                    "InitEnterDirectory"
+                if self.kind == Kind::Initialize {
+                    ui.label(text("InitBranchHelp"));
+                }
+                ui.label(text(match (self.kind, ready) {
+                    (Kind::Initialize, true) => "InitReady",
+                    (Kind::Initialize, false) => "InitEnterDirectory",
+                    (Kind::Clone, true) => "CloneReady",
+                    (Kind::Clone, false) => "CloneInvalid",
                 }));
                 ui.separator();
                 ui.horizontal(|ui| {
                     create = ui
                         .add_enabled(
                             ready && !self.picking && git.is_some(),
-                            egui::Button::new(text("InitCreate")),
+                            egui::Button::new(text(if self.kind == Kind::Clone {
+                                "CloneSubmit"
+                            } else {
+                                "InitCreate"
+                            })),
                         )
                         .clicked();
                     close = ui
@@ -249,14 +338,23 @@ impl Controller {
         }
         if create && let Some(git) = git {
             self.submit(
-                Options {
-                    directory: form.directory.into(),
-                    initial_branch: form.branch,
+                if self.kind == Kind::Clone {
+                    Request::Clone(cloning::Options {
+                        source: form.source.trim().into(),
+                        directory: form.directory.trim().into(),
+                        branch: form.branch.trim().into(),
+                    })
+                } else {
+                    Request::Initialize(Options {
+                        directory: form.directory.into(),
+                        initial_branch: form.branch,
+                    })
                 },
                 origin,
                 git.clone(),
                 scheduler,
                 ctx,
+                operations,
             );
         } else if !close && (!response.should_close() || self.picking) {
             self.form = Some(form);
@@ -264,17 +362,18 @@ impl Controller {
     }
     fn submit(
         &mut self,
-        options: Options,
+        options: Request,
         origin: Option<u64>,
         git: Arc<Git>,
         scheduler: &Scheduler,
         ctx: &egui::Context,
+        operations: &crate::operations::Controller,
     ) {
         if self.busy {
             return;
         }
-        let target = initialization::destination(&options.directory)
-            .unwrap_or_else(|_| options.directory.clone());
+        let target = initialization::destination(options.directory())
+            .unwrap_or_else(|_| options.directory().to_path_buf());
         let owner = format!(
             "init:{:x}",
             Sha256::digest(target.to_string_lossy().to_uppercase().as_bytes())
@@ -294,6 +393,7 @@ impl Controller {
         if !accepted {
             return;
         }
+        self.capture = Default::default();
         self.request_id = request;
         self.path = target;
         self.origin = origin;
@@ -301,7 +401,7 @@ impl Controller {
         self.summary = Some(text("OperationWaiting"));
         self.activity = Some(OwnedActivity {
             request,
-            label: "ActionTitleInit",
+            label: self.kind.title(),
             status: text("OperationWaiting"),
             output: String::new(),
             done: false,
@@ -309,10 +409,24 @@ impl Controller {
         });
         let tx = self.sender.clone();
         let ctx = ctx.clone();
+        let authentication = operations.external_authentication(request, &ctx);
         scheduler.activate(request, move || {
             let _ = tx.send(Event::Started);
             ctx.request_repaint();
-            let result = git.initialize_repository(&options);
+            let result = match options {
+                Request::Initialize(options) => git.initialize_repository(&options),
+                Request::Clone(options) => {
+                    let sender = tx.clone();
+                    let repaint = ctx.clone();
+                    let progress = Arc::new(move |stderr, bytes: &[u8]| {
+                        let _ = sender.send(Event::Output(stderr, bytes.to_vec()));
+                        repaint.request_repaint();
+                    });
+                    authentication().and_then(|auth| {
+                        git.clone_repository(&options, Some(&auth), Some(progress))
+                    })
+                }
+            };
             let outcome = if result
                 .as_ref()
                 .is_ok_and(|r| r.succeeded && r.repository.is_some())

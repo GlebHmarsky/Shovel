@@ -303,3 +303,6 @@ fn failed_native_initialization_opens_inspectable_partial_result_and_retains_err
     );
     assert!(!target.join(".git/index").exists());
 }
+
+#[path = "repository_clone_tests.rs"]
+mod clone;

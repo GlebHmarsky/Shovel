@@ -200,6 +200,7 @@ enum Event {
     Stage(u64, network::Stage),
     BranchStage(u64, shovel_core::branches::Stage),
     Prompt(u64, authentication::Prompt),
+    ExternalPrompt(u64, authentication::Prompt),
     Completed(u64, Box<Result<network::Completed, String>>),
     Removed(u64, Outcome),
 }
@@ -253,6 +254,34 @@ impl Default for Controller {
     }
 }
 impl Controller {
+    pub fn external_authentication(
+        &self,
+        request: u64,
+        ctx: &egui::Context,
+    ) -> Box<dyn FnOnce() -> Result<authentication::Session, shovel_core::operation::Error> + Send>
+    {
+        let helper = self.helper.clone();
+        let sender = self.sender.clone();
+        let ctx = ctx.clone();
+        Box::new(move || {
+            let handler = Arc::new(move |prompt| {
+                let _ = sender.send(Event::ExternalPrompt(request, prompt));
+                ctx.request_repaint();
+            });
+            let helper = match helper {
+                Some(path) => path,
+                None => std::env::current_exe()
+                    .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))?
+                    .with_file_name("ShovelRustAskPass.exe"),
+            };
+            authentication::Session::start(&helper, handler)
+                .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))
+        })
+    }
+    #[cfg(test)]
+    pub(crate) fn set_authentication_helper(&mut self, helper: PathBuf) {
+        self.helper = Some(helper);
+    }
     pub fn modal_open(&self) -> bool {
         !self.prompts.is_empty() || self.options.is_some()
     }
@@ -849,6 +878,20 @@ impl Controller {
                             Stage::Recovering => "ActionStageRecovering",
                             Stage::Reconciling => "ActionReinspecting",
                         });
+                    }
+                }
+                Event::ExternalPrompt(request, prompt) => {
+                    if let Some(run) = self.runs.iter_mut().find(|r| r.request == request) {
+                        run.status = text("ActionWaitingShort");
+                        self.prompts.push_back(Question {
+                            run: run.sequence,
+                            prompt,
+                            response: Zeroizing::new(String::new()),
+                            focus: true,
+                        });
+                    } else {
+                        // An already-retired owner cannot leave a broker waiting.
+                        let _ = prompt.answer.send(None);
                     }
                 }
                 Event::Prompt(id, prompt) => {
