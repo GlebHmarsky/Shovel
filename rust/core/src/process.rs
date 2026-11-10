@@ -517,6 +517,11 @@ mod tests {
                 b"finished",
             )
             .unwrap();
+        } else if mode == "reject-input" {
+            eprintln!("fixture rejected input");
+            std::process::exit(7);
+        } else if mode == "ignore-input" {
+            std::process::exit(0);
         } else if mode == "overflow" {
             println!("{}", "x".repeat(65536));
         } else if mode == "environment" {
@@ -581,6 +586,31 @@ mod tests {
         canceller.join().unwrap();
         assert_eq!(result.outcome, Outcome::Cancelled);
         assert!(!temp.path().join("finished").exists());
+    }
+    #[test]
+    fn incomplete_stdin_is_not_reported_as_success_or_hidden_native_failure() {
+        let temp = tempfile::tempdir().unwrap();
+        for (mode, failed) in [("ignore-input", false), ("reject-input", true)] {
+            let mut request = request(temp.path(), mode);
+            request.input = vec![b'x'; 2 * 1024 * 1024];
+            request.lifetime = Lifetime::AcceptedCommand;
+            let result = run(&request, &Cancellation::default(), None);
+            if failed {
+                let result = result.unwrap();
+                assert_eq!(result.exit_code, 7);
+                assert_eq!(result.outcome, Outcome::Exited);
+                assert!(
+                    String::from_utf8(result.stderr)
+                        .unwrap()
+                        .contains("fixture rejected input")
+                );
+            } else {
+                assert!(
+                    result.is_err(),
+                    "undelivered input cannot count as a successful command"
+                );
+            }
+        }
     }
     #[test]
     fn bounded_capture_drains_accepted_commands() {
