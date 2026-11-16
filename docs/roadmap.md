@@ -1,5 +1,12 @@
 # Roadmap and decision register
 
+## Rust master and GitHub delivery (2026-11-16)
+
+Owner approved replacing C# master with Rust. All tracked C# app/projects/tests and obsolete delivery scripts are removed; assets now live in rust/assets. The old master is archived at codex/csharp-archive-0.47.0. Master pushes and manual GitHub runs build Windows, verify policy/Clippy/smoke, package the native payload and signed installer, upload artifacts and publish new Rust Beta versions. Existing C# release feeds/Latest stay intact, and Stable remains approval-gated.
+
+Rust Beta 0.50.3 was built and published entirely by [GitHub run 43782313961](https://github.com/GlebHmarsky/Shovel/actions/runs/43782313961), source 9d75ec962d714646276f9c2ca25619767437fe5d. All 18 smoke checks passed in 17.36 seconds; native payload, signed package and anonymous production downloads passed. [Download](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.3-win-rust-beta). [Evidence](evidence/rust-master-github-2026-11-16.json) records initial runner-path and publisher parsing failures and their corrections. No install, actual new-version update, visual acceptance or paired benchmark was performed. Full parity remains unfinished.
+
+
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
 ## Independent Rust rewrite — active (2026-11-05)
