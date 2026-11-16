@@ -1,5 +1,7 @@
 # Windows installation and GitHub publishing
 
+**2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
+
 ## Independent Rust Beta (2026-11-07)
 
 Rust 0.49.2 is a separate prerelease in the same public repository. Its immutable tag is `rust-v0.49.2-win-rust-beta`; `rust-beta` hosts only `releases.win-rust-beta.json` and its RSA-PSS signature. The desktop resolves package URLs under the immutable Rust version tag and never uses C# `beta` or GitHub latest. `codex/rust-beta` points to the packaged source, while `codex/rust-stable` is reserved without a published Stable feed/release.

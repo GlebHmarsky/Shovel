@@ -1,0 +1,71 @@
+name: Rust Windows Beta
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: rust-beta-release
+  cancel-in-progress: false
+jobs:
+  windows:
+    if: github.ref == 'refs/heads/master'
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Select exact master source
+        run: git switch -C master
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Release policy
+        run: ./scripts/Test-RustReleasePolicy.ps1
+      - name: Lint
+        run: cargo clippy --locked -j 1 --workspace --all-targets -- -D warnings
+      - name: Bounded smoke suite
+        run: ./scripts/Test-RustSmoke.ps1
+      - name: Build signed Rust Beta installer
+        env:
+          UPDATE_KEY: ${{ secrets.RUST_UPDATE_PRIVATE_KEY }}
+        run: |
+          if (!$env:UPDATE_KEY) { throw 'RUST_UPDATE_PRIVATE_KEY must contain the existing update signing key.' }
+          $key = Join-Path $env:RUNNER_TEMP 'shovel-update.key'
+          try {
+            [IO.File]::WriteAllText($key, $env:UPDATE_KEY)
+            ./scripts/Build-Release.ps1 -Channel win-rust-beta -PackageOnly -PrivateKeyPath $key
+          } finally {
+            Remove-Item -LiteralPath $key -ErrorAction SilentlyContinue
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ShovelRust-Windows-${{ github.sha }}
+          path: |
+            Build/rust-*-installer-win-rust-beta/*
+            Build/rust-*-win-x64/*
+            Build/rust-smoke.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish new Rust Beta version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          . ./scripts/Get-RustSourceFingerprint.ps1
+          $version = Get-RustVersion $PWD
+          $tag = "rust-v$version-win-rust-beta"
+          $releases = gh api --paginate repos/GlebHmarsky/Shovel/releases --jq '.[].tag_name'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect published versions.' }
+          if ($tag -in $releases) {
+            Write-Host "Immutable version $tag already published; build artifact remains available."
+            exit 0
+          }
+          ./scripts/Publish-RustRelease.ps1 -ArtifactDirectory "$PWD/Build/rust-$version-installer-win-rust-beta" -PayloadDirectory "$PWD/Build/rust-$version-win-x64"

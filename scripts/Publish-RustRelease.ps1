@@ -56,11 +56,16 @@ function Get-CSharpState {
     [ordered]@{Master=$master.sha;Latest=$latest.tag_name;LatestId=$latest.id;BetaId=$beta.id;BetaAssets=@($beta.assets | Sort-Object name | Select-Object id,name,size,digest,updated_at)}
 }
 try {
-    $credential=("protocol=https"+[char]10+"host=github.com"+[char]10+[char]10 | git credential fill)
-    if($LASTEXITCODE -ne 0){throw 'Configured GitHub login unavailable.'}
-    $password=@($credential | Where-Object {$_.StartsWith('password=')})
-    if($password.Count -ne 1){throw 'Configured GitHub login unavailable.'}
-    $headers=@{Authorization="Bearer $($password[0].Substring(9))";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+    if ($env:GH_TOKEN) {
+        $token = $env:GH_TOKEN
+    } else {
+        $credential=("protocol=https"+[char]10+"host=github.com"+[char]10+[char]10 | git credential fill)
+        if($LASTEXITCODE -ne 0){throw 'Configured GitHub login unavailable.'}
+        $password=@($credential | Where-Object {$_.StartsWith('password=')})
+        if($password.Count -ne 1){throw 'Configured GitHub login unavailable.'}
+        $token=$password[0].Substring(9)
+    }
+    $headers=@{Authorization="Bearer $token";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
     $repository=Invoke-RestMethod $api -Headers $headers
     if($repository.private){throw 'Anonymous updates require the existing public repository; visibility is never changed.'}
     $before=Get-CSharpState
@@ -76,7 +81,7 @@ try {
         }
         if($history.Count -lt 100){break}
     }
-    git -C $root push origin "HEAD:refs/heads/codex/rust-rewrite" "HEAD:refs/heads/$($plan.ReleaseBranch)"
+    git -C $root push origin "HEAD:refs/heads/$($plan.SourceBranch)" "HEAD:refs/heads/$($plan.ReleaseBranch)"
     if($LASTEXITCODE -ne 0){throw 'Rust branch push failed. No release published.'}
     $remote=Invoke-RestMethod "$api/commits/$($plan.ReleaseBranch)" -Headers $headers
     if($remote.sha -ne $commit){throw 'Rust release branch differs from packaged commit.'}
@@ -108,6 +113,6 @@ try {
     [ordered]@{Published=$true;Version=$plan.Version;SourceCommit=$commit;Url=$published.html_url;AnonymousInstallerVerified=$true;AnonymousSignedPackageVerified=$true;CSharpUnchanged=$true;ParityVerified=$false} | ConvertTo-Json | Set-Content (Join-Path $probe 'PUBLICATION.json')
     Write-Output "Published $($published.html_url); anonymous signed Rust update verified. Evidence: $probe"
 } finally {
-    $headers=$null;$password=$null;$credential=$null
+    $headers=$null;$password=$null;$credential=$null;$token=$null
     $env:GIT_TERMINAL_PROMPT=$priorPrompt;$env:GCM_INTERACTIVE=$priorInteractive
 }

@@ -1,5 +1,7 @@
 # Roadmap and decision register
 
+**2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
+
 ## Independent Rust rewrite — active (2026-11-05)
 
 **Local shutdown checkpoint 0.50.2, 2026-11-10.** Finished only the current startup/chooser/checkout-review/tool-worker batch and prepared a local Windows test payload at the owner-requested stopping point. [Evidence and limits](rust-rewrite.md#remaining-worker-shutdown-checkpoint-2026-11-10) include focused checks and initial fixture corrections. Exact source, final smoke result and payload hashes belong to Build/rust-0.50.2-local-win-x64/VERIFICATION.json. Full parity remains unfinished; no publication, installation or merge.

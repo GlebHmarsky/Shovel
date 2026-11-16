@@ -1,5 +1,7 @@
 # Product
 
+**2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
+
 ## Rust Git executable selection (2026-11-10)
 
 Repository > Git executable opens the native executable picker, then checks the selected Git off-thread. The choice applies to this session, matching the C# baseline; restart uses normal discovery. Cancel or a failed version check keeps the prior executable and useful repository view. Selection waits for startup/loading and accepted work to finish and for repository dialogs/draft saves to settle. The picker/version check blocks further workspace submission with a visible explanation. Successful selection invalidates repository caches, refreshes the selected repository and preserves saved drafts and settings. Automatic fetch pauses during selection. [Evidence and limits](evidence/rust-git-selection-2026-11-10.json).

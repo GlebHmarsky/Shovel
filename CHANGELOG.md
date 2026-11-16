@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.50.3 - 2026-11-16
+
+- Make Rust the application on master; remove C# application/projects and obsolete delivery tooling, preserving history and old release feeds.
+- Move application assets into the Rust tree and make release scripts support master.
+- Build native Windows payloads and signed Rust Beta installers in GitHub Actions; publish new versions without changing C# feeds or GitHub Latest.
+- Full functional parity, native UI acceptance, final installed update and paired benchmarks remain unfinished.
+
 ## Rust 0.50.2 - 2026-11-10 (local test build; not published)
 
 - Recheck accepted work before final exit and preserve failed-save choices. Drain automatic fetch, repository reads, draft restoration, conflict previews and updater workers before closing.

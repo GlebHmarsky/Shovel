@@ -21,11 +21,11 @@ pub fn compile(executable: &str, description: &str) {
         .set("FileVersion", &format!("{version}.0"))
         .set("ProductVersion", &version)
         .set("CompanyName", "Shovel contributors")
-        .set_icon("../../src/GitGui.App/Assets/Shovel.ico")
+        .set_icon("../assets/Shovel.ico")
         .set_manifest_file(manifest_path.to_str().expect("Windows SDK manifest path"))
         .compile()
         .expect("Windows SDK resource compilation failed");
     println!("cargo:rerun-if-changed=../windows_resource.rs");
     println!("cargo:rerun-if-changed=../windows.manifest");
-    println!("cargo:rerun-if-changed=../../src/GitGui.App/Assets/Shovel.ico");
+    println!("cargo:rerun-if-changed=../assets/Shovel.ico");
 }

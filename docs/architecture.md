@@ -1,5 +1,7 @@
 # Architecture and distribution
 
+**2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
+
 ## Rust history cache (2026-11-10)
 
 The independent Rust profile owns a disposable history-view.json. Core history_cache validates schema, matching saved/actual directory identity, at most 200 entries, finite nonnegative scroll positions, 64 graph lanes and at most 256 lines per entry. Reads and serialization stop at 4 MiB. A same-directory temporary file is atomically published; failed writes retain the old complete file and never block settings/exit. Absent/invalid/oversized captures remove only this rebuildable cache.

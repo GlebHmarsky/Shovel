@@ -4,6 +4,8 @@ Updated 2026-11-10. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 ## Current phase
 
+**2026-11-16 owner decision:** replace the C# tree on master with Rust and start GitHub Windows builds. This supersedes prior no-merge/checkpoint restrictions, not the unfinished parity criteria. Preserve old releases and update-feed isolation. C# source is archived at codex/csharp-archive-0.47.0.
+
 ### Entire Rust application — active, not delivered
 
 Owner request 2026-11-05. Parity baseline: C# **0.47.0**, commit **2175458**. Later sections describe C# deliveries, not completed Rust work. Current product/requirements supersede historical behavior (especially command lifetimes, quiet feedback, remembered network flags and approved updates). Every unchecked item below remains required before claiming parity; backend-only tests do not complete UI rows. C# deferred/unimplemented extensions remain deferred rather than being misrepresented as existing functionality.

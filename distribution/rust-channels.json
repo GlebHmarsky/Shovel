@@ -2,7 +2,7 @@
   "SchemaVersion": 1,
   "Product": "ShovelRust",
   "Repository": "GlebHmarsky/Shovel",
-  "DevelopmentBranch": "codex/rust-rewrite",
+  "DevelopmentBranch": "master",
   "BaselineCommit": "2175458",
   "DefaultChannel": "win-rust-beta",
   "Executable": "ShovelRust.exe",

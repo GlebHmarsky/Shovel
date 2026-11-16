@@ -6,7 +6,7 @@ function Get-RustSourceFingerprint {
     if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate Rust source inputs.' }
     $entries = foreach ($file in ($files | Sort-Object -Unique -CaseSensitive)) {
         if ($file -match '^(rust/|scripts/|distribution/|third-party/rust/)' -or
-            $file -in @('Cargo.toml','Cargo.lock','rust-toolchain.toml','.config/dotnet-tools.json','LICENSE','third-party/VELOPACK-LICENSE.txt','src/GitGui.App/Assets/Shovel.ico','src/GitGui.App/Assets/Shovel.png','src/GitGui.App/Resources/Strings.resx')) {
+            $file -in @('Cargo.toml','Cargo.lock','rust-toolchain.toml','.config/dotnet-tools.json','LICENSE','third-party/VELOPACK-LICENSE.txt','.github/workflows/rust-windows.yml')) {
             $path = Join-Path $Root $file
             $hash = if (Test-Path -LiteralPath $path -PathType Leaf) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash } else { 'DELETED' }
             "$file=$hash"

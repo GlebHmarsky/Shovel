@@ -39,7 +39,7 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_icon(
                 eframe::icon_data::from_png_bytes(include_bytes!(
-                    "../../../src/GitGui.App/Assets/Shovel.png"
+                    "../../assets/Shovel.png"
                 ))
                 .expect("checked application icon"),
             )

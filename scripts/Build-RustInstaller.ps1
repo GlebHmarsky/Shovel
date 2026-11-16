@@ -44,7 +44,7 @@ try{
         if($LASTEXITCODE -ne 0){throw 'Pinned Velopack tool restore failed.'}
         $notes=Join-Path $output 'release-notes.md'
         [IO.File]::WriteAllText($notes,"Shovel Rust $version Beta. Native Rust workspace preview. Full C# parity is still in progress. Independent Rust-only updates. See TODO and roadmap for verification limits.")
-        & dotnet vpk pack --packId ShovelRust --packVersion $version --packDir (Join-Path $payload 'app') --mainExe ShovelRust.exe --packTitle 'Shovel Rust' --packAuthors 'Shovel contributors' --channel $Channel --runtime win-x64 --delta None --icon (Join-Path $root 'src/GitGui.App/Assets/Shovel.ico') --outputDir $output --releaseNotes $notes
+        & dotnet vpk pack --packId ShovelRust --packVersion $version --packDir (Join-Path $payload 'app') --mainExe ShovelRust.exe --packTitle 'Shovel Rust' --packAuthors 'Shovel contributors' --channel $Channel --runtime win-x64 --delta None --icon (Join-Path $root 'rust/assets/Shovel.ico') --outputDir $output --releaseNotes $notes
         if($LASTEXITCODE -ne 0){throw 'Rust installer packaging failed.'}
     }finally{Pop-Location}
     $setups=@(Get-ChildItem -LiteralPath $output -Filter '*Setup.exe' -File)

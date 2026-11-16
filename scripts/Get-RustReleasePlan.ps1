@@ -10,7 +10,7 @@ function Get-RustReleasePlan {
     )
     if ($Version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw 'Rust release version must be three canonical numeric components.' }
     if ($SourceCommit -notmatch '^([a-f0-9]{40}|[a-f0-9]{64})$') { throw 'An exact source commit is required.' }
-    if ($SourceBranch -ne 'codex/rust-rewrite') { throw 'Rust release preparation must start on codex/rust-rewrite; C# master is never a Rust source branch.' }
+    if ($SourceBranch -notin @('master','codex/rust-rewrite')) { throw 'Rust releases require master or the Rust development worktree.' }
     if ($Channel -eq 'win-rust-stable' -and [string]::IsNullOrWhiteSpace($StableApproval)) { throw 'Rust Stable requires explicit owner approval for this version; record that approval before publication.' }
     $suffix=if ($Channel -eq 'win-rust-beta') {'beta'} else {'stable'}
     [pscustomobject]@{
