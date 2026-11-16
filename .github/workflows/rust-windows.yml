@@ -27,7 +27,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Install pinned Rust toolchain
-        run: rustup show
+        run: |
+          rustup show
+          rustup component add rust-docs
+          if ($LASTEXITCODE -ne 0) { throw 'Rust license documentation component is required.' }
       - name: Release policy
         run: ./scripts/Test-RustReleasePolicy.ps1
       - name: Lint
