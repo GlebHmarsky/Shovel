@@ -39,6 +39,10 @@ jobs:
             target
           key: windows-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
           restore-keys: windows-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - name: Use explicit runner temporary directory
+        run: |
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - name: Release policy
         run: ./scripts/Test-RustReleasePolicy.ps1
       - name: Automatic-fetch regression

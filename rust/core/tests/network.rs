@@ -313,7 +313,10 @@ fn automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellatio
     let review = f
         .git
         .prepare_network(&f.root, &Cancellation::default())
-        .unwrap();
+        .unwrap_or_else(|error| {
+            let paths = command(&f.git, &f.root, &["rev-parse", "--path-format=absolute", "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir", "--git-common-dir"]);
+            panic!("fixture inspection failed: {error:?}; fixture={:?}; Git paths={paths:?}", f.root);
+        });
     let token = Cancellation::default();
     token.cancel();
     assert!(f.git.automatic_fetch(&review, &token).is_err());
