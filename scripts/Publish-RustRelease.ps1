@@ -75,9 +75,10 @@ try {
     if($alias -and (!$alias.prerelease -or @($alias.assets | Where-Object {$_.name -notin @($plan.Feed,"$($plan.Feed).sig")}).Count)){throw 'Unexpected Rust feed identity.'}
     # Examine all pages so a previous newer Rust version cannot be hidden by C# releases.
     for($page=1;;$page++){
-        $history=@(Invoke-RestMethod "$api/releases?per_page=100&page=$page" -Headers $headers)
+        $history=@(Invoke-RestMethod "$api/releases?per_page=100&page=$page" -Headers $headers | ForEach-Object { $_ })
         foreach($prior in $history){
-            if($prior.tag_name -match "^rust-v(\d+\.\d+\.\d+)-$($plan.Channel)$" -and [version]$plan.Version -le [version]$Matches[1]){throw 'Rust versions must increase.'}
+            $versionMatch=[regex]::Match([string]$prior.tag_name,"^rust-v(\d+\.\d+\.\d+)-$([regex]::Escape($plan.Channel))$")
+            if($versionMatch.Success -and [version]$plan.Version -le [version]$versionMatch.Groups[1].Value){throw 'Rust versions must increase.'}
         }
         if($history.Count -lt 100){break}
     }
