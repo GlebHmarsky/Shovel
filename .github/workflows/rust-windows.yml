@@ -41,6 +41,8 @@ jobs:
           restore-keys: windows-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
       - name: Release policy
         run: ./scripts/Test-RustReleasePolicy.ps1
+      - name: Automatic-fetch regression
+        run: cargo test --locked -j 1 -p shovel-core --test network automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation -- --exact --nocapture
       - name: Lint
         run: cargo clippy --locked -j 1 --workspace --all-targets -- -D warnings
       - name: Bounded smoke suite
