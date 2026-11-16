@@ -45,7 +45,7 @@ try{
             if(!$process.WaitForExit([Math]::Min(30000,$remaining))){$process.Kill($true);throw "Smoke deadline: $($check[2])"}
             $log=$stdout.GetAwaiter().GetResult()+$stderr.GetAwaiter().GetResult()
             if($process.ExitCode -ne 0 -or $log -notmatch 'test result: ok\. 1 passed; 0 failed'){
-                Write-Output $log;throw "Smoke check failed or was not found: $($check[2])"
+                Write-Host $log;throw "Smoke check failed or was not found: $($check[2])"
             }
             Write-Host "PASS $($check[2])"
             [ordered]@{Name=$check[2];Seconds=$watch.Elapsed.TotalSeconds}

@@ -31,12 +31,28 @@ jobs:
           rustup show
           rustup component add rust-docs
           if ($LASTEXITCODE -ne 0) { throw 'Rust license documentation component is required.' }
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: |
+            ~/.cargo/registry
+            target
+          key: windows-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: windows-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
       - name: Release policy
         run: ./scripts/Test-RustReleasePolicy.ps1
       - name: Lint
         run: cargo clippy --locked -j 1 --workspace --all-targets -- -D warnings
       - name: Bounded smoke suite
         run: ./scripts/Test-RustSmoke.ps1
+      - name: Cache compiled dependencies
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            target
+          key: windows-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
       - name: Build signed Rust Beta installer
         env:
           UPDATE_KEY: ${{ secrets.RUST_UPDATE_PRIVATE_KEY }}
