@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Owner-approved Rust Stable promotion (2026-11-18)
+
+[Rust Stable 0.50.3](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.3-win-rust-stable) promotes the existing application from source 9d75ec962d714646276f9c2ca25619767437fe5d. Owner approval is specific to this version despite unfinished parity. The Stable package contains all 19 application files byte-for-byte identical to the signed Beta package. Stable installer/feed/package and anonymous downloads passed production verification; the verifier rejects Stable as Beta. C# releases, Rust Beta and GitHub Latest stayed unchanged. Stable is a normal GitHub release; its metadata alias remains a prerelease to preserve Latest.
+
+All-target Clippy, eight release-policy checks and 18 smoke checks (50.48 s) passed. No application rebuild or version increment was used for promotion. [Evidence](evidence/rust-stable-0.50.3-promotion.json) records installer hash and limits. Fresh 0.50.3 profiles still default to Beta: choose Rust Stable in update settings. No installation, actual Stable update/restart, UI acceptance, paired benchmarks or Authenticode signing was performed. All remaining parity rows stay open.
+
 ## Rust master and GitHub delivery (2026-11-16)
 
 Owner approved replacing C# master with Rust. All tracked C# app/projects/tests and obsolete delivery scripts are removed; assets now live in rust/assets. The old master is archived at codex/csharp-archive-0.47.0. Master pushes and manual GitHub runs build Windows, verify policy/Clippy/smoke, package the native payload and signed installer, upload artifacts and publish new Rust Beta versions. Existing C# release feeds/Latest stay intact, and Stable remains approval-gated.
