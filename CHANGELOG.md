@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.50.5 - 2026-11-18
+
+- Show Pull and Push badges only for positive commit counts.
+- Open the Git output window automatically for failed foreground operations. Keep successful commands and background fetch activity in Activity.
+- Add an Open In... destination icon and a separate Console icon that opens Git Bash in the selected repository.
+
 ## Rust 0.50.4 - 2026-11-18
 
 - Draw a stash directly above its base on the same graph lane when no branch line already leads into that base.

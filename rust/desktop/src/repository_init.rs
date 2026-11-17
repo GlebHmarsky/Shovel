@@ -145,6 +145,7 @@ impl Controller {
                         status: text(self.kind.title()),
                         output: String::new(),
                         done: false,
+                        failed: false,
                         reopen_commit: false,
                     });
                 }
@@ -156,6 +157,7 @@ impl Controller {
                         status: text(self.kind.title()),
                         output: self.capture.text.clone(),
                         done: false,
+                        failed: false,
                         reopen_commit: false,
                     });
                 }
@@ -179,7 +181,7 @@ impl Controller {
                                 ..
                             }) = &error
                             {
-                                output.clone()
+                                shovel_core::network::redact(output)
                             } else {
                                 String::new()
                             };
@@ -187,9 +189,16 @@ impl Controller {
                             (None, status.clone(), output, Some(status))
                         }
                     };
+                    self.capture.finish();
+                    let output = if output.is_empty() {
+                        &self.capture.text
+                    } else {
+                        &output
+                    };
                     self.summary = Some(status.clone());
                     if let Some(activity) = &mut self.activity {
                         activity.done = true;
+                        activity.failed = notice.is_some();
                         activity.status = status;
                         activity.output = output.chars().take(32768).collect();
                     } else {
@@ -200,6 +209,7 @@ impl Controller {
                             status,
                             output: output.chars().take(32768).collect(),
                             done: true,
+                            failed: notice.is_some(),
                             reopen_commit: false,
                         });
                     }
@@ -218,6 +228,7 @@ impl Controller {
                         status: text("QueuedRequestCancelled"),
                         output: String::new(),
                         done: true,
+                        failed: false,
                         reopen_commit: false,
                     });
                 }
@@ -405,6 +416,7 @@ impl Controller {
             status: text("OperationWaiting"),
             output: String::new(),
             done: false,
+            failed: false,
             reopen_commit: false,
         });
         let tx = self.sender.clone();

@@ -40,6 +40,7 @@ pub struct Refresh {
     pub context: Option<Result<Context, String>>,
     pub status: String,
     pub output: String,
+    pub failed: bool,
 }
 pub struct Pane {
     read_workers: crate::read_workers::Workers,
@@ -268,11 +269,11 @@ impl Pane {
                         self.dirty = false;
                     }
                     self.status = text(&report.code);
-                    if !report.output.is_empty() {
-                        self.output = report.output;
-                    }
+                    self.output = report.output;
                     if !report.retry {
                         refresh = Some(Refresh {
+                            failed: !report.resolved
+                                || report.updated.as_ref().is_some_and(Result::is_err),
                             context: report.updated,
                             status: self.status.clone(),
                             output: self.output.clone(),
@@ -350,8 +351,8 @@ impl Pane {
                             .map_err(|e| text(&e.to_string()))
                         });
                         Report {
+                            output: crate::operations::error_log(&error),
                             code,
-                            output: String::new(),
                             resolved: false,
                             retry,
                             updated,

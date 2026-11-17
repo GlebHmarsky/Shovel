@@ -74,7 +74,7 @@ impl Harness {
                 events,
                 ..Default::default()
             },
-            |_| self.editor.show(&ctx, true),
+            |_| self.editor.show(&ctx, true, |_| {}),
         );
         output.textures_delta.clear();
         output

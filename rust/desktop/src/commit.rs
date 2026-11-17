@@ -62,6 +62,7 @@ pub struct Editor {
     pub open: bool,
     pub context: Option<Arc<Context>>,
     pub failed_commit: bool,
+    pub failed_operation: Option<&'static str>,
     pub status: Option<String>,
     pub output: String,
     pub busy: bool,
@@ -138,6 +139,7 @@ impl Editor {
             open: true,
             context: None,
             failed_commit: false,
+            failed_operation: None,
             status: None,
             output: String::new(),
             busy: false,
@@ -567,6 +569,7 @@ impl Editor {
             }
         }
         if let Some(refresh) = self.conflict.as_mut().and_then(|pane| pane.poll(ctx)) {
+            self.failed_operation = refresh.failed.then_some("ConflictResolving");
             self.status = Some(refresh.status);
             self.output = refresh.output;
             self.operation_output = self.output.clone();
@@ -772,7 +775,12 @@ impl Editor {
             }
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context, enabled: bool) {
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        enabled: bool,
+        mut show_failure: impl FnMut(&egui::Context),
+    ) {
         if let Some(inspector) = &mut self.inspector {
             inspector.show(ctx);
         }
@@ -1179,6 +1187,7 @@ impl Editor {
                         self.answer_leave(discard, &ctx);
                     }
                 }
+                show_failure(&ctx);
             },
         );
         // An embedded viewport's first sizing pass is invisible; only a displayed

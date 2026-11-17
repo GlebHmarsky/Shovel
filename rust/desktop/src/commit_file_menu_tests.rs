@@ -232,7 +232,7 @@ impl Harness {
                 events,
                 ..Default::default()
             },
-            |_| self.editor.show(&ctx, true),
+            |_| self.editor.show(&ctx, true, |_| {}),
         );
         out.textures_delta.clear();
         for command in &out.platform_output.commands {

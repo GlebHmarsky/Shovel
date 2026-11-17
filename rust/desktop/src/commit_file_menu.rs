@@ -616,6 +616,10 @@ impl Editor {
     ) {
         self.busy = false;
         self.refresh_history = true;
+        self.failed_operation = (!result
+            .as_ref()
+            .is_ok_and(|r| r.succeeded() && r.updated.is_ok()))
+        .then_some(action.phase());
         match result {
             Ok(result) => {
                 let partial = !result.succeeded()
@@ -669,6 +673,7 @@ impl Editor {
             }
             Err(error) => {
                 self.status = Some(text(&error.code()));
+                self.output = crate::operations::error_log(&error);
                 self.refresh(ctx);
             }
         }

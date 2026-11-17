@@ -92,7 +92,7 @@ impl Harness {
                         self.activity.status(ui, None, &self.editor.scheduler)
                     });
                 }
-                self.editor.show(&ctx, true);
+                self.editor.show(&ctx, true, |_| {});
             },
         )
     }
@@ -450,6 +450,7 @@ fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_inde
     assert!(h.editor.failed_commit);
     assert!(h.editor.can_retire());
     let root = h.editor.path.clone();
+    assert_eq!(h.activity.failure_path(), Some(root.as_path()));
     let ctx = h.ctx.clone();
     let git = h.editor.git.clone();
     let mut app = workspace();
@@ -490,9 +491,14 @@ fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_inde
     app.activity_open = true;
     app.activity_all = true;
     let mut point = None;
+    let mut saw_failure_log = false;
     for _ in 0..3 {
         let out = frame(&ctx, &mut app, vec![]);
         for (_, node) in &out.platform_output.accesskit_update.as_ref().unwrap().nodes {
+            saw_failure_log |= node
+                .label()
+                .or_else(|| node.value())
+                .is_some_and(|label| label.contains("retired-fixture-failure"));
             if node.label() == Some(text("ReopenCommit").as_str()) {
                 assert!(!node.is_disabled());
                 let r = node.bounds().unwrap();
@@ -504,6 +510,7 @@ fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_inde
         }
         out.drop_without_applying_deltas();
     }
+    assert!(saw_failure_log, "the failure log survives editor retirement");
     let pos = point.expect("completed Activity retains Reopen after editor retirement");
     frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
     for pressed in [true, false] {

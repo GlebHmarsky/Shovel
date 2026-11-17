@@ -549,11 +549,7 @@ impl Workspace {
             match event {
                 Event::ToolFinished(result) => {
                     self.external_tools_opened |= result.is_ok();
-                    self.notice = Some(
-                        result
-                            .err()
-                            .unwrap_or_else(|| strings::text("RustToolOpened")),
-                    );
+                    self.notice = result.err();
                 }
                 Event::PreferencesSaved(store, mut saved, result, scale_revision) => {
                     self.store = Some(*store);
@@ -671,8 +667,12 @@ impl Workspace {
                             let error = result
                                 .err()
                                 .unwrap_or_else(|| strings::text("TooManyRepositories"));
-                            self.operations
-                                .record_local(parent, error.clone(), String::new());
+                            self.operations.record_local(
+                                parent,
+                                error.clone(),
+                                String::new(),
+                                None,
+                            );
                             self.notice = Some(error);
                         }
                     }
@@ -988,15 +988,15 @@ impl Workspace {
             for activity in editor.take_activity() {
                 self.operations.record_owned(editor.path.clone(), activity);
             }
-            if was_busy
-                && !owned_work
-                && !editor.busy
+            let failure = editor.failed_operation.take();
+            if (failure.is_some() || was_busy && !owned_work && !editor.busy)
                 && let Some(status) = &editor.status
             {
                 self.operations.record_local(
                     editor.path.clone(),
                     status.clone(),
                     editor.output.clone(),
+                    failure,
                 );
             }
         }
@@ -1926,23 +1926,16 @@ impl eframe::App for Workspace {
                                 &ctx,
                             );
                         }
-                        ui.add_space((ui.available_width() - 85.).max(0.));
-                        ui.add_enabled_ui(!self.tabs.is_empty(), |ui| {
-                            ui.menu_button(strings::text("WorkspaceOpenIn"), |ui| {
-                                for (kind, label) in repository_tools::TOOLS {
-                                    if ui.button(strings::text(label)).clicked() {
-                                        if let Some(tab) = self.tabs.get(self.selected) {
-                                            let path = tab.path.clone();
-                                            let settings = self.settings.clone();
-                                            self.begin_tool_handoff(&ctx, move || {
-                                                repository_tools::launch(kind, &path, &settings)
-                                            });
-                                        }
-                                        ui.close();
-                                    }
-                                }
+                        let tab = self.tabs.get(self.selected);
+                        if let Some(kind) = repository_tools::toolbar(ui, tab.is_some())
+                            && let Some(tab) = tab
+                        {
+                            let path = tab.path.clone();
+                            let settings = self.settings.clone();
+                            self.begin_tool_handoff(&ctx, move || {
+                                repository_tools::launch(kind, &path, &settings)
                             });
-                        });
+                        }
                     },
                 );
                 if self.initialization.busy
@@ -2899,14 +2892,25 @@ impl eframe::App for Workspace {
         {
             self.locate(hash, &ctx);
         }
-        for editor in &mut self.editors {
+        let failure_editor = self.operations.failure_path().and_then(|path| {
+            self.editors
+                .iter()
+                .position(|editor| editor.open && Self::same_path(&editor.path, path))
+        });
+        for (index, editor) in self.editors.iter_mut().enumerate() {
             let open = editor.open;
+            let show_failure = !self.closing && failure_editor == Some(index);
             editor.show(
                 &ctx,
                 !self.closing
                     && !self.operations.modal_open()
                     && !self.branches.is_open()
                     && !self.remotes.is_open(),
+                |ctx| {
+                    if show_failure {
+                        self.operations.show_failure(ctx);
+                    }
+                },
             );
             if open && !editor.open {
                 editor.save_layout(&mut self.settings);
@@ -2963,6 +2967,9 @@ impl eframe::App for Workspace {
             &self.scheduler,
             allow_branch_input,
         );
+        if !self.closing && failure_editor.is_none() {
+            self.operations.show_failure(&ctx);
+        }
         self.operations.show_prompt(&ctx);
     }
 }

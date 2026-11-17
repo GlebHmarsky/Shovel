@@ -224,6 +224,7 @@ struct Run {
     done: bool,
     changed: bool,
     reopen_commit: bool,
+    show_failure: bool,
 }
 struct Question {
     run: u64,
@@ -269,6 +270,7 @@ pub struct Controller {
     options_hold: Option<DialogLease>,
     next: u64,
     runs: Vec<Run>,
+    active_failure: Option<u64>,
     prompts: VecDeque<Question>,
     sender: Sender<Event>,
     receiver: Receiver<Event>,
@@ -286,6 +288,7 @@ impl Default for Controller {
             options_hold: None,
             next: 1,
             runs: vec![],
+            active_failure: None,
             prompts: VecDeque::new(),
             sender,
             receiver,
@@ -355,13 +358,17 @@ impl Controller {
                 let available = path.is_some() && git.is_some();
                 ui.spacing_mut().item_spacing.x = 0.;
                 let count = match kind {
-                    Kind::Pull => Some((&self.divergence.behind[..], "BehindCount")),
-                    Kind::Push => Some((&self.divergence.ahead[..], "AheadCount")),
+                    Kind::Pull => self
+                        .divergence
+                        .behind
+                        .as_deref()
+                        .map(|n| (n, "BehindCount")),
+                    Kind::Push => self.divergence.ahead.as_deref().map(|n| (n, "AheadCount")),
                     Kind::Fetch => None,
                 };
                 let button =
                     crate::workspace_style::action_with_count(ui, kind.key(), available, count);
-                if count.is_some() {
+                if kind != Kind::Fetch {
                     button.clone().on_hover_text(&self.divergence.help);
                 }
                 if !available {
@@ -579,6 +586,7 @@ impl Controller {
             done: false,
             changed: false,
             reopen_commit: false,
+            show_failure: false,
         });
         Some((request, sequence))
     }
@@ -664,6 +672,7 @@ impl Controller {
                 done: false,
                 changed: false,
                 reopen_commit: false,
+                show_failure: false,
             });
             self.pending.push(PendingNetwork {
                 request,
@@ -774,7 +783,7 @@ impl Controller {
                         .iter_mut()
                         .find(|r| r.sequence == request.sequence)
                     {
-                        run.output = error.to_owned();
+                        run.output = network::redact(error);
                     }
                     scheduler.fail_reserved(request.request);
                 }
@@ -872,14 +881,14 @@ impl Controller {
                     .map_err(|_| text("ActionAskPassMissing"))?;
                 let review = git
                     .prepare_network(&captured.worktree, &Cancellation::default())
-                    .map_err(|e| text(&e.code()))?;
+                    .map_err(|e| error_log(&e))?;
                 if review.repository.identity != captured.identity
                     || review.repository.branch != captured.branch
                 {
                     return Err(text("ActionChanged"));
                 }
                 git.execute_network(&review, &action, Some(&auth), Some(progress))
-                    .map_err(|e| text(&e.code()))
+                    .map_err(|e| error_log(&e))
             })();
             let outcome = match &result {
                 Ok(result) if result.succeeded() => Outcome::Succeeded,
@@ -1064,7 +1073,7 @@ impl Controller {
                     } else if let LocalAction::Submodule(action) = &action {
                         let prepared = git
                             .prepare_local(&captured, true, &Cancellation::default())
-                            .map_err(|e| text(&e.code()))?;
+                            .map_err(|e| error_log(&e))?;
                         let auth = if action.operation == shovel_core::submodules::Operation::Update
                         {
                             let helper = match &helper {
@@ -1096,7 +1105,7 @@ impl Controller {
                         );
                         let prepared = git
                             .prepare_local(&captured, unchanged_refs, &Cancellation::default())
-                            .map_err(|e| text(&e.code()))?;
+                            .map_err(|e| error_log(&e))?;
                         match &action {
                             LocalAction::Branch(action) => {
                                 git.execute_branch(&prepared, action, Some(progress))
@@ -1127,7 +1136,7 @@ impl Controller {
                             }
                             result
                         })
-                        .map_err(|e| text(&e.code()))
+                        .map_err(|e| error_log(&e))
                 })();
                 let outcome = match &result {
                     Ok(result) if result.succeeded() => Outcome::Succeeded,
@@ -1162,6 +1171,7 @@ impl Controller {
                 done: false,
                 changed: false,
                 reopen_commit: false,
+                show_failure: false,
             });
         }
         accepted.then_some(request)
@@ -1238,36 +1248,39 @@ impl Controller {
                                     .updated
                                     .as_ref()
                                     .is_ok_and(|s| !s.operations.is_empty());
-                                run.status =
-                                    text(if result.succeeded() && result.warning.is_some() {
-                                        "RustActionWarning"
-                                    } else if result.succeeded() {
-                                        "ActionCompletedShort"
-                                    } else if result.has_conflicts {
-                                        "ActionConflictShort"
-                                    } else if pending
-                                        && result.message.is_none()
-                                        && result.commands.iter().all(network::Command::succeeded)
-                                    {
-                                        "RecoveryPending"
-                                    } else if result.updated.is_err()
-                                        && result.message.is_none()
-                                        && result.commands.iter().all(network::Command::succeeded)
-                                    {
-                                        "ActionRefreshFailedShort"
-                                    } else {
-                                        "ActionFailedShort"
-                                    });
+                                let commands_succeeded =
+                                    result.commands.iter().all(network::Command::succeeded);
+                                let awaiting_recovery = pending
+                                    && !result.has_conflicts
+                                    && result.message.is_none()
+                                    && commands_succeeded;
+                                let succeeded = result.succeeded();
+                                run.show_failure = !succeeded && !awaiting_recovery;
+                                run.status = text(if succeeded && result.warning.is_some() {
+                                    "RustActionWarning"
+                                } else if succeeded {
+                                    "ActionCompletedShort"
+                                } else if result.has_conflicts {
+                                    "ActionConflictShort"
+                                } else if awaiting_recovery {
+                                    "RecoveryPending"
+                                } else if result.updated.is_err()
+                                    && result.message.is_none()
+                                    && commands_succeeded
+                                {
+                                    "ActionRefreshFailedShort"
+                                } else {
+                                    "ActionFailedShort"
+                                });
                                 run.output = result.output;
-                                for message in [
-                                    result.message,
-                                    result.warning,
-                                    result.updated.err().map(|e| e.code()),
-                                ]
-                                .into_iter()
-                                .flatten()
+                                for message in
+                                    [result.message, result.warning].into_iter().flatten()
                                 {
                                     run.output.push_str(&format!("\n{}", text(&message)));
+                                }
+                                if let Err(error) = result.updated {
+                                    run.output.push('\n');
+                                    run.output.push_str(&error_log(&error));
                                 }
                                 if pending {
                                     run.output
@@ -1291,6 +1304,7 @@ impl Controller {
                                 }
                             }
                             Err(error) => {
+                                run.show_failure = true;
                                 run.status = text("ActionFailedShort");
                                 run.output = error;
                             }
@@ -1313,6 +1327,7 @@ impl Controller {
                     self.pending.retain(|p| p.sequence != id);
                     if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
                         run.done = true;
+                        run.show_failure = outcome == Outcome::Failed;
                         run.status = text(match outcome {
                             Outcome::Removed => "QueuedRequestCancelled",
                             Outcome::Failed => "ActionFailedShort",
@@ -1343,6 +1358,7 @@ impl Controller {
     }
     pub fn record_owned(&mut self, path: PathBuf, activity: crate::commit::OwnedActivity) {
         if let Some(run) = self.runs.iter_mut().find(|r| r.request == activity.request) {
+            run.show_failure |= !run.done && activity.done && activity.failed;
             run.status = activity.status;
             run.output = activity.output;
             run.done = activity.done;
@@ -1360,22 +1376,30 @@ impl Controller {
                 done: activity.done,
                 changed: false,
                 reopen_commit: activity.reopen_commit,
+                show_failure: activity.done && activity.failed,
             });
         }
     }
-    pub fn record_local(&mut self, path: PathBuf, status: String, output: String) {
+    pub fn record_local(
+        &mut self,
+        path: PathBuf,
+        status: String,
+        output: String,
+        failure: Option<&'static str>,
+    ) {
         let sequence = self.next;
         self.next += 1;
         self.runs.push(Run {
             sequence,
             request: 0,
             path,
-            label: "Commit",
+            label: failure.unwrap_or("Commit"),
             status,
             output: network::redact(&output).chars().take(32768).collect(),
             done: true,
             changed: false,
             reopen_commit: false,
+            show_failure: failure.is_some(),
         });
     }
     pub fn summary(&self, path: &std::path::Path) -> Option<String> {
@@ -1492,6 +1516,75 @@ impl Controller {
             let _ = question.prompt.answer.send(reply);
             self.prompts.pop_front();
         }
+    }
+
+    fn next_failure(&self) -> Option<usize> {
+        if !self.prompts.is_empty() {
+            return None;
+        }
+        self.runs
+            .iter()
+            .position(|r| r.show_failure && Some(r.sequence) == self.active_failure)
+            .or_else(|| self.runs.iter().position(|r| r.show_failure))
+    }
+
+    pub fn failure_path(&self) -> Option<&Path> {
+        self.next_failure().map(|i| self.runs[i].path.as_path())
+    }
+
+    pub fn show_failure(&mut self, ctx: &egui::Context) {
+        let Some(index) = self.next_failure() else {
+            return;
+        };
+        let run = &mut self.runs[index];
+        self.active_failure = Some(run.sequence);
+        let mut open = true;
+        let mut dismiss = false;
+        egui::Window::new(text("OperationAttentionTitle"))
+            .id(egui::Id::unique("operation-failure"))
+            .open(&mut open)
+            .collapsible(false)
+            .order(egui::Order::Foreground)
+            .default_width(580.)
+            .show(ctx, |ui| {
+                ui.heading(text(run.label));
+                ui.add(egui::Label::new(run.path.to_string_lossy()).selectable(true));
+                ui.add(egui::Label::new(&run.status).selectable(true));
+                let output = run.output.trim();
+                if !output.is_empty() && output != run.status.trim() {
+                    ui.label(text("OperationAttentionLogs"));
+                    egui::ScrollArea::both()
+                        .id_salt(run.sequence)
+                        .max_height(280.)
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::Label::new(RichText::new(output).monospace())
+                                    .selectable(true),
+                            );
+                        });
+                }
+                dismiss = ui.button(text("OperationAttentionDismiss")).clicked();
+            });
+        run.show_failure = open && !dismiss;
+        if !run.show_failure {
+            self.active_failure = None;
+            ctx.request_repaint();
+        }
+    }
+}
+
+pub(crate) fn error_log(error: &shovel_core::operation::Error) -> String {
+    use shovel_core::{git, operation::Error};
+    let status = text(&error.code());
+    match error {
+        Error::Git(git::Error::Command { output, .. })
+        | Error::Working(shovel_core::working::Error::Git(git::Error::Command {
+            output, ..
+        })) => {
+            let output: String = network::redact(output).chars().take(32768).collect();
+            format!("{status}\n{output}")
+        }
+        _ => status,
     }
 }
 
@@ -1679,7 +1772,8 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000., 400.));
-        fs::write(path.join(".git/hooks/pre-push"), "#!/bin/sh\necho started > .git/entered\nwhile [ ! -f .git/release ]; do sleep 0.05; done\n").unwrap();
+        let hook = path.join(".git/hooks/pre-push");
+        fs::write(&hook, "#!/bin/sh\necho started > .git/entered\nwhile [ ! -f .git/release ]; do sleep 0.05; done\necho 'warning: fixture push succeeded' >&2\n").unwrap();
         struct Release(PathBuf);
         impl Drop for Release {
             fn drop(&mut self) {
@@ -1776,10 +1870,57 @@ mod tests {
             "{}",
             controller.runs[0].output
         );
+        assert!(controller.runs[0].output.contains("fixture push succeeded"));
+        assert!(!controller.runs[0].show_failure);
         assert_eq!(
             command(&git, &path.join("remote.git"), &["rev-parse", "main"]),
             snapshot.head.unwrap()
         );
+        command(&git, path, &["commit", "--allow-empty", "-m", "rejected"]);
+        let snapshot = git.inspect(path, &Cancellation::default()).unwrap();
+        fs::write(
+            &hook,
+            "#!/bin/sh\necho 'fixture push rejected' >&2\nexit 1\n",
+        )
+        .unwrap();
+        controller.submit(
+            Options::load(&settings, &snapshot, Kind::Push),
+            &snapshot,
+            git,
+            &scheduler,
+            &ctx,
+        );
+        wait(|| {
+            controller.poll(&ctx);
+            controller.runs.len() == 2 && controller.runs[1].done
+        });
+        assert!(controller.runs[1].show_failure);
+        let frame = |controller: &mut Controller| {
+            ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |_| controller.show_failure(&ctx),
+            )
+        };
+        frame(&mut controller).drop_without_applying_deltas();
+        let output = frame(&mut controller);
+        assert!(
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| {
+                    node.label()
+                        .or_else(|| node.value())
+                        .is_some_and(|value| value.contains("fixture push rejected"))
+                })
+        );
+        output.drop_without_applying_deltas();
     }
     #[test]
     fn password_prompt_masks_accessibility_and_closes_when_broker_finishes() {
@@ -1858,6 +1999,7 @@ mod activity_layout_test {
                 done: true,
                 changed: false,
                 reopen_commit: false,
+                show_failure: false,
             });
         }
         let after = tab_y(&mut app);

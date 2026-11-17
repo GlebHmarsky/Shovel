@@ -11,6 +11,7 @@ pub(crate) struct OwnedActivity {
     pub status: String,
     pub output: String,
     pub done: bool,
+    pub failed: bool,
     pub reopen_commit: bool,
 }
 struct Entry {
@@ -206,6 +207,7 @@ impl Editor {
                     status: text("OperationWaiting"),
                     output: String::new(),
                     done: false,
+                    failed: false,
                     reopen_commit: false,
                 },
                 stage: matches!(action, Action::Stage(_)),
@@ -291,8 +293,16 @@ impl Editor {
     ) {
         self.refresh_history = true;
         if let Some(entry) = self.queue.entries.get_mut(&id) {
+            entry.activity.failed = !result
+                .as_ref()
+                .is_ok_and(|r| r.succeeded() && r.updated.is_ok());
             entry.activity.reopen_commit =
                 submitted.is_some() && !result.as_ref().is_ok_and(|r| r.succeeded());
+            if let Err(working::Error::Git(shovel_core::git::Error::Command { output, .. })) =
+                &result
+            {
+                entry.capture.append(true, output.as_bytes());
+            }
         }
         match result {
             Ok(result) => {
@@ -326,7 +336,7 @@ impl Editor {
                         self.status = Some(format!(
                             "{}\n{}",
                             self.status.as_deref().unwrap_or_default(),
-                            error_text(error)
+                            crate::operations::error_log(&error.into())
                         ))
                     }
                 }

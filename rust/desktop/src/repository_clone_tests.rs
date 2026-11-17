@@ -136,6 +136,7 @@ fn clone_native_failure_opens_partial_repository_and_retains_actual_error() {
     h.until(|a| !a.initialization.busy && a.tabs.first().is_some_and(|t| !t.loading));
     assert_eq!(h.app.tabs[h.app.selected].path, target);
     assert_eq!(h.app.notice, Some(text("CloneIncomplete")));
+    assert_eq!(h.app.operations.failure_path(), Some(target.as_path()));
     assert!(
         h.app
             .operations

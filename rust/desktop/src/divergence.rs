@@ -15,15 +15,15 @@ use std::{
 };
 #[derive(Clone)]
 pub struct Display {
-    pub ahead: String,
-    pub behind: String,
+    pub ahead: Option<String>,
+    pub behind: Option<String>,
     pub help: String,
 }
 impl Default for Display {
     fn default() -> Self {
         Self {
-            ahead: text("CountUnavailable"),
-            behind: text("CountUnavailable"),
+            ahead: None,
+            behind: None,
             help: text("DivergencePending"),
         }
     }
@@ -122,8 +122,6 @@ impl Counter {
     }
     pub fn display(&self) -> Display {
         if let State::Available { ahead, behind } = self.state {
-            let ahead = ahead.to_string();
-            let behind = behind.to_string();
             return Display {
                 help: strings::format(
                     if self.stale {
@@ -131,10 +129,15 @@ impl Counter {
                     } else {
                         "DivergenceAvailable"
                     },
-                    &[&ahead, &behind, &self.upstream, &self.observed],
+                    &[
+                        &ahead.to_string(),
+                        &behind.to_string(),
+                        &self.upstream,
+                        &self.observed,
+                    ],
                 ),
-                ahead,
-                behind,
+                ahead: (ahead > 0).then(|| ahead.to_string()),
+                behind: (behind > 0).then(|| behind.to_string()),
             };
         }
         let key = match self.state {
@@ -247,17 +250,13 @@ mod tests {
                 output.drop_without_applying_deltas();
                 assert!(app.tabs[0].history.is_some());
                 assert!(!app.tabs[0].loading);
-                for label in [
-                    "Commits ahead of upstream: 1",
-                    "Commits behind upstream: 0",
-                    "Pull",
-                    "Push",
-                ] {
+                for label in ["Commits ahead of upstream: 1", "Pull", "Push"] {
                     assert!(
                         labels.iter().any(|n| n == label),
                         "missing {label}; labels={labels:?}"
                     );
                 }
+                assert!(!labels.iter().any(|n| n.starts_with("Commits behind")));
                 break;
             }
             output.drop_without_applying_deltas();
@@ -288,7 +287,7 @@ mod tests {
             .unwrap();
         value.poll(&ctx);
         value.invalidate();
-        assert_eq!(value.display().ahead, "0");
+        assert!(value.display().ahead.is_none());
         assert!(value.display().help.starts_with("Stale:"));
         value
             .sender
@@ -301,7 +300,7 @@ mod tests {
             ))
             .unwrap();
         value.poll(&ctx);
-        assert_eq!(value.display().behind, "2");
+        assert_eq!(value.display().behind.as_deref(), Some("2"));
         value
             .sender
             .send(Event(
@@ -313,13 +312,14 @@ mod tests {
             ))
             .unwrap();
         value.poll(&ctx);
-        assert_eq!(value.display().ahead, "3");
+        assert_eq!(value.display().ahead.as_deref(), Some("3"));
         value
             .sender
             .send(Event(1, Err("fixture failure".into())))
             .unwrap();
         value.poll(&ctx);
-        assert_eq!(value.display().ahead, text("CountUnavailable"));
+        assert!(value.display().ahead.is_none());
+        assert!(value.display().behind.is_none());
         assert!(value.display().help.contains("fixture failure"));
     }
 }
