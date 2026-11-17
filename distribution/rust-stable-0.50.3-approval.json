@@ -1,0 +1,8 @@
+{
+  "Version": "0.50.3",
+  "SourceCommit": "9d75ec962d714646276f9c2ca25619767437fe5d",
+  "BetaPackageSHA256": "a729733fd63181faefeaf08a77ffc760eef50f85c8335089c8157a857c841709",
+  "OwnerApproval": "2026-11-17: make current version as stable",
+  "ParityVerified": false,
+  "Scope": "One-time promotion of the current released binaries; unfinished parity remains open"
+}

@@ -21,3 +21,9 @@ Requirements: Windows MSVC build tools, Git for Windows, pinned Rust from rust-t
 The local signing key remains outside Git at ~/.shovel-signing/shovel-update.key. GitHub uses the encrypted RUST_UPDATE_PRIVATE_KEY repository secret containing that same key; it is materialized only in runner temporary storage and removed after packaging. Publisher/Authenticode signing is not configured.
 
 Keep ShovelRustAskPass.exe next to ShovelRust.exe. Launch with --data-directory PATH for an isolated test profile. Native UI acceptance, final-version installed updates and paired C#/Rust benchmarks remain distinct from build/smoke checks. Historical product/architecture/roadmap sections document the parity baseline; old C# build commands and source paths are not current master commands. Old paired C# fixture scripts are preserved in the Rust development history at bb278e1 for future baseline extraction.
+
+## Rust Stable 0.50.3 promotion
+
+The owner explicitly approved promoting current 0.50.3 to Rust Stable despite unfinished parity. This is a one-version exception recorded in distribution/rust-stable-0.50.3-approval.json, not blanket approval. scripts/Promote-RustStable.ps1 verifies the existing signed Beta package, repackages unchanged application files for win-rust-stable, and signs/verifies the new feed. Pass -Publish only for the recorded promotion. The Cargo version and application source stay unchanged. Normal Stable parity gates remain in Build-Release.
+
+The Stable versioned release is not a GitHub prerelease, but never replaces the legacy C# Latest release. The mutable rust-stable metadata alias remains a prerelease. In version 0.50.3, choose Rust Stable in update settings; fresh profiles still default to Rust Beta. No application-default or installed-update behavior change is claimed by promotion.

@@ -25,7 +25,7 @@
       "FeedTag": "rust-stable",
       "Feed": "releases.win-rust-stable.json",
       "RequiresOwnerApproval": true,
-      "GitHubPrerelease": true,
+      "GitHubPrerelease": false,
       "MakeLatest": false
     }
   ]

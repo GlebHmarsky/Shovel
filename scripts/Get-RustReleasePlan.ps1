@@ -19,7 +19,7 @@ function Get-RustReleasePlan {
         ReleaseBranch="codex/rust-$suffix"; FeedTag="rust-$suffix"
         Tag="rust-v$Version-$Channel"; Feed="releases.$Channel.json"
         Package="ShovelRust-$Version-$Channel-full.nupkg"; Installer='ShovelRust-Setup.exe'
-        Executable='ShovelRust.exe'; GitHubPrerelease=$true; MakeLatest='false'
+        Executable='ShovelRust.exe'; GitHubPrerelease=($Channel -eq 'win-rust-beta'); MakeLatest='false'
         StableApproval=$(if ($Channel -eq 'win-rust-stable') {$StableApproval} else {$null})
     }
 }

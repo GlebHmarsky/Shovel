@@ -86,10 +86,10 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Rust branch push failed. No release published.'}
     $remote=Invoke-RestMethod "$api/commits/$($plan.ReleaseBranch)" -Headers $headers
     if($remote.sha -ne $commit){throw 'Rust release branch differs from packaged commit.'}
-    $body=@{tag_name=$plan.Tag;target_commitish=$commit;name="Shovel Rust $($plan.Version) - $($plan.Channel)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$true;make_latest='false'} | ConvertTo-Json
+    $body=@{tag_name=$plan.Tag;target_commitish=$commit;name="Shovel Rust $($plan.Version) - $($plan.Channel)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$plan.GitHubPrerelease;make_latest='false'} | ConvertTo-Json
     $release=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body $body
     foreach($name in $assetNames){Upload-Asset $release $name}
-    $published=Invoke-RestMethod "$api/releases/$($release.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body (@{draft=$false;prerelease=$true;make_latest='false'}|ConvertTo-Json)
+    $published=Invoke-RestMethod "$api/releases/$($release.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body (@{draft=$false;prerelease=$plan.GitHubPrerelease;make_latest='false'}|ConvertTo-Json)
     # Anonymous immutable downloads must succeed before advertising the feed.
     foreach($name in @($plan.Package,$plan.Installer)){
         Invoke-WebRequest -Uri "https://github.com/$($plan.Repository)/releases/download/$($plan.Tag)/$name" -OutFile (Join-Path $probe $name) -TimeoutSec 300

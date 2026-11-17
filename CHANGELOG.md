@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.50.3 Stable promotion - 2026-11-18
+
+- Owner-approved promotion of the existing 0.50.3 application to the independent Rust Stable channel; application files and Cargo version remain unchanged.
+- Use a Stable installer/package, signed Stable feed and normal GitHub release while preserving Rust Beta, C# feeds and GitHub Latest.
+- Fresh 0.50.3 profiles still default to Beta; select Rust Stable in update settings. Full parity and installed-update acceptance remain open.
+
+
 ## Rust 0.50.3 - 2026-11-16
 
 - Make Rust the application on master; remove C# application/projects and obsolete delivery tooling, preserving history and old release feeds.
