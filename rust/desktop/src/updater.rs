@@ -15,6 +15,27 @@ use std::{
 use velopack::{
     UpdateInfo, UpdateManager, VelopackAsset, VelopackAssetFeed, sources::UpdateSource,
 };
+const CHECK_INTERVAL: Duration = Duration::from_secs(3600);
+const CHECK_HTTP_TIMEOUT: Duration = Duration::from_secs(15);
+pub(super) const UPDATE_CARD_WIDTH: f32 = 116.;
+
+pub(super) fn offer_card(ui: &mut egui::Ui, version: Option<&semver::Version>) -> bool {
+    let Some(version) = version else {
+        return false;
+    };
+    let palette = crate::workspace_style::Palette::current(ui);
+    ui.add_sized(
+        [UPDATE_CARD_WIDTH, 34.],
+        egui::Button::new(
+            egui::RichText::new(text("UpdateShovel"))
+                .strong()
+                .color(palette.selection_text),
+        )
+        .fill(palette.active_selection),
+    )
+    .on_hover_text(format("UpdateOffered", &[&version.to_string()]))
+    .clicked()
+}
 #[derive(Clone)]
 struct Offer {
     release: VerifiedRelease,
@@ -25,13 +46,14 @@ fn failure(_: impl std::fmt::Display) -> String {
 }
 fn bytes(url: &str, max: u64, cancel: &Cancellation) -> Result<Vec<u8>, String> {
     let mut output = Vec::new();
-    transfer(url, &mut output, max, cancel, None)?;
+    transfer(url, &mut output, max, CHECK_HTTP_TIMEOUT, cancel, None)?;
     Ok(output)
 }
 fn transfer(
     url: &str,
     out: &mut impl Write,
     max: u64,
+    timeout: Duration,
     cancel: &Cancellation,
     progress: Option<&mpsc::Sender<i16>>,
 ) -> Result<(), String> {
@@ -41,7 +63,7 @@ fn transfer(
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .https_only(true)
         .max_redirects(5)
-        .timeout_global(Some(Duration::from_secs(600)))
+        .timeout_global(Some(timeout))
         .timeout_resolve(Some(Duration::from_secs(30)))
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_send_request(Some(Duration::from_secs(30)))
@@ -96,11 +118,20 @@ fn trusted_directory() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir)
         .join("ShovelRust/TrustedUpdates")
 }
-fn check(channel: Channel, cancel: &Cancellation) -> Result<Option<Offer>, String> {
+enum CheckError {
+    Unavailable(String),
+    Rejected(&'static str),
+}
+impl From<String> for CheckError {
+    fn from(error: String) -> Self {
+        Self::Unavailable(error)
+    }
+}
+fn check(channel: Channel, cancel: &Cancellation) -> Result<Option<Offer>, CheckError> {
     let feed = bytes(&channel.feed_url(), updates::MAX_FEED_BYTES as u64, cancel)?;
     let signature = bytes(&format!("{}.sig", channel.feed_url()), 2048, cancel)?;
-    let release =
-        updates::verify_feed(channel, &feed, &signature).map_err(|_| text("RustUpdateInvalid"))?;
+    let release = updates::verify_feed(channel, &feed, &signature)
+        .map_err(|_| CheckError::Rejected("RustUpdateInvalid"))?;
     // Immutable, signed floor records shared by this user's Rust profiles.
     let directory = trusted_directory().join(channel.id());
     fs::create_dir_all(&directory).map_err(failure)?;
@@ -109,9 +140,12 @@ fn check(channel: Channel, cancel: &Cancellation) -> Result<Option<Offer>, Strin
         .collect::<Result<Vec<_>, _>>()
         .map_err(failure)?;
     if records.len() > 1024 {
-        return Err(text("RustUpdateInvalid"));
+        return Err(CheckError::Rejected("RustUpdateInvalid"));
     }
     for entry in records {
+        if cancel.is_cancelled() {
+            return Err(text("ActionResultCancelled").into());
+        }
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "json") {
             continue;
@@ -123,11 +157,11 @@ fn check(channel: Channel, cancel: &Cancellation) -> Result<Option<Offer>, Strin
             .read_to_end(&mut data)
             .map_err(failure)?;
         let (old_feed, old_sig): (Vec<u8>, Vec<u8>) =
-            serde_json::from_slice(&data).map_err(|_| text("RustUpdateInvalid"))?;
+            serde_json::from_slice(&data).map_err(|_| CheckError::Rejected("RustUpdateInvalid"))?;
         let old = updates::verify_feed(channel, &old_feed, &old_sig)
-            .map_err(|_| text("RustUpdateInvalid"))?;
+            .map_err(|_| CheckError::Rejected("RustUpdateInvalid"))?;
         if release.version() < old.version() {
-            return Err(text("RustUpdateReplay"));
+            return Err(CheckError::Rejected("RustUpdateReplay"));
         }
     }
     let record = directory.join(format!("{}.json", release.version()));
@@ -148,7 +182,7 @@ fn check(channel: Channel, cancel: &Cancellation) -> Result<Option<Offer>, Strin
         .Assets
         .into_iter()
         .next()
-        .ok_or_else(|| text("RustUpdateInvalid"))?;
+        .ok_or(CheckError::Rejected("RustUpdateInvalid"))?;
     Ok(Some(Offer { release, asset }))
 }
 #[derive(Clone)]
@@ -187,6 +221,7 @@ impl UpdateSource for FrozenSource {
             &self.offer.release.package_url(),
             &mut file,
             self.offer.release.size(),
+            Duration::from_secs(600),
             &self.cancel,
             progress.as_ref(),
         )
@@ -227,7 +262,7 @@ fn package_path(offer: &Offer) -> Result<PathBuf, String> {
 }
 enum Event {
     Applied(Result<(), String>),
-    Checked(u64, Result<Option<Offer>, String>),
+    Checked(u64, Result<Option<Offer>, CheckError>),
     Downloaded(u64, Result<Offer, String>),
     Progress(u64, i16),
 }
@@ -285,7 +320,25 @@ impl Controller {
     pub fn cancel(&self) {
         self.cancel.cancel();
     }
+    pub fn available_version(&self, channel: Channel) -> Option<&semver::Version> {
+        self.offer
+            .as_ref()
+            .filter(|offer| offer.release.channel() == channel)
+            .map(|offer| offer.release.version())
+    }
     pub fn tick(&mut self, ctx: &egui::Context, channel: Channel, periodic: bool) {
+        self.tick_at(ctx, channel, periodic, Instant::now(), |channel, cancel| {
+            check(channel, &cancel)
+        });
+    }
+    fn tick_at(
+        &mut self,
+        ctx: &egui::Context,
+        channel: Channel,
+        periodic: bool,
+        now: Instant,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Offer>, CheckError> + Send + 'static,
+    ) {
         if self.channel != channel {
             self.cancel();
             self.generation += 1;
@@ -295,6 +348,7 @@ impl Controller {
             self.offer = None;
             self.ready = false;
             self.last = None;
+            self.status = text("RustUpdateChecking");
         }
         while let Ok(event) = self.rx.try_recv() {
             match event {
@@ -316,13 +370,33 @@ impl Controller {
                     self.busy = false;
                     match result {
                         Ok(Some(offer)) if offer.release.channel() == self.channel => {
-                            self.status =
-                                format("UpdateOffered", &[&offer.release.version().to_string()]);
+                            self.ready &= self.offer.as_ref().is_some_and(|current| {
+                                current.release.version() == offer.release.version()
+                                    && current.release.size() == offer.release.size()
+                                    && current
+                                        .asset
+                                        .SHA256
+                                        .eq_ignore_ascii_case(&offer.asset.SHA256)
+                            });
+                            self.status = if self.ready {
+                                text("UpdateReadyShort")
+                            } else {
+                                format("UpdateOffered", &[&offer.release.version().to_string()])
+                            };
                             self.offer = Some(offer);
                         }
-                        Ok(None) => self.status = text("RustUpdateCurrent"),
-                        Err(error) => self.status = error,
-                        _ => {}
+                        Ok(None) => {
+                            self.offer = None;
+                            self.ready = false;
+                            self.status = text("RustUpdateCurrent");
+                        }
+                        Err(CheckError::Unavailable(error)) => self.status = error,
+                        Err(CheckError::Rejected(key)) => {
+                            self.offer = None;
+                            self.ready = false;
+                            self.status = text(key);
+                        }
+                        Ok(Some(_)) => {}
                     }
                 }
                 Event::Downloaded(id, result) if id == self.generation => {
@@ -340,35 +414,45 @@ impl Controller {
                 _ => {}
             }
         }
-        let due = self.last.is_none()
-            || (periodic
-                && self
-                    .last
-                    .is_some_and(|t| t.elapsed() > Duration::from_secs(4 * 3600)));
-        if due && !self.busy && !self.workers.stopping() {
-            self.check(ctx);
+        if self.busy || self.restart_requested || self.exit_ready || self.workers.stopping() {
+            return;
         }
-        if periodic {
-            ctx.request_repaint_after(Duration::from_secs(60));
+        match self.last {
+            None => self.begin_check(ctx, now, run),
+            Some(last) if periodic => {
+                let remaining = CHECK_INTERVAL.saturating_sub(now.saturating_duration_since(last));
+                if remaining.is_zero() {
+                    self.begin_check(ctx, now, run);
+                } else {
+                    ctx.request_repaint_after(remaining);
+                }
+            }
+            Some(_) => {}
         }
     }
     pub fn check(&mut self, ctx: &egui::Context) {
-        self.begin_check(ctx, |channel, cancel| check(channel, &cancel));
+        self.begin_check(ctx, Instant::now(), |channel, cancel| {
+            check(channel, &cancel)
+        });
     }
     fn begin_check(
         &mut self,
         ctx: &egui::Context,
-        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Offer>, String> + Send + 'static,
+        now: Instant,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Offer>, CheckError> + Send + 'static,
     ) {
-        if self.busy || self.workers.stopping() {
+        if self.busy
+            || self.restart_requested
+            || self.exit_ready
+            || self.workers.stopping()
+            || !self.workers.idle()
+        {
             return;
         }
         self.generation += 1;
         let generation = self.generation;
         self.busy = true;
-        self.last = Some(Instant::now());
-        self.offer = None;
-        self.ready = false;
+        self.last = Some(now);
         self.status = text("RustUpdateChecking");
         self.cancel = Cancellation::default();
         let tx = self.tx.clone();
@@ -377,8 +461,9 @@ impl Controller {
         let cancel = self.cancel.clone();
         let lease = self.workers.start(cancel.clone());
         std::thread::spawn(move || {
-            let _lease = lease;
-            let _ = tx.send(Event::Checked(generation, run(channel, cancel)));
+            let result = run(channel, cancel);
+            drop(lease);
+            let _ = tx.send(Event::Checked(generation, result));
             ctx.request_repaint();
         });
     }
@@ -418,7 +503,10 @@ impl Controller {
                     }
                     if self.ready {
                         if ui
-                            .add_enabled(!blocked, egui::Button::new(text("RustUpdateRestart")))
+                            .add_enabled(
+                                !blocked && !self.busy,
+                                egui::Button::new(text("RustUpdateRestart")),
+                            )
                             .on_disabled_hover_text(text("RustUpdateBlocked"))
                             .clicked()
                         {
@@ -438,7 +526,6 @@ impl Controller {
                         let ctx = ctx.clone();
                         let lease = self.workers.start(cancel.clone());
                         std::thread::spawn(move || {
-                            let _lease = lease;
                             let result = (|| {
                                 let manager = manager(&offer, cancel)?;
                                 let target = package_path(&offer)?;
@@ -473,6 +560,7 @@ impl Controller {
                                     .map_err(|_| text("RustUpdateInvalid"))?;
                                 Ok(offer)
                             })();
+                            drop(lease);
                             let _ = tx.send(Event::Downloaded(generation, result));
                             ctx.request_repaint();
                         });
@@ -598,7 +686,14 @@ mod tests {
         cancel.cancel();
         let mut output = Vec::new();
         assert_eq!(
-            transfer("not a URL", &mut output, 100, &cancel, None),
+            transfer(
+                "not a URL",
+                &mut output,
+                100,
+                CHECK_HTTP_TIMEOUT,
+                &cancel,
+                None
+            ),
             Err(text("ActionResultCancelled"))
         );
         assert!(output.is_empty());
@@ -638,12 +733,13 @@ mod tests {
         app.store = Some(store);
         let (started, token) = mpsc::channel();
         let (release, held) = mpsc::channel();
-        app.updater.begin_check(&ctx, move |_, cancel| {
-            started.send(cancel.clone()).unwrap();
-            held.recv_timeout(Duration::from_secs(10)).unwrap();
-            assert!(cancel.is_cancelled());
-            Err(text("ActionResultCancelled"))
-        });
+        app.updater
+            .begin_check(&ctx, Instant::now(), move |_, cancel| {
+                started.send(cancel.clone()).unwrap();
+                held.recv_timeout(Duration::from_secs(10)).unwrap();
+                assert!(cancel.is_cancelled());
+                Err(text("ActionResultCancelled").into())
+            });
         let cancel = token.recv_timeout(Duration::from_secs(5)).unwrap();
         app.close(&ctx);
         assert!(cancel.is_cancelled());
@@ -668,11 +764,11 @@ mod tests {
         let mut controller = Controller::default();
         let (started, token) = mpsc::channel();
         let (release, held) = mpsc::channel();
-        controller.begin_check(&ctx, move |channel, cancel| {
+        controller.begin_check(&ctx, Instant::now(), move |channel, cancel| {
             assert_eq!(channel, Channel::Beta);
             started.send(cancel).unwrap();
             held.recv_timeout(Duration::from_secs(10)).unwrap();
-            Err("obsolete beta failure".into())
+            Err(CheckError::Unavailable("obsolete beta failure".into()))
         });
         let cancel = token.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(!controller.stop_and_drained());
@@ -692,7 +788,7 @@ mod tests {
         controller.tick(&ctx, Channel::Stable, false);
         assert_ne!(controller.status, "obsolete beta failure");
         controller.resume();
-        controller.begin_check(&ctx, |channel, _| {
+        controller.begin_check(&ctx, Instant::now(), |channel, _| {
             assert_eq!(channel, Channel::Stable);
             Ok(None)
         });
@@ -702,5 +798,114 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         assert_eq!(controller.status, text("RustUpdateCurrent"));
+    }
+
+    #[test]
+    fn startup_check_is_async_and_hourly_checks_follow_the_channel_and_preference() {
+        let ctx = egui::Context::default();
+        let start = Instant::now();
+        let mut controller = Controller {
+            last: None,
+            ..Default::default()
+        };
+        let (calls, received) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        let startup = calls.clone();
+        controller.tick_at(&ctx, Channel::Stable, false, start, move |channel, _| {
+            startup.send(channel).unwrap();
+            held.recv_timeout(Duration::from_secs(5)).unwrap();
+            Ok(None)
+        });
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Channel::Stable
+        );
+        assert!(controller.busy && !controller.open);
+        let tick = |controller: &mut Controller, periodic, now| {
+            let calls = calls.clone();
+            controller.tick_at(&ctx, Channel::Stable, periodic, now, move |channel, _| {
+                calls.send(channel).unwrap();
+                Ok(None)
+            });
+        };
+        let hour = start + Duration::from_secs(3600);
+        tick(&mut controller, true, hour);
+        assert_eq!(controller.last, Some(start));
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while controller.busy {
+            tick(&mut controller, false, start);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        tick(&mut controller, true, hour - Duration::from_secs(1));
+        tick(&mut controller, false, hour);
+        assert_eq!(controller.last, Some(start));
+        assert!(received.try_recv().is_err());
+        tick(&mut controller, true, hour);
+        assert_eq!(controller.last, Some(hour));
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Channel::Stable
+        );
+        assert!(!controller.open);
+    }
+
+    #[test]
+    fn update_card_only_appears_for_an_offer_and_can_be_clicked() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let version = semver::Version::new(0, 99, 0);
+        let frame = |available: bool, events| {
+            let mut chosen = false;
+            let output = ctx.run_ui(
+                egui::RawInput {
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    ui.horizontal(|ui| {
+                        chosen = offer_card(ui, available.then_some(&version));
+                        ui.label("Repository");
+                    });
+                },
+            );
+            let nodes = &output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes;
+            let bounds = |label| {
+                nodes.iter().find_map(|(_, node)| {
+                    (node.label().or_else(|| node.value()) == Some(label))
+                        .then(|| node.bounds())
+                        .flatten()
+                })
+            };
+            let card = bounds("Update Shovel");
+            let repository = bounds("Repository").unwrap();
+            output.drop_without_applying_deltas();
+            (card, repository, chosen)
+        };
+        let (hidden, idle_repository, _) = frame(false, vec![]);
+        assert!(hidden.is_none());
+        let (visible, repository, _) = frame(true, vec![]);
+        let card = visible.unwrap();
+        assert!(card.x1 <= repository.x0 && idle_repository.x0 < repository.x0);
+        let pos = egui::pos2(
+            ((card.x0 + card.x1) / 2.) as f32,
+            ((card.y0 + card.y1) / 2.) as f32,
+        );
+        frame(true, vec![egui::Event::PointerMoved(pos)]);
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(true, vec![button(true)]);
+        assert!(frame(true, vec![button(false)]).2);
+        assert!(frame(false, vec![]).0.is_none());
     }
 }

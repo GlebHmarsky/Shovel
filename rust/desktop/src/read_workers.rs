@@ -39,6 +39,9 @@ impl Workers {
     pub fn stopping(&self) -> bool {
         self.0.lock().unwrap().stopping
     }
+    pub fn idle(&self) -> bool {
+        self.0.lock().unwrap().active.is_empty()
+    }
     pub fn resume(&self) {
         self.0.lock().unwrap().stopping = false;
     }

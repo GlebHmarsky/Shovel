@@ -1886,9 +1886,15 @@ impl eframe::App for Workspace {
                         {
                             self.open_commit();
                         }
-                        let context_width = (ui.available_width() - 180.).clamp(90., 530.);
-                        let margin = ((ui.available_width() - 180. - context_width) / 2.).max(0.);
+                        let offer = self.updater.available_version(self.settings.channel());
+                        let reserved = 180. + offer.map_or(0., |_| updater::UPDATE_CARD_WIDTH + 2.);
+                        let context_width = (ui.available_width() - reserved).clamp(90., 530.);
+                        let margin =
+                            ((ui.available_width() - reserved - context_width) / 2.).max(0.);
                         ui.add_space(margin);
+                        if updater::offer_card(ui, offer) {
+                            self.updater.open = true;
+                        }
                         let context_response = egui::Frame::new()
                             .fill(palette.raised)
                             .stroke(egui::Stroke::new(1., palette.border))

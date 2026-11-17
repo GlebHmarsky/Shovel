@@ -2,6 +2,10 @@
 
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
+## Update discovery (0.50.9)
+
+Shovel checks the selected Rust Beta or Rust Stable channel at startup and every hour while running. **File → Settings → Updates** controls the hourly check. A verified newer release adds an **Update Shovel** button to the left of the central repository status. The button opens the updater, where download and restart each require approval. Discovery runs in the background.
+
 ## Operation progress (0.50.8)
 
 The central repository status shows the current Git action and phase, and includes the number of queued requests when applicable. A spinner appears during active or queued work and history reads. The lower Commit controls show current Local Changes activity, and Changed files shows a spinner while reading a comparison. Completed results remain available after the spinners stop.
