@@ -2,7 +2,9 @@
 //! generation-checked; useful prior files/diffs survive a failed new selection.
 use crate::{
     diff_view,
+    history_row::text as row_text,
     strings::{self, text},
+    workspace_style::Palette,
 };
 use eframe::egui::{self, RichText};
 use shovel_core::{
@@ -227,7 +229,7 @@ impl Pane {
         let ctx = ui.ctx().clone();
         self.poll(&ctx);
         ui.horizontal(|ui| {
-            for (index, key) in [(0, "Commit"), (1, "CommitFilesTitle")] {
+            for (index, key) in [(0, "Commit"), (1, "ChangedFiles")] {
                 if crate::workspace_style::lower_tab(ui, self.details_index == index, text(key))
                     .clicked()
                 {
@@ -297,34 +299,18 @@ impl Pane {
                 .min_size(160.)
                 .resizable(true)
                 .show(ui, |ui| {
-                    let mut chosen = None;
-                    if let Some(comparison) = &self.comparison {
-                        if comparison.commit != commit.hash {
-                            ui.label(text("DiffRetainedLoading"));
-                        }
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false, false])
-                            .show_rows(ui, 22., comparison.entries.len(), |ui, range| {
-                                for index in range {
-                                    let entry = &comparison.entries[index];
-                                    if ui
-                                        .add_sized(
-                                            [ui.available_width(), 22.],
-                                            egui::Button::selectable(
-                                                self.selected_file.as_deref() == Some(&entry.path),
-                                                format!("{}  {}", entry.code, entry.path),
-                                            )
-                                            .truncate(),
-                                        )
-                                        .on_hover_text(&entry.path)
-                                        .clicked()
-                                        && !self.loading
-                                    {
-                                        chosen = Some(entry.path.clone());
-                                    }
-                                }
-                            });
+                    let Some(comparison) = &self.comparison else {
+                        return;
+                    };
+                    if comparison.commit != commit.hash {
+                        ui.label(text("DiffRetainedLoading"));
                     }
+                    let chosen = file_table(
+                        ui,
+                        &comparison.entries,
+                        self.selected_file.as_deref(),
+                        !self.loading,
+                    );
                     if let Some(path) = chosen {
                         self.load_diff(&path, &ctx);
                     }
@@ -350,6 +336,116 @@ impl Pane {
         });
     }
 }
+
+fn file_table(
+    ui: &mut egui::Ui,
+    entries: &[working::Change],
+    selected_file: Option<&str>,
+    enabled: bool,
+) -> Option<String> {
+    const ROW_HEIGHT: f32 = 22.;
+    const PADDING: f32 = 6.;
+    let palette = Palette::current(ui);
+    let change = text("ChangesKind");
+    let font = egui::FontId::proportional(13.);
+    let change_width = ui
+        .painter()
+        .layout_no_wrap(change.clone(), font.clone(), palette.muted)
+        .size()
+        .x
+        + 2. * PADDING;
+    let cells = |ui: &egui::Ui, rect: egui::Rect, change: &str, path: &str, color| {
+        let divider = rect.left() + change_width;
+        let mut change_cell = rect;
+        change_cell.max.x = divider;
+        let mut path_cell = rect;
+        path_cell.min.x = divider;
+        for (cell, value) in [(change_cell, change), (path_cell, path)] {
+            row_text(
+                ui,
+                cell.shrink2(egui::vec2(PADDING, 0.)),
+                value,
+                font.clone(),
+                color,
+            );
+        }
+        ui.painter().vline(
+            divider,
+            rect.y_range(),
+            egui::Stroke::new(1., palette.border),
+        );
+    };
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.;
+        let (header, _) = ui.allocate_exact_size(
+            egui::vec2(ui.available_width(), ROW_HEIGHT),
+            egui::Sense::hover(),
+        );
+        ui.painter().rect_filled(header, 0., palette.raised);
+        cells(ui, header, &change, &text("ChangesPath"), palette.muted);
+        ui.painter().hline(
+            header.x_range(),
+            header.bottom(),
+            egui::Stroke::new(1., palette.border),
+        );
+
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show_rows(ui, ROW_HEIGHT, entries.len(), |ui, range| {
+                let mut chosen = None;
+                for index in range {
+                    let entry = &entries[index];
+                    let selected = selected_file == Some(entry.path.as_str());
+                    let (rect, response) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), ROW_HEIGHT),
+                        egui::Sense::click(),
+                    );
+                    response.widget_info(|| {
+                        egui::WidgetInfo::selected(
+                            egui::Role::Button,
+                            enabled,
+                            selected,
+                            format!("{} {}", entry.code, entry.path),
+                        )
+                    });
+                    let highlighted = selected || response.hovered();
+                    let color = if highlighted {
+                        let fill = if selected {
+                            palette.selected
+                        } else {
+                            palette.hover
+                        };
+                        ui.painter().rect_filled(rect, 0., fill);
+                        palette.selection_text
+                    } else {
+                        palette.text
+                    };
+                    if response.has_focus() {
+                        ui.painter().rect_stroke(
+                            rect,
+                            0.,
+                            egui::Stroke::new(1., palette.focus),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                    cells(
+                        ui,
+                        rect,
+                        entry.code.encode_utf8(&mut [0; 4]),
+                        &entry.path,
+                        color,
+                    );
+                    if response.on_hover_text(&entry.path).clicked() && enabled {
+                        chosen = Some(entry.path.clone());
+                    }
+                }
+                chosen
+            })
+            .inner
+    })
+    .inner
+}
+
 impl Drop for Pane {
     fn drop(&mut self) {
         self.cancel.cancel();
@@ -450,7 +546,9 @@ mod tests {
         };
         command(vec!["init", "--initial-branch=main"]);
         std::fs::write(root.join("file.txt"), "immutable text\n").unwrap();
-        command(vec!["add", "--", "file.txt"]);
+        let other_file = "z-second-longer-file.txt";
+        std::fs::write(root.join(other_file), "second file diff\n").unwrap();
+        command(vec!["add", "--", "file.txt", other_file]);
         command(vec![
             "-c",
             "user.name=Fixture",
@@ -475,6 +573,7 @@ mod tests {
             message: "initial\n\nfull message".into(),
         };
         let ctx = egui::Context::default();
+        ctx.enable_accesskit();
         let mut pane = Pane::new(root, Arc::new(git));
         pane.select(&commit, &ctx);
         let settle = |pane: &mut Pane| {
@@ -495,30 +594,89 @@ mod tests {
                 .iter()
                 .any(|l| l.text == "immutable text")
         );
-        for size in [[1200., 500.], [760., 320.]] {
+        let frame = |pane: &mut Pane, size: [f32; 2], events| {
             ctx.run_ui(
                 egui::RawInput {
                     screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size.into())),
+                    events,
                     ..Default::default()
                 },
                 |ui| pane.show(ui),
             )
-            .drop_without_applying_deltas();
+        };
+        let click = |pane: &mut Pane, label: &str| {
+            let size = [1200., 500.];
+            let output = frame(pane, size, vec![]);
+            let bounds = output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find_map(|(_, node)| {
+                    (node.label() == Some(label))
+                        .then(|| node.bounds())
+                        .flatten()
+                })
+                .unwrap_or_else(|| panic!("missing clickable {label}"));
+            output.drop_without_applying_deltas();
+            let pos = egui::pos2(
+                (bounds.x0 + bounds.x1) as f32 / 2.,
+                (bounds.y0 + bounds.y1) as f32 / 2.,
+            );
+            frame(pane, size, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
+            for pressed in [true, false] {
+                frame(
+                    pane,
+                    size,
+                    vec![egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                )
+                .drop_without_applying_deltas();
+            }
+        };
+        click(&mut pane, "Changed files");
+        assert_eq!(pane.details_index, 1);
+        for size in [[1200., 500.], [760., 320.]] {
+            let output = frame(&mut pane, size, vec![]);
+            let text_left = |label| {
+                output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text() == label => Some(text.pos.x),
+                        _ => None,
+                    })
+                    .reduce(f32::min)
+                    .unwrap()
+            };
+            let path_column = text_left("Path");
+            assert_eq!(text_left("file.txt"), path_column);
+            assert_eq!(text_left(other_file), path_column);
+            output.drop_without_applying_deltas();
         }
+        click(&mut pane, &format!("A {other_file}"));
+        settle(&mut pane);
+        assert_eq!(pane.displayed_file, other_file);
         let mut missing = commit;
         missing.hash = "a".repeat(40);
         pane.select(&missing, &ctx);
         settle(&mut pane);
         assert!(pane.error.is_some());
         assert_eq!(pane.displayed_commit, hash);
-        assert_eq!(pane.displayed_file, "file.txt");
+        assert_eq!(pane.displayed_file, other_file);
         assert!(
             pane.diff
                 .as_ref()
                 .unwrap()
                 .lines
                 .iter()
-                .any(|l| l.text == "immutable text")
+                .any(|l| l.text == "second file diff")
         );
     }
 }

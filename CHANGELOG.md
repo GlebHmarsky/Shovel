@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.6 - 2026-11-18
+
+- Show changed files in the lower History pane as a left-aligned Change and Path table. Select a row to open its diff.
+
 ## Rust 0.50.5 - 2026-11-18
 
 - Show Pull and Push badges only for positive commit counts.

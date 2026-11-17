@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use shovel_core::git::Entry;
 use unicode_segmentation::UnicodeSegmentation;
 
-fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color32) {
+pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color32) {
     if rect.width() <= 0. {
         return;
     }
