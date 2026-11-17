@@ -265,7 +265,11 @@ impl Editor {
     }
     pub(super) fn working_started(&mut self, id: u64) {
         if let Some(entry) = self.queue.entries.get_mut(&id) {
-            entry.activity.status = text(entry.activity.label);
+            entry.activity.status = text(if entry.activity.label == "Commit" {
+                "CommitRunning"
+            } else {
+                entry.activity.label
+            });
             entry.dirty = true;
             self.status = Some(entry.activity.status.clone());
             self.output.clear();

@@ -755,13 +755,55 @@ fn commit_layout_setting_switches_sidebar_view_and_preserves_the_commit_editor()
         app.receive(&ctx);
         thread::sleep(std::time::Duration::from_millis(5));
     };
+    let snapshot = &app.editors[0].context.as_ref().unwrap().repository;
+    let (release, waiting) = mpsc::channel::<()>();
+    let (_, accepted) = app.scheduler.submit(
+        snapshot.identity.fingerprint.clone(),
+        shovel_core::case::path_key(&snapshot.common_directory),
+        "fixture:hold-working-copy".into(),
+        shovel_core::scheduler::Lane::WorkingCopy,
+        move || {
+            let _ = waiting.recv();
+            shovel_core::scheduler::Outcome::Succeeded
+        },
+        |_| {},
+    );
+    assert!(accepted);
     click_at(&mut app, commit);
     assert!(app.editors[0].busy && app.inline_editor().is_some());
+    app.receive(&ctx);
+    assert_eq!(
+        app.operations.progress(&repo.root, &app.scheduler).as_deref(),
+        Some("Queued: Commit")
+    );
+    assert!(find(&mut app, &|node| {
+        node.label().or_else(|| node.value()) == Some("Queued: Commit")
+    }).is_some());
+    for top in [true, false] {
+        assert!(
+            find(&mut app, &|node| {
+                node.role() == egui::Role::ProgressIndicator
+                    && node
+                        .bounds()
+                        .is_some_and(|r| if top { r.y0 < 100. } else { r.y0 > 350. })
+            })
+            .is_some()
+        );
+    }
+    drop(release);
     until(&mut app, &ctx, |app| !app.editors[0].busy);
     assert!(app.inline_editor().is_some());
     assert_eq!(
         repo.command(&["log", "-1", "--format=%s"]),
         b"Inline commit\n"
+    );
+    until(&mut app, &ctx, |app| {
+        app.editors[0].progress().is_none() && !app.tabs[0].loading && !app.tabs[0].refresh_again
+    });
+    assert!(
+        find(&mut app, &|node| node.role()
+            == egui::Role::ProgressIndicator)
+        .is_none()
     );
 
     save_layout(&mut app, "SettingsCommitWindow");

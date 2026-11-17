@@ -222,6 +222,7 @@ struct Run {
     status: String,
     output: String,
     done: bool,
+    dialog_open: bool,
     changed: bool,
     reopen_commit: bool,
     show_failure: bool,
@@ -584,6 +585,7 @@ impl Controller {
             status: text("OperationWaiting"),
             output: String::new(),
             done: false,
+            dialog_open: false,
             changed: false,
             reopen_commit: false,
             show_failure: false,
@@ -670,6 +672,7 @@ impl Controller {
                 status: text("OperationWaiting"),
                 output: String::new(),
                 done: false,
+                dialog_open: false,
                 changed: false,
                 reopen_commit: false,
                 show_failure: false,
@@ -1169,6 +1172,7 @@ impl Controller {
                 status: text("OperationWaiting"),
                 output: String::new(),
                 done: false,
+                dialog_open: false,
                 changed: false,
                 reopen_commit: false,
                 show_failure: false,
@@ -1313,6 +1317,7 @@ impl Controller {
                 }
                 Event::OptionsReady(id, ready) => {
                     if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
+                        run.dialog_open = true;
                         run.status = text("RustOptionsOpen");
                     }
                     self.ready_options.push_back(*ready);
@@ -1374,6 +1379,7 @@ impl Controller {
                 status: activity.status,
                 output: activity.output,
                 done: activity.done,
+                dialog_open: false,
                 changed: false,
                 reopen_commit: activity.reopen_commit,
                 show_failure: activity.done && activity.failed,
@@ -1397,17 +1403,58 @@ impl Controller {
             status,
             output: network::redact(&output).chars().take(32768).collect(),
             done: true,
+            dialog_open: false,
             changed: false,
             reopen_commit: false,
             show_failure: failure.is_some(),
         });
     }
     pub fn summary(&self, path: &std::path::Path) -> Option<String> {
-        let mut runs = self.runs.iter().rev().filter(|r| r.path == path);
+        let mut runs = self
+            .runs
+            .iter()
+            .rev()
+            .filter(|r| crate::Workspace::same_path(&r.path, path));
         runs.clone()
             .find(|r| !r.done)
             .or_else(|| runs.next())
             .map(|r| format!("{} · {}", text(r.label), r.status))
+    }
+    pub fn progress(&self, path: &Path, scheduler: &Scheduler) -> Option<String> {
+        let runs = self.runs.iter().rev().filter(|run| {
+            !run.done && !run.dialog_open && crate::Workspace::same_path(&run.path, path)
+        });
+        runs.clone().next()?;
+        let records = scheduler.records();
+        let mut running = None;
+        let mut waiting = None;
+        let mut queued = 0;
+        for run in runs {
+            if let Some(record) = records
+                .iter()
+                .find(|record| record.id == run.request && record.outcome.is_none())
+            {
+                if record.running {
+                    running.get_or_insert(run);
+                } else {
+                    waiting.get_or_insert(run);
+                    queued += 1;
+                }
+            }
+        }
+        let mut message = if let Some(run) = running {
+            format!("{} · {}", text(run.label), run.status)
+        } else {
+            strings::format("ActionQueued", &[&text(waiting?.label)])
+        };
+        if queued > usize::from(running.is_none()) {
+            message.push_str(" · ");
+            message.push_str(&strings::format(
+                "OperationQueuedCount",
+                &[&queued.to_string()],
+            ));
+        }
+        Some(message)
     }
     pub fn status(
         &self,
@@ -1856,6 +1903,10 @@ mod tests {
             path.join(".git/entered").is_file()
         });
         assert!(scheduler.has_accepted_work());
+        assert_eq!(
+            controller.progress(path, &scheduler).as_deref(),
+            Some("Push · Pushing")
+        );
         // No further view renders while the accepted native hook is held.
         thread::sleep(Duration::from_millis(80));
         assert!(scheduler.has_accepted_work());
@@ -1871,6 +1922,7 @@ mod tests {
             controller.runs[0].output
         );
         assert!(controller.runs[0].output.contains("fixture push succeeded"));
+        assert!(controller.progress(path, &scheduler).is_none());
         assert!(!controller.runs[0].show_failure);
         assert_eq!(
             command(&git, &path.join("remote.git"), &["rev-parse", "main"]),
@@ -1997,6 +2049,7 @@ mod activity_layout_test {
                 status: "complete".into(),
                 output: "command output\n".repeat(20),
                 done: true,
+                dialog_open: false,
                 changed: false,
                 reopen_commit: false,
                 show_failure: false,

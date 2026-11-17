@@ -230,6 +230,23 @@ impl Editor {
     fn action_busy(&self) -> bool {
         self.busy || self.patch_picking || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
     }
+    pub fn progress(&self) -> Option<String> {
+        if self.busy {
+            Some(
+                self.status
+                    .clone()
+                    .unwrap_or_else(|| text("OperationWaiting")),
+            )
+        } else if let Some(pane) = self.conflict.as_ref().filter(|pane| pane.mutating) {
+            Some(pane.status.clone())
+        } else if self.loading {
+            Some(text("CommitReadingChanges"))
+        } else if self.draft_saving {
+            Some(text("CommitDraftSaving"))
+        } else {
+            None
+        }
+    }
     pub fn unsaved_conflict(&self) -> bool {
         self.conflict
             .as_ref()
@@ -883,10 +900,9 @@ impl Editor {
                 if let Some(context) = &self.context {
                     ui.label(context.repository.branch.as_deref().unwrap_or("HEAD"));
                 }
-                if self.loading {
-                    ui.label(text("ChangesLoading"));
-                }
-                if let Some(status) = &self.status {
+                if self.progress().is_none()
+                    && let Some(status) = &self.status
+                {
                     ui.label(status);
                 }
             });
@@ -948,8 +964,10 @@ impl Editor {
                 {
                     self.request_commit(&ctx);
                 }
-                if self.draft_saving {
-                    ui.label(text("CommitDraftSaving"));
+                if let Some(progress) = self.progress() {
+                    ui.add(egui::Spinner::new().size(14.));
+                    ui.add(egui::Label::new(egui::RichText::new(&progress).small()).truncate())
+                        .on_hover_text(progress);
                 }
             });
         });

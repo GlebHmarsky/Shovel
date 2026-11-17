@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.8 - 2026-11-18
+
+- Show the current Git phase and pending requests in the central repository status. Add activity spinners there, beside the lower Commit action, and in the Changed files controls while comparisons load.
+
 ## Rust 0.50.7 - 2026-11-18
 
 - Choose a toolbar Commit window or a sidebar Local Changes view in File → Settings → Appearance. The sidebar switches between History and the in-workspace commit editor.

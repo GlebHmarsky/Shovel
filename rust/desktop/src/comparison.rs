@@ -245,6 +245,7 @@ impl Pane {
             if let Some(error) = &self.error {
                 ui.colored_label(ui.visuals().error_fg_color, error);
             } else if self.loading {
+                ui.add(egui::Spinner::new().size(14.));
                 ui.label(text(if self.diff.is_some() {
                     "DiffRetainedLoading"
                 } else {

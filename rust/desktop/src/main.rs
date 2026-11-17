@@ -1928,41 +1928,54 @@ impl eframe::App for Workspace {
                                                 )
                                                 .truncate(),
                                             );
-                                        } else if tab.loading {
-                                            ui.label(
-                                                RichText::new(strings::text("HistoryLoading"))
-                                                    .color(palette.muted),
-                                            );
                                         }
-                                        let editor =
-                                            self.editors.iter().find(|e| e.path == tab.path);
-                                        let op = self.operations.summary(&tab.path);
-                                        let msg = if tab.loading || tab.locating.is_some() {
-                                            Some(strings::text("HistoryLoading"))
-                                        } else if editor.is_some_and(|e| e.busy) {
-                                            editor.and_then(|e| e.status.clone()).or(op)
-                                        } else {
-                                            match (op, editor.and_then(|e| e.status.clone())) {
+                                        let editor = self
+                                            .editors
+                                            .iter()
+                                            .find(|e| Self::same_path(&e.path, &tab.path));
+                                        let progress = self
+                                            .operations
+                                            .progress(&tab.path, &self.scheduler)
+                                            .or_else(|| editor.and_then(commit::Editor::progress))
+                                            .or_else(|| {
+                                                tab.locating
+                                                    .is_some()
+                                                    .then(|| strings::text("HistoryLocatingCommit"))
+                                            })
+                                            .or_else(|| {
+                                                tab.loading.then(|| strings::text("HistoryLoading"))
+                                            });
+                                        let active = progress.is_some();
+                                        let status = progress.or_else(|| {
+                                            let completed = self.operations.summary(&tab.path);
+                                            let local = editor.and_then(|e| e.status.clone());
+                                            match (completed, local) {
                                                 (Some(run), Some(local)) => {
                                                     Some(format!("{run} · {local}"))
                                                 }
-                                                (a, b) => a.or(b),
+                                                (run, local) => run.or(local),
                                             }
-                                        };
-                                        if let Some(msg) = msg {
-                                            let r = ui.add(
-                                                egui::Label::new(
-                                                    RichText::new(&msg)
-                                                        .small()
-                                                        .color(palette.muted),
-                                                )
-                                                .truncate()
-                                                .sense(egui::Sense::click()),
-                                            );
-                                            if r.clicked() {
-                                                self.activity_open = true;
-                                            }
-                                            r.on_hover_text(msg);
+                                        });
+                                        if let Some(status) = status {
+                                            ui.horizontal(|ui| {
+                                                if active {
+                                                    ui.add(egui::Spinner::new().size(14.));
+                                                }
+                                                let response = ui
+                                                    .add(
+                                                        egui::Label::new(
+                                                            RichText::new(&status)
+                                                                .small()
+                                                                .color(palette.muted),
+                                                        )
+                                                        .truncate()
+                                                        .sense(egui::Sense::click()),
+                                                    )
+                                                    .on_hover_text(status);
+                                                if response.clicked() {
+                                                    self.activity_open = true;
+                                                }
+                                            });
                                         } else {
                                             ui.allocate_space(egui::vec2(
                                                 0.,
@@ -2013,7 +2026,10 @@ impl eframe::App for Workspace {
                 if self.initialization.busy
                     && let Some(summary) = &self.initialization.summary
                 {
-                    ui.label(summary);
+                    ui.horizontal(|ui| {
+                        ui.add(egui::Spinner::new().size(14.));
+                        ui.label(summary);
+                    });
                 }
                 if let Some(notice) = &self.notice {
                     ui.colored_label(palette.diff_removed_text, notice);

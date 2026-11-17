@@ -2,6 +2,10 @@
 
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
+## Operation progress (0.50.8)
+
+The central repository status shows the current Git action and phase, and includes the number of queued requests when applicable. A spinner appears during active or queued work and history reads. The lower Commit controls show current Local Changes activity, and Changed files shows a spinner while reading a comparison. Completed results remain available after the spinners stop.
+
 ## Commit layout (0.50.7)
 
 In **File → Settings → Appearance**, **Commit layout** selects the toolbar **Commit** window or the sidebar **Local Changes** view. The toolbar window is the default for existing profiles. In sidebar mode, **History** and **Local Changes** switch the active repository’s main pane. The Local Changes view stays open after submitting a commit and uses the same staging, diff, draft and Git operation handling as the window.
