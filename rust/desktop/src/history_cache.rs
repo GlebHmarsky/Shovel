@@ -3,7 +3,7 @@
 use super::*;
 use shovel_core::{
     git::{Commit, Entry, Snapshot},
-    history_cache::{Preview, Store},
+    history_cache::{PREVIEW_SCHEMA, Preview, Store},
 };
 use std::time::{Duration, Instant};
 
@@ -205,7 +205,7 @@ impl Workspace {
             return None;
         }
         Some(Preview {
-            schema: 1,
+            schema: PREVIEW_SCHEMA,
             directory: tab.path.clone(),
             identity,
             repository: metadata(&history.snapshot),

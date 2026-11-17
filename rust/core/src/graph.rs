@@ -82,30 +82,29 @@ pub fn build<'a>(
                     color: l.color,
                 })
                 .collect::<Vec<_>>();
-            let target = match lanes
+            let color = next_color;
+            next_color += 1;
+            let (node, target) = match lanes
                 .iter()
                 .position(|l| l.hash == parents[0] && !l.is_stash)
             {
-                Some(i) => i,
+                Some(target) => (lanes.len(), target),
                 None => {
-                    let i = allocate(
+                    // The stash starts this lane, so connect straight down to its base.
+                    let node = allocate(
                         &mut lanes,
                         Lane {
                             hash: parents[0].clone(),
-                            color: next_color,
+                            color,
                             is_stash: false,
                         },
                     )?;
-                    next_color += 1;
-                    i
+                    (node, node)
                 }
             };
-            let node = lanes.len();
             if node >= MAX_LANES {
                 return Err(GraphError::TooWide);
             }
-            let color = next_color;
-            next_color += 1;
             lines.push(Line {
                 from: node,
                 from_y: 0.5,
@@ -116,7 +115,7 @@ pub fn build<'a>(
             rows.push(Row {
                 node,
                 color,
-                width: node + 1,
+                width: lanes.len().max(node + 1),
                 is_merge: false,
                 is_stash: true,
                 lines,
@@ -274,7 +273,10 @@ mod tests {
             &Cursor::default(),
         )
         .unwrap();
-        assert!(rows.iter().all(|r| r.width == 2 && r.is_stash));
+        assert_eq!(rows[0].node, 0);
+        assert_eq!(rows[0].width, 1);
+        assert!(rows.iter().all(|r| r.is_stash));
+        assert!(rows[1..].iter().all(|r| r.width == 2 && r.node == 1));
         assert_eq!(cursor.lanes.len(), 1);
         assert!(!cursor.lanes[0].is_stash);
         let (base, end) = build([("base", &[][..], false)], &cursor).unwrap();

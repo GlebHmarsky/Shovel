@@ -103,12 +103,68 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     assert!(entries[204].graph.is_stash);
     assert_eq!(entries[204].commit.parents[0], entries[205].commit.hash);
     assert_eq!(entries[204].commit.parents.len(), 2);
+    assert_ne!(entries[204].graph.node, entries[205].graph.node);
+    assert_eq!(entries[203].graph.node, entries[205].graph.node);
+    assert_eq!(entries[203].graph.color, entries[205].graph.color);
     assert!(entries[0].commit.message.contains("complete body שלום"));
     command(&git, root, &["branch", "new-reference", "HEAD~3"], b"");
     assert!(matches!(
         git.page(&history, &Cursor::default(), &cancel),
         Err(git::Error::Changed)
     ));
+}
+
+#[test]
+fn stash_and_its_detached_base_share_a_lane() {
+    let (temp, mut git) = fixture();
+    let root = temp.path();
+    fs::write(root.join("tracked.txt"), "base\n").unwrap();
+    command(&git, root, &["add", "tracked.txt"], b"");
+    command(&git, root, &["commit", "-m", "Common base"], b"");
+    command(&git, root, &["checkout", "--detach", "HEAD"], b"");
+    git.environment
+        .insert("GIT_COMMITTER_DATE".into(), Some("1600000000 +0000".into()));
+    command(
+        &git,
+        root,
+        &["commit", "--allow-empty", "-m", "Previous tip"],
+        b"",
+    );
+    git.environment
+        .remove(std::ffi::OsStr::new("GIT_COMMITTER_DATE"));
+    fs::write(root.join("tracked.txt"), "changed\n").unwrap();
+    command(&git, root, &["stash", "push", "-m", "Pull autostash"], b"");
+    command(&git, root, &["checkout", "main"], b"");
+    command(
+        &git,
+        root,
+        &["commit", "--allow-empty", "-m", "Current tip"],
+        b"",
+    );
+
+    let cancel = Cancellation::default();
+    let snapshot = git.inspect(root, &cancel).unwrap();
+    let history = git.history(snapshot, &cancel).unwrap();
+    let page = git.page(&history, &Cursor::default(), &cancel).unwrap();
+    let [tip, stash, base, common] = page.entries.as_slice() else {
+        panic!("expected four history rows");
+    };
+    assert!(stash.graph.is_stash);
+    assert_eq!(stash.commit.parents[0], base.commit.hash);
+    let common_parent = std::slice::from_ref(&common.commit.hash);
+    assert_eq!(tip.commit.parents, common_parent);
+    assert_eq!(base.commit.parents, common_parent);
+    assert_eq!(stash.graph.node, base.graph.node);
+    assert_eq!(stash.graph.color, base.graph.color);
+    assert_eq!(stash.graph.width, 2);
+    assert!(stash.graph.lines.iter().any(|line| {
+        line.from == stash.graph.node
+            && line.from_y == 0.5
+            && line.to == base.graph.node
+            && line.to_y == 1.
+    }));
+    assert_ne!(base.graph.node, tip.graph.node);
+    assert_eq!(tip.graph.node, common.graph.node);
 }
 
 #[test]

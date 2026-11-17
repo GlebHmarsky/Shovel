@@ -3,7 +3,7 @@ use chrono::Utc;
 use shovel_core::{
     git::{Commit, Entry, Snapshot},
     graph,
-    history_cache::{MAX_BYTES, Preview, Store},
+    history_cache::{MAX_BYTES, PREVIEW_SCHEMA, Preview, Store},
     identity::Identity,
 };
 use std::{fs, fs::OpenOptions, os::windows::fs::OpenOptionsExt};
@@ -16,7 +16,7 @@ fn preview(root: &std::path::Path) -> Preview {
     };
     let now = Utc::now();
     Preview {
-        schema: 1,
+        schema: PREVIEW_SCHEMA,
         directory: root.into(),
         identity: identity.fingerprint.clone(),
         repository: Snapshot {
@@ -123,7 +123,7 @@ fn cache_validation_rejects_malformed_paths_identity_graph_counts_and_offsets() 
     for index in 0..10 {
         let mut bad = valid.clone();
         match index {
-            0 => bad.schema = 2,
+            0 => bad.schema = 1,
             1 => bad.repository.worktree = temp.path().join("elsewhere"),
             2 => bad.entries[0].graph.width = 65,
             3 => bad.entries[0].graph.node = 64,

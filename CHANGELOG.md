@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.4 - 2026-11-18
+
+- Draw a stash directly above its base on the same graph lane when no branch line already leads into that base.
+
 ## Rust 0.50.3 Stable promotion - 2026-11-18
 
 - Owner-approved promotion of the existing 0.50.3 application to the independent Rust Stable channel; application files and Cargo version remain unchanged.

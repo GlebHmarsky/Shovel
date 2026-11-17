@@ -12,6 +12,8 @@ use std::{
 };
 
 pub const MAX_BYTES: usize = 4 * 1024 * 1024;
+// Schema 2 invalidates cached graph rows from before inline stash connections.
+pub const PREVIEW_SCHEMA: u32 = 2;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Preview {
     pub schema: u32,
@@ -27,7 +29,7 @@ pub struct Preview {
 }
 impl Preview {
     pub fn valid(&self, path: &Path, identity: &str) -> bool {
-        self.schema == 1
+        self.schema == PREVIEW_SCHEMA
             && self.identity == identity
             && self.repository.identity.fingerprint == identity
             && same_path(&self.directory, path)
