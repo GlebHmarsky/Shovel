@@ -1853,7 +1853,7 @@ impl eframe::App for Workspace {
                     caption::controls(ui);
                 });
                 ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), 64.),
+                    egui::vec2(ui.available_width(), 52.),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 2.;
@@ -1899,9 +1899,10 @@ impl eframe::App for Workspace {
                             .fill(palette.raised)
                             .stroke(egui::Stroke::new(1., palette.border))
                             .corner_radius(6)
-                            .inner_margin(egui::Margin::symmetric(10, 4))
+                            .inner_margin(egui::Margin::symmetric(10, 2))
                             .show(ui, |ui| {
                                 ui.set_width((context_width - 22.).max(1.));
+                                ui.spacing_mut().item_spacing.y = 1.;
                                 ui.vertical_centered(|ui| {
                                     if let Some(tab) = self.tabs.get(self.selected) {
                                         ui.add(
@@ -1930,6 +1931,7 @@ impl eframe::App for Workspace {
                                                             .as_deref()
                                                             .unwrap_or("HEAD"),
                                                     )
+                                                    .small()
                                                     .color(palette.muted),
                                                 )
                                                 .truncate(),

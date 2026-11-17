@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.10 - 2026-11-18
+
+- Reduce the top toolbar height and tighten spacing in the repository status card.
+
 ## Rust 0.50.9 - 2026-11-18
 
 - Check the selected Rust update channel at startup and every hour by default. Show an Update Shovel button by the repository status when a verified newer release is available.
