@@ -90,6 +90,7 @@ enum Event {
 struct Tab {
     id: u64,
     path: PathBuf,
+    local_changes: bool,
     history: Option<History>,
     owner_snapshot: Option<shovel_core::git::Snapshot>,
     divergence: divergence::Counter,
@@ -277,6 +278,7 @@ impl Workspace {
         self.tabs.push(Tab {
             id,
             path,
+            local_changes: false,
             history: None,
             owner_snapshot: None,
             divergence: Default::default(),
@@ -297,7 +299,11 @@ impl Workspace {
         self.tabs.len() - 1
     }
     fn refresh(&mut self, ctx: &egui::Context) {
-        self.refresh_at(self.selected, ctx);
+        if let Some(index) = self.inline_editor() {
+            self.editors[index].refresh(ctx);
+        } else {
+            self.refresh_at(self.selected, ctx);
+        }
     }
     fn refresh_at(&mut self, index: usize, ctx: &egui::Context) {
         if let Some(tab) = self.tabs.get(index) {
@@ -308,6 +314,7 @@ impl Workspace {
         self.refresh_history(id, false, ctx);
     }
     fn first_page(&mut self, ctx: &egui::Context) {
+        self.show_history(ctx);
         if let Some(tab) = self.tabs.get(self.selected) {
             self.refresh_history(tab.id, true, ctx);
         }
@@ -388,6 +395,7 @@ impl Workspace {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
             return;
         }
+        self.show_history(ctx);
         let Some(git) = self.git.clone() else {
             return;
         };
@@ -435,6 +443,7 @@ impl Workspace {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
             return;
         }
+        self.show_history(ctx);
         let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
@@ -605,6 +614,7 @@ impl Workspace {
                         self.tabs.push(Tab {
                             id,
                             path,
+                            local_changes: false,
                             history: None,
                             owner_snapshot: None,
                             divergence: Default::default(),
@@ -1111,14 +1121,17 @@ impl Workspace {
     }
 
     fn open_commit(&mut self) {
-        let Some(tab) = self.tabs.get(self.selected) else {
+        let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
+        let inline = self.settings.commit_in_workspace();
         if let Some(editor) = self
             .editors
             .iter_mut()
-            .find(|editor| editor.path == tab.path)
+            .find(|editor| Self::same_path(&editor.path, &tab.path))
         {
+            tab.local_changes = inline;
+            editor.inline = inline;
             editor.activate();
             return;
         }
@@ -1129,15 +1142,48 @@ impl Workspace {
                 self.scheduler.clone(),
                 store.clone(),
             );
+            tab.local_changes = inline;
+            editor.inline = inline;
             editor.read_workers = self.read_workers.clone();
             editor.restore_layout(&self.settings);
-            editor.external_merge_tool = self
-                .settings
-                .get("ExternalMergeTool")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or_default();
             editor.apply_preferences(&self.settings);
             self.editors.push(editor);
+        }
+    }
+
+    fn inline_editor(&self) -> Option<usize> {
+        let tab = self
+            .tabs
+            .get(self.selected)
+            .filter(|tab| tab.local_changes)?;
+        self.editors.iter().position(|editor| {
+            editor.inline && editor.open && Self::same_path(&editor.path, &tab.path)
+        })
+    }
+
+    fn show_history(&mut self, ctx: &egui::Context) {
+        if let Some(tab) = self.tabs.get_mut(self.selected)
+            && std::mem::take(&mut tab.local_changes)
+        {
+            self.sync_inline_editor(ctx);
+        }
+    }
+
+    fn sync_inline_editor(&mut self, ctx: &egui::Context) {
+        let target = self.tabs.get(self.selected).filter(|tab| tab.local_changes);
+        for editor in &mut self.editors {
+            if editor.inline
+                && editor.open
+                && !editor.exit_prompt_open()
+                && target.is_none_or(|tab| !Self::same_path(&editor.path, &tab.path))
+            {
+                editor.hide(ctx);
+                editor.save_layout(&mut self.settings);
+                self.preferences_dirty = true;
+            }
+        }
+        if target.is_some() && self.inline_editor().is_none() {
+            self.open_commit();
         }
     }
     // Recheck immediately before every final close: saving settings yields to
@@ -1321,8 +1367,22 @@ impl Workspace {
                     .unwrap_or(12.) as f32;
             }
         }
+        let inline = self.settings.commit_in_workspace();
         for editor in &mut self.editors {
+            if editor.inline != inline && !editor.exit_prompt_open() {
+                if editor.open {
+                    editor.hide(ctx);
+                    editor.save_layout(&mut self.settings);
+                    self.preferences_dirty = true;
+                }
+                editor.inline = inline;
+            }
             editor.apply_preferences(&self.settings);
+        }
+        if !inline {
+            for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
+                tab.local_changes = false;
+            }
         }
     }
     fn settings_window(&mut self, ctx: &egui::Context) {
@@ -1411,17 +1471,25 @@ impl eframe::App for Workspace {
         self.branches.read_workers = self.read_workers.clone();
         self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
+        let sidebar_commit = self.settings.commit_in_workspace();
         let modal_open = self.closing
             || self.pending_exit
             || self.confirm_exit_without_save
             || self.git_selection.busy()
             || self.settings_dialog.is_some()
-            || self.editors.iter().any(|editor| editor.open)
+            || self
+                .editors
+                .iter()
+                .any(|editor| editor.open && !editor.inline)
             || self.operations.modal_open()
             || self.remotes.is_open()
             || self.branches.is_open()
             || self.initialization.is_open()
             || self.stash_views.iter().any(|view| view.open);
+        let shortcuts_blocked = modal_open
+            || self
+                .inline_editor()
+                .is_some_and(|i| self.editors[i].has_prompt());
         if modal_open || self.closing {
             ui.disable();
         }
@@ -1447,13 +1515,16 @@ impl eframe::App for Workspace {
         if ctx.input(|i| i.viewport().close_requested()) {
             self.close(&ctx);
         }
-        if !modal_open && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
+        if !shortcuts_blocked && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
             self.refresh(&ctx);
         }
-        if !modal_open && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageDown)) {
+        if !shortcuts_blocked
+            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageDown))
+        {
             self.page(true, &ctx);
         }
-        if !modal_open && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageUp)) {
+        if !shortcuts_blocked && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageUp))
+        {
             self.page(false, &ctx);
         }
         if ctx.input(|i| {
@@ -1476,7 +1547,7 @@ impl eframe::App for Workspace {
                     == Some(1),
             );
         }
-        if !modal_open && !self.tabs.is_empty() {
+        if !shortcuts_blocked && !self.tabs.is_empty() {
             if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::W)) {
                 self.close_tab(self.tabs[self.selected].id, &ctx);
             } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Tab)) {
@@ -1805,12 +1876,13 @@ impl eframe::App for Workspace {
                             self.git.as_ref(),
                             &self.scheduler,
                         );
-                        if workspace_style::action(
-                            ui,
-                            "Commit",
-                            self.git.is_some() && !self.tabs.is_empty(),
-                        )
-                        .clicked()
+                        if !sidebar_commit
+                            && workspace_style::action(
+                                ui,
+                                "Commit",
+                                self.git.is_some() && !self.tabs.is_empty(),
+                            )
+                            .clicked()
                         {
                             self.open_commit();
                         }
@@ -2201,6 +2273,19 @@ impl eframe::App for Workspace {
             .exact_size(Divider::Sidebar.size(ui, &self.settings, width))
             .resizable(false)
             .show(ui, |ui| {
+                if sidebar_commit && self.tabs.get(self.selected).is_some() {
+                    let local = self.inline_editor().is_some();
+                    if ui.selectable_label(!local, strings::text("FileHistoryTab")).clicked() {
+                        self.show_history(&ctx);
+                    }
+                    if ui.add_enabled(
+                        self.git.is_some() && self.draft_store.is_some(),
+                        egui::Button::selectable(local, strings::text("WorkspaceLocalChanges")),
+                    ).clicked() {
+                        self.open_commit();
+                    }
+                    ui.separator();
+                }
                 if let Some(tab) = self.tabs.get_mut(self.selected)
                     && let Some(history) = &tab.history
                 {
@@ -2558,11 +2643,13 @@ impl eframe::App for Workspace {
         let height = ui.available_height();
         self.preferences_dirty |=
             Divider::Sidebar.handle(ui, sidebar.response.rect, width, &mut self.settings);
-        let details = egui::Panel::bottom("details")
+        let inline_editor = self.inline_editor();
+        let details_panel = egui::Panel::bottom("details")
             .frame(workspace_style::pane(palette.panel, 6, 3))
             .exact_size(Divider::Details.size(ui, &self.settings, height))
-            .resizable(false)
-            .show(ui, |ui| {
+            .resizable(false);
+        let details = inline_editor.is_none().then(|| {
+            details_panel.show(ui, |ui| {
                 if let Some(tab) = self.tabs.get_mut(self.selected)
                     && let Some(commit) = tab
                         .page
@@ -2636,12 +2723,19 @@ impl eframe::App for Workspace {
                         }
                     }
                 }
-            });
-        self.preferences_dirty |=
-            Divider::Details.handle(ui, details.response.rect, height, &mut self.settings);
+            })
+        });
+        if let Some(details) = details {
+            self.preferences_dirty |=
+                Divider::Details.handle(ui, details.response.rect, height, &mut self.settings);
+        }
         egui::CentralPanel::default()
             .frame(workspace_style::pane(palette.canvas, 0, 0))
             .show(ui, |ui| {
+                if let Some(index) = inline_editor {
+                    self.editors[index].show_inline(ui, !modal_open);
+                    return;
+                }
                 let Some(tab) = self.tabs.get_mut(self.selected) else {
                     ui.vertical_centered(|ui| {
                         ui.add_space((ui.available_height() / 2. - 55.).max(8.));
@@ -2893,13 +2987,16 @@ impl eframe::App for Workspace {
             self.locate(hash, &ctx);
         }
         let failure_editor = self.operations.failure_path().and_then(|path| {
-            self.editors
-                .iter()
-                .position(|editor| editor.open && Self::same_path(&editor.path, path))
+            self.editors.iter().position(|editor| {
+                editor.open && !editor.inline && Self::same_path(&editor.path, path)
+            })
         });
         for (index, editor) in self.editors.iter_mut().enumerate() {
             let open = editor.open;
             let show_failure = !self.closing && failure_editor == Some(index);
+            if editor.inline && editor.exit_prompt_open() {
+                editor.show_leave_prompt(&ctx);
+            }
             editor.show(
                 &ctx,
                 !self.closing
@@ -3070,6 +3167,7 @@ mod tests {
             tabs: vec![Tab {
                 id: 1,
                 path: path.clone(),
+                local_changes: false,
                 history: None,
                 owner_snapshot: None,
                 divergence: Default::default(),

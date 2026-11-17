@@ -1,5 +1,4 @@
-//! Repository-owned Local Changes state. The native window is only a view;
-//! closing it never drops accepted work, draft saves, or reconciliation.
+//! Repository-owned Local Changes state shared by the workspace and native window.
 use crate::strings::{self, text};
 use eframe::egui;
 pub(crate) use queue::{Capture, OwnedActivity};
@@ -60,6 +59,7 @@ pub struct Editor {
     pub(super) read_workers: crate::read_workers::Workers,
     pub path: PathBuf,
     pub open: bool,
+    pub inline: bool,
     pub context: Option<Arc<Context>>,
     pub failed_commit: bool,
     pub failed_operation: Option<&'static str>,
@@ -137,6 +137,7 @@ impl Editor {
             read_workers: Default::default(),
             path,
             open: true,
+            inline: false,
             context: None,
             failed_commit: false,
             failed_operation: None,
@@ -204,6 +205,15 @@ impl Editor {
     pub fn activate(&mut self) {
         self.open = true;
     }
+    pub fn hide(&mut self, ctx: &egui::Context) {
+        self.leave = None;
+        self.confirm_amend = false;
+        self.files_focus = None;
+        self.finish_leave(Leave::Close, ctx);
+    }
+    pub fn has_prompt(&self) -> bool {
+        self.confirm_amend || self.leave.is_some() || self.file_confirmation.is_some()
+    }
     pub fn external_changed(&mut self) {
         self.refresh_pending = true;
     }
@@ -228,7 +238,7 @@ impl Editor {
     pub fn confirm_exit(&mut self, ctx: &egui::Context) {
         self.file_menu = None;
         self.file_confirmation = None;
-        self.open = true;
+        self.open |= !self.inline;
         self.request_leave(Leave::Exit, ctx);
     }
     pub fn take_exit_cancelled(&mut self) -> bool {
@@ -784,7 +794,7 @@ impl Editor {
         if let Some(inspector) = &mut self.inspector {
             inspector.show(ctx);
         }
-        if !self.open {
+        if !self.open || self.inline {
             return;
         }
         let id = egui::ViewportId::from_hash_of(("commit", &self.path));
@@ -805,388 +815,12 @@ impl Editor {
             |ui, class| {
                 visible = ui.is_visible();
                 let ctx = ui.ctx().clone();
-                if !enabled {
-                    ui.disable();
-                }
                 if ctx.input(|i| i.viewport().close_requested()) {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                     self.request_leave(Leave::Close, &ctx);
                 }
                 self.observe_geometry(&ctx, class);
-                if enabled && self.leave.is_none() && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
-                    self.refresh(&ctx);
-                }
-                if enabled
-                    && self.leave.is_none()
-                    && ctx.input(|i| {
-                        i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Enter)
-                    })
-                {
-                    self.request_commit(&ctx);
-                }
-                if enabled
-                    && !self.confirm_amend
-                    && self.leave.is_none()
-                    && self.file_menu.is_none()
-                    && self.file_confirmation.is_none()
-                    && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-                {
-                    self.request_leave(Leave::Close, &ctx);
-                }
-                egui::Panel::top("commit_controls").show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        if ui
-                            .add_enabled(
-                                !self.loading && !self.action_busy(),
-                                egui::Button::new(text("CommitRefresh")),
-                            )
-                            .clicked()
-                        {
-                            self.refresh(&ctx);
-                        }
-                        if let Some(context) = &self.context {
-                            ui.label(context.repository.branch.as_deref().unwrap_or("HEAD"));
-                        }
-                        if self.loading {
-                            ui.label(text("ChangesLoading"));
-                        }
-                        if let Some(status) = &self.status {
-                            ui.label(status);
-                        }
-                    });
-                });
-                let message = egui::Panel::bottom("commit_message")
-                    .default_size(self.message_height)
-                    .min_size(140.)
-                    .resizable(true)
-                    .show(ui, |ui| {
-                        if let Some(error) = &self.draft_error {
-                            ui.colored_label(ui.visuals().error_fg_color, error);
-                        }
-                        ui.label(text("CommitSubject"));
-                        let subject = ui.add(
-                            egui::TextEdit::singleline(&mut self.draft.subject)
-                                .desired_width(f32::INFINITY),
-                        );
-                        ui.label(text("CommitDescription"));
-                        let body = ui.add(
-                            egui::TextEdit::multiline(&mut self.draft.description)
-                                .desired_width(f32::INFINITY)
-                                .desired_rows(3),
-                        );
-                        if subject.changed() || body.changed() {
-                            self.edited();
-                        }
-                        ui.horizontal(|ui| {
-                            let allow_amend = self.context.as_ref().is_some_and(|c| {
-                                c.repository.head.is_some() && c.repository.operations.is_empty()
-                            });
-                            if ui
-                                .add_enabled(
-                                    allow_amend && self.working_ready(),
-                                    egui::Checkbox::new(&mut self.amend, text("CommitAmend")),
-                                )
-                                .changed()
-                                && self.amend
-                                && self.draft.is_empty()
-                                && let Some(context) = &self.context
-                            {
-                                let (subject, body) = context
-                                    .head_message
-                                    .split_once('\n')
-                                    .unwrap_or((&context.head_message, ""));
-                                self.draft = drafts::Text {
-                                    subject: subject.into(),
-                                    description: body.trim_start_matches(['\r', '\n']).into(),
-                                };
-                                self.edited();
-                            }
-                            let reason = self.commit_reason();
-                            if ui
-                                .add_enabled(reason.is_none(), egui::Button::new(text("Commit")))
-                                .on_disabled_hover_text(text(reason.unwrap_or("Commit")))
-                                .clicked()
-                            {
-                                self.request_commit(&ctx);
-                            }
-                            if self.draft_saving {
-                                ui.label(text("CommitDraftSaving"));
-                            }
-                        });
-                    });
-                self.message_height = message.response.rect.height();
-                if !self.operation_output.is_empty() {
-                    egui::Panel::bottom("commit-output").show(ui, |ui| {
-                        egui::CollapsingHeader::new(text("ActionOutput")).show(ui, |ui| {
-                            egui::ScrollArea::both().max_height(150.).show(ui, |ui| {
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(&self.operation_output).monospace(),
-                                    )
-                                    .selectable(true),
-                                );
-                            });
-                        });
-                    });
-                }
-                let files = egui::Panel::left("commit_files")
-                    .default_size(self.files_width)
-                    .min_size(220.)
-                    .resizable(true)
-                    .show(ui, |ui| {
-                        let mut chosen = None;
-                        for staged in [false, true] {
-                            let rows = self
-                                .context
-                                .as_ref()
-                                .map(|c| {
-                                    c.entries
-                                        .iter()
-                                        .filter(|e| {
-                                            (e.group == Group::Staged) == staged
-                                                && e.group != Group::Ignored
-                                        })
-                                        .cloned()
-                                        .collect::<Vec<_>>()
-                                })
-                                .unwrap_or_default();
-                            ui.horizontal(|ui| {
-                                ui.strong(strings::format(
-                                    if staged {
-                                        "CommitStagedCount"
-                                    } else {
-                                        "CommitUnstagedCount"
-                                    },
-                                    &[&rows.len().to_string()],
-                                ));
-                                let selected = rows
-                                    .iter()
-                                    .any(|e| self.selection.contains(&(e.group, e.path.clone())));
-                                let all = ui.input(|i| i.modifiers.shift);
-                                if ui
-                                    .add_enabled(
-                                        self.working_ready()
-                                            && (selected || all && !rows.is_empty()),
-                                        egui::Button::new(text(if staged {
-                                            "CommitUnstage"
-                                        } else {
-                                            "CommitStage"
-                                        })),
-                                    )
-                                    .clicked()
-                                {
-                                    self.stage(staged, all, &ctx);
-                                }
-                                if ui
-                                    .add_enabled(
-                                        self.working_ready() && !rows.is_empty(),
-                                        egui::Button::new(text(if staged {
-                                            "CommitUnstageAll"
-                                        } else {
-                                            "CommitStageAll"
-                                        })),
-                                    )
-                                    .clicked()
-                                {
-                                    self.stage(staged, true, &ctx);
-                                }
-                            });
-                            let height = (ui.available_height() / if staged { 1. } else { 2. }
-                                - 32.)
-                                .max(65.);
-                            egui::ScrollArea::both()
-                                .id_salt(("files", staged))
-                                .max_height(height)
-                                .min_scrolled_height(height)
-                                .show_rows(ui, 22., rows.len(), |ui, range| {
-                                    for index in range {
-                                        let entry = &rows[index];
-                                        let key = (entry.group, entry.path.clone());
-                                        let selected = self.selection.contains(&key);
-                                        let response = ui.add_enabled(
-                                            !self.working_blocked(),
-                                            egui::Button::selectable(
-                                                selected,
-                                                format!("{}  {}", entry.code, entry.path),
-                                            ),
-                                        );
-                                        if response.clicked() {
-                                            response.request_focus();
-                                            self.files_focus = Some(response.id);
-                                            let mut selection = self.selection.clone();
-                                            if !ui.input(|i| i.modifiers.ctrl) {
-                                                selection.clear();
-                                            }
-                                            if selected && ui.input(|i| i.modifiers.ctrl) {
-                                                selection.remove(&key);
-                                            } else {
-                                                selection.insert(key);
-                                            }
-                                            chosen = Some(Leave::Select {
-                                                entry: Box::new(entry.clone()),
-                                                selection,
-                                                stage: false,
-                                            });
-                                        }
-                                        if response.double_clicked() {
-                                            chosen = Some(Leave::Select {
-                                                entry: Box::new(entry.clone()),
-                                                selection: BTreeSet::from([(
-                                                    entry.group,
-                                                    entry.path.clone(),
-                                                )]),
-                                                stage: true,
-                                            });
-                                        }
-                                        if response.secondary_clicked() && !self.action_busy() {
-                                            response.request_focus();
-                                            self.files_focus = Some(response.id);
-                                            if let Some(context) = self.context.clone() {
-                                                let entries = if selected {
-                                                    rows.iter()
-                                                        .filter(|e| {
-                                                            self.selection.contains(&(
-                                                                e.group,
-                                                                e.path.clone(),
-                                                            ))
-                                                        })
-                                                        .cloned()
-                                                        .collect()
-                                                } else {
-                                                    vec![entry.clone()]
-                                                };
-                                                chosen =
-                                                    Some(Leave::Menu(Box::new(file_menu::Menu {
-                                                        selected: file_menu::Selection {
-                                                            context,
-                                                            entries,
-                                                        },
-                                                        all: rows.clone(),
-                                                        entry: entry.clone(),
-                                                        position: response
-                                                            .interact_pointer_pos()
-                                                            .unwrap_or(response.rect.left_bottom()),
-                                                        layer: ui.layer_id(),
-                                                    })));
-                                            }
-                                        }
-                                    }
-                                });
-                            ui.separator();
-                        }
-                        if let Some(next) = chosen {
-                            self.request_leave(next, &ctx);
-                        }
-                    });
-                self.files_width = files.response.rect.width();
-                egui::CentralPanel::default().show(ui, |ui| {
-                    if let Some(pane) = &mut self.conflict {
-                        ui.add_enabled_ui(!self.busy && !self.loading, |ui| pane.show(ui));
-                        return;
-                    }
-                    if let Some(entry) = &self.focused {
-                        ui.strong(&entry.path);
-                        if entry.group == Group::Conflicted
-                            && ui
-                                .add_enabled(
-                                    !self.action_busy() && !self.loading,
-                                    egui::Button::new(text("ConflictOpen")),
-                                )
-                                .clicked()
-                        {
-                            self.open_conflict();
-                            return;
-                        }
-                    }
-                    let mut options_changed = false;
-                    ui.horizontal(|ui| {
-                        options_changed |= ui
-                            .checkbox(
-                                &mut self.diff_options.ignore_whitespace,
-                                text("DiffIgnoreWhitespace"),
-                            )
-                            .changed();
-                        options_changed |= ui
-                            .checkbox(&mut self.diff_options.whole_file, text("DiffWholeFile"))
-                            .changed();
-                    });
-                    if options_changed && let Some(entry) = self.focused.clone() {
-                        self.show_diff(entry, &ctx);
-                    }
-                    if let Some(error) = &self.diff_error {
-                        ui.colored_label(ui.visuals().error_fg_color, error);
-                    } else if let Some(diff) = &self.diff {
-                        if let Some(ids) =
-                            self.diff_view.show(ui, diff, !self.busy && !self.loading)
-                            && let Some(preview) = diff.hunks.clone()
-                        {
-                            self.submit(Action::Hunks { preview, ids }, &ctx);
-                        }
-                    } else {
-                        ui.label(text(if self.focused.is_some() {
-                            "DiffLoading"
-                        } else {
-                            "DiffChooseFile"
-                        }));
-                    }
-                });
-                if self.confirm_amend {
-                    egui::Modal::new(egui::Id::unique("confirm_amend")).show(&ctx, |ui| {
-                        if let Some(context) = &self.context {
-                            ui.label(strings::format(
-                                "CommitConfirmAmend",
-                                &[
-                                    context.repository.branch.as_deref().unwrap_or("HEAD"),
-                                    context.repository.head.as_deref().unwrap_or(""),
-                                ],
-                            ));
-                        }
-                        ui.horizontal(|ui| {
-                            if ui.button(text("CommitAmend")).clicked() {
-                                self.confirm_amend = false;
-                                self.submit(
-                                    Action::Commit {
-                                        message: self.draft.message(),
-                                        amend: true,
-                                    },
-                                    &ctx,
-                                );
-                            }
-                            if ui.button(text("ActionCancel")).clicked() {
-                                self.confirm_amend = false;
-                            }
-                        });
-                    });
-                }
-                self.show_file_menu(&ctx);
-                self.show_file_confirmation(&ctx);
-                if enabled {
-                    self.file_shortcuts(&ctx);
-                }
-                if self.leave.is_some() {
-                    let mut answer = None;
-                    let response =
-                        egui::Modal::new(egui::Id::unique("conflict_leave")).show(&ctx, |ui| {
-                            ui.heading(text("ConflictResolve"));
-                            if let Some(pane) = &self.conflict {
-                                ui.label(strings::format("ConflictCloseEdits", &[&pane.path]));
-                            }
-                            ui.horizontal(|ui| {
-                                if ui.button(text("RustDiscardConflictText")).clicked() {
-                                    answer = Some(true);
-                                }
-                                if ui.button(text("ActionCancel")).clicked() {
-                                    answer = Some(false);
-                                }
-                            });
-                        });
-                    if response.should_close() && answer.is_none() {
-                        answer = Some(false);
-                    }
-                    if let Some(discard) = answer {
-                        self.answer_leave(discard, &ctx);
-                    }
-                }
+                self.show_contents(ui, enabled);
                 show_failure(&ctx);
             },
         );
@@ -1194,6 +828,398 @@ impl Editor {
         // editor may begin its requested reads.
         if visible && !self.initialized {
             self.initialize(ctx);
+        }
+    }
+
+    pub fn show_inline(&mut self, ui: &mut egui::Ui, enabled: bool) {
+        if ui.is_visible() && !self.initialized {
+            self.initialize(ui.ctx());
+        }
+        let id = egui::Id::unique(("inline_commit", &self.path));
+        ui.push_id(id, |ui| self.show_contents(ui, enabled));
+    }
+
+    fn show_contents(&mut self, ui: &mut egui::Ui, enabled: bool) {
+        let ctx = ui.ctx().clone();
+        if !enabled {
+            ui.disable();
+        }
+        if !self.inline
+            && enabled
+            && self.leave.is_none()
+            && ctx.input(|i| i.key_pressed(egui::Key::F5))
+        {
+            self.refresh(&ctx);
+        }
+        if enabled
+            && self.leave.is_none()
+            && ctx.input(|i| {
+                i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Enter)
+            })
+        {
+            self.request_commit(&ctx);
+        }
+        if !self.inline
+            && enabled
+            && !self.confirm_amend
+            && self.leave.is_none()
+            && self.file_menu.is_none()
+            && self.file_confirmation.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        {
+            self.request_leave(Leave::Close, &ctx);
+        }
+        egui::Panel::top("commit_controls").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !self.loading && !self.action_busy(),
+                        egui::Button::new(text("CommitRefresh")),
+                    )
+                    .clicked()
+                {
+                    self.refresh(&ctx);
+                }
+                if let Some(context) = &self.context {
+                    ui.label(context.repository.branch.as_deref().unwrap_or("HEAD"));
+                }
+                if self.loading {
+                    ui.label(text("ChangesLoading"));
+                }
+                if let Some(status) = &self.status {
+                    ui.label(status);
+                }
+            });
+        });
+        let message = egui::Panel::bottom(if self.inline {
+            "inline_commit_message"
+        } else {
+            "commit_message"
+        })
+        .default_size(self.message_height)
+        .min_size(140.)
+        .resizable(true)
+        .show(ui, |ui| {
+            if let Some(error) = &self.draft_error {
+                ui.colored_label(ui.visuals().error_fg_color, error);
+            }
+            ui.label(text("CommitSubject"));
+            let subject = ui.add(
+                egui::TextEdit::singleline(&mut self.draft.subject).desired_width(f32::INFINITY),
+            );
+            ui.label(text("CommitDescription"));
+            let body = ui.add(
+                egui::TextEdit::multiline(&mut self.draft.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(3),
+            );
+            if subject.changed() || body.changed() {
+                self.edited();
+            }
+            ui.horizontal(|ui| {
+                let allow_amend = self.context.as_ref().is_some_and(|c| {
+                    c.repository.head.is_some() && c.repository.operations.is_empty()
+                });
+                if ui
+                    .add_enabled(
+                        allow_amend && self.working_ready(),
+                        egui::Checkbox::new(&mut self.amend, text("CommitAmend")),
+                    )
+                    .changed()
+                    && self.amend
+                    && self.draft.is_empty()
+                    && let Some(context) = &self.context
+                {
+                    let (subject, body) = context
+                        .head_message
+                        .split_once('\n')
+                        .unwrap_or((&context.head_message, ""));
+                    self.draft = drafts::Text {
+                        subject: subject.into(),
+                        description: body.trim_start_matches(['\r', '\n']).into(),
+                    };
+                    self.edited();
+                }
+                let reason = self.commit_reason();
+                if ui
+                    .add_enabled(reason.is_none(), egui::Button::new(text("Commit")))
+                    .on_disabled_hover_text(text(reason.unwrap_or("Commit")))
+                    .clicked()
+                {
+                    self.request_commit(&ctx);
+                }
+                if self.draft_saving {
+                    ui.label(text("CommitDraftSaving"));
+                }
+            });
+        });
+        self.message_height = message.response.rect.height();
+        if !self.operation_output.is_empty() {
+            egui::Panel::bottom("commit-output").show(ui, |ui| {
+                egui::CollapsingHeader::new(text("ActionOutput")).show(ui, |ui| {
+                    egui::ScrollArea::both().max_height(150.).show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&self.operation_output).monospace(),
+                            )
+                            .selectable(true),
+                        );
+                    });
+                });
+            });
+        }
+        let files = egui::Panel::left(if self.inline {
+            "inline_commit_files"
+        } else {
+            "commit_files"
+        })
+        .default_size(self.files_width)
+        .max_size((ui.available_width() - 200.).max(220.))
+        .min_size(220.)
+        .resizable(true)
+        .show(ui, |ui| {
+            let mut chosen = None;
+            for staged in [false, true] {
+                let rows = self
+                    .context
+                    .as_ref()
+                    .map(|c| {
+                        c.entries
+                            .iter()
+                            .filter(|e| {
+                                (e.group == Group::Staged) == staged && e.group != Group::Ignored
+                            })
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                ui.horizontal(|ui| {
+                    ui.strong(strings::format(
+                        if staged {
+                            "CommitStagedCount"
+                        } else {
+                            "CommitUnstagedCount"
+                        },
+                        &[&rows.len().to_string()],
+                    ));
+                    let selected = rows
+                        .iter()
+                        .any(|e| self.selection.contains(&(e.group, e.path.clone())));
+                    let all = ui.input(|i| i.modifiers.shift);
+                    if ui
+                        .add_enabled(
+                            self.working_ready() && (selected || all && !rows.is_empty()),
+                            egui::Button::new(text(if staged {
+                                "CommitUnstage"
+                            } else {
+                                "CommitStage"
+                            })),
+                        )
+                        .clicked()
+                    {
+                        self.stage(staged, all, &ctx);
+                    }
+                    if ui
+                        .add_enabled(
+                            self.working_ready() && !rows.is_empty(),
+                            egui::Button::new(text(if staged {
+                                "CommitUnstageAll"
+                            } else {
+                                "CommitStageAll"
+                            })),
+                        )
+                        .clicked()
+                    {
+                        self.stage(staged, true, &ctx);
+                    }
+                });
+                let height = (ui.available_height() / if staged { 1. } else { 2. } - 32.).max(65.);
+                egui::ScrollArea::both()
+                    .id_salt(("files", staged))
+                    .max_height(height)
+                    .min_scrolled_height(height)
+                    .show_rows(ui, 22., rows.len(), |ui, range| {
+                        for index in range {
+                            let entry = &rows[index];
+                            let key = (entry.group, entry.path.clone());
+                            let selected = self.selection.contains(&key);
+                            let response = ui.add_enabled(
+                                !self.working_blocked(),
+                                egui::Button::selectable(
+                                    selected,
+                                    format!("{}  {}", entry.code, entry.path),
+                                ),
+                            );
+                            if response.clicked() {
+                                response.request_focus();
+                                self.files_focus = Some(response.id);
+                                let mut selection = self.selection.clone();
+                                if !ui.input(|i| i.modifiers.ctrl) {
+                                    selection.clear();
+                                }
+                                if selected && ui.input(|i| i.modifiers.ctrl) {
+                                    selection.remove(&key);
+                                } else {
+                                    selection.insert(key);
+                                }
+                                chosen = Some(Leave::Select {
+                                    entry: Box::new(entry.clone()),
+                                    selection,
+                                    stage: false,
+                                });
+                            }
+                            if response.double_clicked() {
+                                chosen = Some(Leave::Select {
+                                    entry: Box::new(entry.clone()),
+                                    selection: BTreeSet::from([(entry.group, entry.path.clone())]),
+                                    stage: true,
+                                });
+                            }
+                            if response.secondary_clicked() && !self.action_busy() {
+                                response.request_focus();
+                                self.files_focus = Some(response.id);
+                                if let Some(context) = self.context.clone() {
+                                    let entries = if selected {
+                                        rows.iter()
+                                            .filter(|e| {
+                                                self.selection.contains(&(e.group, e.path.clone()))
+                                            })
+                                            .cloned()
+                                            .collect()
+                                    } else {
+                                        vec![entry.clone()]
+                                    };
+                                    chosen = Some(Leave::Menu(Box::new(file_menu::Menu {
+                                        selected: file_menu::Selection { context, entries },
+                                        all: rows.clone(),
+                                        entry: entry.clone(),
+                                        position: response
+                                            .interact_pointer_pos()
+                                            .unwrap_or(response.rect.left_bottom()),
+                                        layer: ui.layer_id(),
+                                    })));
+                                }
+                            }
+                        }
+                    });
+                ui.separator();
+            }
+            if let Some(next) = chosen {
+                self.request_leave(next, &ctx);
+            }
+        });
+        self.files_width = files.response.rect.width();
+        egui::CentralPanel::default().show(ui, |ui| {
+            if let Some(pane) = &mut self.conflict {
+                ui.add_enabled_ui(!self.busy && !self.loading, |ui| pane.show(ui));
+                return;
+            }
+            if let Some(entry) = &self.focused {
+                ui.strong(&entry.path);
+                if entry.group == Group::Conflicted
+                    && ui
+                        .add_enabled(
+                            !self.action_busy() && !self.loading,
+                            egui::Button::new(text("ConflictOpen")),
+                        )
+                        .clicked()
+                {
+                    self.open_conflict();
+                    return;
+                }
+            }
+            let mut options_changed = false;
+            ui.horizontal(|ui| {
+                options_changed |= ui
+                    .checkbox(
+                        &mut self.diff_options.ignore_whitespace,
+                        text("DiffIgnoreWhitespace"),
+                    )
+                    .changed();
+                options_changed |= ui
+                    .checkbox(&mut self.diff_options.whole_file, text("DiffWholeFile"))
+                    .changed();
+            });
+            if options_changed && let Some(entry) = self.focused.clone() {
+                self.show_diff(entry, &ctx);
+            }
+            if let Some(error) = &self.diff_error {
+                ui.colored_label(ui.visuals().error_fg_color, error);
+            } else if let Some(diff) = &self.diff {
+                if let Some(ids) = self.diff_view.show(ui, diff, !self.busy && !self.loading)
+                    && let Some(preview) = diff.hunks.clone()
+                {
+                    self.submit(Action::Hunks { preview, ids }, &ctx);
+                }
+            } else {
+                ui.label(text(if self.focused.is_some() {
+                    "DiffLoading"
+                } else {
+                    "DiffChooseFile"
+                }));
+            }
+        });
+        if self.confirm_amend {
+            egui::Modal::new(egui::Id::unique("confirm_amend")).show(&ctx, |ui| {
+                if let Some(context) = &self.context {
+                    ui.label(strings::format(
+                        "CommitConfirmAmend",
+                        &[
+                            context.repository.branch.as_deref().unwrap_or("HEAD"),
+                            context.repository.head.as_deref().unwrap_or(""),
+                        ],
+                    ));
+                }
+                ui.horizontal(|ui| {
+                    if ui.button(text("CommitAmend")).clicked() {
+                        self.confirm_amend = false;
+                        self.submit(
+                            Action::Commit {
+                                message: self.draft.message(),
+                                amend: true,
+                            },
+                            &ctx,
+                        );
+                    }
+                    if ui.button(text("ActionCancel")).clicked() {
+                        self.confirm_amend = false;
+                    }
+                });
+            });
+        }
+        self.show_file_menu(&ctx);
+        self.show_file_confirmation(&ctx);
+        if enabled {
+            self.file_shortcuts(&ctx);
+        }
+        if !self.inline || !self.exit_prompt_open() {
+            self.show_leave_prompt(&ctx);
+        }
+    }
+
+    pub fn show_leave_prompt(&mut self, ctx: &egui::Context) {
+        if self.leave.is_some() {
+            let mut answer = None;
+            let response = egui::Modal::new(egui::Id::unique("conflict_leave")).show(ctx, |ui| {
+                ui.heading(text("ConflictResolve"));
+                if let Some(pane) = &self.conflict {
+                    ui.label(strings::format("ConflictCloseEdits", &[&pane.path]));
+                }
+                ui.horizontal(|ui| {
+                    if ui.button(text("RustDiscardConflictText")).clicked() {
+                        answer = Some(true);
+                    }
+                    if ui.button(text("ActionCancel")).clicked() {
+                        answer = Some(false);
+                    }
+                });
+            });
+            if response.should_close() && answer.is_none() {
+                answer = Some(false);
+            }
+            if let Some(discard) = answer {
+                self.answer_leave(discard, ctx);
+            }
         }
     }
 }

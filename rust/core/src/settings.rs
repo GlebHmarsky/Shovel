@@ -44,6 +44,9 @@ impl Settings {
     pub fn ui_scale(&self) -> f64 {
         self.get("UiScale").and_then(Value::as_f64).unwrap_or(1.0)
     }
+    pub fn commit_in_workspace(&self) -> bool {
+        self.get("CommitInWorkspace").and_then(Value::as_bool) == Some(true)
+    }
     pub fn repositories(&self) -> Vec<PathBuf> {
         self.get("RepositoryPaths")
             .and_then(Value::as_array)
@@ -82,6 +85,7 @@ impl Settings {
         }
         for (name, fallback) in [
             ("HistoryRefsOnRight", false),
+            ("CommitInWorkspace", false),
             ("DiffSideBySide", false),
             ("CheckUpdatesPeriodically", true),
             ("AutoFetchEnabled", true),

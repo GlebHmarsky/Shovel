@@ -219,7 +219,9 @@ impl Editor {
         self.status = Some(text("OperationWaiting"));
         if committing {
             self.flush(ctx);
-            self.open = false;
+            if !self.inline {
+                self.open = false;
+            }
         }
         let git = self.git.clone();
         let tx = self.sender.clone();

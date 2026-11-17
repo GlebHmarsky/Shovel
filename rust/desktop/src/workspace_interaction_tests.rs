@@ -9,6 +9,7 @@ pub(super) fn workspace() -> Workspace {
         .map(|(i, name)| Tab {
             id: i as u64 + 1,
             path: PathBuf::from(name),
+            local_changes: false,
             history: None,
             owner_snapshot: None,
             divergence: Default::default(),
@@ -633,6 +634,151 @@ pub(super) fn sidebar_click(
         .drop_without_applying_deltas();
     }
 }
+
+#[test]
+fn commit_layout_setting_switches_sidebar_view_and_preserves_the_commit_editor() {
+    let repo = RepositoryFixture::new();
+    let other = RepositoryFixture::new();
+    std::fs::write(repo.root.join("file"), b"updated\n").unwrap();
+    repo.command(&["add", "file"]);
+    let mut app = repo.workspace();
+    let profile = repo._temp.path().join("profile");
+    let mut store = SettingsStore::new(profile.clone());
+    app.settings = store.load().unwrap();
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    app.store = Some(store);
+    app.draft_store = Some(shovel_core::drafts::Store {
+        directory: profile.join("CommitDrafts"),
+        legacy_directory: None,
+    });
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    ctx.set_embed_viewports(true);
+    app.open(repo.root.clone(), &ctx);
+    until(&mut app, &ctx, |app| {
+        app.tabs[0].history.is_some() && !app.saving && !app.preferences_dirty
+    });
+
+    let find = |app: &mut Workspace, test: &dyn Fn(&egui::accesskit::Node) -> bool| {
+        let output = frame(&ctx, app, vec![]);
+        let point = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter_map(|(_, node)| {
+                (test(node) && !node.is_disabled())
+                    .then(|| node.bounds())
+                    .flatten()
+            })
+            .map(|r| egui::pos2(((r.x0 + r.x1) / 2.) as f32, ((r.y0 + r.y1) / 2.) as f32))
+            .next();
+        output.drop_without_applying_deltas();
+        point
+    };
+    let toolbar_commit = |node: &egui::accesskit::Node| {
+        node.label() == Some("Commit") && node.bounds().is_some_and(|r| r.y0 < 100.)
+    };
+    let click_at = |app: &mut Workspace, pos| {
+        frame(&ctx, app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
+        for pressed in [true, false] {
+            frame(&ctx, app, vec![button(pos, pressed)]).drop_without_applying_deltas();
+        }
+    };
+    let save_layout = |app: &mut Workspace, key: &str| {
+        until(app, &ctx, |app| !app.saving && !app.preferences_dirty);
+        app.settings_dialog = Some(settings_ui::Dialog::new(&app.settings));
+        for key in [key, "SettingsSave"] {
+            sidebar_click(&ctx, app, &strings::text(key), egui::PointerButton::Primary);
+        }
+        until(app, &ctx, |app| {
+            app.settings_dialog.is_none() && !app.saving
+        });
+    };
+    assert!(find(&mut app, &toolbar_commit).is_some());
+    assert!(sidebar_point(&ctx, &mut app, "Local Changes").is_none());
+    save_layout(&mut app, "SettingsCommitSidebar");
+    assert!(
+        SettingsStore::new(profile.clone())
+            .load()
+            .unwrap()
+            .commit_in_workspace()
+    );
+    assert!(find(&mut app, &toolbar_commit).is_none());
+
+    sidebar_click(
+        &ctx,
+        &mut app,
+        "Local Changes",
+        egui::PointerButton::Primary,
+    );
+    assert!(app.inline_editor().is_some());
+    until(&mut app, &ctx, |app| {
+        !app.editors[0].blocks_exit() && app.editors[0].context.is_some()
+    });
+    let subject = find(&mut app, &|node| node.role() == egui::Role::TextInput)
+        .expect("inline commit subject input");
+    click_at(&mut app, subject);
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Text("Inline commit".into())],
+    )
+    .drop_without_applying_deltas();
+
+    sidebar_click(&ctx, &mut app, "History", egui::PointerButton::Primary);
+    assert!(app.inline_editor().is_none());
+    assert!(sidebar_point(&ctx, &mut app, "Commit subject").is_none());
+    sidebar_click(
+        &ctx,
+        &mut app,
+        "Local Changes",
+        egui::PointerButton::Primary,
+    );
+    app.open(other.root.clone(), &ctx);
+    assert!(app.inline_editor().is_none());
+    app.select_tab(0, &ctx);
+    assert!(app.inline_editor().is_some());
+    assert_eq!(app.editors.len(), 1);
+    until(&mut app, &ctx, |app| !app.editors[0].blocks_exit());
+    assert!(find(&mut app, &|node| node.value() == Some("Inline commit")).is_some());
+
+    let start = std::time::Instant::now();
+    let commit = loop {
+        if let Some(point) = find(&mut app, &|node| node.label() == Some("Commit")) {
+            break point;
+        }
+        assert!(start.elapsed() < std::time::Duration::from_secs(15));
+        app.receive(&ctx);
+        thread::sleep(std::time::Duration::from_millis(5));
+    };
+    click_at(&mut app, commit);
+    assert!(app.editors[0].busy && app.inline_editor().is_some());
+    until(&mut app, &ctx, |app| !app.editors[0].busy);
+    assert!(app.inline_editor().is_some());
+    assert_eq!(
+        repo.command(&["log", "-1", "--format=%s"]),
+        b"Inline commit\n"
+    );
+
+    save_layout(&mut app, "SettingsCommitWindow");
+    assert!(
+        !SettingsStore::new(profile)
+            .load()
+            .unwrap()
+            .commit_in_workspace()
+    );
+    assert!(app.inline_editor().is_none());
+    assert!(sidebar_point(&ctx, &mut app, "Local Changes").is_none());
+    let point = find(&mut app, &toolbar_commit).expect("toolbar Commit after switching back");
+    click_at(&mut app, point);
+    assert!(app.editors[0].open && !app.editors[0].inline);
+    assert_eq!(app.editors.len(), 1);
+}
+
 #[test]
 fn sidebar_remote_fetch_uses_clicked_target_without_changing_toolbar_flags() {
     use crate::history_view::tests::{Fixture, wait};

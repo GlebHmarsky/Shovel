@@ -5,6 +5,7 @@ use shovel_core::{conflicts::ToolSettings, settings::Settings};
 pub const KEYS: &[&str] = &[
     "Appearance",
     "UiScale",
+    "CommitInWorkspace",
     "HistoryRefsOnRight",
     "DiffSideBySide",
     "DiffFontSize",
@@ -154,6 +155,20 @@ impl Dialog {
                                     );
                                     self.values.set("UiScale", json!(scale / 100.));
                                     ui.label(text("SettingsLayoutHelp"));
+                                    ui.separator();
+                                    ui.label(text("SettingsCommitPlacement"));
+                                    let mut inline = self.values.commit_in_workspace();
+                                    ui.radio_value(
+                                        &mut inline,
+                                        false,
+                                        text("SettingsCommitWindow"),
+                                    );
+                                    ui.radio_value(
+                                        &mut inline,
+                                        true,
+                                        text("SettingsCommitSidebar"),
+                                    );
+                                    self.values.set("CommitInWorkspace", json!(inline));
                                 }
                                 1 => {
                                     ui.heading(text("HistoryRefsSettingsTitle"));

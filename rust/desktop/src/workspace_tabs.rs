@@ -35,6 +35,7 @@ impl Workspace {
         egui::Popup::close_all(ctx);
         self.history_menu = None;
         self.reference_menu = None;
+        self.sync_inline_editor(ctx);
         // Reattach to the same initialization; reopening is not a second request.
         self.activate_history(index, ctx);
         self.remember_tabs();
@@ -63,6 +64,8 @@ impl Workspace {
             .unwrap_or_else(|| index.min(self.tabs.len().saturating_sub(1)));
         if !self.tabs.is_empty() {
             self.select_tab(self.selected, ctx);
+        } else {
+            self.sync_inline_editor(ctx);
         }
         self.remember_tabs();
         self.prune_retained_tabs();

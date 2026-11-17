@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.7 - 2026-11-18
+
+- Choose a toolbar Commit window or a sidebar Local Changes view in File → Settings → Appearance. The sidebar switches between History and the in-workspace commit editor.
+
 ## Rust 0.50.6 - 2026-11-18
 
 - Show changed files in the lower History pane as a left-aligned Change and Path table. Select a row to open its diff.
