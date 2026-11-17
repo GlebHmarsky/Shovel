@@ -21,6 +21,8 @@ pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color3
         .galley(egui::pos2(rect.left(), top), galley, color);
 }
 
+pub(super) const HEIGHT: f32 = 23.;
+
 fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette) {
     let colors = if ui.visuals().dark_mode {
         [0xdba24a, 0xd78279, 0x82b787, 0x7eabe0, 0xb398d5]
@@ -85,7 +87,7 @@ pub fn show(
 ) -> egui::Response {
     let graph_width = lanes as f32 * 16.;
     let width = ui.available_width().max(graph_width + 535.);
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 23.), egui::Sense::click());
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, HEIGHT), egui::Sense::click());
     let c = &entry.commit;
     let refs = entry
         .references

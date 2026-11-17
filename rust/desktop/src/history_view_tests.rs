@@ -369,6 +369,7 @@ fn obsolete_results_cannot_publish_or_invalidate_newer_history() {
             Box::new(history),
             Box::new(page.clone()),
             false,
+            false,
         ))
         .unwrap();
     app.sender
@@ -382,6 +383,62 @@ fn obsolete_results_cannot_publish_or_invalidate_newer_history() {
     assert!(!app.tabs[0].view.stale && !app.tabs[0].view.identity_blocked);
     assert!(app.tabs[0].previous.is_empty());
     assert!(app.tabs[0].error.is_none());
+}
+
+#[test]
+fn refreshed_history_waits_for_the_context_menu_and_keeps_the_visible_commit_anchored() {
+    use crate::workspace_interaction_tests::{sidebar_click, sidebar_point};
+    let fixture = Fixture::new();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = fixture.app(&ctx);
+    let (selected, offset) = position(&mut app, &ctx, 5, egui::vec2(0., 49.));
+    let output = frame(&ctx, &mut app, vec![]);
+    let row = output
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .unwrap()
+        .nodes
+        .iter()
+        .find_map(|(_, node)| {
+            node.label()
+                .filter(|label| label.starts_with("Commit 605  "))
+                .map(str::to_owned)
+        })
+        .unwrap();
+    output.drop_without_applying_deltas();
+    sidebar_click(&ctx, &mut app, &row, egui::PointerButton::Secondary);
+    let copy = strings::text("HistoryCopySha");
+    assert!(sidebar_point(&ctx, &mut app, &copy).is_some());
+    assert_eq!(app.history_menu.as_ref().unwrap().commit.hash, selected);
+
+    fixture.command(&["commit", "--allow-empty", "-m", "new tip"], &[]);
+    app.refresh(&ctx);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while app.deferred_history.is_empty() {
+        app.receive(&ctx);
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(sidebar_point(&ctx, &mut app, &copy).is_some());
+    assert_eq!(
+        app.tabs[0].page.as_ref().unwrap().entries[0]
+            .commit
+            .subject(),
+        "Commit 610"
+    );
+    sidebar_click(&ctx, &mut app, &copy, egui::PointerButton::Primary);
+    assert!(!egui::Popup::is_any_open(&ctx));
+    wait(&mut app, &ctx);
+    paint(&mut app, &ctx, vec![]);
+    let tab = &app.tabs[0];
+    assert_eq!(
+        tab.page.as_ref().unwrap().entries[0].commit.subject(),
+        "new tip"
+    );
+    assert_eq!(tab.selected.as_ref(), Some(&selected));
+    assert_eq!(tab.view.offset.y, offset.y + history_row::HEIGHT);
 }
 
 #[test]

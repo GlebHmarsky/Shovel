@@ -69,6 +69,7 @@ pub(super) fn workspace() -> Workspace {
         stash_views: vec![],
         history_menu: None,
         reference_menu: None,
+        deferred_history: Default::default(),
     }
 }
 pub(super) fn frame(

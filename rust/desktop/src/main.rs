@@ -79,7 +79,7 @@ enum Event {
     SubmoduleOpened(u64, PathBuf, Result<PathBuf, String>),
     Preview(u64, u64, Option<Box<shovel_core::history_cache::Preview>>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
-    Loaded(u64, u64, Box<History>, Box<Page>, bool),
+    Loaded(u64, u64, Box<History>, Box<Page>, bool, bool),
     Page(u64, u64, Box<Page>, bool),
     Located(u64, u64, String, Result<(Page, Vec<Cursor>), String>),
     Failed(u64, u64, history_view::Failure),
@@ -159,6 +159,7 @@ struct Workspace {
     stash_views: Vec<stashes::View>,
     history_menu: Option<HistoryMenu>,
     reference_menu: Option<ReferenceMenu>,
+    deferred_history: std::collections::VecDeque<Event>,
 }
 impl Workspace {
     fn new(context: &eframe::CreationContext<'_>) -> Self {
@@ -244,6 +245,7 @@ impl Workspace {
             stash_views: vec![],
             history_menu: None,
             reference_menu: None,
+            deferred_history: Default::default(),
         }
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
@@ -347,7 +349,7 @@ impl Workspace {
         if tab.view.identity_blocked {
             return;
         }
-        if tab.loading {
+        if tab.loading || (!first && tab.locating.is_some()) {
             tab.refresh_again = true;
             return;
         }
@@ -382,9 +384,14 @@ impl Workspace {
                 &cancel,
             );
             let event = match result {
-                Ok((history, page, keep)) => {
-                    Event::Loaded(id, generation, Box::new(history), Box::new(page), keep)
-                }
+                Ok((history, page, keep)) => Event::Loaded(
+                    id,
+                    generation,
+                    Box::new(history),
+                    Box::new(page),
+                    keep,
+                    first,
+                ),
                 Err(error) => Event::Failed(id, generation, error),
             };
             let _ = sender.send(event);
@@ -447,26 +454,29 @@ impl Workspace {
         let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
-        if tab.loading || tab.view.stale || tab.view.identity_blocked {
+        if tab.view.identity_blocked {
             return;
         }
-        tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
-        let generation = tab.view.locate_generation;
-        tab.locate_cancel.cancel();
-        tab.locating = None;
         if tab
             .page
             .as_ref()
             .is_some_and(|p| p.entries.iter().any(|e| e.commit.hash == hash))
         {
+            tab.locate_cancel.cancel();
+            tab.locating = None;
             tab.selected = Some(hash);
             tab.scroll_selected = true;
+            return;
+        }
+        if tab.loading || tab.view.stale {
             return;
         }
         let (Some(git), Some(history)) = (self.git.clone(), tab.history.clone()) else {
             return;
         };
         tab.locate_cancel = Cancellation::default();
+        tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
+        let generation = tab.view.locate_generation;
         let cancel = tab.locate_cancel.clone();
         tab.locating = Some(hash.clone());
         let id = tab.id;
@@ -554,7 +564,29 @@ impl Workspace {
                 self.open(path, ctx);
             }
         }
-        while let Ok(event) = self.receiver.try_recv() {
+        // Keep the displayed rows and popup anchors together until the user dismisses the menu.
+        let protected_owner = self
+            .tabs
+            .get(self.selected)
+            .filter(|_| !self.pending_exit && !self.closing && egui::Popup::is_any_open(ctx))
+            .map(|tab| tab.id);
+        let mut deferred = std::mem::take(&mut self.deferred_history);
+        while let Some(event) = deferred
+            .pop_front()
+            .or_else(|| self.receiver.try_recv().ok())
+        {
+            let owner = match &event {
+                Event::Loaded(id, ..)
+                | Event::Page(id, ..)
+                | Event::Located(id, ..)
+                | Event::Preview(id, ..) => Some(*id),
+                Event::Failed(id, _, failure) if !failure.identity => Some(*id),
+                _ => None,
+            };
+            if owner.is_some() && owner == protected_owner {
+                self.deferred_history.push_back(event);
+                continue;
+            }
             match event {
                 Event::ToolFinished(result) => {
                     self.external_tools_opened |= result.is_ok();
@@ -687,7 +719,7 @@ impl Workspace {
                         }
                     }
                 }
-                Event::Loaded(id, generation, history, page, keep) => {
+                Event::Loaded(id, generation, history, page, keep, first) => {
                     if !self
                         .tabs
                         .iter()
@@ -709,11 +741,6 @@ impl Workspace {
                             ctx,
                         );
                     }
-                    if self.tabs.get(self.selected).is_some_and(|tab| tab.id == id) {
-                        egui::Popup::close_all(ctx);
-                        self.history_menu = None;
-                        self.reference_menu = None;
-                    }
                     if let Some(tab) = self
                         .tabs
                         .iter_mut()
@@ -725,7 +752,7 @@ impl Workspace {
                                 view.observe(&history.snapshot);
                             }
                         }
-                        tab.publish_history(*history, *page, keep);
+                        tab.publish_history(*history, *page, keep, first);
                         if !self.closing
                             && !self.pending_exit
                             && !self.confirm_exit_without_save
@@ -760,11 +787,6 @@ impl Workspace {
                         .any(|t| t.id == id && t.view.generation == generation)
                     {
                         continue;
-                    }
-                    if self.tabs.get(self.selected).is_some_and(|tab| tab.id == id) {
-                        egui::Popup::close_all(ctx);
-                        self.history_menu = None;
-                        self.reference_menu = None;
                     }
                     if let Some(tab) = self
                         .tabs
@@ -813,6 +835,16 @@ impl Workspace {
                     }
                 }
                 Event::Failed(id, generation, failure) => {
+                    if failure.identity
+                        && self
+                            .tabs
+                            .get(self.selected)
+                            .is_some_and(|tab| tab.id == id && tab.view.generation == generation)
+                    {
+                        egui::Popup::close_all(ctx);
+                        self.history_menu = None;
+                        self.reference_menu = None;
+                    }
                     if let Some(tab) = self
                         .tabs
                         .iter_mut()
@@ -823,6 +855,7 @@ impl Workspace {
                         tab.view.checking_identity = false;
                         let error = failure.message;
                         if failure.identity {
+                            tab.view.generation = tab.view.generation.wrapping_add(1);
                             tab.locate_cancel.cancel();
                             tab.locating = None;
                             tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
@@ -971,6 +1004,9 @@ impl Workspace {
         );
         for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
             tab.divergence.poll(ctx);
+            if Some(tab.id) == protected_owner {
+                continue;
+            }
             let remote_changed = tab.remotes.poll(ctx);
             let sidebar_changed = tab.sidebar.poll(ctx);
             if remote_changed || sidebar_changed {
@@ -1065,8 +1101,11 @@ impl Workspace {
             .iter_mut()
             .enumerate()
             .filter_map(|(index, tab)| {
-                (index == self.selected && !tab.loading && std::mem::take(&mut tab.refresh_again))
-                    .then_some(index)
+                (index == self.selected
+                    && !tab.loading
+                    && tab.locating.is_none()
+                    && std::mem::take(&mut tab.refresh_again))
+                .then_some(index)
             })
             .collect::<Vec<_>>();
         for index in pending {
@@ -1468,6 +1507,7 @@ impl eframe::App for Workspace {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let popup_was_open = egui::Popup::is_any_open(&ctx);
         self.branches.read_workers = self.read_workers.clone();
         self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
@@ -2808,15 +2848,16 @@ impl eframe::App for Workspace {
                 if let Some(offset) = tab.view.restore_offset.take() {
                     scroll = scroll.scroll_offset(offset);
                 }
+                use history_row::HEIGHT;
                 if std::mem::take(&mut tab.scroll_selected)
                     && let Some(index) = page
                         .entries
                         .iter()
                         .position(|e| Some(&e.commit.hash) == tab.selected.as_ref())
                 {
-                    scroll = scroll.vertical_scroll_offset((index as f32 * 23. - 46.).max(0.));
+                    scroll = scroll.vertical_scroll_offset(((index as f32 - 2.) * HEIGHT).max(0.));
                 }
-                let scroll_output = scroll.show_rows(ui, 23., page.entries.len(), |ui, range| {
+                let scroll_output = scroll.show_rows(ui, HEIGHT, page.entries.len(), |ui, range| {
                     for index in range {
                         let entry = &page.entries[index];
                         {
@@ -2826,9 +2867,13 @@ impl eframe::App for Workspace {
                                     && &entry.commit.author == name
                                     && &entry.commit.email == email
                             });
-                            let response = history_row::show(
-                                ui, entry, lanes, selected, peer, refs_right, &palette,
-                            );
+                            let response = ui
+                                .push_id(&entry.commit.hash, |ui| {
+                                    history_row::show(
+                                        ui, entry, lanes, selected, peer, refs_right, &palette,
+                                    )
+                                })
+                                .inner;
                             if response.clicked() {
                                 tab.selected = Some(entry.commit.hash.clone());
                             }
@@ -3092,6 +3137,9 @@ impl eframe::App for Workspace {
             self.operations.show_failure(&ctx);
         }
         self.operations.show_prompt(&ctx);
+        if popup_was_open && !egui::Popup::is_any_open(&ctx) {
+            ctx.request_repaint();
+        }
     }
 }
 
@@ -3146,6 +3194,7 @@ mod tests {
             stash_views: vec![],
             history_menu: None,
             reference_menu: None,
+            deferred_history: Default::default(),
         };
         let ctx = egui::Context::default();
         workspace
@@ -3246,6 +3295,7 @@ mod tests {
             stash_views: vec![],
             history_menu: None,
             reference_menu: None,
+            deferred_history: Default::default(),
         };
         let mut frame = eframe::Frame::_new_kittest();
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200., 800.));

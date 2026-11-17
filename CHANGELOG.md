@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.11 - 2026-11-18
+
+- Apply refreshed history and sidebar data after open menus close. Preserve the visible commit's scroll position across ordinary refreshes when it remains on the page.
+
 ## Rust 0.50.10 - 2026-11-18
 
 - Reduce the top toolbar height and tighten spacing in the repository status card.

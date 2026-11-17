@@ -220,13 +220,43 @@ impl Workspace {
     }
 }
 impl Tab {
-    pub(super) fn publish_history(&mut self, history: History, page: Page, keep: bool) {
+    pub(super) fn publish_history(
+        &mut self,
+        history: History,
+        page: Page,
+        keep: bool,
+        first: bool,
+    ) {
+        let anchored_offset = (!keep && !first)
+            .then(|| {
+                self.page
+                    .as_ref()
+                    .filter(|old| old.cursor.offset == page.cursor.offset)
+            })
+            .flatten()
+            .and_then(|old| {
+                let offset = self.view.offset;
+                let top = (offset.y / history_row::HEIGHT).floor() as usize;
+                let anchor = old.entries.get(top)?;
+                let new_top = page
+                    .entries
+                    .iter()
+                    .position(|entry| entry.commit.hash == anchor.commit.hash)?;
+                Some(egui::vec2(
+                    offset.x,
+                    offset.y + (new_top as f32 - top as f32) * history_row::HEIGHT,
+                ))
+            });
         if self.view.preview.is_none() {
             self.view.remember(self.page.as_ref(), &self.selected);
         }
         if !keep {
             self.previous.clear();
             self.view.restore(&page, &mut self.selected);
+            if let Some(offset) = anchored_offset {
+                self.view.offset = offset;
+                self.view.restore_offset = Some(offset);
+            }
         }
         // Keep the actual allocation that the selected/focused rows use.
         // Metadata is immutable for unchanged commits and ref fingerprints.
