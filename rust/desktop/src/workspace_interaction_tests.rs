@@ -70,6 +70,7 @@ pub(super) fn workspace() -> Workspace {
         history_menu: None,
         reference_menu: None,
         deferred_history: Default::default(),
+        tab_markers: Default::default(),
     }
 }
 pub(super) fn frame(

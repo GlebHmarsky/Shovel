@@ -2,6 +2,10 @@
 
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
+## Repository tab markers (0.50.12)
+
+Right-click a tab to pick a colored circle or clear it with the crossed circle. The choice is saved per repository folder. A hollow circle means the working tree is clean. A filled circle means there are staged, unstaged, untracked, or conflicted files. A dash in the circle indicates that status is pending or unavailable. Only marked tabs receive the optional local status checks, one at a time in the background.
+
 ## Update discovery (0.50.9)
 
 Shovel checks the selected Rust Beta or Rust Stable channel at startup and every hour while running. **File → Settings → Updates** controls the hourly check. A verified newer release adds an **Update Shovel** button to the left of the central repository status. The button opens the updater, where download and restart each require approval. Discovery runs in the background.

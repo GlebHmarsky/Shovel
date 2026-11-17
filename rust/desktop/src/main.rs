@@ -27,6 +27,7 @@ mod strings;
 mod ui_scale;
 mod updater;
 mod window_geometry;
+mod tab_markers;
 mod workspace_split;
 mod workspace_style;
 mod workspace_tabs;
@@ -160,6 +161,7 @@ struct Workspace {
     history_menu: Option<HistoryMenu>,
     reference_menu: Option<ReferenceMenu>,
     deferred_history: std::collections::VecDeque<Event>,
+    tab_markers: tab_markers::Controller,
 }
 impl Workspace {
     fn new(context: &eframe::CreationContext<'_>) -> Self {
@@ -246,6 +248,7 @@ impl Workspace {
             history_menu: None,
             reference_menu: None,
             deferred_history: Default::default(),
+            tab_markers: Default::default(),
         }
     }
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
@@ -301,6 +304,9 @@ impl Workspace {
         self.tabs.len() - 1
     }
     fn refresh(&mut self, ctx: &egui::Context) {
+        if let Some(tab) = self.tabs.get(self.selected) {
+            self.tab_markers.invalidate(tab.id);
+        }
         if let Some(index) = self.inline_editor() {
             self.editors[index].refresh(ctx);
         } else {
@@ -855,6 +861,7 @@ impl Workspace {
                         tab.view.checking_identity = false;
                         let error = failure.message;
                         if failure.identity {
+                            self.tab_markers.forget(id);
                             tab.view.generation = tab.view.generation.wrapping_add(1);
                             tab.locate_cancel.cancel();
                             tab.locating = None;
@@ -1070,6 +1077,7 @@ impl Workspace {
         }
         for path in changed {
             if let Some(index) = self.tabs.iter().position(|tab| tab.path == path) {
+                self.tab_markers.invalidate(self.tabs[index].id);
                 if index == self.selected {
                     self.refresh_at(index, ctx);
                 } else {
@@ -1111,6 +1119,7 @@ impl Workspace {
         for index in pending {
             self.refresh_at(index, ctx);
         }
+        self.poll_tab_markers(ctx);
         if self.preferences_dirty && !self.saving {
             self.save_preferences(ctx);
         }
@@ -1572,6 +1581,9 @@ impl eframe::App for Workspace {
                 .iter()
                 .any(|event| matches!(event, egui::Event::WindowFocused(true)))
         }) {
+            for tab in &self.tabs {
+                self.tab_markers.invalidate(tab.id);
+            }
             if self.tabs.get(self.selected).is_some_and(|tab| {
                 tab.view
                     .validated
@@ -2233,10 +2245,23 @@ impl eframe::App for Workspace {
                 let mut action = None;
                 ui.horizontal(|ui| {
                     for (index, tab) in self.tabs.iter().enumerate() {
-                        let label = tab.path.file_name().unwrap_or_default().to_string_lossy();
+                        let label =
+                            RichText::new(tab.path.file_name().unwrap_or_default().to_string_lossy())
+                                .color(palette.text);
+                        let marker = tab_markers::color(&self.settings, &tab.path);
+                        let status = if self.git.is_some() {
+                            self.tab_markers.status(tab)
+                        } else {
+                            tab_markers::Status::Unavailable
+                        };
+                        let button = if let Some(color) = marker {
+                            egui::Button::new((tab_markers::marker(color, status), label))
+                        } else {
+                            egui::Button::new(label)
+                        };
                         let response = ui.add_sized(
                             [width, 26.],
-                            egui::Button::new(RichText::new(label).color(palette.text))
+                            button
                                 .truncate()
                                 .sense(egui::Sense::click_and_drag())
                                 .selected(index == self.selected)
@@ -2284,8 +2309,20 @@ impl eframe::App for Workspace {
                                     ui.close();
                                 }
                             }
+                            if let Some(color) = tab_markers::picker(ui, marker) {
+                                action = Some(TabAction::Marker(tab.id, color));
+                                ui.close();
+                            }
                         });
-                        response.on_hover_text(tab.path.to_string_lossy());
+                        if marker.is_some() {
+                            response.on_hover_text(format!(
+                                "{}\n{}",
+                                tab.path.display(),
+                                strings::text(status.label())
+                            ));
+                        } else {
+                            response.on_hover_text(tab.path.to_string_lossy());
+                        }
                     }
                 });
                 if let Some((drag, original)) = &self.tab_drag {
@@ -3195,6 +3232,7 @@ mod tests {
             history_menu: None,
             reference_menu: None,
             deferred_history: Default::default(),
+            tab_markers: Default::default(),
         };
         let ctx = egui::Context::default();
         workspace
@@ -3296,6 +3334,7 @@ mod tests {
             history_menu: None,
             reference_menu: None,
             deferred_history: Default::default(),
+            tab_markers: Default::default(),
         };
         let mut frame = eframe::Frame::_new_kittest();
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200., 800.));

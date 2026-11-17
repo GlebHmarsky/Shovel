@@ -397,12 +397,14 @@ impl Git {
                 .stdout,
         ))
     }
-    pub fn working_copy(&self, root: &Path, cancel: &Cancellation) -> Result<Context, Error> {
-        let repository = self.inspect(root, cancel)?;
-        let index_stamp = self.semantic_index(&repository, cancel)?;
-        let config_stamp = self.config_stamp(root, cancel)?;
-        let (filters, standard_lfs) = self.working_filters(root, cancel)?;
-        let mut args = filters.clone();
+    fn read_worktree_status(
+        &self,
+        root: &Path,
+        filters: &[OsString],
+        full: bool,
+        cancel: &Cancellation,
+    ) -> Result<Vec<Change>, Error> {
+        let mut args = filters.to_vec();
         args.extend(
             [
                 "--literal-pathspecs",
@@ -411,15 +413,52 @@ impl Git {
                 "status",
                 "--porcelain=v2",
                 "-z",
-                "--untracked-files=all",
+                if full {
+                    "--untracked-files=all"
+                } else {
+                    "--untracked-files=normal"
+                },
                 "--ignore-submodules=dirty",
-                "--renames",
+                if full { "--renames" } else { "--no-renames" },
                 "--ignored=no",
                 "--",
             ]
             .map(OsString::from),
         );
-        let mut entries = parse_status(&self.read(root, args, cancel, 4 * 1024 * 1024)?.stdout)?;
+        parse_status(&self.read(root, args, cancel, 4 * 1024 * 1024)?.stdout)
+    }
+
+    pub fn has_local_changes(
+        &self,
+        root: &Path,
+        expected: Option<&str>,
+        cancel: &Cancellation,
+    ) -> Result<bool, Error> {
+        let before = identity::read(root)?;
+        if expected.is_some_and(|id| id != before.fingerprint) {
+            return Err(Error::Stale);
+        }
+        let (filters, standard_lfs) = self.working_filters(root, cancel)?;
+        let mut entries = self.read_worktree_status(root, &filters, false, cancel)?;
+        if standard_lfs
+            && entries
+                .iter()
+                .all(|entry| entry.group == Group::Unstaged && entry.code == 'M')
+        {
+            crate::lfs::normalize(self, root, &mut entries, cancel)?;
+        }
+        if identity::read(root)? != before || cancel.is_cancelled() {
+            return Err(Error::Stale);
+        }
+        Ok(!entries.is_empty())
+    }
+
+    pub fn working_copy(&self, root: &Path, cancel: &Cancellation) -> Result<Context, Error> {
+        let repository = self.inspect(root, cancel)?;
+        let index_stamp = self.semantic_index(&repository, cancel)?;
+        let config_stamp = self.config_stamp(root, cancel)?;
+        let (filters, standard_lfs) = self.working_filters(root, cancel)?;
+        let mut entries = self.read_worktree_status(root, &filters, true, cancel)?;
         if standard_lfs {
             crate::lfs::normalize(self, root, &mut entries, cancel)?;
         }

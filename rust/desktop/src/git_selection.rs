@@ -99,6 +99,7 @@ impl Workspace {
                     git.environment = current.environment.clone();
                 }
                 self.git = Some(Arc::new(git));
+                self.tab_markers.reset();
                 // Selection is admitted only with retired editors and no user
                 // commands. Persisted drafts remain owned by the draft store.
                 self.editors.clear();

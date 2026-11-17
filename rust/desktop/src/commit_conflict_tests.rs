@@ -376,6 +376,7 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         history_menu: None,
         reference_menu: None,
         deferred_history: Default::default(),
+        tab_markers: Default::default(),
     };
     workspace.close(&h.ctx);
     assert!(workspace.pending_exit && !workspace.closing && !workspace.exit_ready);

@@ -7,6 +7,7 @@ pub(super) enum TabAction {
     Close(u64),
     CloseOthers(u64),
     Move(u64, isize),
+    Marker(u64, Option<tab_markers::Color>),
 }
 
 impl Workspace {
@@ -31,6 +32,7 @@ impl Workspace {
             return;
         }
         self.selected = index;
+        self.tab_markers.invalidate(self.tabs[index].id);
         self.tabs[index].view.last_use = Some(std::time::Instant::now());
         egui::Popup::close_all(ctx);
         self.history_menu = None;
@@ -47,6 +49,7 @@ impl Workspace {
         };
         let selected = self.tabs.get(self.selected).map(|t| t.id);
         let mut owner = self.tabs.remove(index);
+        self.tab_markers.forget(id);
         owner.locate_cancel.cancel();
         owner.locating = None;
         if let Some(pane) = &mut owner.comparison {
@@ -74,8 +77,10 @@ impl Workspace {
     pub(super) fn tab_action(&mut self, action: workspace_tabs::TabAction, ctx: &egui::Context) {
         use workspace_tabs::TabAction;
         match action {
+            TabAction::Marker(id, marker) => self.set_tab_marker(id, marker, ctx),
             TabAction::Refresh(id) => {
                 if let Some(index) = self.tabs.iter().position(|t| t.id == id) {
+                    self.tab_markers.invalidate(id);
                     self.refresh_at(index, ctx);
                 }
             }
