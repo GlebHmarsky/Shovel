@@ -1086,6 +1086,73 @@ fn retirement_keeps_failed_or_pending_draft_writes_and_unfinished_initialization
         "a failed draft write must leave the workspace usable for recovery"
     );
     assert!(app.notice.is_some());
+    assert!(app.editors[0].open && !app.editors[0].inline);
+}
+
+#[test]
+fn recovery_copy_preserves_other_files_and_unlocks_exit_only_for_the_saved_text() {
+    let mut h = Harness::new();
+    let destination = h._temp.path().join("recovered");
+    fs::create_dir(&destination).unwrap();
+    let primary = destination.join("Shovel commit message.txt");
+    fs::write(&primary, b"keep prior copy").unwrap();
+    let blocked = h._temp.path().join("invalid-profile");
+    fs::write(&blocked, b"preserve profile").unwrap();
+    h.editor.store.directory = blocked.clone();
+    let index = fs::read(h.editor.path.join(".git/index")).unwrap();
+    h.editor.draft.subject = "First β version".into();
+    h.editor.draft.description = "Line one\n\nLine two  ".into();
+    h.editor.edited();
+    h.editor.flush(&h.ctx);
+    h.until(|e| e.draft_problem().is_some());
+    h.point(&text("CommitDraftCopy"));
+    h.editor.begin_draft_copy(&h.ctx, |_| None);
+    h.until(|e| !e.draft_copying);
+    assert!(h.editor.blocks_exit());
+    assert_eq!(h.editor.status, Some(text("CommitDraftCopyCancelled")));
+    let metadata = h.editor.path.join(".git");
+    h.editor.begin_draft_copy(&h.ctx, move |_| Some(metadata));
+    h.until(|e| !e.draft_copying);
+    assert!(h.editor.draft_problem().is_some());
+    assert!(
+        !h.editor
+            .path
+            .join(".git/Shovel commit message.txt")
+            .exists()
+    );
+    let (release, wait) = mpsc::channel();
+    let first = destination.clone();
+    h.editor.begin_draft_copy(&h.ctx, move |_| {
+        wait.recv_timeout(Duration::from_secs(8)).unwrap();
+        Some(first)
+    });
+    h.editor.request_leave(Leave::Close, &h.ctx);
+    assert!(h.editor.open && h.editor.native_picker_open());
+    let earlier = h.editor.draft.message();
+    h.editor.draft.description.push_str("\nNew typing");
+    h.editor.edited();
+    release.send(()).unwrap();
+    h.until(|e| !e.draft_copying);
+    assert!(h.editor.draft_dirty && h.editor.blocks_exit());
+    let contents = || {
+        fs::read_dir(&destination)
+            .unwrap()
+            .map(|e| fs::read_to_string(e.unwrap().path()).unwrap())
+            .collect::<Vec<_>>()
+    };
+    assert!(contents().contains(&earlier));
+    h.editor.flush(&h.ctx);
+    h.until(|e| e.draft_problem().is_some());
+    let final_folder = destination.clone();
+    h.editor
+        .begin_draft_copy(&h.ctx, move |_| Some(final_folder));
+    h.until(|e| !e.draft_copying);
+    assert!(!h.editor.draft_dirty && !h.editor.blocks_exit());
+    assert!(contents().contains(&h.editor.draft.message()));
+    assert_eq!(contents().len(), 3);
+    assert_eq!(fs::read(primary).unwrap(), b"keep prior copy");
+    assert_eq!(fs::read(blocked).unwrap(), b"preserve profile");
+    assert_eq!(fs::read(h.editor.path.join(".git/index")).unwrap(), index);
 }
 
 #[test]

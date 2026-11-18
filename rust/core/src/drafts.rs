@@ -31,6 +31,48 @@ impl Text {
     pub fn is_empty(&self) -> bool {
         self.subject.is_empty() && self.description.is_empty()
     }
+
+    /// Export the exact editor text independently of its profile or live worktree.
+    pub fn save_copy(
+        &self,
+        directory: &Path,
+        owner: Option<&Identity>,
+    ) -> std::io::Result<PathBuf> {
+        let resolved = directory.canonicalize()?;
+        let selected = crate::case::path_key(&resolved);
+        if resolved
+            .components()
+            .any(|part| part.as_os_str().eq_ignore_ascii_case(".git"))
+            || owner.is_some_and(|owner| {
+                [&owner.git, &owner.common].iter().any(|root| {
+                    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+                    let metadata = crate::case::path_key(&root);
+                    selected == metadata
+                        || selected
+                            .strip_prefix(&metadata)
+                            .is_some_and(|s| s.starts_with('\\'))
+                })
+            })
+        {
+            return Err(std::io::ErrorKind::PermissionDenied.into());
+        }
+        let mut temporary = tempfile::NamedTempFile::new_in(&resolved)?;
+        temporary.write_all(self.message().as_bytes())?;
+        temporary.as_file().sync_all()?;
+        let name = "Shovel commit message.txt";
+        match temporary.persist_noclobber(resolved.join(name)) {
+            Ok(_) => Ok(directory.join(name)),
+            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let name = format!("Shovel commit message {}.txt", uuid::Uuid::new_v4());
+                error
+                    .file
+                    .persist_noclobber(resolved.join(&name))
+                    .map_err(|error| error.error)?;
+                Ok(directory.join(name))
+            }
+            Err(error) => Err(error.error),
+        }
+    }
 }
 #[derive(Clone, Debug, Default)]
 pub struct Snapshot {

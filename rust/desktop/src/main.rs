@@ -1311,9 +1311,9 @@ impl Workspace {
             self.notice = Some(strings::text("RustRepositoryChooserOpen"));
             return false;
         }
-        if self.editors.iter().any(commit::Editor::native_picker_open) {
+        if let Some(notice) = self.editors.iter().find_map(commit::Editor::picker_notice) {
             self.pending_exit = false;
-            self.notice = Some(strings::text("RustPatchChooserOpen"));
+            self.notice = Some(notice);
             return false;
         }
         self.auto_fetch.cancel();
@@ -1371,19 +1371,20 @@ impl Workspace {
         if self.editors.iter().any(commit::Editor::blocks_exit) {
             // Continue the same close after a load/save/result delivery finishes.
             // A failed draft write instead returns control for explicit recovery.
-            self.pending_exit = !self
+            if let Some(editor) = self
                 .editors
-                .iter()
-                .any(|editor| editor.draft_problem().is_some());
-            if self.pending_exit {
+                .iter_mut()
+                .find(|editor| editor.draft_problem().is_some())
+            {
+                self.pending_exit = false;
+                self.notice = editor.draft_problem().map(str::to_owned);
+                editor.inline = false;
+                editor.activate();
+            } else {
+                self.pending_exit = true;
+                self.notice = Some(strings::text("CommitDraftSaving"));
                 ctx.request_repaint_after(std::time::Duration::from_millis(25));
             }
-            self.notice = Some(
-                self.editors
-                    .iter()
-                    .find_map(|editor| editor.draft_problem().map(str::to_owned))
-                    .unwrap_or_else(|| strings::text("CommitDraftSaving")),
-            );
             return false;
         }
         if !self.initialized {
@@ -1483,7 +1484,8 @@ impl Workspace {
         }
         let inline = self.settings.commit_in_workspace();
         for editor in &mut self.editors {
-            if editor.inline != inline && !editor.exit_prompt_open() {
+            if editor.inline != inline && !editor.exit_prompt_open() && !editor.native_picker_open()
+            {
                 if editor.open {
                     editor.hide(ctx);
                     editor.save_layout(&mut self.settings);

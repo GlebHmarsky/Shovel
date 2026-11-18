@@ -27,6 +27,7 @@ enum Event {
     Diff(u64, Result<shovel_core::diff::FileDiff, working::Error>),
     DraftLoaded(Result<(Identity, Result<drafts::Snapshot, drafts::Error>), drafts::Error>),
     DraftSaved(u64, Result<drafts::Snapshot, String>),
+    DraftCopied(u64, std::io::Result<Option<PathBuf>>),
     WorkingStarted(u64),
     WorkingPushing(u64),
     WorkingOutput(u64, Arc<crate::activity_output::OutputStream>),
@@ -103,6 +104,7 @@ pub struct Editor {
     draft_sequence: u64,
     draft_dirty: bool,
     draft_saving: bool,
+    draft_copying: bool,
     draft_error: Option<String>,
     draft_saved_at: Instant,
     recovery_id: String,
@@ -186,6 +188,7 @@ impl Editor {
             draft_sequence: 0,
             draft_dirty: false,
             draft_saving: false,
+            draft_copying: false,
             draft_error: None,
             draft_saved_at: Instant::now(),
             recovery_id: uuid::Uuid::new_v4().simple().to_string(),
@@ -284,10 +287,21 @@ impl Editor {
             || self.unsaved_conflict()
     }
     pub fn native_picker_open(&self) -> bool {
-        self.patch_picking
+        self.patch_picking || self.draft_copying
+    }
+    pub fn picker_notice(&self) -> Option<String> {
+        self.native_picker_open().then(|| {
+            text(if self.draft_copying {
+                "CommitDraftCopyChoosing"
+            } else {
+                "RustPatchChooserOpen"
+            })
+        })
     }
     fn action_busy(&self) -> bool {
-        self.busy || self.patch_picking || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
+        self.busy
+            || self.native_picker_open()
+            || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
     }
     pub fn progress(&self) -> Option<String> {
         if self.busy {
@@ -334,8 +348,8 @@ impl Editor {
         }
     }
     fn request_leave(&mut self, next: Leave, ctx: &egui::Context) {
-        if self.patch_picking {
-            self.status = Some(text("RustPatchChooserOpen"));
+        if let Some(notice) = self.picker_notice() {
+            self.status = Some(notice);
             if matches!(next, Leave::Exit) {
                 self.exit_cancelled = true;
             }
@@ -433,7 +447,9 @@ impl Editor {
         );
     }
     pub fn draft_problem(&self) -> Option<&str> {
-        self.draft_error.as_deref()
+        self.draft_error
+            .as_deref()
+            .filter(|_| self.draft_dirty && !self.draft_copying)
     }
     fn initialize(&mut self, ctx: &egui::Context) {
         if self.read_workers.stopping() {
@@ -537,15 +553,45 @@ impl Editor {
     fn edited(&mut self) {
         self.draft_sequence += 1;
         self.draft_dirty = true;
-        self.draft_error = None;
+        if self.identity.is_some() {
+            self.draft_error = None;
+        }
         self.draft_saved_at = Instant::now();
     }
+    fn begin_draft_copy(
+        &mut self,
+        ctx: &egui::Context,
+        pick: impl FnOnce(rfd::FileDialog) -> Option<PathBuf> + Send + 'static,
+    ) {
+        if self.draft_problem().is_none() || self.action_busy() || self.draft_saving {
+            return;
+        }
+        self.draft_copying = true;
+        let dialog = crate::file_picker::draft_copy();
+        let draft = self.draft.clone();
+        let owner = self
+            .identity
+            .clone()
+            .or_else(|| self.context.as_ref().map(|c| c.repository.identity.clone()));
+        let (sequence, tx, ctx) = (self.draft_sequence, self.sender.clone(), ctx.clone());
+        thread::spawn(move || {
+            let result = pick(dialog)
+                .map(|directory| draft.save_copy(&directory, owner.as_ref()))
+                .transpose();
+            let _ = tx.send(Event::DraftCopied(sequence, result));
+            ctx.request_repaint();
+        });
+    }
+    fn can_flush_draft(&self) -> bool {
+        self.draft_dirty
+            && !self.draft_saving
+            && !self.draft_copying
+            && self.draft_loaded
+            && self.draft_error.is_none()
+            && self.identity.is_some()
+    }
     pub fn flush(&mut self, ctx: &egui::Context) {
-        if !self.draft_dirty
-            || self.draft_saving
-            || !self.draft_loaded
-            || self.draft_error.is_some()
-        {
+        if !self.can_flush_draft() {
             return;
         }
         let Some(identity) = self.identity.clone() else {
@@ -644,6 +690,25 @@ impl Editor {
                         Err(error) => self.draft_error = Some(error),
                     }
                 }
+                Event::DraftCopied(sequence, result) => {
+                    self.draft_copying = false;
+                    self.status = Some(match result {
+                        Ok(Some(path)) => {
+                            let key = if sequence == self.draft_sequence {
+                                self.draft_dirty = false;
+                                self.draft_error = None;
+                                "CommitDraftCopySaved"
+                            } else {
+                                "CommitDraftCopyEarlier"
+                            };
+                            strings::format(key, &[&path.to_string_lossy()])
+                        }
+                        Ok(None) => text("CommitDraftCopyCancelled"),
+                        Err(error) => {
+                            strings::format("CommitDraftCopyFailed", &[&error.to_string()])
+                        }
+                    });
+                }
                 Event::WorkingStarted(id) => self.working_started(id),
                 Event::WorkingPushing(id) => self.working_pushing(id),
                 Event::WorkingOutput(id, stream) => self.working_output(id, &stream.take_pending()),
@@ -675,10 +740,13 @@ impl Editor {
                 }
             }
         }
-        if self.draft_dirty {
-            ctx.request_repaint_after(Duration::from_millis(400));
-            if self.draft_saved_at.elapsed() >= Duration::from_millis(400) {
+        if self.can_flush_draft() {
+            let remaining =
+                Duration::from_millis(400).saturating_sub(self.draft_saved_at.elapsed());
+            if remaining.is_zero() {
                 self.flush(ctx);
+            } else {
+                ctx.request_repaint_after(remaining);
             }
         }
         if self.refresh_pending
@@ -1036,6 +1104,16 @@ impl Editor {
         .show(ui, |ui| {
             if let Some(error) = &self.draft_error {
                 ui.colored_label(ui.visuals().error_fg_color, error);
+                if self.draft_dirty
+                    && ui
+                        .add_enabled(
+                            !self.action_busy() && !self.draft_saving,
+                            egui::Button::new(text("CommitDraftCopy")),
+                        )
+                        .clicked()
+                {
+                    self.begin_draft_copy(ui.ctx(), rfd::FileDialog::pick_folder);
+                }
             }
             let subject_label = ui.label(text("CommitSubject"));
             let subject = ui

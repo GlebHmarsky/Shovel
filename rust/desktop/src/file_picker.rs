@@ -20,10 +20,17 @@ impl HasDisplayHandle for Owner {
     }
 }
 pub fn patch() -> rfd::FileDialog {
-    let mut dialog = rfd::FileDialog::new()
-        .set_title(text("FilePatchTitle"))
-        .add_filter(text("RustPatchFilter"), &["patch"])
-        .add_filter(text("RustAllFilesFilter"), &["*"]);
+    owned(
+        rfd::FileDialog::new()
+            .set_title(text("FilePatchTitle"))
+            .add_filter(text("RustPatchFilter"), &["patch"])
+            .add_filter(text("RustAllFilesFilter"), &["*"]),
+    )
+}
+pub fn draft_copy() -> rfd::FileDialog {
+    owned(rfd::FileDialog::new().set_title(text("CommitDraftCopyFolder")))
+}
+fn owned(mut dialog: rfd::FileDialog) -> rfd::FileDialog {
     // Read only our thread's active window; never attach to another app's
     // foreground window. No filesystem, Git or tool discovery is done here.
     let active = unsafe { windows_sys::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow() };
