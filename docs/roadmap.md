@@ -1,5 +1,9 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.19 published
+
+GitHub Actions run `44307865905` published master `50497772d60bb997a224e2c5dc8118e074df1e3a`. The public verifier checked the exact tag and all seven downloaded assets. The immutable signed feed matched the live alias byte for byte. The Windows installer reports 0.50.19 and has no Authenticode signature. Shovel’s native updater independently verified the same release and downloaded the package. Installed apply, restart, repair and uninstall require separate acceptance. [Release receipt](evidence/rust-beta-0.50.19-publication.json)
+
 ## Reuse the Windows dependency cache across Beta versions
 
 The earlier workflow used the combined Cargo lock and toolchain hash for every cache prefix. Bumping Shovel’s version changes the lock hash on every Beta. The 0.50.18 run spent 147 seconds in lint, 283 seconds in bounded smoke including compilation, and 570 seconds in packaging. The new cache prefers the exact lock and can fall back to the same pinned toolchain and runner architecture. The save step uses the restore step’s primary key and still runs before signing. [Run 44298385990](https://github.com/GlebHmarsky/Shovel/actions/runs/44298385990) · [GitHub cache matching](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-key-matching)
