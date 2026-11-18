@@ -1,0 +1,20 @@
+{
+  "SchemaVersion": 1,
+  "Product": "ShovelRust",
+  "Channel": "win-rust-beta",
+  "Architecture": "win-x64",
+  "SourceCommit": "9d75ec962d714646276f9c2ca25619767437fe5d",
+  "Assets": [
+    {
+      "PackageId": "ShovelRust",
+      "Version": "0.50.3",
+      "Type": "Full",
+      "FileName": "ShovelRust-0.50.3-win-rust-beta-full.nupkg",
+      "SHA1": "4AA14BF2F5EF6BA3193E943AD23E293D67286BE0",
+      "SHA256": "A729733FD63181FAEFEAF08A77FFC760EEF50F85C8335089C8157A857C841709",
+      "Size": 13656694,
+      "NotesMarkdown": "Shovel Rust 0.50.3 Beta. Native Rust workspace preview. Full C# parity is still in progress. Independent Rust-only updates. See TODO and roadmap for verification limits.",
+      "NotesHTML": "<p>Shovel Rust 0.50.3 Beta. Native Rust workspace preview. Full C# parity is still in progress. Independent Rust-only updates. See TODO and roadmap for verification limits.</p>"
+    }
+  ]
+}

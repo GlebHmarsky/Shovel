@@ -1,0 +1,20 @@
+{
+  "SchemaVersion": 1,
+  "Product": "ShovelRust",
+  "Channel": "win-rust-beta",
+  "Architecture": "win-x64",
+  "SourceCommit": "3439d51f2ba1f1cd3aee770a93821cc421123053",
+  "Assets": [
+    {
+      "PackageId": "ShovelRust",
+      "Version": "0.50.14",
+      "Type": "Full",
+      "FileName": "ShovelRust-0.50.14-win-rust-beta-full.nupkg",
+      "SHA1": "CC4181FBA6834B5C9873F187F08B6F58D1DA318C",
+      "SHA256": "DD7FFAD0E5546A9A15A4F9652962A7FC7CB4FB320B43D37D24230CF3EAB5FB0D",
+      "Size": 13707907,
+      "NotesMarkdown": "Shovel 0.50.14 Beta. See the changelog for changes and TODO for verification limits.",
+      "NotesHTML": "<p>Shovel 0.50.14 Beta. See the changelog for changes and TODO for verification limits.</p>"
+    }
+  ]
+}

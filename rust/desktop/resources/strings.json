@@ -1104,6 +1104,8 @@
   "RustUpdateFailed": "Could not complete the update request. Check your connection and try again. This Rust channel may not have a published release yet.",
   "RustUpdateInvalid": "Update verification failed. No update was applied.",
   "RustUpdateReplay": "The feed offers an older version than one already verified. No update was applied.",
+  "RustUpdateCheckingElsewhere": "Another Shovel window is checking this update channel. Try again in a moment.",
+  "RustUpdateFloorUnavailable": "Shovel could not read or save the latest trusted version for this channel. Check access to the update data folder and retry.",
   "RustUpdateCurrent": "This installation is up to date on the selected Rust channel.",
   "RustUpdateProgress": "Downloading verified Rust update — {0}%",
   "RustUpdateInstallNeeded": "Install Shovel using its Windows installer before applying updates.",

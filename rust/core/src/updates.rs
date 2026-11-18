@@ -7,6 +7,9 @@ use sha2::{Digest, Sha256};
 use std::io::Read;
 use thiserror::Error;
 
+#[cfg(windows)]
+pub mod floor;
+
 pub const PRODUCT: &str = "ShovelRust";
 pub const REPOSITORY: &str = "GlebHmarsky/Shovel";
 pub const MAX_FEED_BYTES: usize = 1024 * 1024;

@@ -6,7 +6,7 @@ use shovel_core::{
     updates::{self, Channel, VerifiedRelease},
 };
 use std::{
-    fs::{self, File},
+    fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::mpsc,
@@ -127,53 +127,39 @@ impl From<String> for CheckError {
         Self::Unavailable(error)
     }
 }
+impl From<updates::UpdateError> for CheckError {
+    fn from(error: updates::UpdateError) -> Self {
+        use std::io::ErrorKind;
+        use updates::UpdateError;
+        match error {
+            UpdateError::Replay => Self::Rejected("RustUpdateReplay"),
+            UpdateError::Io(e) => Self::Unavailable(text(match e.kind() {
+                ErrorKind::Interrupted => "ActionResultCancelled",
+                ErrorKind::WouldBlock => "RustUpdateCheckingElsewhere",
+                _ => "RustUpdateFloorUnavailable",
+            })),
+            _ => Self::Rejected("RustUpdateInvalid"),
+        }
+    }
+}
+fn recheck_offer(offer: &Offer, cancel: &Cancellation) -> Result<(), String> {
+    updates::floor::recheck(&trusted_directory(), &offer.release, cancel).map_err(|error| {
+        match CheckError::from(error) {
+            CheckError::Unavailable(message) => message,
+            CheckError::Rejected(key) => text(key),
+        }
+    })
+}
 fn check(channel: Channel, cancel: &Cancellation) -> Result<Option<Offer>, CheckError> {
     let feed = bytes(&channel.feed_url(), updates::MAX_FEED_BYTES as u64, cancel)?;
     let signature = bytes(&format!("{}.sig", channel.feed_url()), 2048, cancel)?;
-    let release = updates::verify_feed(channel, &feed, &signature)
-        .map_err(|_| CheckError::Rejected("RustUpdateInvalid"))?;
-    // Immutable, signed floor records shared by this user's Rust profiles.
-    let directory = trusted_directory().join(channel.id());
-    fs::create_dir_all(&directory).map_err(failure)?;
-    let records = fs::read_dir(&directory)
-        .map_err(failure)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(failure)?;
-    if records.len() > 1024 {
-        return Err(CheckError::Rejected("RustUpdateInvalid"));
-    }
-    for entry in records {
-        if cancel.is_cancelled() {
-            return Err(text("ActionResultCancelled").into());
-        }
-        let path = entry.path();
-        if path.extension().is_none_or(|e| e != "json") {
-            continue;
-        }
-        let mut data = Vec::new();
-        File::open(path)
-            .map_err(failure)?
-            .take(8 * updates::MAX_FEED_BYTES as u64)
-            .read_to_end(&mut data)
-            .map_err(failure)?;
-        let (old_feed, old_sig): (Vec<u8>, Vec<u8>) =
-            serde_json::from_slice(&data).map_err(|_| CheckError::Rejected("RustUpdateInvalid"))?;
-        let old = updates::verify_feed(channel, &old_feed, &old_sig)
-            .map_err(|_| CheckError::Rejected("RustUpdateInvalid"))?;
-        if release.version() < old.version() {
-            return Err(CheckError::Rejected("RustUpdateReplay"));
-        }
-    }
-    let record = directory.join(format!("{}.json", release.version()));
-    if !record.exists() {
-        let temporary = directory.join(format!("{}.tmp", uuid::Uuid::new_v4()));
-        fs::write(
-            &temporary,
-            serde_json::to_vec(&(feed.clone(), signature)).map_err(failure)?,
-        )
-        .map_err(failure)?;
-        fs::rename(&temporary, &record).map_err(failure)?;
-    }
+    let release = updates::floor::verify_and_record(
+        &trusted_directory(),
+        channel,
+        &feed,
+        &signature,
+        cancel,
+    )?;
     if !release.is_newer_than(&semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap()) {
         return Ok(None);
     }
@@ -527,6 +513,7 @@ impl Controller {
                         let lease = self.workers.start(cancel.clone());
                         std::thread::spawn(move || {
                             let result = (|| {
+                                recheck_offer(&offer, &cancel)?;
                                 let manager = manager(&offer, cancel)?;
                                 let target = package_path(&offer)?;
                                 if target.exists() {
@@ -601,6 +588,7 @@ impl Controller {
                     .release
                     .verify_package(File::open(package_path(&offer)?).map_err(failure)?)
                     .map_err(|_| text("RustUpdateInvalid"))?;
+                recheck_offer(&offer, &Cancellation::default())?;
                 manager(&offer, Cancellation::default())?
                     .wait_exit_then_apply_updates(
                         &offer.asset,
@@ -626,7 +614,9 @@ fn other_instances() -> Result<(), String> {
                 CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
                 TH32CS_SNAPPROCESS,
             },
-            Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW},
+            Threading::{
+                OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+            },
         },
     };
     let current = std::env::current_exe().map_err(failure)?;
@@ -665,13 +655,16 @@ fn other_instances() -> Result<(), String> {
                     GetLastError() != ERROR_INVALID_PARAMETER
                 } else {
                     let mut length = image.len() as u32;
-                    let read = QueryFullProcessImageNameW(process, 0, image.as_mut_ptr(), &mut length);
+                    let read =
+                        QueryFullProcessImageNameW(process, 0, image.as_mut_ptr(), &mut length);
                     CloseHandle(process);
                     read == 0
                         || PathBuf::from(std::ffi::OsString::from_wide(&image[..length as usize]))
                             .parent()
                             .is_some_and(|parent| {
-                                parent.as_os_str().eq_ignore_ascii_case(directory.as_os_str())
+                                parent
+                                    .as_os_str()
+                                    .eq_ignore_ascii_case(directory.as_os_str())
                             })
                 };
                 if blocks_update {
