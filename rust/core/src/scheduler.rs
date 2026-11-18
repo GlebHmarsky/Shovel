@@ -27,6 +27,7 @@ pub enum Outcome {
     Failed,
     Conflict,
     Removed,
+    Coalesced,
     StoppedAfterFailure,
 }
 #[derive(Clone, Debug)]
@@ -154,14 +155,48 @@ impl Scheduler {
     }
     /// Bind the whole pending owner before activating any request. Failure of
     /// the first action can then stop all its remaining requests consistently.
-    pub fn bind_repository(&self, pending: &str, repository: &str, common: &str) {
-        let mut state = self.state.lock().unwrap();
-        for work in &mut state.waiting {
-            if work.record.repository == pending && work.run.is_none() {
-                work.record.repository = repository.to_owned();
-                work.record.common = common.to_owned();
-            }
+    pub fn bind_reserved(&self, bindings: &[(u64, String)], repository: &str, common: &str) {
+        if bindings.is_empty() {
+            return;
         }
+        let duplicates = {
+            let mut state = self.state.lock().unwrap();
+            for work in &mut state.waiting {
+                if work.run.is_none()
+                    && let Some((_, key)) = bindings.iter().find(|(id, _)| *id == work.record.id)
+                {
+                    work.record.repository = repository.to_owned();
+                    work.record.common = common.to_owned();
+                    work.record.key.clone_from(key);
+                }
+            }
+            // An already running command owns its key. Otherwise retain the first
+            // matching reservation in actual queue order, including dialog handoffs.
+            let mut keys: std::collections::HashSet<_> = state
+                .running
+                .values()
+                .filter(|r| r.repository == repository)
+                .map(|r| r.key.clone())
+                .collect();
+            let mut duplicates = Vec::new();
+            let mut index = 0;
+            while index < state.waiting.len() {
+                let record = &state.waiting[index].record;
+                if record.repository == repository && !keys.insert(record.key.clone()) {
+                    let mut duplicate = state.waiting.remove(index).unwrap();
+                    duplicate.record.outcome = Some(Outcome::Coalesced);
+                    state.retain_completed(duplicate.record.clone());
+                    duplicates.push(duplicate);
+                } else {
+                    index += 1;
+                }
+            }
+            duplicates
+        };
+        for duplicate in duplicates {
+            (duplicate.discard)(Outcome::Coalesced);
+        }
+        self.dispatch();
     }
 
     pub fn activate(&self, id: u64, run: impl FnOnce() -> Outcome + Send + 'static) -> bool {
@@ -454,7 +489,11 @@ mod tests {
         assert!(!scheduler.activate(removed, || panic!("removed reservation started")));
         assert!(scheduler.has_accepted_work());
         assert!(scheduler.records().iter().all(|r| !r.running));
-        scheduler.bind_repository("pending", "worktree-A", "common");
+        scheduler.bind_reserved(
+            &[(a, "push".into()), (b, "pull".into())],
+            "worktree-A",
+            "common",
+        );
         let (sent, received) = mpsc::channel();
         let tx = sent.clone();
         // Activating a later request cannot overtake an earlier unresolved one.

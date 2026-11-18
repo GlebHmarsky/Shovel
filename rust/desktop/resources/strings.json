@@ -1110,6 +1110,7 @@
   "RustPatchChoosing": "Choose where to save the selected patch…",
   "RustPatchNotSaved": "Patch export cancelled.",
   "RustPatchChooserOpen": "Finish or cancel the patch save dialog before closing this window.",
+  "RustRequestCoalesced": "Handled by the matching active request",
   "RustPatchWriteFailed": "The patch could not be saved. The existing destination has been preserved.",
   "RustRefNotFound": "The selected reference is no longer in this history. Refresh to retry.",
   "RustRefsRight": "Show branch and tag labels after the commit subject",

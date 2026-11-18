@@ -27,7 +27,7 @@ pub struct Context {
     pub remotes: Vec<Remote>,
     pub config_stamp: String,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Strategy {
     Rebase,
     Merge,
@@ -37,13 +37,13 @@ pub struct Target {
     pub remote: String,
     pub branch: String,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PushTarget {
     pub source: String,
     pub commit: Option<String>,
     pub destination: Target,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub enum Action {
     Fetch {
         remote: Option<String>,

@@ -1114,10 +1114,26 @@ fn selected_dos_alias_binds_waiting_fetch_and_reuses_the_verified_tab_and_previe
         &app.scheduler,
         &ctx,
     );
+    app.operations.defer_network(
+        crate::operations::Kind::Fetch,
+        &fixture.root,
+        &app.settings,
+        &app.scheduler,
+        &ctx,
+    );
     app.close_tab(owner, &ctx);
-    until(&mut app, &ctx, |app| {
-        app.scheduler.records()[0].outcome.is_some()
-    });
+    until(&mut app, &ctx, |app| !app.scheduler.has_accepted_work());
+    let records = app.scheduler.records();
+    let completed = |outcome| {
+        records
+            .iter()
+            .filter(|r| r.outcome == Some(outcome))
+            .count()
+    };
+    assert_eq!(completed(shovel_core::scheduler::Outcome::Succeeded), 1);
+    if !Workspace::same_path(&alias, &fixture.root) {
+        assert_eq!(completed(shovel_core::scheduler::Outcome::Coalesced), 1);
+    }
     assert_eq!(
         fixture.command(&["rev-parse", "refs/remotes/origin/main"]),
         fixture.command(&["rev-parse", "HEAD"])

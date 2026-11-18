@@ -56,6 +56,24 @@ struct Options {
     explicit: bool,
 }
 impl Options {
+    fn saved<'a>(settings: &'a Settings, path: &Path, kind: Kind) -> Option<&'a serde_json::Value> {
+        settings
+            .get("NetworkActions")?
+            .as_array()?
+            .iter()
+            .find(|entry| {
+                entry["Action"].as_u64() == Some(kind.number())
+                    && entry["Path"]
+                        .as_str()
+                        .is_some_and(|p| crate::Workspace::same_path(Path::new(p), path))
+            })
+    }
+    fn queue_key(&self, snapshot: &Snapshot) -> String {
+        use sha2::{Digest, Sha256};
+        let bytes = serde_json::to_vec(&(&snapshot.branch, self.action()))
+            .expect("network action contains only strings and flags");
+        format!("network:{}:{:x}", self.kind.key(), Sha256::digest(bytes))
+    }
     fn load(settings: &Settings, snapshot: &Snapshot, kind: Kind) -> Self {
         let branch = snapshot.branch.clone().unwrap_or_default();
         let upstream = snapshot
@@ -68,18 +86,23 @@ impl Options {
                         .map(|b| (r.clone(), b.to_owned()))
                 })
             });
-        let (remote, destination) = upstream.unwrap_or_else(|| {
-            (
-                snapshot
-                    .remotes
-                    .iter()
-                    .find(|r| *r == "origin")
-                    .or(snapshot.remotes.first())
-                    .cloned()
-                    .unwrap_or_default(),
-                branch.clone(),
-            )
-        });
+        let (remote, destination) = snapshot
+            .upstream_target
+            .as_ref()
+            .map(|target| (target.remote.clone(), target.branch.clone()))
+            .or(upstream)
+            .unwrap_or_else(|| {
+                (
+                    snapshot
+                        .remotes
+                        .iter()
+                        .find(|r| *r == "origin")
+                        .or(snapshot.remotes.first())
+                        .cloned()
+                        .unwrap_or_default(),
+                    branch.clone(),
+                )
+            });
         let mut options = Self {
             kind,
             source: branch.clone(),
@@ -92,17 +115,7 @@ impl Options {
             set_upstream: false,
             explicit: false,
         };
-        let saved = settings
-            .get("NetworkActions")
-            .and_then(serde_json::Value::as_array)
-            .and_then(|items| {
-                items.iter().find(|v| {
-                    v["Action"].as_u64() == Some(kind.number())
-                        && v["Path"].as_str().is_some_and(|s| {
-                            s.eq_ignore_ascii_case(&snapshot.worktree.to_string_lossy())
-                        })
-                })
-            });
+        let saved = Self::saved(settings, &snapshot.worktree, kind);
         if let Some(saved) = saved {
             options.strategy = if saved["Strategy"].as_u64() == Some(1) {
                 Strategy::Merge
@@ -141,7 +154,7 @@ impl Options {
             !(v["Action"].as_u64() == Some(self.kind.number())
                 && v["Path"]
                     .as_str()
-                    .is_some_and(|p| p.eq_ignore_ascii_case(&path)))
+                    .is_some_and(|p| crate::Workspace::same_path(Path::new(p), &snapshot.worktree)))
         });
         entries.insert(0, serde_json::json!({ "Path": path, "Action": self.kind.number(), "Branch": snapshot.branch.as_deref().unwrap_or_default(), "SourceBranch": self.source, "Remote": self.remote, "RemoteBranch": self.branch, "Strategy": if self.strategy == Strategy::Merge { 1 } else { 0 }, "AutoStash": self.auto_stash, "AllRemotes": self.all_remotes, "AllTags": self.all_tags, "SetUpstream": self.set_upstream, "ExplicitTarget": self.explicit }));
         entries.truncate(60);
@@ -279,6 +292,7 @@ struct PendingNetwork {
     path: PathBuf,
     action: RequestKind,
     settings: Settings,
+    bound: Option<(String, Option<String>)>,
 }
 pub struct Controller {
     pub divergence: crate::divergence::Display,
@@ -585,7 +599,7 @@ impl Controller {
         action: RequestKind,
         path: &Path,
         owner: (&str, &str),
-        target_key: Option<&str>,
+        key: String,
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) -> Option<(u64, u64)> {
@@ -596,11 +610,7 @@ impl Controller {
         let (request, accepted) = scheduler.reserve(
             owner.0.into(),
             owner.1.into(),
-            match (action, target_key) {
-                (RequestKind::Network(kind), Some(key)) => format!("network:{}:{key}", kind.key()),
-                (RequestKind::Network(kind), None) => format!("network:{}", kind.key()),
-                _ => format!("dialog:{action:?}"),
-            },
+            key,
             action.lane(),
             move |outcome| {
                 let _ = sender.send(Event::Removed(sequence, outcome));
@@ -656,8 +666,17 @@ impl Controller {
         ctx: &egui::Context,
     ) {
         let owner = Self::pending_owner(path);
+        let key = match action {
+            RequestKind::Network(kind) => {
+                use sha2::{Digest, Sha256};
+                let saved = serde_json::to_vec(&Options::saved(settings, path, kind))
+                    .expect("saved network preferences are JSON");
+                format!("network:{}:pending:{:x}", kind.key(), Sha256::digest(saved))
+            }
+            _ => format!("dialog:{action:?}"),
+        };
         if let Some((request, sequence)) =
-            self.reserve_run(action, path, (&owner, &owner), None, scheduler, ctx)
+            self.reserve_run(action, path, (&owner, &owner), key, scheduler, ctx)
         {
             self.pending.push(PendingNetwork {
                 request,
@@ -665,6 +684,7 @@ impl Controller {
                 path: path.to_path_buf(),
                 action,
                 settings: settings.clone(),
+                bound: None,
             });
         }
     }
@@ -680,13 +700,38 @@ impl Controller {
     }
 
     pub fn bind_initialization(
-        &self,
+        &mut self,
         path: &std::path::Path,
         snapshot: &Snapshot,
         scheduler: &Scheduler,
     ) {
-        scheduler.bind_repository(
-            &Self::pending_owner(path),
+        let bindings: Vec<_> = self
+            .pending
+            .iter_mut()
+            .filter(|p| {
+                p.bound.is_none()
+                    && (crate::Workspace::same_path(&p.path, path)
+                        || crate::Workspace::same_path(&p.path, &snapshot.worktree))
+            })
+            .map(|p| {
+                let key = match p.action {
+                    RequestKind::Network(kind) => {
+                        Options::load(&p.settings, snapshot, kind).queue_key(snapshot)
+                    }
+                    action => format!("dialog:{action:?}"),
+                };
+                p.bound = Some((
+                    snapshot.identity.fingerprint.clone(),
+                    snapshot.branch.clone(),
+                ));
+                (p.request, key)
+            })
+            .collect();
+        if bindings.is_empty() {
+            return;
+        }
+        scheduler.bind_reserved(
+            &bindings,
             &snapshot.identity.fingerprint,
             &shovel_core::case::path_key(&snapshot.common_directory),
         );
@@ -700,17 +745,35 @@ impl Controller {
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) {
+        if let Ok(snapshot) = result {
+            self.bind_initialization(path, snapshot, scheduler);
+        }
         let (pending, others): (Vec<_>, Vec<_>) = std::mem::take(&mut self.pending)
             .into_iter()
-            .partition(|p| crate::Workspace::same_path(&p.path, path));
+            .partition(|p| {
+                crate::Workspace::same_path(&p.path, path)
+                    || result.is_ok_and(|s| crate::Workspace::same_path(&p.path, &s.worktree))
+            });
         self.pending = others;
         if pending.is_empty() {
             return;
         }
         match result {
             Ok(snapshot) => {
-                self.bind_initialization(path, snapshot, scheduler);
                 for request in pending {
+                    if request.bound.as_ref().is_some_and(|(owner, branch)| {
+                        owner != &snapshot.identity.fingerprint || branch != &snapshot.branch
+                    }) {
+                        if let Some(run) = self
+                            .runs
+                            .iter_mut()
+                            .find(|r| r.sequence == request.sequence)
+                        {
+                            run.output = text("ActionChanged");
+                        }
+                        scheduler.fail_reserved(request.request);
+                        continue;
+                    }
                     if let RequestKind::Network(kind) = request.action {
                         self.activate_network(
                             (request.request, request.sequence),
@@ -792,7 +855,7 @@ impl Controller {
             RequestKind::Network(options.kind),
             &snapshot.worktree,
             (&snapshot.identity.fingerprint, &common),
-            None,
+            options.queue_key(snapshot),
             scheduler,
             ctx,
         ) {
@@ -817,17 +880,7 @@ impl Controller {
         options.remote = name.to_owned();
         options.explicit = true;
         options.all_remotes = false;
-        let common = shovel_core::case::path_key(&snapshot.common_directory);
-        if let Some(ticket) = self.reserve_run(
-            RequestKind::Network(Kind::Fetch),
-            &snapshot.worktree,
-            (&snapshot.identity.fingerprint, &common),
-            Some(&format!("remote:{name}")),
-            scheduler,
-            ctx,
-        ) {
-            self.activate_network(ticket, options, snapshot, git, scheduler, ctx);
-        }
+        self.submit(options, snapshot, git, scheduler, ctx);
     }
 
     fn activate_network(
@@ -1334,6 +1387,7 @@ impl Controller {
                         run.show_failure = outcome == Outcome::Failed;
                         run.status = text(match outcome {
                             Outcome::Removed => "QueuedRequestCancelled",
+                            Outcome::Coalesced => "RustRequestCoalesced",
                             Outcome::Failed => "ActionFailedShort",
                             _ => "ActionStoppedShort",
                         });

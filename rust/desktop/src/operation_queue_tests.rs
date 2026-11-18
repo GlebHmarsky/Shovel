@@ -17,6 +17,143 @@ fn controller() -> Controller {
 }
 
 #[test]
+fn explicit_push_targets_keep_distinct_requests_and_coalesce_the_matching_initialization() {
+    let (_temp, git, snapshot) = fixture();
+    let ctx = egui::Context::default();
+    let scheduler = Scheduler::default();
+    let mut ops = controller();
+    let mut settings = Settings::default();
+    let mut first = Options::load(&settings, &snapshot, Kind::Push);
+    first.explicit = true;
+    first.branch = "review/alpha".into();
+    first.save(&mut settings, &snapshot);
+    let mut second = first.clone();
+    second.branch = "review/beta".into();
+    let (hold, _) = scheduler.reserve(
+        "hold".into(),
+        shovel_core::case::path_key(&snapshot.common_directory),
+        "hold".into(),
+        Lane::Exclusive,
+        |_| {},
+    );
+    ops.defer_network(Kind::Push, &snapshot.worktree, &settings, &scheduler, &ctx);
+    let pending = ops.pending[0].request;
+    let duplicate = ops
+        .submit(first.clone(), &snapshot, git.clone(), &scheduler, &ctx)
+        .unwrap();
+    let distinct = ops
+        .submit(second, &snapshot, git.clone(), &scheduler, &ctx)
+        .expect("another target must get its own request");
+    ops.resolve_initialization(&snapshot.worktree, Ok(&snapshot), &git, &scheduler, &ctx);
+    assert!(
+        ops.submit(first, &snapshot, git.clone(), &scheduler, &ctx)
+            .is_none()
+    );
+    assert!(scheduler.remove_waiting(hold));
+    wait(|| {
+        ops.poll(&ctx);
+        ops.runs.iter().all(|r| r.done) && !scheduler.has_accepted_work()
+    });
+    let records = scheduler.records();
+    let outcome = |id| records.iter().find(|r| r.id == id).unwrap().outcome;
+    assert_eq!(outcome(pending), Some(Outcome::Succeeded));
+    assert_eq!(outcome(duplicate), Some(Outcome::Coalesced));
+    assert_eq!(outcome(distinct), Some(Outcome::Succeeded));
+    assert!(
+        ops.runs
+            .iter()
+            .any(|r| r.status == text("RustRequestCoalesced"))
+    );
+    for branch in ["review/alpha", "review/beta"] {
+        assert_eq!(
+            command(
+                &git,
+                &snapshot.worktree.join("remote.git"),
+                &["rev-parse", branch]
+            ),
+            snapshot.head.as_deref().unwrap()
+        );
+    }
+}
+
+#[test]
+fn pending_push_bound_by_local_changes_rejects_a_different_history_owner() {
+    let (_temp, git, first) = fixture();
+    let (_other_temp, _, other) = fixture();
+    let ctx = egui::Context::default();
+    let scheduler = Scheduler::default();
+    let mut ops = controller();
+    ops.defer_network(
+        Kind::Push,
+        &first.worktree,
+        &Settings::default(),
+        &scheduler,
+        &ctx,
+    );
+    ops.bind_initialization(&first.worktree, &first, &scheduler);
+    ops.resolve_initialization(&first.worktree, Ok(&other), &git, &scheduler, &ctx);
+    ops.poll(&ctx);
+    assert!(!scheduler.has_accepted_work());
+    assert_eq!(scheduler.records()[0].outcome, Some(Outcome::Failed));
+    assert_eq!(ops.runs[0].output, text("ActionChanged"));
+    for snapshot in [first, other] {
+        assert!(
+            command(
+                &git,
+                &snapshot.worktree.join("remote.git"),
+                &["for-each-ref", "refs/heads"]
+            )
+            .is_empty()
+        );
+    }
+}
+
+#[test]
+fn network_options_display_the_configured_destination_with_a_custom_tracking_ref() {
+    let (_temp, git, first) = fixture();
+    command(
+        &git,
+        &first.worktree,
+        &[
+            "remote",
+            "add",
+            "mirror",
+            first.worktree.join("remote.git").to_str().unwrap(),
+        ],
+    );
+    command(
+        &git,
+        &first.worktree,
+        &[
+            "config",
+            "remote.mirror.fetch",
+            "+refs/heads/*:refs/tracking/mirror/*",
+        ],
+    );
+    command(
+        &git,
+        &first.worktree,
+        &["config", "branch.main.remote", "mirror"],
+    );
+    command(
+        &git,
+        &first.worktree,
+        &["config", "branch.main.merge", "refs/heads/integration"],
+    );
+    let snapshot = git
+        .inspect(&first.worktree, &Cancellation::default())
+        .unwrap();
+    for kind in [Kind::Pull, Kind::Push] {
+        let options = Options::load(&Settings::default(), &snapshot, kind);
+        assert_eq!(
+            (&*options.remote, &*options.branch),
+            ("mirror", "integration")
+        );
+        assert!(!options.explicit);
+    }
+}
+
+#[test]
 fn initializing_toolbar_push_coalesces_and_finishes_after_all_tabs_close() {
     let (_temp, git, snapshot) = fixture();
     command(&git, &snapshot.worktree, &["tag", "remembered-tag"]);
