@@ -403,7 +403,7 @@ impl Editor {
             self.diff_generation += 1;
             self.diff_cancel.cancel();
             self.loading = false;
-            self.diff = None;
+            self.diff_current = false;
             self.diff_deferred = self.focused.is_some();
         }
     }

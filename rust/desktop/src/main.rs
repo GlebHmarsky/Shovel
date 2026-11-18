@@ -1464,6 +1464,9 @@ impl Workspace {
             editor.inline = inline;
             editor.read_workers = self.read_workers.clone();
             editor.owner_fingerprint = expected;
+            if let Some(rows) = self.tab_markers.preview_rows(tab) {
+                editor.seed_preview(rows);
+            }
             editor.authentication = Some(self.operations.external_authentication());
             editor.restore_layout(&self.settings);
             editor.apply_preferences(&self.settings);

@@ -388,7 +388,7 @@ impl Pane {
                         .on_hover_text(&self.displayed_file);
                         ui.monospace(&self.displayed_commit[..self.displayed_commit.len().min(8)]);
                     });
-                    self.view.show(ui, diff, false);
+                    self.view.show(ui, diff, diff_view::HunkActions::ReadOnly);
                 } else {
                     ui.label(text("DiffChooseFile"));
                 }

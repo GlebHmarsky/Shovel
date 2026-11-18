@@ -23,7 +23,148 @@ struct Harness {
     show_activity: bool,
     modifiers: egui::Modifiers,
 }
+
+#[test]
+fn shift_replaces_each_staging_button_and_operates_on_the_whole_group() {
+    let mut h = Harness::new();
+    h.click("Unstaged · Modified · one.txt");
+    let normal = h.point(&text("CommitStage"));
+    h.modifiers = egui::Modifiers::SHIFT;
+    assert_eq!(h.point(&text("CommitStageAll")), normal);
+    let output = h.render(vec![]);
+    let nodes = &output
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .unwrap()
+        .nodes;
+    assert!(
+        nodes
+            .iter()
+            .all(|(_, node)| !matches!(node.label(), Some("Stage" | "Unstage" | "Refresh")))
+    );
+    output.drop_without_applying_deltas();
+    h.click(&text("CommitStageAll"));
+    h.until(|editor| editor.working_ready() && !editor.busy);
+    assert_eq!(
+        h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .group(Group::Staged)
+            .len(),
+        2
+    );
+    h.click(&text("CommitUnstageAll"));
+    h.until(|editor| editor.working_ready() && !editor.busy);
+    let context = h.editor.context.as_ref().unwrap();
+    assert!(context.group(Group::Staged).is_empty());
+    assert_eq!(context.group(Group::Unstaged).len(), 2);
+}
+
+#[test]
+fn diff_remains_visible_during_selection_refresh_and_after_the_file_becomes_clean() {
+    let mut h = Harness::new();
+    h.click("Unstaged · Modified · one.txt");
+    h.until(|editor| editor.diff_current);
+    let assert_visible = |h: &mut Harness, line: &str| {
+        let output = h.render(vec![]);
+        let expected = format!(" + {line}");
+        let y = output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::Shape::Text(label) if label.galley.text().ends_with(&expected) => {
+                Some(label.visual_bounding_rect().top())
+            }
+            _ => None,
+        }).unwrap_or_else(|| panic!("missing diff line {line}"));
+        output.drop_without_applying_deltas();
+        y
+    };
+    let before_selection = assert_visible(&mut h, "one");
+    let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
+    h.click("Unstaged · Modified · two.txt");
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(!h.editor.diff_current);
+    assert_eq!(assert_visible(&mut h, "one"), before_selection);
+    release.send(()).unwrap();
+    h.until(|editor| editor.diff_current);
+    let before_refresh = assert_visible(&mut h, "two");
+
+    fs::write(h.editor.path.join("two.txt"), "updated\n").unwrap();
+    let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
+    h.refresh();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(assert_visible(&mut h, "two"), before_refresh);
+    release.send(()).unwrap();
+    h.until(|editor| editor.diff_current);
+    assert_visible(&mut h, "updated");
+
+    fs::write(h.editor.path.join("two.txt"), "base\n").unwrap();
+    h.refresh();
+    h.until(|editor| editor.focused.is_none() && !editor.loading);
+    assert!(!h.editor.diff_current);
+    assert_visible(&mut h, "updated");
+}
+
+#[test]
+fn lfs_preview_shows_both_extensions_and_logical_sizes_without_text_controls() {
+    let mut h = Harness::new();
+    let relative = "nested/meter.uasset";
+    let root = h.editor.path.clone();
+    let path = root.join(relative);
+    fs::create_dir(root.join("nested")).unwrap();
+    let pointer = |size| {
+        format!(
+            "version https://git-lfs.github.com/spec/v1\noid sha256:{}\nsize {size}\n",
+            "a".repeat(64)
+        )
+    };
+    fs::write(&path, pointer(131651)).unwrap();
+    command(&h.editor.git, &root, &["add", "--", relative]);
+    fs::write(&path, pointer(140650)).unwrap();
+    h.refresh();
+    h.until(|editor| !editor.loading && editor.working_ready());
+    h.click("Unstaged · Modified · nested/meter.uasset");
+    h.until(|editor| editor.diff_current);
+    let output = h.render(vec![]);
+    let labels: Vec<_> = output
+        .shapes
+        .iter()
+        .filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(label) => Some(label.galley.text()),
+            _ => None,
+        })
+        .collect();
+    for label in ["LFS", ".uasset"] {
+        assert_eq!(labels.iter().filter(|value| **value == label).count(), 2);
+    }
+    for (compact, bytes) in [("128", "131651"), ("137", "140650")] {
+        let size = strings::format("BinarySizeCompact", &[compact, &text("BinaryKiB"), bytes]);
+        assert!(labels.contains(&size.as_str()));
+    }
+    for key in [
+        "DiffIgnoreWhitespace",
+        "DiffWholeFile",
+        "DiffSideBySide",
+        "CommitRefresh",
+    ] {
+        assert!(!labels.contains(&text(key).as_str()));
+    }
+    output.drop_without_applying_deltas();
+}
+
 impl Harness {
+    fn refresh(&mut self) {
+        for pressed in [true, false] {
+            self.render(vec![egui::Event::Key {
+                key: egui::Key::F5,
+                physical_key: Some(egui::Key::F5),
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }])
+            .drop_without_applying_deltas();
+        }
+    }
     fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("repo");
@@ -537,7 +678,7 @@ fn refresh_reloads_a_draft_after_the_native_lock_is_released() {
     h.editor.activate();
     drop(lock);
 
-    h.click(&text("CommitRefresh"));
+    h.refresh();
     h.until(|e| !e.loading && e.draft_loaded);
     assert_eq!(h.editor.draft, text_on_disk);
     assert!(h.editor.draft_error.is_none());
@@ -570,7 +711,7 @@ fn refresh_retries_a_failed_save_and_preserves_a_competing_draft() {
     assert!(h.editor.draft_dirty && h.editor.draft_error.is_some());
     drop(lock);
 
-    h.click(&text("CommitRefresh"));
+    h.refresh();
     h.until(|e| !e.loading && e.draft_loaded && !e.draft_saving);
     assert!(h.editor.draft_error.is_none());
     h.until(|e| !e.draft_dirty);
@@ -589,7 +730,7 @@ fn refresh_retries_a_failed_save_and_preserves_a_competing_draft() {
     h.editor.flush(&h.ctx);
     h.until(|e| !e.draft_saving);
     assert!(h.editor.draft_dirty && h.editor.draft_error.is_some());
-    h.click(&text("CommitRefresh"));
+    h.refresh();
     h.until(|e| !e.loading && e.draft_loaded && !e.draft_saving);
     assert!(h.editor.draft_dirty && h.editor.draft_error.is_some());
     assert_eq!(h.editor.draft.subject, "unsaved local text");
@@ -809,7 +950,7 @@ fn stage_and_unstage_keep_the_focused_file_while_an_older_full_read_is_held() {
     // Both a successful stale event and the cancelled native read must be ignored.
     h.editor
         .sender
-        .send(Event::Loaded(stale_generation, Box::new(Ok(stale))))
+        .send(Event::Loaded(stale_generation, Box::new(Ok(stale)), None))
         .unwrap();
     release.send(()).unwrap();
     h.until(|e| !e.loading && !e.target_rows_current);

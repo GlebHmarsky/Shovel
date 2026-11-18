@@ -154,16 +154,28 @@ struct Scan {
     id: u64,
     count: bool,
     cancel: Cancellation,
-    result: Receiver<Read>,
+    result: Receiver<ScanResult>,
+}
+
+struct ScanResult {
+    read: Read,
+    rows: Option<Arc<[shovel_core::working::Change]>>,
 }
 
 #[derive(Default)]
 pub(super) struct Controller {
     observations: HashMap<u64, Observation>,
     scan: Option<Scan>,
+    preview: Option<(u64, Arc<[shovel_core::working::Change]>)>,
 }
 
 impl Controller {
+    pub fn preview_rows(&self, tab: &Tab) -> Option<Arc<[shovel_core::working::Change]>> {
+        self.preview
+            .as_ref()
+            .filter(|(id, _)| *id == tab.id && !tab.view.identity_blocked)
+            .map(|(_, rows)| rows.clone())
+    }
     pub fn status(&self, tab: &Tab) -> Status {
         if tab.view.identity_blocked {
             return Status::Unavailable;
@@ -202,6 +214,7 @@ impl Controller {
 
     pub fn reset(&mut self) {
         self.observations.clear();
+        self.preview = None;
         if let Some(scan) = &self.scan {
             scan.cancel.cancel();
         }
@@ -209,6 +222,9 @@ impl Controller {
 
     pub fn forget(&mut self, id: u64) {
         self.observations.remove(&id);
+        if self.preview.as_ref().is_some_and(|(owner, _)| *owner == id) {
+            self.preview = None;
+        }
         self.invalidate(id);
     }
 }
@@ -255,14 +271,28 @@ impl Workspace {
                                 && (Some(tab.id) == active || marked(tab))
                         })
                     {
+                        let result = result.unwrap_or(ScanResult {
+                            read: if scan.count {
+                                Read::Count(None)
+                            } else {
+                                Read::Marker(Status::Unavailable)
+                            },
+                            rows: None,
+                        });
+                        if let Some(rows) = result.rows
+                            && Some(tab.id) == active
+                        {
+                            for editor in &mut self.editors {
+                                if tab.owns_editor(editor) {
+                                    editor.seed_preview(rows.clone());
+                                }
+                            }
+                            markers.preview = Some((tab.id, rows));
+                        }
                         markers.observations.insert(
                             scan.id,
                             Observation {
-                                read: result.unwrap_or(if scan.count {
-                                    Read::Count(None)
-                                } else {
-                                    Read::Marker(Status::Unavailable)
-                                }),
+                                read: result.read,
                                 due: marked(tab).then_some(now + INTERVAL),
                             },
                         );
@@ -334,19 +364,32 @@ impl Workspace {
         let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
             let _lease = lease;
-            let read = match expected.as_deref().filter(|_| count) {
+            let result = match expected.as_deref().filter(|_| count) {
                 Some(expected) => {
-                    Read::Count(git.local_change_count(&path, expected, &cancel).ok())
+                    let rows = git.local_change_rows(&path, expected, &cancel).ok();
+                    let count = rows.as_ref().map(|rows| {
+                        rows.iter()
+                            .map(|entry| entry.path.as_str())
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .len()
+                    });
+                    ScanResult {
+                        read: Read::Count(count),
+                        rows: rows.map(Arc::from),
+                    }
                 }
-                None => Read::Marker(
-                    match git.has_local_changes(&path, expected.as_deref(), &cancel) {
-                        Ok(true) => Status::Changed,
-                        Ok(false) => Status::Clean,
-                        Err(_) => Status::Unavailable,
-                    },
-                ),
+                None => ScanResult {
+                    read: Read::Marker(
+                        match git.has_local_changes(&path, expected.as_deref(), &cancel) {
+                            Ok(true) => Status::Changed,
+                            Ok(false) => Status::Clean,
+                            Err(_) => Status::Unavailable,
+                        },
+                    ),
+                    rows: None,
+                },
             };
-            let _ = tx.send(read);
+            let _ = tx.send(result);
             ctx.request_repaint();
         });
     }

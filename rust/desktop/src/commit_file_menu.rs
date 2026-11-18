@@ -100,11 +100,7 @@ impl Editor {
             .iter()
             .map(|e| (e.group, e.path.clone()))
             .collect();
-        self.focused = Some(menu.entry.clone());
-        self.diff_cancel.cancel();
-        self.diff_generation += 1;
-        self.diff = None;
-        self.diff_error = None;
+        self.set_diff_target(menu.entry.clone());
         self.diff_deferred = true;
         self.file_menu = Some(menu);
     }

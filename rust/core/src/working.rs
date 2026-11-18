@@ -629,18 +629,13 @@ impl Git {
             .is_empty())
     }
 
-    pub fn local_change_count(
+    pub fn local_change_rows(
         &self,
         root: &Path,
         expected: &str,
         cancel: &Cancellation,
-    ) -> Result<usize, Error> {
-        let entries = self.local_changes(root, Some(expected), true, cancel)?;
-        Ok(entries
-            .iter()
-            .map(|entry| entry.path.as_str())
-            .collect::<BTreeSet<_>>()
-            .len())
+    ) -> Result<Vec<Change>, Error> {
+        self.local_changes(root, Some(expected), true, cancel)
     }
 
     fn local_changes(

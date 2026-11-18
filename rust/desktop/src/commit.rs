@@ -23,7 +23,7 @@ use std::{
 };
 
 enum Event {
-    Loaded(u64, Box<Result<Context, working::Error>>),
+    Loaded(u64, Box<Result<Context, working::Error>>, Option<String>),
     Diff(u64, Result<shovel_core::diff::FileDiff, working::Error>),
     DraftLoaded {
         retry: bool,
@@ -68,6 +68,7 @@ pub struct Editor {
     pub open: bool,
     pub inline: bool,
     pub context: Option<Arc<Context>>,
+    preview_rows: Option<Arc<[Change]>>,
     pub failed_commit: bool,
     pub failed_operation: Option<&'static str>,
     pub status: Option<String>,
@@ -96,6 +97,8 @@ pub struct Editor {
     selection: BTreeSet<(Group, String)>,
     focused: Option<Change>,
     diff: Option<shovel_core::diff::FileDiff>,
+    displayed_path: Option<String>,
+    diff_current: bool,
     diff_view: crate::diff_view::View,
     diff_options: shovel_core::diff::Options,
     diff_error: Option<String>,
@@ -153,6 +156,7 @@ impl Editor {
             open: true,
             inline: false,
             context: None,
+            preview_rows: None,
             failed_commit: false,
             failed_operation: None,
             status: None,
@@ -181,6 +185,8 @@ impl Editor {
             selection: BTreeSet::new(),
             focused: None,
             diff: None,
+            displayed_path: None,
+            diff_current: false,
             diff_view: crate::diff_view::View::default(),
             diff_options: shovel_core::diff::Options::default(),
             diff_error: None,
@@ -227,6 +233,11 @@ impl Editor {
             .as_deref()
             .filter(|_| self.snapshot_error.is_none())
     }
+    pub(super) fn seed_preview(&mut self, rows: Arc<[Change]>) {
+        if self.context.is_none() {
+            self.preview_rows = Some(rows);
+        }
+    }
 
     #[cfg(test)]
     pub(super) fn presented(&self) -> bool {
@@ -261,6 +272,8 @@ impl Editor {
         self.diff_generation += 1;
         self.scan_cancel.cancel();
         self.diff_cancel.cancel();
+        self.diff_current = false;
+        self.preview_rows = None;
         self.loading = false;
         self.refresh_pending = false;
         self.target_rows_current = false;
@@ -445,7 +458,7 @@ impl Editor {
         }
         self.diff_cancel.cancel();
         self.diff_generation += 1;
-        self.diff = None;
+        self.diff_current = false;
         self.diff_error = None;
         self.conflict = Some(
             crate::conflict::Pane::new(
@@ -541,12 +554,16 @@ impl Editor {
         }
         self.refresh_pending = false;
         self.loading = true;
+        self.diff_current = false;
+        self.diff_cancel.cancel();
+        self.diff_generation += 1;
         self.scan_cancel.cancel();
         self.scan_cancel = Cancellation::default();
         self.generation += 1;
         let generation = self.generation;
         let git = self.git.clone();
         let path = self.path.clone();
+        let displayed = self.displayed_path.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
         let cancel = self.scan_cancel.clone();
@@ -557,28 +574,44 @@ impl Editor {
             crate::history_cache::tests::wait_for_read(&path);
             let git = git.as_ref().clone().with_foreground_reads(true);
             let result = git.working_copy(&path, &cancel);
-            let _ = tx.send(Event::Loaded(generation, Box::new(result)));
+            let removed = result.as_ref().ok().and_then(|context| {
+                displayed.filter(|relative| {
+                    !context.entries.iter().any(|entry| entry.path == *relative)
+                        && working::path(&context.repository.worktree, relative).is_ok_and(|file| {
+                            std::fs::symlink_metadata(file)
+                                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+                        })
+                })
+            });
+            let _ = tx.send(Event::Loaded(generation, Box::new(result), removed));
             ctx.request_repaint();
         });
     }
+    fn set_diff_target(&mut self, entry: Change) {
+        self.diff_cancel.cancel();
+        self.diff_generation += 1;
+        if self
+            .focused
+            .as_ref()
+            .is_none_or(|old| old.path != entry.path || old.group != entry.group)
+        {
+            self.diff_options = Default::default();
+        }
+        self.focused = Some(entry);
+        self.diff_current = false;
+        self.diff_error = None;
+    }
+
     fn show_diff(&mut self, entry: Change, ctx: &egui::Context) {
         if self.read_workers.stopping() {
             return;
         }
-        let Some(context) = self.context.clone() else {
-            return;
-        };
-        self.diff_cancel.cancel();
-        self.diff_cancel = Cancellation::default();
-        self.diff_generation += 1;
-        self.focused = Some(entry.clone());
-        self.diff = None;
-        self.diff_view.reset();
-        self.diff_error = None;
+        self.set_diff_target(entry.clone());
         if self.file_menu.is_some()
             || self.file_confirmation.is_some()
             || self.patch_picking
             || self.has_working_queue()
+            || self.loading
         {
             self.diff_deferred = true;
             return;
@@ -591,7 +624,12 @@ impl Editor {
         {
             return;
         }
+        let Some(context) = self.context.clone() else {
+            self.diff_deferred = true;
+            return;
+        };
         let generation = self.diff_generation;
+        self.diff_cancel = Cancellation::default();
         let cancel = self.diff_cancel.clone();
         let git = self.git.clone();
         let tx = self.sender.clone();
@@ -600,6 +638,8 @@ impl Editor {
         let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
             let _lease = lease;
+            #[cfg(test)]
+            crate::history_cache::tests::wait_for_read(&context.repository.worktree);
             let result = git.file_diff(&context, &entry, options, &cancel);
             let _ = tx.send(Event::Diff(generation, result));
             ctx.request_repaint();
@@ -691,19 +731,35 @@ impl Editor {
     pub fn poll(&mut self, ctx: &egui::Context) -> bool {
         while let Ok(event) = self.receiver.try_recv() {
             match event {
-                Event::Loaded(generation, result) if generation == self.generation => {
+                Event::Loaded(generation, result, removed) if generation == self.generation => {
                     self.loading = false;
                     if self.refresh_pending {
                         continue;
                     }
                     match *result {
-                        Ok(context) => self.apply(context, ctx),
+                        Ok(context) => {
+                            self.apply(context, ctx);
+                            if self.focused.is_none()
+                                && removed.is_some()
+                                && self.displayed_path == removed
+                                && self.snapshot_error.is_none()
+                            {
+                                self.diff = None;
+                                self.displayed_path = None;
+                            }
+                        }
                         Err(error) => self.snapshot_error = Some(error_text(error)),
                     }
                 }
                 Event::Diff(generation, result) if generation == self.diff_generation => {
                     match result {
-                        Ok(diff) => self.diff = Some(diff),
+                        Ok(diff) => {
+                            self.diff = Some(diff);
+                            self.displayed_path =
+                                self.focused.as_ref().map(|entry| entry.path.clone());
+                            self.diff_current = true;
+                            self.diff_view.reset();
+                        }
                         Err(error) => self.diff_error = Some(error_text(error)),
                     }
                 }
@@ -859,6 +915,7 @@ impl Editor {
             && self.leave.is_none()
             && !self.action_busy()
             && !self.loading
+            && self.current_context().is_some()
             && let Some(entry) = self.focused.clone()
         {
             self.show_diff(entry, ctx);
@@ -908,6 +965,7 @@ impl Editor {
             .and_then(|old| matching_row(old.group, &old.path))
             .cloned();
         self.context = Some(Arc::new(context));
+        self.preview_rows = None;
         // Keep edited text even when an external operation removes this conflict.
         // The captured preview cannot execute against the changed index/state.
         if let Some(pane) = &mut self.conflict {
@@ -921,7 +979,10 @@ impl Editor {
             self.show_diff(focus, ctx);
         } else {
             self.focused = None;
-            self.diff = None;
+            self.diff_cancel.cancel();
+            self.diff_generation += 1;
+            self.diff_current = false;
+            self.diff_deferred = false;
             self.diff_error = None;
         }
     }
@@ -1152,15 +1213,7 @@ impl Editor {
         }
         egui::Panel::top("commit_controls").show(ui, |ui| {
             ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        !self.loading && !self.action_busy(),
-                        egui::Button::new(text("CommitRefresh")),
-                    )
-                    .clicked()
-                {
-                    self.request_refresh(&ctx);
-                }
+                ui.set_min_height(20.);
                 if let Some(branch) = self
                     .context
                     .as_ref()
@@ -1309,57 +1362,75 @@ impl Editor {
         .show(ui, |ui| {
             let mut chosen = None;
             let snapshot = self.context.clone();
+            let preview = self.preview_rows.clone();
+            let entries = snapshot
+                .as_ref()
+                .map(|context| context.entries.as_slice())
+                .or(preview.as_deref());
+            let mid = ui.max_rect().center().y;
+            let palette = crate::workspace_style::Palette::current(ui);
             for staged in [false, true] {
-                let rows = file_list::FileList::new(snapshot.as_deref(), staged);
+                let rows = file_list::FileList::from_entries(entries.unwrap_or_default(), staged);
                 let count = rows.count();
-                ui.horizontal(|ui| {
-                    ui.strong(strings::format(
-                        if staged {
-                            "CommitStagedCount"
-                        } else {
-                            "CommitUnstagedCount"
-                        },
-                        &[&count.to_string()],
-                    ));
-                    let selected = self
-                        .selection
-                        .iter()
-                        .any(|(group, _)| (*group == Group::Staged) == staged);
-                    let all = ui.input(|i| i.modifiers.shift);
-                    if ui
-                        .add_enabled(
-                            self.working_ready() && (selected || all && count > 0),
-                            egui::Button::new(text(if staged {
-                                "CommitUnstage"
-                            } else {
-                                "CommitStage"
-                            })),
-                        )
-                        .on_hover_text(text(if staged {
-                            "CommitUnstageHelp"
-                        } else {
-                            "CommitStageHelp"
-                        }))
-                        .clicked()
-                    {
-                        self.stage(staged, all, &ctx);
-                    }
-                    if ui
-                        .add_enabled(
-                            self.working_ready() && count > 0,
-                            egui::Button::new(text(if staged {
-                                "CommitUnstageAll"
-                            } else {
-                                "CommitStageAll"
-                            })),
-                        )
-                        .clicked()
-                    {
-                        self.stage(staged, true, &ctx);
-                    }
-                });
-                let height = (ui.available_height() / if staged { 1. } else { 2. } - 32.).max(65.);
-                let empty_snapshot = count == 0 && snapshot.is_some();
+                let header = egui::Frame::new()
+                    .fill(palette.panel)
+                    .inner_margin(egui::Margin::symmetric(6, 3))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.strong(strings::format(
+                                if staged {
+                                    "CommitStagedCount"
+                                } else {
+                                    "CommitUnstagedCount"
+                                },
+                                &[&count.to_string()],
+                            ));
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let selected = self
+                                        .selection
+                                        .iter()
+                                        .any(|(group, _)| (*group == Group::Staged) == staged);
+                                    let all = ui.input(|i| i.modifiers.shift);
+                                    let key = match (staged, all) {
+                                        (false, false) => "CommitStage",
+                                        (false, true) => "CommitStageAll",
+                                        (true, false) => "CommitUnstage",
+                                        (true, true) => "CommitUnstageAll",
+                                    };
+                                    if ui
+                                        .add_enabled(
+                                            self.working_ready()
+                                                && if all { count > 0 } else { selected },
+                                            egui::Button::new(text(key))
+                                                .min_size(egui::vec2(88., 22.)),
+                                        )
+                                        .on_hover_text(text(if staged {
+                                            "CommitUnstageShift"
+                                        } else {
+                                            "CommitStageShift"
+                                        }))
+                                        .clicked()
+                                    {
+                                        self.stage(staged, all, &ctx);
+                                    }
+                                },
+                            );
+                        });
+                    });
+                ui.painter().hline(
+                    header.response.rect.x_range(),
+                    header.response.rect.bottom(),
+                    egui::Stroke::new(1., palette.border),
+                );
+                let height = if staged {
+                    ui.available_height()
+                } else {
+                    mid - ui.next_widget_position().y
+                }
+                .max(32.);
+                let empty_snapshot = count == 0 && entries.is_some();
                 egui::ScrollArea::vertical()
                     .id_salt(("files", staged))
                     .auto_shrink([false, false])
@@ -1460,50 +1531,81 @@ impl Editor {
                 ui.add_enabled_ui(ready, |ui| pane.show(ui));
                 return;
             }
-            if let Some(entry) = &self.focused {
-                ui.strong(&entry.path);
-                if entry.group == Group::Conflicted
+            let current = self.diff_current
+                && !self.loading
+                && !self.refresh_pending
+                && !self.action_busy()
+                && self.snapshot_error.is_none();
+            let conflict = self
+                .focused
+                .as_ref()
+                .is_some_and(|entry| entry.group == Group::Conflicted);
+            let has_text = self
+                .diff
+                .as_ref()
+                .is_some_and(|diff| diff.kind == shovel_core::diff::Kind::Text);
+            let mut options_changed = false;
+            ui.horizontal(|ui| {
+                ui.set_min_height(22.);
+                if conflict
                     && ui
                         .add_enabled(
-                            !self.action_busy() && !self.loading && self.snapshot_error.is_none(),
+                            self.working_ready(),
                             egui::Button::new(text("ConflictOpen")),
                         )
                         .clicked()
                 {
                     self.open_conflict();
-                    return;
                 }
-            }
-            let mut options_changed = false;
-            ui.horizontal(|ui| {
-                options_changed |= ui
-                    .checkbox(
-                        &mut self.diff_options.ignore_whitespace,
-                        text("DiffIgnoreWhitespace"),
+                if has_text {
+                    ui.add_enabled_ui(current, |ui| {
+                        options_changed |= ui
+                            .checkbox(
+                                &mut self.diff_options.ignore_whitespace,
+                                text("DiffIgnoreWhitespace"),
+                            )
+                            .changed();
+                        options_changed |= ui
+                            .checkbox(&mut self.diff_options.whole_file, text("DiffWholeFile"))
+                            .changed();
+                    });
+                }
+                if let Some(error) = &self.diff_error {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text("CommitDiffUnavailable"))
+                                .color(ui.visuals().error_fg_color),
+                        )
+                        .truncate(),
                     )
-                    .changed();
-                options_changed |= ui
-                    .checkbox(&mut self.diff_options.whole_file, text("DiffWholeFile"))
-                    .changed();
+                    .on_hover_text(error);
+                } else if self.diff.is_some() && !current {
+                    ui.weak(text(if self.focused.is_none() {
+                        "DiffNoLongerChanged"
+                    } else {
+                        "CommitDiffPrevious"
+                    }));
+                } else if self.diff.is_none() && self.focused.is_some() && !conflict {
+                    ui.weak(text("DiffLoading"));
+                }
             });
             if options_changed && let Some(entry) = self.focused.clone() {
                 self.show_diff(entry, &ctx);
             }
-            if let Some(error) = &self.diff_error {
-                ui.colored_label(ui.visuals().error_fg_color, error);
-            } else if let Some(diff) = &self.diff {
-                let ready = !self.busy && !self.loading && self.snapshot_error.is_none();
-                if let Some(ids) = self.diff_view.show(ui, diff, ready)
-                    && let Some(preview) = diff.hunks.clone()
-                {
-                    self.submit(Action::Hunks { preview, ids }, &ctx);
-                }
-            } else {
-                ui.label(text(if self.focused.is_some() {
-                    "DiffLoading"
-                } else {
-                    "DiffChooseFile"
-                }));
+            if let Some(diff) = &self.diff
+                && let Some(ids) = ui
+                    .push_id(("local-diff", self.displayed_path.as_deref()), |ui| {
+                        let actions = if current && !options_changed {
+                            crate::diff_view::HunkActions::Ready
+                        } else {
+                            crate::diff_view::HunkActions::Waiting
+                        };
+                        self.diff_view.show(ui, diff, actions)
+                    })
+                    .inner
+                && let Some(preview) = diff.hunks.clone()
+            {
+                self.submit(Action::Hunks { preview, ids }, &ctx);
             }
         });
         if let Some(review) = &self.confirm_amend {
@@ -1707,8 +1809,26 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(5));
             }
         };
+        let started = Instant::now();
+        while app.tab_markers.preview_rows(&app.tabs[0]).is_none() {
+            assert!(started.elapsed() < Duration::from_secs(15));
+            app.receive(&ctx);
+            thread::sleep(Duration::from_millis(5));
+        }
+        let (scanning, release) = crate::history_cache::tests::hold_read(first.root.clone());
         app.open_commit();
         paint(&mut app, &ctx, vec![]);
+        scanning.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(app.editors[0].context.is_none());
+        assert!(
+            app.editors[0]
+                .preview_rows
+                .as_ref()
+                .unwrap()
+                .iter()
+                .any(|entry| entry.path == "visible.txt")
+        );
+        release.send(()).unwrap();
         until(&mut app, &|editor| {
             editor.draft_loaded && editor.current_context().is_some()
         });
@@ -1760,6 +1880,13 @@ mod tests {
         println!("dirty Local Changes return to fresh rows: {:?}", started.elapsed());
         assert!(app.editors[0].selection.contains(&selected));
         assert_eq!(app.editors[0].draft.subject, "retained repository draft");
+        until(&mut app, &|editor| editor.diff_current);
+        std::fs::remove_file(first.root.join("visible.txt")).unwrap();
+        app.editors[0].refresh(&ctx);
+        until(&mut app, &|editor| {
+            !editor.loading && editor.focused.is_none()
+        });
+        assert!(app.editors[0].diff.is_none());
     }
 
     #[test]

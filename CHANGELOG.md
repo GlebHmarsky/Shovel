@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.51.5 - 2026-11-19
+
+- Use matching arrows for Fetch, Pull, and Push, with a hollow Fetch arrow and an upward Push arrow.
+- Show cached Local Changes rows while Git verifies the worktree. Use one button per file group and hold Shift to switch to Stage all or Unstage all.
+- Keep the last diff visible until its replacement is ready. Show full relative paths in the file list and move manual refresh to F5.
+- Show old and new binary file extensions, compact and exact sizes, and LFS badges. Show text controls only for text diffs.
+
 ## Rust 0.51.4 - 2026-11-19
 
 - Label Open In and Console, make the History and Local Changes rows clickable across the sidebar, and keep the compact repository header in place when Update Shovel appears.

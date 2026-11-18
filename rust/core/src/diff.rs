@@ -69,6 +69,8 @@ pub struct FileDiff {
     pub lines: Vec<Line>,
     pub old: Summary,
     pub new: Summary,
+    pub old_extension: Option<String>,
+    pub new_extension: Option<String>,
     pub added: u32,
     pub removed: u32,
     pub availability: HunkAvailability,
@@ -88,12 +90,29 @@ impl FileDiff {
             lines: vec![],
             old,
             new,
+            old_extension: None,
+            new_extension: None,
             added: 0,
             removed: 0,
             availability: HunkAvailability::ContentType,
             hunks: None,
             patch: String::new(),
         }
+    }
+
+    fn with_file_extensions(mut self, entry: &Change) -> Self {
+        if self.kind == Kind::Binary {
+            let extension = |path: &str| {
+                Path::new(path)
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| format!(".{value}"))
+            };
+            self.old_extension = extension(entry.original.as_deref().unwrap_or(&entry.path));
+            self.new_extension = extension(&entry.path);
+        }
+        self
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -393,6 +412,7 @@ impl Git {
             false,
             cancel,
         )
+        .map(|diff| diff.with_file_extensions(entry))
     }
     fn blob_summary(
         &self,
@@ -612,7 +632,7 @@ impl Git {
                 }));
             }
         }
-        Ok(result)
+        Ok(result.with_file_extensions(entry))
     }
     #[allow(clippy::too_many_arguments)]
     fn read_comparison(

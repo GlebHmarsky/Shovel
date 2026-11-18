@@ -312,19 +312,6 @@ pub fn action_with_count(
                 (1., 17.),
                 (1., 4.),
             ]],
-            "Fetch" => &[
-                &[(10., 1.), (10., 14.)],
-                &[(5., 9.), (10., 14.), (15., 9.)],
-                &[(2., 16.), (2., 19.), (18., 19.), (18., 16.)],
-            ],
-            "Pull" => &[
-                &[(17., 2.), (10., 3.), (6., 6.), (5., 10.), (5., 16.)],
-                &[(1., 11.), (5., 16.), (10., 11.)],
-            ],
-            "Push" => &[
-                &[(3., 18.), (10., 17.), (14., 14.), (15., 10.), (15., 4.)],
-                &[(10., 9.), (15., 4.), (19., 9.)],
-            ],
             "Commit" => &[&[(2., 10.), (7., 15.), (18., 3.)]],
             "BranchToolbar" => &[
                 &[(5., 2.), (5., 18.)],
@@ -339,6 +326,9 @@ pub fn action_with_count(
             ],
             _ => &[],
         };
+        if matches!(key, "Fetch" | "Pull" | "Push") {
+            network_arrow(ui.painter(), origin, color, key == "Fetch", key == "Push");
+        }
         for path in paths {
             let points = path
                 .iter()
@@ -384,6 +374,55 @@ pub fn action_with_count(
         );
         response
     })
+}
+
+fn network_arrow(
+    painter: &egui::Painter,
+    origin: egui::Pos2,
+    color: Color32,
+    hollow: bool,
+    upwards: bool,
+) {
+    // Two edges of the same curved shaft, closing at the tail, and a shared arrowhead.
+    let outer = [(19., 2.), (13.7, 2.3), (9.2, 3.8), (5.7, 6.7), (4., 11.3)];
+    let inner = [(19., 2.), (15., 4.), (12.5, 6.6), (11., 9.), (10.5, 11.3)];
+    let point = |(x, y)| {
+        origin
+            + if upwards {
+                egui::vec2(20. - x, 20. - y)
+            } else {
+                egui::vec2(x, y)
+            }
+    };
+    let left = (1.5, 11.3);
+    let tip = (7.3, 18.);
+    let right = (13., 11.3);
+    if hollow {
+        let outline = outer
+            .into_iter()
+            .chain([left, tip, right])
+            .chain(inner.into_iter().rev());
+        painter.add(egui::Shape::line(
+            outline.map(point).collect(),
+            Stroke::new(1.1, color),
+        ));
+    } else {
+        let mut mesh = egui::Mesh::default();
+        for (a, b) in outer.into_iter().zip(inner) {
+            mesh.colored_vertex(point(a), color);
+            mesh.colored_vertex(point(b), color);
+        }
+        for i in (0..8).step_by(2) {
+            mesh.add_triangle(i, i + 2, i + 3);
+            mesh.add_triangle(i, i + 3, i + 1);
+        }
+        painter.add(egui::Shape::mesh(mesh));
+        painter.add(egui::Shape::convex_polygon(
+            [left, tip, right].map(point).to_vec(),
+            color,
+            Stroke::NONE,
+        ));
+    }
 }
 
 /// The chevron is drawn from geometry so it survives system font substitution.

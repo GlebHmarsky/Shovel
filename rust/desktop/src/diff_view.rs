@@ -13,6 +13,12 @@ pub struct View {
     scroll_to: Option<usize>,
     navigation: Option<usize>,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum HunkActions {
+    ReadOnly,
+    Waiting,
+    Ready,
+}
 impl Default for View {
     fn default() -> Self {
         Self {
@@ -75,67 +81,80 @@ impl View {
         &mut self,
         ui: &mut egui::Ui,
         diff: &FileDiff,
-        mutations: bool,
+        actions: HunkActions,
     ) -> Option<Vec<usize>> {
-        let mut apply = None;
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut self.side_by_side, text("DiffSideBySide"));
-            if let Some(preview) = &diff.hunks {
-                let label = if preview.staged() {
-                    "HunkUnstageMany"
-                } else {
-                    "HunkStageMany"
-                };
-                if ui
-                    .add_enabled(
-                        mutations && !self.selected.is_empty(),
-                        egui::Button::new(strings::format(
-                            label,
-                            &[&self.selected.len().to_string()],
-                        )),
-                    )
-                    .on_disabled_hover_text(text("HunkSelectChange"))
-                    .clicked()
-                {
-                    apply = Some(self.selected.iter().copied().collect());
-                }
-            }
-            let hunks = diff
-                .lines
-                .iter()
-                .enumerate()
-                .filter(|(_, l)| l.kind == LineKind::Hunk)
-                .map(|(i, _)| i)
-                .collect::<Vec<_>>();
-            for (next, key) in [(false, "DiffPreviousHunk"), (true, "DiffNextHunk")] {
-                if ui
-                    .add_enabled(!hunks.is_empty(), egui::Button::new(text(key)))
-                    .clicked()
-                {
-                    self.scroll_to = if next {
-                        hunks
-                            .iter()
-                            .copied()
-                            .find(|i| *i > self.navigation.unwrap_or(0))
-                            .or_else(|| hunks.first().copied())
-                    } else {
-                        hunks
-                            .iter()
-                            .copied()
-                            .rev()
-                            .find(|i| *i < self.navigation.unwrap_or(usize::MAX))
-                            .or_else(|| hunks.last().copied())
-                    };
-                    self.navigation = self.scroll_to;
-                }
-            }
-        });
         if diff.kind == Kind::Binary {
             ui.columns(2, |columns| {
-                card(&mut columns[0], "DiffOldSide", &diff.old);
-                card(&mut columns[1], "DiffNewSide", &diff.new);
+                card(
+                    &mut columns[0],
+                    true,
+                    &diff.old,
+                    diff.old_extension.as_deref(),
+                );
+                card(
+                    &mut columns[1],
+                    false,
+                    &diff.new,
+                    diff.new_extension.as_deref(),
+                );
             });
-            return apply;
+            return None;
+        }
+        let mutations = actions == HunkActions::Ready;
+        let mut apply = None;
+        if diff.kind == Kind::Text {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.side_by_side, text("DiffSideBySide"));
+                if let Some(preview) = &diff.hunks {
+                    let label = if preview.staged() {
+                        "HunkUnstageMany"
+                    } else {
+                        "HunkStageMany"
+                    };
+                    if ui
+                        .add_enabled(
+                            mutations && !self.selected.is_empty(),
+                            egui::Button::new(strings::format(
+                                label,
+                                &[&self.selected.len().to_string()],
+                            )),
+                        )
+                        .on_disabled_hover_text(text("HunkSelectChange"))
+                        .clicked()
+                    {
+                        apply = Some(self.selected.iter().copied().collect());
+                    }
+                }
+                let hunks = diff
+                    .lines
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, l)| l.kind == LineKind::Hunk)
+                    .map(|(i, _)| i)
+                    .collect::<Vec<_>>();
+                for (next, key) in [(false, "DiffPreviousHunk"), (true, "DiffNextHunk")] {
+                    if ui
+                        .add_enabled(!hunks.is_empty(), egui::Button::new(text(key)))
+                        .clicked()
+                    {
+                        self.scroll_to = if next {
+                            hunks
+                                .iter()
+                                .copied()
+                                .find(|i| *i > self.navigation.unwrap_or(0))
+                                .or_else(|| hunks.first().copied())
+                        } else {
+                            hunks
+                                .iter()
+                                .copied()
+                                .rev()
+                                .find(|i| *i < self.navigation.unwrap_or(usize::MAX))
+                                .or_else(|| hunks.last().copied())
+                        };
+                        self.navigation = self.scroll_to;
+                    }
+                }
+            });
         }
         let reason = match diff.kind {
             Kind::Directory => Some("DiffSummaryDirectory"),
@@ -161,7 +180,7 @@ impl View {
                     &diff.removed.to_string(),
                 ],
             ));
-            if mutations && diff.availability != HunkAvailability::Available {
+            if actions != HunkActions::ReadOnly && diff.availability != HunkAvailability::Available {
                 ui.label(text(match diff.availability {
                     HunkAvailability::ChangeType => "HunkUnavailableChangeType",
                     HunkAvailability::PreviewOptions => "HunkUnavailablePreviewOptions",
@@ -284,18 +303,96 @@ fn size(summary: &Summary) -> String {
         .map(|n| n.to_string())
         .unwrap_or_else(|| text("CountUnavailable"))
 }
-fn card(ui: &mut egui::Ui, key: &str, summary: &Summary) {
-    egui::Frame::group(ui.style()).show(ui, |ui| {
-        ui.strong(text(key));
-        ui.label(text(if summary.absent {
-            "BinaryAbsent"
-        } else if summary.lfs {
-            "BinaryLfs"
+fn binary_size(bytes: u64) -> String {
+    let units = [
+        (1 << 40, "BinaryTiB"),
+        (1 << 30, "BinaryGiB"),
+        (1 << 20, "BinaryMiB"),
+        (1 << 10, "BinaryKiB"),
+    ];
+    if let Some((unit, key)) = units.into_iter().find(|(unit, _)| bytes >= *unit) {
+        strings::format(
+            "BinarySizeCompact",
+            &[&(bytes / unit).to_string(), &text(key), &bytes.to_string()],
+        )
+    } else {
+        strings::format("BinaryExactBytes", &[&bytes.to_string()])
+    }
+}
+
+fn card(ui: &mut egui::Ui, old: bool, summary: &Summary, extension: Option<&str>) {
+    let palette = crate::workspace_style::Palette::current(ui);
+    let title = text(if old { "DiffOldSide" } else { "DiffNewSide" });
+    let color = if old {
+        palette.diff_removed_text
+    } else {
+        palette.diff_added_text
+    };
+    ui.vertical_centered(|ui| {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(title).strong().color(color));
+            if summary.lfs {
+                egui::Frame::new()
+                    .fill(palette.active_selection)
+                    .corner_radius(3)
+                    .inner_margin(egui::Margin::symmetric(5, 2))
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(text("BinaryLfs"))
+                                .small()
+                                .strong()
+                                .color(palette.selection_text),
+                        );
+                    });
+            }
+        });
+        let width = ui.available_width().clamp(44., 152.);
+        let (tile, _) = ui.allocate_exact_size(egui::vec2(width, 105.), egui::Sense::hover());
+        let painter = ui.painter();
+        painter.rect_filled(tile, 5., palette.raised);
+        painter.rect_stroke(
+            tile,
+            5.,
+            egui::Stroke::new(1., palette.border),
+            egui::StrokeKind::Inside,
+        );
+        if summary.absent {
+            painter.text(
+                tile.center(),
+                egui::Align2::CENTER_CENTER,
+                text("BinaryAbsent"),
+                egui::FontId::proportional(13.),
+                palette.muted,
+            );
         } else {
-            "BinaryStoredFile"
-        }));
-        if !summary.absent {
-            ui.label(strings::format("BinaryExactBytes", &[&size(summary)]));
+            let origin = tile.center() - egui::vec2(12., 27.);
+            let points = [
+                (0., 0.),
+                (15., 0.),
+                (24., 9.),
+                (24., 30.),
+                (0., 30.),
+                (0., 0.),
+            ];
+            let stroke = egui::Stroke::new(1.5, palette.text);
+            let point = |(x, y)| origin + egui::vec2(x, y);
+            painter.add(egui::Shape::line(points.map(point).to_vec(), stroke));
+            painter.add(egui::Shape::line(
+                [(15., 0.), (15., 9.), (24., 9.)].map(point).to_vec(),
+                stroke,
+            ));
+            painter.with_clip_rect(tile.intersect(ui.clip_rect())).text(
+                tile.center() + egui::vec2(0., 20.),
+                egui::Align2::CENTER_CENTER,
+                extension
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| text("BinaryNoExtension")),
+                egui::FontId::proportional(13.),
+                palette.muted,
+            );
+            if let Some(bytes) = summary.bytes {
+                ui.label(binary_size(bytes));
+            }
         }
     });
 }

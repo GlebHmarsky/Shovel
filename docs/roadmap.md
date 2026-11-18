@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Local Changes in Rust 0.51.5
+
+Local Changes consumes the available rows from the selected repository's existing status scan while the editor independently verifies its worktree. The offscreen fixture opened Local Changes with the fresh scan held and confirmed that the cached rows were available before it completed. A second fixture held a new file read and a status refresh and confirmed that the previous diff remained visible at the same vertical position. It also exercised retention after a file became clean. A verified removal cleared the old diff. Shift staging and unstaging changed the actual index for both files. Git LFS pointers reported the expected extensions and logical byte counts on both sides without text controls.
+
+Twenty-three focused checks, all-target Clippy, and `git diff --check` passed. The 18-check smoke suite passed in 53.92 seconds on fingerprint `7AE40C215E3149FFA6AFC74AC5B34B2517C27324C979ED04AEA9A4D393AE8C90`. Cold-open timings and live desktop appearance remain unverified.
+
 ## Toolbar, Activity and updates in Rust 0.51.4
 
 Activity opens under the repository header and displays selected run output beside the run list. The offscreen Windows checks moved, enlarged, and closed the window, opened warning output, exercised right-edge sidebar clicks, and compared exact header bounds with and without an update offer. Update approval remains bound to the offered package and requests guarded restart after download or when an already verified package is ready. Stashes use standard-size gray markers. A real Git fixture kept a nonstandard stash in the sidebar data and included it in the history only after a regular tag referenced it.

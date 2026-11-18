@@ -12,7 +12,15 @@ pub(super) enum Row<'a> {
 }
 impl<'a> FileList<'a> {
     pub fn new(context: Option<&'a Context>, staged: bool) -> Self {
-        let rows = |group| context.map_or(&[][..], |c| c.group(group));
+        Self::from_entries(context.map_or(&[], |context| &context.entries), staged)
+    }
+
+    pub fn from_entries(entries: &'a [Change], staged: bool) -> Self {
+        let rows = |group| {
+            let start = entries.partition_point(|entry| entry.group < group);
+            let remaining = &entries[start..];
+            &remaining[..remaining.partition_point(|entry| entry.group == group)]
+        };
         let groups = if staged {
             [rows(Group::Staged), &[], &[]]
         } else {
@@ -71,8 +79,17 @@ pub(super) fn heading(ui: &mut egui::Ui, group: Group, count: usize) {
     } else {
         group_name(group)
     };
-    ui.add_sized(
-        [ui.available_width(), 22.],
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.), egui::Sense::hover());
+    let palette = Palette::current(ui);
+    ui.painter().rect_filled(rect, 0., palette.raised);
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom(),
+        egui::Stroke::new(1., palette.border),
+    );
+    ui.put(
+        rect.shrink2(egui::vec2(6., 0.)),
         egui::Label::new(
             egui::RichText::new(strings::format(
                 "CommitFileGroup",
@@ -112,34 +129,29 @@ pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egu
     } else {
         p.text
     };
-    let secondary = if highlighted { fg } else { p.muted };
+    let status_color = if p.high_contrast {
+        fg
+    } else {
+        Palette::change_status(entry.code, ui.visuals().dark_mode || highlighted)
+    };
     let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
     painter.text(
         rect.left_center() + egui::vec2(8., 0.),
         egui::Align2::LEFT_CENTER,
         entry.code,
         egui::FontId::monospace(12.),
-        secondary,
+        status_color,
     );
     let path = crate::path_text::PathText::new(ui.ctx(), &entry.path);
     let original = entry
         .original
         .as_ref()
         .map(|p| crate::path_text::PathText::new(ui.ctx(), p));
-    let visible = path.visual();
-    let (directory, name) = visible.rsplit_once('/').unwrap_or(("", visible));
     let mut job = egui::text::LayoutJob::simple_singleline(
-        name.to_owned(),
+        path.visual().to_owned(),
         egui::FontId::proportional(13.),
         fg,
     );
-    if !directory.is_empty() {
-        job.append(
-            directory,
-            9.,
-            egui::TextFormat::simple(egui::FontId::proportional(12.), secondary),
-        );
-    }
     job.wrap.max_width = (rect.width() - 31.).max(1.);
     job.wrap.max_rows = 1;
     let galley = painter.layout_job(job);

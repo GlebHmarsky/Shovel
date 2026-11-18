@@ -8,6 +8,12 @@ The current branch and operation progress share one line below the repository na
 
 Commit shows the author, subject, message body and changed paths across the pane. Changed Files shows a path list with change letters and a diff. Drag the divider to set the list width. Shovel saves it across sessions. Use Repository → Refresh or F5 to retry an inspector read.
 
+## Local Changes (0.51.5)
+
+The selected repository's latest status scan supplies file rows immediately when available. Shovel verifies the worktree in the background before accepting file changes. Files use one repository-relative path per line. The Unstaged and Staged sections have one action each. Hold Shift to act on the entire section. F5 retries status and draft reads.
+
+The previous diff stays visible during a selection or refresh. Hunk operations become available again when the new diff is ready. If a file becomes clean, its last diff stays visible. A verified removal can clear it. Binary cards show each side's extension, size and LFS status. Text options appear with text comparisons.
+
 ## Network options during repository loading (2026-11-18)
 
 The arrows beside Fetch, Pull and Push accept requests as soon as a repository tab starts loading. Each options dialog opens with the original repository's branch and remote choices when they are ready. Closing the tab keeps the request. Closing the dialog saves edited choices. Git runs when you click the named action.

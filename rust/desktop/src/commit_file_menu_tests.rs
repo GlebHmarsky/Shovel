@@ -79,8 +79,12 @@ fn failed_status_read_keeps_rows_and_copy_but_requires_refresh_before_writing() 
     assert!(h.editor.current_context().is_none() && !h.editor.working_ready());
     let out = h.render(vec![]);
     let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
-    for key in ["CommitStage", "CommitStageAll", "Commit"] {
-        assert!(nodes.iter().any(|(_, n)| n.label() == Some(text(key).as_str()) && n.is_disabled()));
+    for key in ["CommitStage", "Commit"] {
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, n)| n.label() == Some(text(key).as_str()) && n.is_disabled())
+        );
     }
     assert!(nodes.iter().any(|(_, n)| n.label().or(n.value()) == Some(text("CommitPreviousStatus").as_str())));
     out.drop_without_applying_deltas();
