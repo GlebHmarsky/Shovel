@@ -555,6 +555,7 @@ impl Editor {
             let _lease = lease;
             #[cfg(test)]
             crate::history_cache::tests::wait_for_read(&path);
+            let git = git.as_ref().clone().with_foreground_reads(true);
             let result = git.working_copy(&path, &cancel);
             let _ = tx.send(Event::Loaded(generation, Box::new(result)));
             ctx.request_repaint();

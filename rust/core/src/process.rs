@@ -49,47 +49,59 @@ pub fn spawn_external(command: &mut std::process::Command) -> std::io::Result<st
 // Background reads cannot exhaust capacity reserved for accepted user work.
 // A permit covers the entire process tree and both output drains.
 struct Admission {
-    count: Mutex<usize>,
+    state: Mutex<AdmissionState>,
     changed: Condvar,
     limit: usize,
 }
-static READS: Admission = Admission {
-    count: Mutex::new(0),
-    changed: Condvar::new(),
-    limit: 2,
-};
-static COMMANDS: Admission = Admission {
-    count: Mutex::new(0),
-    changed: Condvar::new(),
-    limit: 4,
-};
-struct Permit(&'static Admission);
-impl Drop for Permit {
-    fn drop(&mut self) {
-        *self.0.count.lock().unwrap() -= 1;
-        self.0.changed.notify_one();
+struct AdmissionState {
+    active: usize,
+    waiting_foreground: usize,
+}
+impl Admission {
+    const fn new(limit: usize) -> Self {
+        Self {
+            state: Mutex::new(AdmissionState {
+                active: 0,
+                waiting_foreground: 0,
+            }),
+            changed: Condvar::new(),
+            limit,
+        }
+    }
+
+    fn acquire(&self, foreground: bool, cancel: &Cancellation) -> Option<Permit<'_>> {
+        let mut state = self.state.lock().unwrap();
+        if foreground {
+            state.waiting_foreground += 1;
+        }
+        loop {
+            if cancel.is_cancelled() {
+                if foreground {
+                    state.waiting_foreground -= 1;
+                    self.changed.notify_all();
+                }
+                return None;
+            }
+            if state.active < self.limit && (foreground || state.waiting_foreground == 0) {
+                state.active += 1;
+                state.waiting_foreground -= usize::from(foreground);
+                return Some(Permit(self));
+            }
+            state = self
+                .changed
+                .wait_timeout(state, Duration::from_millis(50))
+                .unwrap()
+                .0;
+        }
     }
 }
-fn admit(lifetime: Lifetime, cancel: &Cancellation) -> Option<Permit> {
-    let lane = if lifetime == Lifetime::AcceptedCommand {
-        &COMMANDS
-    } else {
-        &READS
-    };
-    let mut count = lane.count.lock().unwrap();
-    loop {
-        if cancel.is_cancelled() {
-            return None;
-        }
-        if *count < lane.limit {
-            *count += 1;
-            return Some(Permit(lane));
-        }
-        count = lane
-            .changed
-            .wait_timeout(count, Duration::from_millis(50))
-            .unwrap()
-            .0;
+static READS: Admission = Admission::new(2);
+static COMMANDS: Admission = Admission::new(4);
+struct Permit<'a>(&'a Admission);
+impl Drop for Permit<'_> {
+    fn drop(&mut self) {
+        self.0.state.lock().unwrap().active -= 1;
+        self.0.changed.notify_all();
     }
 }
 
@@ -109,6 +121,7 @@ pub struct Request {
     pub capture_limit: usize,
     pub deadline: Duration,
     pub lifetime: Lifetime,
+    pub(crate) foreground_read: bool,
 }
 impl Request {
     pub fn new(
@@ -125,6 +138,7 @@ impl Request {
             capture_limit: 256 * 1024,
             deadline: Duration::from_secs(15),
             lifetime: Lifetime::Read,
+            foreground_read: false,
         }
     }
 }
@@ -396,7 +410,12 @@ fn run_before_launch(
     {
         return Err(invalid());
     }
-    let Some(_permit) = admit(request.lifetime, cancel) else {
+    let (lane, foreground) = match request.lifetime {
+        Lifetime::AcceptedCommand => (&COMMANDS, false),
+        Lifetime::AutomaticFetch => (&READS, false),
+        Lifetime::Read => (&READS, request.foreground_read),
+    };
+    let Some(_permit) = lane.acquire(foreground, cancel) else {
         return Ok(cancelled_before_launch(start));
     };
     let cancellable = request.lifetime != Lifetime::AcceptedCommand;
@@ -963,6 +982,43 @@ mod tests {
             WAIT_TIMEOUT
         );
         assert_eq!(early, Err(mpsc::RecvTimeoutError::Timeout));
+    }
+
+    #[test]
+    fn waiting_foreground_read_goes_first_or_yields_on_cancellation() {
+        for cancel_foreground in [false, true] {
+            let admission = Admission::new(1);
+            let background = Cancellation::default();
+            let foreground = Cancellation::default();
+            let busy = admission.acquire(false, &background).unwrap();
+            let (record, order) = std::sync::mpsc::channel();
+            thread::scope(|scope| {
+                scope.spawn(|| {
+                    let _permit = admission.acquire(false, &background).unwrap();
+                    record.send("background").unwrap();
+                });
+                scope.spawn(|| {
+                    if let Some(_permit) = admission.acquire(true, &foreground) {
+                        record.send("foreground").unwrap();
+                    }
+                });
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while admission.state.lock().unwrap().waiting_foreground == 0 {
+                    assert!(Instant::now() < deadline, "foreground read did not queue");
+                    thread::sleep(Duration::from_millis(2));
+                }
+                if cancel_foreground {
+                    foreground.cancel();
+                }
+                drop(busy);
+            });
+            let expected: &[&str] = if cancel_foreground {
+                &["background"]
+            } else {
+                &["foreground", "background"]
+            };
+            assert_eq!(order.try_iter().collect::<Vec<_>>(), expected);
+        }
     }
 
     // Each saturation test deliberately owns every permit in a process-wide

@@ -391,6 +391,7 @@ impl Workspace {
         let Some(git) = self.git.clone() else {
             return;
         };
+        let foreground = self.tabs.get(self.selected).is_some_and(|tab| tab.id == id);
         let open = self.tabs.iter().any(|tab| tab.id == id);
         let Some(tab) = self
             .tabs
@@ -444,6 +445,7 @@ impl Workspace {
                 }
                 #[cfg(test)]
                 history_cache::tests::wait_for_read(&path);
+                let git = git.as_ref().clone().with_foreground_reads(foreground);
                 let result = history_view::read_expected(
                     &git,
                     &path,
@@ -503,6 +505,7 @@ impl Workspace {
             move || {
                 #[cfg(test)]
                 history_cache::tests::wait_for_read(&history.snapshot.worktree);
+                let git = git.as_ref().clone().with_foreground_reads(true);
                 match history_view::read_page(&git, &history, &cursor, &cancel) {
                     Ok(page) => Event::Page(id, generation, Box::new(page), older),
                     Err(error) => Event::Failed(id, generation, error),
@@ -552,6 +555,7 @@ impl Workspace {
             move || {
                 #[cfg(test)]
                 history_cache::tests::wait_for_read(&history.snapshot.worktree);
+                let git = git.as_ref().clone().with_foreground_reads(true);
                 let result = (|| {
                     let mut cursor = Cursor::default();
                     let mut previous = Vec::new();

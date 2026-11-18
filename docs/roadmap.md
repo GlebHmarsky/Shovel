@@ -86,6 +86,28 @@ Git Trace2 recorded 36–43 ms inside the initial `git log --topo-order` on the 
 
 Four native core history checks, nine desktop history checks, eleven cache checks and the Windows DOS path alias regression passed. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 38.09 seconds on source fingerprint `9E4DD039BA99D4611EE1D86DA362C538CF78A1C0B9EB618C29C1E4076C017E17`.
 
+### Prioritize the selected repository's history reads
+
+Three instrumented native runs of the previous implementation found up to 397 ms waiting for a read slot during the merge-heavy opening. The contention came from Git reads left in flight after opening and viewing the small repository. The temporary probe recorded admission, process creation, and wall time in `Build/navigation-process-timing-{0,1,2}.log`.
+
+Opening or refreshing the selected repository, paging history, locating a commit, and scanning status for a visible Commit editor now give their Git reads first access to available read slots. Running reads keep their permits through process exit and output capture. A cancelled priority waiter yields its place. Accepted Git commands have four dedicated slots, and history and background work share two read slots.
+
+Seven interleaved pairs ran the same command-line native scenario against baseline `f0c3c02` and the changed development build. Each launch started with an isolated profile. The scenario opens the small fixture first, moves its history selection, then opens the merge-heavy fixture while reads from the first repository can still be active. Both versions preserved commit selection, scroll position and Commit window ownership through switches, owner closure, warm reopening and explicit refresh.
+
+| Native scenario | Baseline median (range) | Changed median (range) |
+| --- | ---: | ---: |
+| Small cold open to fresh history layout | 769 ms (624–1,036) | 708 ms (646–946) |
+| Merge-heavy cold open to fresh history layout | 1,322 ms (1,022–2,307) | 935 ms (858–1,108) |
+| Retained tab to first layout | 24 ms (16–26) | 16 ms (14–25) |
+| Warm reopen to first layout | 21 ms (14–27) | 20 ms (17–28) |
+| Commit window to first layout | 162 ms (124–296) | 161 ms (122–362) |
+| Commit window to fresh status | 1,744 ms (1,575–3,915) | 1,804 ms (1,724–2,081) |
+| Explicit unchanged refresh to validated layout | 506 ms (417–660) | 543 ms (417–650) |
+
+The merge-heavy fixture improved in all seven pairs. The fresh Commit status and explicit refresh timings varied in both directions. Raw results and executable hashes are in `Build/navigation-foreground-final-{before,after}.log` and `Build/navigation-foreground-final-binaries.sha256`. The 400 ms target and wider native coverage remain open.
+
+All 19 process checks, four core history checks, nine desktop history checks and four Commit checks passed. The process checks cover priority under contention, cancellation, and independent command capacity. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 35.54 seconds on source fingerprint `332C93E2ED356ED8D6EF4DF6F2552B3FD71FAD186DE478A36E7B27A85A3F4472`.
+
 
 ## Windows Rust 0.51.0 local build checks
 

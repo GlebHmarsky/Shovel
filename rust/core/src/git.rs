@@ -44,6 +44,7 @@ pub struct Git {
     pub executable: PathBuf,
     pub version: String,
     pub environment: BTreeMap<OsString, Option<OsString>>,
+    foreground_reads: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Reference {
@@ -228,6 +229,7 @@ impl Git {
             executable,
             version: String::new(),
             environment: BTreeMap::new(),
+            foreground_reads: false,
         };
         let directory = git.executable.parent().ok_or(Error::MissingGit)?;
         let output = git.read(directory, ["--version"], cancel, 4096)?;
@@ -248,6 +250,13 @@ impl Git {
         git.version = version;
         Ok(git)
     }
+
+    /// Give reads for the current interaction first access to free read slots.
+    pub fn with_foreground_reads(mut self, foreground: bool) -> Self {
+        self.foreground_reads = foreground;
+        self
+    }
+
     pub fn request(
         &self,
         root: &Path,
@@ -275,6 +284,7 @@ impl Git {
         request.arguments.extend(args.into_iter().map(Into::into));
         request.capture_limit = max;
         request.lifetime = lifetime;
+        request.foreground_read = self.foreground_reads;
         for (name, _) in std::env::vars_os() {
             let key = name.to_string_lossy().to_uppercase();
             if (key.starts_with("GIT_")
