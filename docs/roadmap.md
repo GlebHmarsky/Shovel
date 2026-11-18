@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.20 published
+
+Run `44317954177` published master `29b75c3266f1b0d39775726795dc7614a641aa79`. An independent anonymous download checked all seven immutable assets. The live feed and its signature matched the verified release byte for byte. The 21,699,969-byte installer reports 0.50.20 and Windows reports its Authenticode status as `NotSigned`. The native updater discovered and downloaded the exact signed package with progress and exposed the Restart action in a headless frame. Installed apply remains open. GitHub Latest, C# Beta and Rust Stable retained the same release and asset IDs, digests and update timestamps. [Published release](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.20-win-rust-beta) · [Publication receipt](evidence/rust-beta-0.50.20-publication.json)
+
+The committed release source passed all 394 standard workspace tests. Four opt-in tests were excluded from that count. Native SSH signing and the public updater download passed separately. Hosted release policy, automatic Fetch, lint and bounded smoke passed. GitHub stored the new cache for this exact SHA as entry `10728368506` with 783,866,139 bytes. Hosted lint took 205 seconds, smoke with compilation took 408 seconds and installer packaging took 880 seconds. The next Cargo version can exercise the same-toolchain restore prefix.
+
 ## Restore update controls after a worker fails
 
 A discovery worker unwind previously left Updates stuck in Checking after the worker had exited. Discovery and download now report interrupted work as a retryable result. Download progress drains with its work, and a thread creation refusal reports through the existing error path for discovery, download or restart. A controlled discovery interruption kept a verified offer ready and a subsequent manual check completed normally.
