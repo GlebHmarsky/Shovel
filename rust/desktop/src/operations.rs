@@ -165,6 +165,7 @@ impl Options {
             Kind::Push => Action::Push {
                 target: self.explicit.then(|| PushTarget {
                     source: self.source.clone(),
+                    commit: None,
                     destination: target,
                 }),
                 all_tags: self.all_tags,
@@ -208,7 +209,7 @@ enum Event {
     Stage(u64, network::Stage),
     BranchStage(u64, shovel_core::branches::Stage),
     Prompt(u64, authentication::Prompt),
-    ExternalPrompt(u64, authentication::Prompt),
+    ExternalPrompt(u64, PathBuf, &'static str, authentication::Prompt),
     Completed(u64, Box<Result<network::Completed, String>>),
     Removed(u64, Outcome),
     OptionsReady(u64, Box<ReadyOptions>),
@@ -314,30 +315,42 @@ impl Default for Controller {
         }
     }
 }
-impl Controller {
-    pub fn external_authentication(
-        &self,
+#[derive(Clone)]
+pub(crate) struct ExternalAuthentication {
+    sender: Sender<Event>,
+    helper: Option<PathBuf>,
+}
+impl ExternalAuthentication {
+    pub(crate) fn start(
+        self,
         request: u64,
+        path: PathBuf,
+        label: &'static str,
         ctx: &egui::Context,
-    ) -> Box<dyn FnOnce() -> Result<authentication::Session, shovel_core::operation::Error> + Send>
-    {
-        let helper = self.helper.clone();
-        let sender = self.sender.clone();
+    ) -> Result<authentication::Session, shovel_core::operation::Error> {
         let ctx = ctx.clone();
-        Box::new(move || {
-            let handler = Arc::new(move |prompt| {
-                let _ = sender.send(Event::ExternalPrompt(request, prompt));
-                ctx.request_repaint();
-            });
-            let helper = match helper {
-                Some(path) => path,
-                None => std::env::current_exe()
-                    .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))?
-                    .with_file_name("ShovelAskPass.exe"),
-            };
-            authentication::Session::start(&helper, handler)
-                .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))
-        })
+        let handler = Arc::new(move |prompt| {
+            let _ = self
+                .sender
+                .send(Event::ExternalPrompt(request, path.clone(), label, prompt));
+            ctx.request_repaint();
+        });
+        let helper = match self.helper {
+            Some(path) => path,
+            None => std::env::current_exe()
+                .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))?
+                .with_file_name("ShovelAskPass.exe"),
+        };
+        authentication::Session::start(&helper, handler)
+            .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))
+    }
+}
+impl Controller {
+    pub(crate) fn external_authentication(&self) -> ExternalAuthentication {
+        ExternalAuthentication {
+            sender: self.sender.clone(),
+            helper: self.helper.clone(),
+        }
     }
     #[cfg(test)]
     pub(crate) fn set_authentication_helper(&mut self, helper: PathBuf) {
@@ -1175,8 +1188,31 @@ impl Controller {
                         });
                     }
                 }
-                Event::ExternalPrompt(request, prompt) => {
+                Event::ExternalPrompt(request, path, label, prompt) => {
+                    if prompt.closed.is_cancelled() {
+                        continue;
+                    }
+                    // The worker can reach Git authentication before the editor
+                    // has published its first Activity entry to this controller.
+                    if !self.runs.iter().any(|run| run.request == request) {
+                        self.record_owned(
+                            path,
+                            crate::commit::OwnedActivity {
+                                request,
+                                label,
+                                status: text("ActionWaitingShort"),
+                                output: String::new(),
+                                done: false,
+                                failed: false,
+                                reopen_commit: false,
+                            },
+                        );
+                    }
                     if let Some(run) = self.runs.iter_mut().find(|r| r.request == request) {
+                        if run.done {
+                            let _ = prompt.answer.send(None);
+                            continue;
+                        }
                         run.status = text("ActionWaitingShort");
                         self.prompts.push_back(Question {
                             run: run.sequence,
@@ -1184,9 +1220,6 @@ impl Controller {
                             response: Zeroizing::new(String::new()),
                             focus: true,
                         });
-                    } else {
-                        // An already-retired owner cannot leave a broker waiting.
-                        let _ = prompt.answer.send(None);
                     }
                 }
                 Event::Prompt(id, prompt) => {
@@ -1269,13 +1302,7 @@ impl Controller {
                                 if let Some(failure) = result.authentication_failure {
                                     run.output.push_str(&format!(
                                         "\n{}",
-                                        text(match failure {
-                                            authentication::Failure::Unavailable =>
-                                                "RustAuthUnavailable",
-                                            authentication::Failure::TimedOut => "RustAuthTimedOut",
-                                            authentication::Failure::PromptLimit =>
-                                                "RustAuthPromptLimit",
-                                        })
+                                        text(authentication_error(failure))
                                     ));
                                 }
                             }
@@ -1595,6 +1622,13 @@ impl Controller {
     }
 }
 
+pub(crate) fn authentication_error(failure: authentication::Failure) -> &'static str {
+    match failure {
+        authentication::Failure::Unavailable => "RustAuthUnavailable",
+        authentication::Failure::TimedOut => "RustAuthTimedOut",
+        authentication::Failure::PromptLimit => "RustAuthPromptLimit",
+    }
+}
 pub(crate) fn error_log(error: &shovel_core::operation::Error) -> String {
     use shovel_core::{git, operation::Error};
     let status = text(&error.code());

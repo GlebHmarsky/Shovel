@@ -27,6 +27,7 @@ fn preview(root: &std::path::Path) -> Preview {
             branch: Some("main".into()),
             head: Some("b".repeat(40)),
             upstream: None,
+            upstream_target: None,
             remotes: vec![],
             operations: vec![],
             recovery: None,

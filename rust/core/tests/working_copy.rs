@@ -217,6 +217,42 @@ fn failed_native_hook_retains_index_and_reports_failure() {
     assert!(result.commit.is_none());
     assert_eq!(command(&git, root, &["show", ":file"]), "payload\n");
 }
+
+#[test]
+fn commit_reports_the_created_object_when_a_post_commit_hook_moves_head() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    command(&git, root, &["commit", "--allow-empty", "-m", "base"]);
+    let before = command(&git, root, &["rev-parse", "HEAD"])
+        .trim()
+        .to_owned();
+    fs::write(root.join("change"), b"reviewed work").unwrap();
+    command(&git, root, &["add", "change"]);
+    fs::write(
+        root.join(".git/hooks/post-commit"),
+        "#!/bin/sh\ngit rev-parse HEAD > .git/fixture-created\ngit update-ref HEAD HEAD^ HEAD\n",
+    )
+    .unwrap();
+    let review = git.working_copy(root, &Cancellation::default()).unwrap();
+    let result = git
+        .execute_working(
+            &review,
+            &Action::Commit {
+                message: "reviewed commit".into(),
+                amend: false,
+            },
+            None,
+        )
+        .unwrap();
+    assert!(result.succeeded());
+    let created = fs::read_to_string(root.join(".git/fixture-created")).unwrap();
+    assert_ne!(before, created.trim());
+    assert_eq!(result.commit.as_deref(), Some(created.trim()));
+    assert_eq!(
+        result.updated.unwrap().repository.head.as_deref(),
+        Some(before.as_str())
+    );
+}
 #[test]
 fn linked_worktree_gate_conflicts_on_another_thread() {
     let (temp, git) = fixture();

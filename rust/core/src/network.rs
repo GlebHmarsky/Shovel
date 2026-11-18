@@ -32,7 +32,7 @@ pub enum Strategy {
     Rebase,
     Merge,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Target {
     pub remote: String,
     pub branch: String,
@@ -40,6 +40,7 @@ pub struct Target {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PushTarget {
     pub source: String,
+    pub commit: Option<String>,
     pub destination: Target,
 }
 #[derive(Clone, Debug)]
@@ -408,6 +409,7 @@ impl Git {
             .ok_or(Error::Code("DefaultPushNeedsTarget"))?;
         Ok(PushTarget {
             source: branch.clone(),
+            commit: None,
             destination: Target {
                 remote,
                 branch: destination.into(),
@@ -460,6 +462,44 @@ impl Git {
         environment.insert("GIT_MERGE_AUTOEDIT".into(), Some("no".into()));
         environment.insert("GIT_EDITOR".into(), Some("false".into()));
         Ok(environment)
+    }
+    pub fn push_created_commit(
+        &self,
+        previous: &crate::working::Context,
+        commit: &str,
+        destination: &Target,
+        auth: Option<&authentication::Session>,
+    ) -> Result<Completed, Error> {
+        let repository = &previous.repository;
+        let branch = repository
+            .branch
+            .as_ref()
+            .ok_or(Error::Code("CommitNoUpstream"))?;
+        let current = self.prepare_network(&repository.worktree, &Cancellation::default())?;
+        if !oid(commit)
+            || repository.upstream_target.as_ref() != Some(destination)
+            || current.repository.identity != repository.identity
+            || current.repository.branch != repository.branch
+            || current.repository.head.as_deref() != Some(commit)
+            || current.repository.upstream_target.as_ref() != Some(destination)
+            || current.config_stamp != previous.config_stamp
+        {
+            return Err(Error::Code("CommitStale"));
+        }
+        self.execute_network(
+            &current,
+            &Action::Push {
+                target: Some(PushTarget {
+                    source: branch.clone(),
+                    commit: Some(commit.into()),
+                    destination: destination.clone(),
+                }),
+                all_tags: false,
+                set_upstream: false,
+            },
+            auth,
+            None,
+        )
     }
     pub fn execute_network(
         &self,
@@ -620,14 +660,25 @@ impl Git {
                     self.require_remote(context, &target.destination.remote, "ActionNoRemote")?;
                     self.network_branch(root, &target.source, cancel)?;
                     self.network_branch(root, &target.destination.branch, cancel)?;
-                    if !context
+                    let local_ref = format!("refs/heads/{}", target.source);
+                    let source_ref = context
                         .repository
                         .references
                         .iter()
-                        .any(|r| r.name == format!("refs/heads/{}", target.source))
-                    {
-                        return Err(Error::Code("ActionChanged"));
-                    }
+                        .find(|r| r.name == local_ref)
+                        .ok_or(Error::Code("ActionChanged"))?;
+                    let source = match target.commit {
+                        Some(commit)
+                            if oid(&commit)
+                                && commit == source_ref.hash
+                                && !all_tags
+                                && !set_upstream =>
+                        {
+                            commit
+                        }
+                        Some(_) => return Err(Error::Code("ActionChanged")),
+                        None => local_ref,
+                    };
                     let mut args = vec![
                         "-c".into(),
                         format!("remote.{}.mirror=false", target.destination.remote),
@@ -652,10 +703,7 @@ impl Git {
                     args.extend([
                         "--".into(),
                         target.destination.remote,
-                        format!(
-                            "refs/heads/{}:refs/heads/{}",
-                            target.source, target.destination.branch
-                        ),
+                        format!("{source}:refs/heads/{}", target.destination.branch),
                     ]);
                     self.validate_network(context, true, cancel)?;
                     stage(Stage::Pushing);

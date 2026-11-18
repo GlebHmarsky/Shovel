@@ -6,6 +6,7 @@ use shovel_core::{
     drafts,
     git::Git,
     identity::{self, Identity},
+    network::Target,
     process::{Cancellation, OutputCallback},
     scheduler::{Lane, Outcome, Scheduler},
     working::{self, Action, Change, Context, Group},
@@ -27,12 +28,9 @@ enum Event {
     DraftLoaded(Result<(Identity, Result<drafts::Snapshot, drafts::Error>), drafts::Error>),
     DraftSaved(u64, Result<drafts::Snapshot, String>),
     WorkingStarted(u64),
+    WorkingPushing(u64),
     WorkingOutput(u64, bool, Vec<u8>),
-    WorkingCompleted(
-        u64,
-        Box<Result<working::Completed, working::Error>>,
-        Option<drafts::Text>,
-    ),
+    WorkingCompleted(u64, Box<queue::WorkingResult>),
     WorkingRemoved(u64, Outcome),
     Removed,
     FileStarted(file_menu::FileAction),
@@ -44,6 +42,11 @@ enum Event {
         file_menu::FileAction,
         Box<Result<shovel_core::files::Completed, shovel_core::operation::Error>>,
     ),
+}
+struct CommitReview {
+    context: Arc<Context>,
+    draft: drafts::Text,
+    push: Option<Target>,
 }
 enum Leave {
     Close,
@@ -101,7 +104,8 @@ pub struct Editor {
     draft_saved_at: Instant,
     recovery_id: String,
     amend: bool,
-    confirm_amend: bool,
+    confirm_amend: Option<CommitReview>,
+    pub(crate) authentication: Option<crate::operations::ExternalAuthentication>,
     refresh_history: bool,
     conflict: Option<crate::conflict::Pane>,
     operation_output: String,
@@ -180,7 +184,8 @@ impl Editor {
             draft_saved_at: Instant::now(),
             recovery_id: uuid::Uuid::new_v4().simple().to_string(),
             amend: false,
-            confirm_amend: false,
+            confirm_amend: None,
+            authentication: None,
             refresh_history: false,
             conflict: None,
             operation_output: String::new(),
@@ -214,12 +219,12 @@ impl Editor {
     }
     pub fn hide(&mut self, ctx: &egui::Context) {
         self.leave = None;
-        self.confirm_amend = false;
+        self.confirm_amend = None;
         self.files_focus = None;
         self.finish_leave(Leave::Close, ctx);
     }
     pub fn has_prompt(&self) -> bool {
-        self.confirm_amend || self.leave.is_some() || self.file_confirmation.is_some()
+        self.confirm_amend.is_some() || self.leave.is_some() || self.file_confirmation.is_some()
     }
     pub fn external_changed(&mut self) {
         self.refresh_pending = true;
@@ -584,10 +589,9 @@ impl Editor {
                     }
                 }
                 Event::WorkingStarted(id) => self.working_started(id),
+                Event::WorkingPushing(id) => self.working_pushing(id),
                 Event::WorkingOutput(id, stderr, bytes) => self.working_output(id, stderr, &bytes),
-                Event::WorkingCompleted(id, result, submitted) => {
-                    self.working_completed(id, *result, submitted, ctx)
-                }
+                Event::WorkingCompleted(id, result) => self.working_completed(id, *result, ctx),
                 Event::WorkingRemoved(id, outcome) => self.working_removed(id, outcome),
                 Event::FileStarted(action) => self.status = Some(text(action.phase())),
                 Event::FileCompleted(action, result) => self.file_completed(action, *result, ctx),
@@ -712,12 +716,21 @@ impl Editor {
             );
         }
     }
-    fn commit_reason(&self) -> Option<&'static str> {
+    fn push_target(&self) -> Option<&Target> {
+        let repository = &self.context.as_ref()?.repository;
+        repository
+            .upstream_target
+            .as_ref()
+            .filter(|target| repository.remotes.contains(&target.remote))
+    }
+    fn commit_reason(&self, push: bool) -> Option<&'static str> {
         let Some(context) = &self.context else {
             return Some("CommitWaitForRead");
         };
         if !self.working_ready() {
             Some("CommitWaitForRead")
+        } else if push && self.push_target().is_none() {
+            Some("CommitNoUpstream")
         } else if self.draft.subject.trim().is_empty() {
             Some("CommitMessageRequired")
         } else if self.draft.message().len() > 65536 {
@@ -738,23 +751,31 @@ impl Editor {
             None
         }
     }
-    fn request_commit(&mut self, ctx: &egui::Context) {
-        if self.file_menu.is_some() || self.file_confirmation.is_some() || self.leave.is_some() {
+    fn request_commit(&mut self, push: bool, ctx: &egui::Context) {
+        if self.has_prompt() || self.file_menu.is_some() || self.commit_reason(push).is_some() {
             return;
         }
-        if self.commit_reason().is_none() {
-            if self.amend {
-                self.confirm_amend = true;
+        let review = CommitReview {
+            context: self.context.clone().unwrap(),
+            draft: self.draft.clone(),
+            push: if push {
+                self.push_target().cloned()
             } else {
-                self.submit(
-                    Action::Commit {
-                        message: self.draft.message(),
-                        amend: false,
-                    },
-                    ctx,
-                );
-            }
+                None
+            },
+        };
+        if self.amend {
+            self.confirm_amend = Some(review);
+        } else {
+            self.submit_commit(review, false, ctx);
         }
+    }
+    fn submit_commit(&mut self, review: CommitReview, amend: bool, ctx: &egui::Context) {
+        let action = Action::Commit {
+            message: review.draft.message(),
+            amend,
+        };
+        self.submit_captured(action, review.context, Some(review.draft), review.push, ctx);
     }
     pub fn restore_layout(&mut self, settings: &shovel_core::settings::Settings) {
         if let Some(layout) = settings.get("CommitLayout") {
@@ -871,16 +892,25 @@ impl Editor {
             self.refresh(&ctx);
         }
         if enabled
-            && self.leave.is_none()
-            && ctx.input(|i| {
-                i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Enter)
+            && !self.has_prompt()
+            && self.file_menu.is_none()
+            && let Some(push) = ctx.input_mut(|input| {
+                let index = input.events.iter().position(|event| {
+                    matches!(event, egui::Event::Key {
+                    key: egui::Key::Enter, pressed: true, modifiers, ..
+                } if modifiers.ctrl && !modifiers.alt && !modifiers.mac_cmd)
+                })?;
+                match input.events.remove(index) {
+                    egui::Event::Key { modifiers, repeat: false, .. } => Some(modifiers.shift),
+                    _ => None,
+                }
             })
         {
-            self.request_commit(&ctx);
+            self.request_commit(push, &ctx);
         }
         if !self.inline
             && enabled
-            && !self.confirm_amend
+            && self.confirm_amend.is_none()
             && self.leave.is_none()
             && self.file_menu.is_none()
             && self.file_confirmation.is_none()
@@ -980,13 +1010,28 @@ impl Editor {
                     };
                     self.edited();
                 }
-                let reason = self.commit_reason();
+                let push = ui.input(|input| input.modifiers.shift);
+                let label = if push { "CommitAndPush" } else { "Commit" };
+                let target = self
+                    .push_target()
+                    .map(|t| strings::format("CommitPushTarget", &[&t.remote, &t.branch]));
+                let reason = self.commit_reason(push);
                 if ui
-                    .add_enabled(reason.is_none(), egui::Button::new(text("Commit")))
-                    .on_disabled_hover_text(text(reason.unwrap_or("Commit")))
+                    .add_enabled(reason.is_none(), egui::Button::new(text(label)))
+                    .on_hover_text(if push {
+                        target.clone().unwrap_or_else(|| text("CommitNoUpstream"))
+                    } else {
+                        text("CommitReady")
+                    })
+                    .on_disabled_hover_text(text(reason.unwrap_or(label)))
                     .clicked()
                 {
-                    self.request_commit(&ctx);
+                    self.request_commit(push, &ctx);
+                }
+                if push {
+                    let target = target.unwrap_or_else(|| text("CommitNoUpstream"));
+                    ui.add(egui::Label::new(egui::RichText::new(&target).small()).truncate())
+                        .on_hover_text(target);
                 }
                 if let Some(progress) = self.progress() {
                     ui.add(egui::Spinner::new().size(14.));
@@ -1219,33 +1264,38 @@ impl Editor {
                 }));
             }
         });
-        if self.confirm_amend {
+        if let Some(review) = &self.confirm_amend {
+            let mut confirmed = false;
+            let mut dismissed = false;
             egui::Modal::new(egui::Id::unique("confirm_amend")).show(&ctx, |ui| {
-                if let Some(context) = &self.context {
+                ui.label(strings::format(
+                    "CommitConfirmAmend",
+                    &[
+                        review
+                            .context
+                            .repository
+                            .branch
+                            .as_deref()
+                            .unwrap_or("HEAD"),
+                        review.context.repository.head.as_deref().unwrap_or(""),
+                    ],
+                ));
+                if let Some(target) = &review.push {
                     ui.label(strings::format(
-                        "CommitConfirmAmend",
-                        &[
-                            context.repository.branch.as_deref().unwrap_or("HEAD"),
-                            context.repository.head.as_deref().unwrap_or(""),
-                        ],
+                        "CommitPushTarget",
+                        &[&target.remote, &target.branch],
                     ));
                 }
                 ui.horizontal(|ui| {
-                    if ui.button(text("CommitAmend")).clicked() {
-                        self.confirm_amend = false;
-                        self.submit(
-                            Action::Commit {
-                                message: self.draft.message(),
-                                amend: true,
-                            },
-                            &ctx,
-                        );
-                    }
-                    if ui.button(text("ActionCancel")).clicked() {
-                        self.confirm_amend = false;
-                    }
+                    confirmed = ui.button(text("CommitAmend")).clicked();
+                    dismissed = ui.button(text("ActionCancel")).clicked();
                 });
             });
+            if confirmed && let Some(review) = self.confirm_amend.take() {
+                self.submit_commit(review, true, &ctx);
+            } else if dismissed {
+                self.confirm_amend = None;
+            }
         }
         self.show_file_menu(&ctx);
         self.show_file_confirmation(&ctx);
@@ -1495,7 +1545,7 @@ mod tests {
             "#!/bin/sh\ntouch hook-started\nwhile test ! -f hook-release; do sleep .05; done\n",
         )
         .unwrap();
-        editor.request_commit(&ctx);
+        editor.request_commit(false, &ctx);
         assert!(!editor.open);
         assert!(editor.blocks_exit());
         let start = Instant::now();
@@ -1535,7 +1585,7 @@ mod tests {
         settle(&mut editor, &ctx, |e| !e.loading);
         let stamp = editor.context.as_ref().unwrap().index_stamp.clone();
         editor.activate();
-        editor.request_commit(&ctx);
+        editor.request_commit(false, &ctx);
         assert!(!editor.open);
         settle(&mut editor, &ctx, |e| !e.busy);
         assert!(editor.failed_commit);

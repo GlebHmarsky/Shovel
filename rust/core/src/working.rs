@@ -123,6 +123,25 @@ fn command_succeeded(result: &process::Result) -> bool {
             process::Outcome::Exited | process::Outcome::OutputLimit
         )
 }
+
+// Git prints the object it created after running post-commit. HEAD may already
+// point elsewhere by then. An incomplete or unrecognized summary has no safe ID.
+fn created_commit(command: &process::Result) -> Option<String> {
+    if !command.success() {
+        return None;
+    }
+    let summary = command
+        .stdout
+        .split(|&b| b == b'\n')
+        .rev()
+        .find(|line| line.starts_with(b"["))?;
+    let object = summary
+        .split(|b| b.is_ascii_whitespace())
+        .skip(1)
+        .find_map(|word| word.strip_suffix(b"]"))?;
+    (matches!(object.len(), 40 | 64) && object.iter().all(u8::is_ascii_hexdigit))
+        .then(|| String::from_utf8_lossy(object).into_owned())
+}
 /// A Windows mutex must be released by the thread that acquired it.
 /// Keep the guard on that worker through validation and mutation.
 ///
@@ -689,6 +708,10 @@ impl Git {
                 let mut args = [
                     "-c",
                     "i18n.commitEncoding=UTF-8",
+                    "-c",
+                    "core.abbrev=no",
+                    "-c",
+                    "color.ui=false",
                     "commit",
                     "--cleanup=strip",
                     "--file=-",
@@ -714,8 +737,8 @@ impl Git {
             .environment
             .insert("GIT_EDITOR".into(), Some("false".into()));
         let command = process::run(&request, &cancel, output)?;
-        let commit = if command_succeeded(&command) && matches!(action, Action::Commit { .. }) {
-            self.inspect(root, &cancel).ok().and_then(|r| r.head)
+        let commit = if matches!(action, Action::Commit { .. }) {
+            created_commit(&command)
         } else {
             None
         };

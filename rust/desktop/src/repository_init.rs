@@ -423,7 +423,7 @@ impl Controller {
         });
         let tx = self.sender.clone();
         let ctx = ctx.clone();
-        let authentication = operations.external_authentication(request, &ctx);
+        let authentication = operations.external_authentication();
         scheduler.activate(request, move || {
             let _ = tx.send(Event::Started);
             ctx.request_repaint();
@@ -436,9 +436,11 @@ impl Controller {
                         let _ = sender.send(Event::Output(stderr, bytes.to_vec()));
                         repaint.request_repaint();
                     });
-                    authentication().and_then(|auth| {
-                        git.clone_repository(&options, Some(&auth), Some(progress))
-                    })
+                    authentication
+                        .start(request, options.directory.clone(), "ActionTitleClone", &ctx)
+                        .and_then(|auth| {
+                            git.clone_repository(&options, Some(&auth), Some(progress))
+                        })
                 }
             };
             let outcome = if result

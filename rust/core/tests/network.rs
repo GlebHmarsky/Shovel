@@ -166,6 +166,131 @@ fn configured_fetch_pull_and_push_preserve_native_hooks_and_targets() {
 }
 
 #[test]
+fn reviewed_commit_push_uses_mapped_upstream_and_an_immutable_source() {
+    let f = Fixture::new();
+    let cancel = Cancellation::default();
+    let destination = f._temp.path().join("team.git");
+    command(
+        &f.git,
+        f._temp.path(),
+        &["init", "--bare", destination.to_str().unwrap()],
+    );
+    command(
+        &f.git,
+        &f.root,
+        &[
+            "remote",
+            "add",
+            "team/publish",
+            destination.to_str().unwrap(),
+        ],
+    );
+    command(
+        &f.git,
+        &f.root,
+        &[
+            "config",
+            "remote.team/publish.fetch",
+            "+refs/heads/*:refs/remotes/cache/*",
+        ],
+    );
+    command(
+        &f.git,
+        &f.root,
+        &["config", "branch.main.remote", "team/publish"],
+    );
+    command(
+        &f.git,
+        &f.root,
+        &["config", "branch.main.merge", "refs/heads/review/main"],
+    );
+    command(
+        &f.git,
+        &f.root,
+        &["config", "branch.main.pushRemote", "origin"],
+    );
+    let target = Target {
+        remote: "team/publish".into(),
+        branch: "review/main".into(),
+    };
+    let original = f.git.working_copy(&f.root, &cancel).unwrap();
+    assert_eq!(original.repository.upstream_target.as_ref(), Some(&target));
+    let before = original.repository.head.clone().unwrap();
+    command(
+        &f.git,
+        &f.root,
+        &["commit", "--allow-empty", "-m", "reviewed work"],
+    );
+    let created = command(&f.git, &f.root, &["rev-parse", "HEAD"]);
+    let result = f
+        .git
+        .push_created_commit(&original, &created, &target, None)
+        .unwrap();
+    assert!(result.succeeded(), "{}", result.output);
+    assert_eq!(
+        command(
+            &f.git,
+            &destination,
+            &["rev-parse", "refs/heads/review/main"]
+        ),
+        created
+    );
+    assert_eq!(command(&f.git, &f.remote, &["rev-parse", "main"]), before);
+
+    let review = f.git.prepare_network(&f.root, &cancel).unwrap();
+    let git = f.git.clone();
+    let root = f.root.clone();
+    let progress = Arc::new(move |stage| {
+        if stage == Stage::Pushing {
+            command(
+                &git,
+                &root,
+                &["commit", "--allow-empty", "-m", "later external work"],
+            );
+        }
+    });
+    let action = Action::Push {
+        target: Some(PushTarget {
+            source: "main".into(),
+            commit: Some(created.clone()),
+            destination: target.clone(),
+        }),
+        all_tags: false,
+        set_upstream: false,
+    };
+    assert!(
+        f.git
+            .execute_network(&review, &action, None, Some(progress))
+            .unwrap()
+            .succeeded()
+    );
+    assert_ne!(command(&f.git, &f.root, &["rev-parse", "HEAD"]), created);
+    assert_eq!(
+        command(&f.git, &destination, &["rev-parse", "review/main"]),
+        created
+    );
+    assert!(matches!(
+        f.git
+            .push_created_commit(&original, &created, &target, None),
+        Err(Error::Code("CommitStale"))
+    ));
+    let later = command(&f.git, &f.root, &["rev-parse", "HEAD"]);
+    command(
+        &f.git,
+        &f.root,
+        &["config", "branch.main.merge", "refs/heads/other"],
+    );
+    assert!(matches!(
+        f.git.push_created_commit(&original, &later, &target, None),
+        Err(Error::Code("CommitStale"))
+    ));
+    assert_eq!(
+        command(&f.git, &destination, &["rev-parse", "review/main"]),
+        created
+    );
+}
+
+#[test]
 fn push_defaults_refuse_ambiguous_scope_and_follow_push_remote_priority() {
     let f = Fixture::new();
     let cancel = Cancellation::default();
@@ -184,6 +309,7 @@ fn push_defaults_refuse_ambiguous_scope_and_follow_push_remote_priority() {
         f.git.default_push(&review, &cancel).unwrap(),
         PushTarget {
             source: "main".into(),
+            commit: None,
             destination: Target {
                 remote: "publish".into(),
                 branch: "main".into()
@@ -213,6 +339,7 @@ fn push_defaults_refuse_ambiguous_scope_and_follow_push_remote_priority() {
     let result = f.run(Action::Push {
         target: Some(PushTarget {
             source: "main".into(),
+            commit: None,
             destination: Target {
                 remote: "publish".into(),
                 branch: "explicit".into(),

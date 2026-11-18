@@ -4,6 +4,104 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
+pub(super) struct WorkingResult {
+    command: Result<working::Completed, working::Error>,
+    submitted: Option<drafts::Text>,
+    push: Option<PushReport>,
+}
+struct PushReport {
+    status: String,
+    output: String,
+    failed: bool,
+}
+impl PushReport {
+    fn after_commit(
+        git: &Git,
+        context: &Context,
+        completed: &mut working::Completed,
+        target: &Target,
+        authenticate: impl FnOnce() -> Result<
+            shovel_core::authentication::Session,
+            shovel_core::operation::Error,
+        >,
+    ) -> Self {
+        let Some(commit) = &completed.commit else {
+            return Self {
+                status: text("CommitSucceededUnknownTip"),
+                output: String::new(),
+                failed: true,
+            };
+        };
+        if completed.updated.is_err() {
+            return Self::failed(commit, &text("ActionRefreshFailedShort"));
+        }
+        let pushed = authenticate()
+            .and_then(|auth| git.push_created_commit(context, commit, target, Some(&auth)));
+        // A native pre-push hook can change the index or worktree.
+        completed.updated =
+            git.working_copy(&context.repository.worktree, &Cancellation::default());
+        Self::from_result(commit, pushed)
+    }
+    fn failed(commit: &str, reason: &str) -> Self {
+        Self {
+            status: strings::format("CommitCreatedPushFailed", &[commit, reason]),
+            output: String::new(),
+            failed: true,
+        }
+    }
+    fn from_result(
+        commit: &str,
+        result: Result<shovel_core::network::Completed, shovel_core::operation::Error>,
+    ) -> Self {
+        let pushed = match result {
+            Ok(result) => result,
+            Err(error) => {
+                let mut report = Self::failed(commit, &text(&error.code()));
+                report.output = crate::operations::error_log(&error);
+                return report;
+            }
+        };
+        let sent = !pushed.commands.is_empty()
+            && pushed
+                .commands
+                .iter()
+                .all(shovel_core::network::Command::succeeded);
+        let reason = pushed
+            .authentication_failure
+            .map(crate::operations::authentication_error)
+            .or(pushed.message.as_deref())
+            .map(text);
+        let mut report = if sent {
+            Self {
+                status: strings::format("CommitCreatedPushed", &[commit]),
+                output: String::new(),
+                failed: !pushed.succeeded() || reason.is_some(),
+            }
+        } else {
+            Self::failed(
+                commit,
+                &reason.clone().unwrap_or_else(|| text("ActionFailedShort")),
+            )
+        };
+        if sent && report.failed {
+            let detail = reason.unwrap_or_else(|| text("ActionRefreshFailedShort"));
+            report.status.push('\n');
+            report.status.push_str(&detail);
+        }
+        report.output = pushed.output;
+        if let Err(error) = pushed.updated {
+            report.output.push('\n');
+            report
+                .output
+                .push_str(&crate::operations::error_log(&error));
+        }
+        if pushed.output_truncated {
+            report.output.push('\n');
+            report.output.push_str(&text("ActivityOutputLimit"));
+        }
+        report
+    }
+}
 #[derive(Clone)]
 pub(crate) struct OwnedActivity {
     pub request: u64,
@@ -164,10 +262,24 @@ impl Editor {
         result
     }
     pub(super) fn submit(&mut self, action: Action, ctx: &egui::Context) {
+        let Some(context) = self.context.clone() else {
+            return;
+        };
+        let submitted = matches!(action, Action::Commit { .. }).then(|| self.draft.clone());
+        self.submit_captured(action, context, submitted, None, ctx);
+    }
+    pub(super) fn submit_captured(
+        &mut self,
+        action: Action,
+        context: Arc<Context>,
+        submitted: Option<drafts::Text>,
+        push: Option<Target>,
+        ctx: &egui::Context,
+    ) {
         if !self.working_ready() {
+            self.status = Some(text("CommitWaitForRead"));
             return;
         }
-        let context = self.context.clone().unwrap();
         if !self.has_working_queue() {
             // A completed batch no longer owns the current review. In particular,
             // never replace a fresh scan of external staging with an older result.
@@ -183,7 +295,11 @@ impl Editor {
             context.repository.identity.fingerprint.clone(),
             shovel_core::case::path_key(&context.repository.common_directory),
             key,
-            Lane::WorkingCopy,
+            if push.is_some() {
+                Lane::Exclusive
+            } else {
+                Lane::WorkingCopy
+            },
             move |outcome| {
                 let _ = dropped.send(Event::WorkingRemoved(id, outcome));
                 drop_ctx.request_repaint();
@@ -195,12 +311,12 @@ impl Editor {
         let label = match &action {
             Action::Stage(_) => "CommitPhaseStage",
             Action::Unstage(_) => "CommitPhaseUnstage",
+            Action::Commit { .. } if push.is_some() => "CommitAndPush",
             Action::Commit { .. } => "Commit",
             Action::Hunks { preview, .. } if preview.staged() => "CommitPhaseUnstage",
             Action::Hunks { .. } => "CommitPhaseStage",
         };
         let committing = matches!(action, Action::Commit { .. });
-        let submitted = committing.then(|| self.draft.clone());
         self.queue.entries.insert(
             id,
             Entry {
@@ -230,6 +346,7 @@ impl Editor {
         let tx = self.sender.clone();
         let ctx = ctx.clone();
         let owned = self.queue.owned.clone();
+        let authentication = self.authentication.clone();
         self.scheduler.activate(request, move || {
             let _ = tx.send(Event::WorkingStarted(id));
             ctx.request_repaint();
@@ -248,10 +365,35 @@ impl Editor {
                     output_ctx.request_repaint();
                 }
             });
-            let result = git.execute_working(&context, &action, Some(callback));
+            let mut result = git.execute_working(&context, &action, Some(callback));
+            let push = if let (Ok(completed), Some(target)) = (&mut result, push)
+                && completed.succeeded()
+            {
+                let _ = tx.send(Event::WorkingPushing(id));
+                ctx.request_repaint();
+                Some(PushReport::after_commit(
+                    &git,
+                    &context,
+                    completed,
+                    &target,
+                    || {
+                        authentication
+                            .ok_or(shovel_core::operation::Error::Code("ActionAskPassMissing"))?
+                            .start(
+                                request,
+                                context.repository.worktree.clone(),
+                                "CommitAndPush",
+                                &ctx,
+                            )
+                    },
+                ))
+            } else {
+                None
+            };
             let outcome = if result
                 .as_ref()
                 .is_ok_and(|r| r.succeeded() && r.updated.is_ok())
+                && push.as_ref().is_none_or(|p| !p.failed)
             {
                 if let Ok(completed) = &result {
                     *owned.lock().unwrap() =
@@ -261,18 +403,27 @@ impl Editor {
             } else {
                 Outcome::Failed
             };
-            let _ = tx.send(Event::WorkingCompleted(id, Box::new(result), submitted));
+            let _ = tx.send(Event::WorkingCompleted(
+                id,
+                Box::new(WorkingResult {
+                    command: result,
+                    submitted,
+                    push,
+                }),
+            ));
             ctx.request_repaint();
             outcome
         });
     }
     pub(super) fn working_started(&mut self, id: u64) {
         if let Some(entry) = self.queue.entries.get_mut(&id) {
-            entry.activity.status = text(if entry.activity.label == "Commit" {
-                "CommitRunning"
-            } else {
-                entry.activity.label
-            });
+            entry.activity.status = text(
+                if matches!(entry.activity.label, "Commit" | "CommitAndPush") {
+                    "CommitRunning"
+                } else {
+                    entry.activity.label
+                },
+            );
             entry.dirty = true;
             self.status = Some(entry.activity.status.clone());
             self.output.clear();
@@ -283,6 +434,13 @@ impl Editor {
             self.loading = false;
             self.diff = None;
             self.diff_deferred = self.focused.is_some();
+        }
+    }
+    pub(super) fn working_pushing(&mut self, id: u64) {
+        if let Some(entry) = self.queue.entries.get_mut(&id) {
+            entry.activity.status = text("ActionStagePushing");
+            self.status = Some(entry.activity.status.clone());
+            entry.dirty = true;
         }
     }
     pub(super) fn working_output(&mut self, id: u64, stderr: bool, bytes: &[u8]) {
@@ -296,15 +454,20 @@ impl Editor {
     pub(super) fn working_completed(
         &mut self,
         id: u64,
-        result: Result<working::Completed, working::Error>,
-        submitted: Option<drafts::Text>,
+        completed: WorkingResult,
         ctx: &egui::Context,
     ) {
+        let WorkingResult {
+            command: result,
+            submitted,
+            push,
+        } = completed;
         self.refresh_history = true;
         if let Some(entry) = self.queue.entries.get_mut(&id) {
-            entry.activity.failed = !result
-                .as_ref()
-                .is_ok_and(|r| r.succeeded() && r.updated.is_ok());
+            entry.activity.failed = push.as_ref().is_some_and(|p| p.failed)
+                || !result
+                    .as_ref()
+                    .is_ok_and(|r| r.succeeded() && r.updated.is_ok());
             entry.activity.reopen_commit =
                 submitted.is_some() && !result.as_ref().is_ok_and(|r| r.succeeded());
             if let Err(working::Error::Git(shovel_core::git::Error::Command { output, .. })) =
@@ -319,17 +482,26 @@ impl Editor {
         match result {
             Ok(result) => {
                 if result.succeeded() {
-                    self.status = Some(
+                    self.status = Some(if let Some(report) = push {
+                        if !report.output.is_empty()
+                            && let Some(entry) = self.queue.entries.get_mut(&id)
+                        {
+                            entry.capture.finish(complete);
+                            entry.capture.publish(b"\n");
+                            entry.capture.publish(report.output.as_bytes());
+                        }
+                        report.status
+                    } else {
+                        let summary = result.commit.as_ref().map_or_else(
+                            || text("ActionCompletedShort"),
+                            |commit| strings::format("CommitCreated", &[commit]),
+                        );
                         if result.command.outcome == shovel_core::process::Outcome::OutputLimit {
-                            format!(
-                                "{} {}",
-                                text("ActionCompletedShort"),
-                                text("ActivityOutputLimit")
-                            )
+                            format!("{} {}", summary, text("ActivityOutputLimit"))
                         } else {
-                            text("ActionCompletedShort")
-                        },
-                    );
+                            summary
+                        }
+                    });
                     if let Some(submitted) = submitted {
                         self.failed_commit = false;
                         if self.draft == submitted {

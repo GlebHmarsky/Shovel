@@ -686,7 +686,7 @@ impl Editor {
             || self.leave.is_some()
             || self.file_menu.is_some()
             || self.file_confirmation.is_some()
-            || self.confirm_amend
+            || self.confirm_amend.is_some()
             || self.files_focus.is_none()
             || ctx.memory(|m| m.focused()) != self.files_focus
         {

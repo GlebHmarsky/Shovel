@@ -60,6 +60,8 @@ pub struct Snapshot {
     pub branch: Option<String>,
     pub head: Option<String>,
     pub upstream: Option<String>,
+    #[serde(default)]
+    pub upstream_target: Option<crate::network::Target>,
     pub remotes: Vec<String>,
     pub operations: Vec<String>,
     #[serde(default)]
@@ -300,6 +302,7 @@ impl Git {
             branch: None,
             head: None,
             upstream: None,
+            upstream_target: None,
             remotes: vec![],
             operations: vec![],
             recovery: None,
@@ -318,7 +321,16 @@ impl Git {
         if crate::identity::read(&snapshot.worktree)? != snapshot.identity {
             return Err(Error::Changed);
         }
-        let raw=self.read(&snapshot.worktree,["for-each-ref","--include-root-refs","--sort=refname","--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref)%00%(upstream)","HEAD","refs/heads/","refs/remotes/","refs/tags/","refs/replace/","refs/stash"],cancel,MAX_HISTORY)?;
+        let raw = self.read(
+            &snapshot.worktree,
+            [
+                "for-each-ref", "--include-root-refs", "--sort=refname",
+                "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00%(symref)%00%(upstream)%00%(upstream:remotename)%00%(upstream:remoteref)",
+                "HEAD", "refs/heads/", "refs/remotes/", "refs/tags/", "refs/replace/", "refs/stash",
+            ],
+            cancel,
+            MAX_HISTORY,
+        )?;
         let mut refs = text(&raw.stdout);
         if refs.lines().any(|l| l.starts_with("refs/stash\0")) {
             let stashes = lines(
@@ -345,16 +357,17 @@ impl Git {
                 if !oid(hash) {
                     return Err(Error::Invalid);
                 }
-                refs.push_str(&format!("stash@{{{i}}}\0{hash}\0commit\0\0\0\0\n"));
+                refs.push_str(&format!("stash@{{{i}}}\0{hash}\0commit\0\0\0\0\0\0\n"));
             }
         }
         let mut references = Vec::new();
         let mut branch = None;
         let mut head = None;
         let mut target = None;
+        let mut upstream_target = None;
         for line in refs.lines() {
             let fields = line.split('\0').collect::<Vec<_>>();
-            if fields.len() != 7 || !oid(fields[1]) {
+            if fields.len() != 9 || !oid(fields[1]) {
                 return Err(Error::Invalid);
             }
             if fields[0] == "HEAD" {
@@ -372,6 +385,15 @@ impl Git {
                     upstream: None,
                 });
                 continue;
+            }
+            if target.as_deref() == Some(fields[0])
+                && !matches!(fields[7], "" | ".")
+                && let Some(branch) = fields[8].strip_prefix("refs/heads/")
+            {
+                upstream_target = Some(crate::network::Target {
+                    remote: fields[7].into(),
+                    branch: branch.into(),
+                });
             }
             // A remote symbolic ref is an alias (for example origin/HEAD), not a branch tip.
             if fields[0].starts_with("refs/remotes/") && !fields[5].is_empty() {
@@ -460,6 +482,7 @@ impl Git {
         snapshot.shallow = !shallow.is_empty();
         snapshot.head = head;
         snapshot.branch = branch;
+        snapshot.upstream_target = upstream_target;
         snapshot.upstream = references
             .iter()
             .find(|r| Some(&r.name) == target.as_ref())

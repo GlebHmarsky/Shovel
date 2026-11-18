@@ -1204,6 +1204,7 @@ impl Workspace {
             tab.local_changes = inline;
             editor.inline = inline;
             editor.read_workers = self.read_workers.clone();
+            editor.authentication = Some(self.operations.external_authentication());
             editor.restore_layout(&self.settings);
             editor.apply_preferences(&self.settings);
             self.editors.push(editor);

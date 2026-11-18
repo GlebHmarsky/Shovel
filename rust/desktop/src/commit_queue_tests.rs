@@ -21,6 +21,7 @@ struct Harness {
     editor: Editor,
     activity: crate::operations::Controller,
     show_activity: bool,
+    modifiers: egui::Modifiers,
 }
 impl Harness {
     fn new() -> Self {
@@ -65,12 +66,14 @@ impl Harness {
             editor,
             activity: Default::default(),
             show_activity: false,
+            modifiers: egui::Modifiers::NONE,
         };
         h.editor.initialize(&h.ctx);
         h.until(|e| e.draft_loaded && e.context.is_some() && !e.loading);
         h
     }
-    fn render(&mut self, events: Vec<egui::Event>) -> egui::FullOutput {
+    fn render(&mut self, mut events: Vec<egui::Event>) -> egui::FullOutput {
+        events.insert(0, egui::Event::ModifiersChanged(self.modifiers));
         self.editor.poll(&self.ctx);
         for activity in self.editor.take_activity() {
             self.activity
@@ -147,7 +150,7 @@ impl Harness {
                 pos: p,
                 button: egui::PointerButton::Primary,
                 pressed,
-                modifiers: Default::default(),
+                modifiers: self.modifiers,
             }])
             .drop_without_applying_deltas();
         }
@@ -159,13 +162,51 @@ impl Harness {
     fn submit_commit(&mut self, subject: &str) {
         self.editor.draft.subject = subject.into();
         self.editor.edited();
-        assert!(self.editor.commit_reason().is_none());
+        assert!(self.editor.commit_reason(false).is_none());
         self.click(&text("Commit"));
         assert!(!self.editor.open, "accepted Commit closes immediately");
         assert!(self.editor.blocks_exit());
     }
     fn git(&self, args: &[&str]) -> String {
         command(&self.editor.git, &self.editor.path, args)
+    }
+    fn upstream(&mut self) -> PathBuf {
+        let remote = self._temp.path().join("upstream.git");
+        self.git(&["init", "--bare", remote.to_str().unwrap()]);
+        self.git(&["remote", "add", "team", remote.to_str().unwrap()]);
+        self.git(&["push", "-u", "team", "main:refs/heads/review/main"]);
+        self.activity.set_authentication_helper(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelAskPass.exe"),
+        );
+        self.editor.authentication = Some(self.activity.external_authentication());
+        self.editor.refresh(&self.ctx);
+        self.until(|e| !e.loading && e.push_target().is_some());
+        remote
+    }
+    fn commit_shortcut(&mut self, shift: bool, repeat: bool) {
+        self.modifiers = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            shift,
+            ..Default::default()
+        };
+        self.render(vec![egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: Some(egui::Key::Enter),
+            pressed: true,
+            repeat,
+            modifiers: self.modifiers,
+        }])
+        .drop_without_applying_deltas();
+        self.render(vec![egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: Some(egui::Key::Enter),
+            pressed: false,
+            repeat: false,
+            modifiers: self.modifiers,
+        }])
+        .drop_without_applying_deltas();
+        self.modifiers = egui::Modifiers::NONE;
     }
     fn export(&self, scenario: &str) {
         let Some(directory) = std::env::var_os("SHOVEL_QUEUE_PARITY_OUTPUT") else {
@@ -222,6 +263,244 @@ fn hold_index(h: &Harness) -> HookRelease {
 }
 
 #[test]
+fn ctrl_shift_enter_commits_and_pushes_the_reviewed_upstream_after_the_window_closes() {
+    let mut h = Harness::new();
+    let remote = h.upstream();
+    h.stage("one.txt");
+    h.until(|e| !e.busy);
+    let before = h.git(&["rev-parse", "HEAD"]);
+    let hook = h.editor.path.join(".git/hooks/pre-push");
+    fs::write(&hook, "#!/bin/sh\ntouch .git/push-entered\nwhile test ! -f .git/push-release; do sleep .05; done\ngit add -- two.txt\n").unwrap();
+    let release = HookRelease(h.editor.path.join(".git/push-release"));
+    h.modifiers = egui::Modifiers::CTRL | egui::Modifiers::SHIFT;
+    // Keep Enter held from a press with an empty draft. egui derives repeats
+    // from its key-down set, just like the real window integration.
+    h.render(vec![egui::Event::Key {
+        key: egui::Key::Enter, physical_key: Some(egui::Key::Enter), pressed: true,
+        repeat: false, modifiers: h.modifiers,
+    }]).drop_without_applying_deltas();
+    h.editor.draft.subject = "keyboard commit and push".into();
+    h.editor.edited();
+    h.commit_shortcut(true, true);
+    assert!(h.editor.open && !h.editor.busy, "ignore key repeat");
+    h.commit_shortcut(true, false);
+    assert!(!h.editor.open && h.editor.blocks_exit());
+    h.until(|e| e.path.join(".git/push-entered").exists());
+    let created = h.git(&["rev-parse", "HEAD"]);
+    assert_ne!(created, before);
+    assert_eq!(
+        command(&h.editor.git, &remote, &["rev-parse", "review/main"]),
+        before
+    );
+    assert_eq!(h.editor.status, Some(text("ActionStagePushing")));
+    drop(release);
+    h.until(|e| !e.busy && !e.draft_saving && !e.draft_dirty);
+    assert_eq!(
+        command(&h.editor.git, &remote, &["rev-parse", "review/main"]),
+        created
+    );
+    assert_eq!(h.git(&["rev-list", "--count", "HEAD"]), "2");
+    assert!(h.editor.draft.is_empty() && !h.editor.failed_commit);
+    assert!(
+        h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .change(Group::Staged, "two.txt")
+            .is_some()
+    );
+    assert!(
+        h.activity
+            .summary(&h.editor.path)
+            .unwrap()
+            .contains(&strings::format("CommitCreatedPushed", &[&created]))
+    );
+}
+
+#[test]
+fn shift_click_preserves_new_draft_and_reports_a_non_fast_forward_separately() {
+    let mut h = Harness::new();
+    let remote = h.upstream();
+    let external = h.git(&[
+        "commit-tree",
+        "HEAD^{tree}",
+        "-p",
+        "HEAD",
+        "-m",
+        "remote work",
+    ]);
+    h.git(&[
+        "push",
+        "team",
+        &format!("{external}:refs/heads/review/main"),
+    ]);
+    h.stage("one.txt");
+    h.until(|e| !e.busy);
+    h.editor.draft.subject = "local work".into();
+    h.editor.edited();
+    let barrier = h.barrier();
+    h.modifiers = egui::Modifiers::SHIFT;
+    h.click(&text("CommitAndPush"));
+    h.modifiers = egui::Modifiers::NONE;
+    assert!(!h.editor.open && h.editor.blocks_exit());
+    h.editor.draft.subject = "next draft".into();
+    h.editor.edited();
+    drop(barrier);
+    h.until(|e| !e.busy && !e.draft_dirty && !e.draft_saving);
+    let created = h.git(&["rev-parse", "HEAD"]);
+    assert_eq!(h.git(&["rev-list", "--count", "HEAD"]), "2");
+    assert_eq!(h.git(&["log", "-1", "--format=%s"]), "local work");
+    assert_eq!(
+        command(&h.editor.git, &remote, &["rev-parse", "review/main"]),
+        external
+    );
+    assert_eq!(h.editor.draft.subject, "next draft");
+    assert!(!h.editor.failed_commit);
+    assert_eq!(h.activity.failure_path(), Some(h.editor.path.as_path()));
+    assert!(h.editor.status.as_ref().unwrap().contains(&created));
+    assert!(
+        h.editor
+            .status
+            .as_ref()
+            .unwrap()
+            .contains("Use Push to retry")
+    );
+    assert!(h.editor.output.contains("[rejected]"));
+}
+
+#[test]
+fn missing_upstream_disables_shift_only_and_ctrl_enter_still_commits() {
+    let mut h = Harness::new();
+    h.stage("one.txt");
+    h.until(|e| !e.busy);
+    h.editor.draft.subject = "plain keyboard commit".into();
+    h.editor.edited();
+    h.modifiers = egui::Modifiers::SHIFT;
+    let frame = h.render(vec![]);
+    let nodes = &frame
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .unwrap()
+        .nodes;
+    assert!(nodes.iter().any(
+        |(_, node)| node.label() == Some(text("CommitAndPush").as_str()) && node.is_disabled()
+    ));
+    assert!(
+        nodes
+            .iter()
+            .any(|(_, node)| node.value() == Some(text("CommitNoUpstream").as_str()))
+    );
+    frame.drop_without_applying_deltas();
+    h.commit_shortcut(true, false);
+    assert!(h.editor.open && !h.editor.busy);
+    h.commit_shortcut(false, false);
+    h.until(|e| !e.busy && !e.draft_dirty && !e.draft_saving);
+    assert_eq!(
+        h.git(&["log", "-1", "--format=%s"]),
+        "plain keyboard commit"
+    );
+    assert!(h.editor.draft.is_empty());
+}
+
+#[test]
+fn amend_confirmation_keeps_the_reviewed_head_and_destination_through_refresh() {
+    let mut h = Harness::new();
+    let remote = h.upstream();
+    let original = h.git(&["rev-parse", "HEAD"]);
+    h.editor.amend = true;
+    h.editor.draft.subject = "reviewed replacement".into();
+    h.editor.edited();
+    h.commit_shortcut(true, false);
+    assert!(h.editor.confirm_amend.is_some() && !h.editor.busy);
+    h.git(&["commit", "--allow-empty", "-m", "external commit"]);
+    let external = h.git(&["rev-parse", "HEAD"]);
+    h.editor.refresh(&h.ctx);
+    h.until(|e| {
+        !e.loading && e.context.as_ref().unwrap().repository.head.as_ref() == Some(&external)
+    });
+    let frame = h.render(vec![]);
+    let nodes = &frame
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .unwrap()
+        .nodes;
+    assert!(
+        nodes
+            .iter()
+            .any(|(_, n)| n.value().is_some_and(|v| v.contains(&original)))
+    );
+    assert!(nodes.iter().any(|(_, n)| n.value()
+        == Some(strings::format("CommitPushTarget", &["team", "review/main"]).as_str())));
+    frame.drop_without_applying_deltas();
+    h.click(&text("CommitAmend"));
+    h.until(|e| !e.busy);
+    assert_eq!(h.git(&["rev-parse", "HEAD"]), external);
+    assert_eq!(
+        command(&h.editor.git, &remote, &["rev-parse", "review/main"]),
+        original
+    );
+    assert!(h.editor.failed_commit);
+    assert_eq!(h.editor.draft.subject, "reviewed replacement");
+}
+
+#[test]
+fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
+    let mut h = Harness::new();
+    let first = h.git(&["rev-parse", "HEAD"]);
+    h.editor.amend = true;
+    h.editor.draft.subject = "amended base".into();
+    h.editor.edited();
+    h.commit_shortcut(false, false);
+    assert!(h.editor.confirm_amend.is_some());
+    h.click(&text("CommitAmend"));
+    h.until(|e| !e.busy && !e.draft_saving && !e.draft_dirty);
+    let amended = h.git(&["rev-parse", "HEAD"]);
+    assert_ne!(first, amended);
+    assert!(h.git(&["log", "-1", "--format=%P"]).is_empty());
+    assert_eq!(h.git(&["log", "-1", "--format=%s"]), "amended base");
+
+    h.git(&["switch", "-c", "side"]);
+    fs::write(h.editor.path.join("side"), "side\n").unwrap();
+    h.git(&["add", "side"]);
+    h.git(&["commit", "-m", "side"]);
+    let side = h.git(&["rev-parse", "HEAD"]);
+    h.git(&["switch", "main"]);
+    h.git(&["merge", "--no-ff", "--no-commit", "side"]);
+    h.editor.activate();
+    h.editor.refresh(&h.ctx);
+    h.until(|e| !e.loading && e.context.as_ref().unwrap().repository.operations == ["merge"]);
+    h.editor.draft.subject = "merge side".into();
+    h.editor.draft.description = "reviewed in Local Changes".into();
+    h.editor.edited();
+    h.commit_shortcut(false, false);
+    h.until(|e| !e.busy && !e.draft_saving && !e.draft_dirty);
+    assert_eq!(
+        h.git(&["log", "-1", "--format=%P"]),
+        format!("{amended} {side}")
+    );
+    assert_eq!(
+        h.git(&["log", "-1", "--format=%B"]),
+        "merge side\n\nreviewed in Local Changes"
+    );
+    assert!(
+        h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .repository
+            .operations
+            .is_empty()
+    );
+    assert!(h.editor.draft.is_empty());
+    assert_eq!(
+        fs::read_to_string(h.editor.path.join("one.txt")).unwrap(),
+        "one\n"
+    );
+}
+
+#[test]
 fn distinct_stage_requests_and_commit_use_owned_index_after_view_closes() {
     let mut h = Harness::new();
     let before = h.editor.context.as_ref().unwrap().repository.head.clone();
@@ -274,7 +553,10 @@ fn distinct_stage_requests_and_commit_use_owned_index_after_view_closes() {
         h.activity
             .summary(&h.editor.path)
             .unwrap()
-            .contains(&text("ActionCompletedShort"))
+            .contains(&strings::format(
+                "CommitCreated",
+                &[&h.git(&["rev-parse", "HEAD"])]
+            ))
     );
     h.export("stage-commit");
 }
@@ -441,7 +723,7 @@ fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_inde
     let head = h.git(&["rev-parse", "HEAD"]);
     let index = h.git(&["ls-files", "--stage", "-z"]);
     let config = fs::read(h.editor.path.join(".git/config")).unwrap();
-    h.editor.request_commit(&h.ctx);
+    h.editor.request_commit(false, &h.ctx);
     h.until(|e| !e.busy && !e.draft_dirty && !e.draft_saving);
     assert!(h.editor.failed_commit);
     assert!(h.editor.can_retire());
