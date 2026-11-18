@@ -4,6 +4,7 @@ use crate::{
     diff_view,
     history_row::text as row_text,
     strings::{self, text},
+    workspace_split::Divider,
     workspace_style::Palette,
 };
 use eframe::egui::{self, RichText};
@@ -11,6 +12,7 @@ use shovel_core::{
     diff::{CommitFiles, FileDiff},
     git::{Commit, Git},
     process::Cancellation,
+    settings::Settings,
     working,
 };
 use std::{
@@ -43,7 +45,6 @@ pub struct Pane {
     loading: bool,
     error: Option<String>,
     pub details_index: usize,
-    pub files_width: f32,
     pub view: diff_view::View,
 }
 impl Pane {
@@ -72,7 +73,6 @@ impl Pane {
             loading: false,
             error: None,
             details_index: 0,
-            files_width: 340.,
             view: Default::default(),
         }
     }
@@ -126,7 +126,7 @@ impl Pane {
         self.error = None;
         (self.generation, self.cancel.clone())
     }
-    fn load_files(&mut self, ctx: &egui::Context) {
+    pub(super) fn load_files(&mut self, ctx: &egui::Context) {
         if self.read_workers.stopping() {
             return;
         }
@@ -226,6 +226,14 @@ impl Pane {
         }
     }
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        self.show_in(ui, None);
+    }
+
+    pub fn show_history(&mut self, ui: &mut egui::Ui, settings: &mut Settings) -> bool {
+        self.show_in(ui, Some(settings))
+    }
+
+    fn show_in(&mut self, ui: &mut egui::Ui, settings: Option<&mut Settings>) -> bool {
         let ctx = ui.ctx().clone();
         self.poll(&ctx);
         ui.horizontal(|ui| {
@@ -236,29 +244,44 @@ impl Pane {
                     self.details_index = index;
                 }
             }
-            if ui
-                .add_enabled(!self.loading, egui::Button::new(text("CommitRefresh")))
-                .clicked()
+            if settings.is_none()
+                && ui
+                    .add_enabled(!self.loading, egui::Button::new(text("CommitRefresh")))
+                    .clicked()
             {
                 self.load_files(&ctx);
             }
             if let Some(error) = &self.error {
-                ui.colored_label(ui.visuals().error_fg_color, error);
+                ui.add(
+                    egui::Label::new(RichText::new(error).color(ui.visuals().error_fg_color))
+                        .truncate(),
+                )
+                .on_hover_text(error);
             } else if self.loading {
                 ui.add(egui::Spinner::new().size(14.));
-                ui.label(text(if self.diff.is_some() {
-                    "DiffRetainedLoading"
-                } else {
-                    "CommitFilesLoading"
-                }));
+                ui.add(
+                    egui::Label::new(text(if self.diff.is_some() {
+                        "DiffRetainedLoading"
+                    } else {
+                        "CommitFilesLoading"
+                    }))
+                    .truncate(),
+                );
             }
         });
         let Some(commit) = self.selected.clone() else {
             ui.label(text("SelectCommit"));
-            return;
+            return false;
         };
         if self.details_index == 0 {
-            metadata(ui, &commit, &self.path);
+            if settings.is_some() {
+                self.show_summary(ui, &commit);
+                return false;
+            }
+            egui::ScrollArea::vertical()
+                .id_salt("metadata")
+                .max_height(125.)
+                .show(ui, |ui| inspector_metadata(ui, &commit, &self.path));
             ui.separator();
         }
         ui.horizontal(|ui| {
@@ -294,31 +317,67 @@ impl Pane {
             }
         });
         ui.push_id("history_comparison", |ui| {
-            let files = egui::Panel::left("files")
-                .default_size(self.files_width)
-                .max_size((ui.available_width() - 200.).max(160.))
-                .min_size(160.)
-                .resizable(true)
-                .show(ui, |ui| {
-                    let Some(comparison) = &self.comparison else {
-                        return;
-                    };
+            let span = ui.available_width();
+            let panel = egui::Panel::left("files");
+            let panel = if let Some(settings) = settings.as_deref() {
+                panel
+                    .frame(crate::workspace_style::pane(
+                        Palette::current(ui).canvas,
+                        6,
+                        2,
+                    ))
+                    .exact_size(Divider::HistoryFiles.size(ui, settings, span))
+                    .resizable(false)
+            } else {
+                panel
+                    .default_size(340.)
+                    .max_size((span - 200.).max(160.))
+                    .min_size(160.)
+                    .resizable(true)
+            };
+            let files = panel.show(ui, |ui| {
+                if let Some(comparison) = &self.comparison {
                     if comparison.commit != commit.hash {
                         ui.label(text("DiffRetainedLoading"));
                     }
-                    let chosen = file_table(
-                        ui,
-                        &comparison.entries,
-                        self.selected_file.as_deref(),
-                        !self.loading,
-                    );
-                    if let Some(path) = chosen {
-                        self.load_diff(&path, &ctx);
-                    }
-                });
-            if ctx.input(|i| i.pointer.any_released()) {
-                self.files_width = files.response.rect.width();
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = 0.;
+                        egui::ScrollArea::vertical()
+                            .id_salt("comparison_files")
+                            .auto_shrink([false, false])
+                            .show_rows(
+                                ui,
+                                FILE_ROW_HEIGHT,
+                                comparison.entries.len(),
+                                |ui, range| {
+                                    let mut chosen = None;
+                                    for entry in &comparison.entries[range] {
+                                        let selected =
+                                            self.selected_file.as_deref() == Some(&entry.path);
+                                        let kind = RowKind::Diff {
+                                            selected,
+                                            enabled: !self.loading,
+                                        };
+                                        if file_row(ui, entry, kind) {
+                                            chosen = Some(entry.path.clone());
+                                        }
+                                    }
+                                    chosen
+                                },
+                            )
+                            .inner
+                    })
+                    .inner
+                } else {
+                    None
+                }
+            });
+            if let Some(path) = files.inner {
+                self.load_diff(&path, &ctx);
             }
+            let resized = settings.is_some_and(|settings| {
+                Divider::HistoryFiles.handle(ui, files.response.rect, span, settings)
+            });
             egui::CentralPanel::default().show(ui, |ui| {
                 if let Some(diff) = &self.diff {
                     ui.horizontal(|ui| {
@@ -334,117 +393,126 @@ impl Pane {
                     ui.label(text("DiffChooseFile"));
                 }
             });
-        });
+            resized
+        })
+        .inner
+    }
+
+    fn show_summary(&self, ui: &mut egui::Ui, commit: &Commit) {
+        egui::ScrollArea::vertical()
+            .id_salt("commit_summary")
+            .auto_shrink([false, false])
+            .show_viewport(ui, |ui, viewport| {
+                let top = ui.next_widget_position().y;
+                metadata(ui, commit, &self.path);
+                let Some(comparison) = self.comparison.as_ref().filter(|c| c.commit == commit.hash)
+                else {
+                    return;
+                };
+                if comparison.entries.is_empty() {
+                    return;
+                }
+                ui.separator();
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.;
+                    let file_top = ui.next_widget_position().y - top;
+                    let len = comparison.entries.len();
+                    let start =
+                        (((viewport.min.y - file_top) / FILE_ROW_HEIGHT).floor() as usize).min(len);
+                    let end = (((viewport.max.y - file_top) / FILE_ROW_HEIGHT).ceil() as usize)
+                        .clamp(start, len);
+                    ui.add_space(start as f32 * FILE_ROW_HEIGHT);
+                    for entry in &comparison.entries[start..end] {
+                        file_row(ui, entry, RowKind::Summary);
+                    }
+                    ui.add_space((len - end) as f32 * FILE_ROW_HEIGHT);
+                });
+            });
     }
 }
 
-fn file_table(
-    ui: &mut egui::Ui,
-    entries: &[working::Change],
-    selected_file: Option<&str>,
-    enabled: bool,
-) -> Option<String> {
-    const ROW_HEIGHT: f32 = 22.;
-    const PADDING: f32 = 6.;
-    let palette = Palette::current(ui);
-    let change = text("ChangesKind");
-    let font = egui::FontId::proportional(13.);
-    let change_width = ui
-        .painter()
-        .layout_no_wrap(change.clone(), font.clone(), palette.muted)
-        .size()
-        .x
-        + 2. * PADDING;
-    let cells = |ui: &egui::Ui, rect: egui::Rect, change: &str, path: &str, color| {
-        let divider = rect.left() + change_width;
-        let mut change_cell = rect;
-        change_cell.max.x = divider;
-        let mut path_cell = rect;
-        path_cell.min.x = divider;
-        for (cell, value) in [(change_cell, change), (path_cell, path)] {
-            row_text(
-                ui,
-                cell.shrink2(egui::vec2(PADDING, 0.)),
-                value,
-                font.clone(),
-                color,
-            );
-        }
-        ui.painter().vline(
-            divider,
-            rect.y_range(),
-            egui::Stroke::new(1., palette.border),
-        );
-    };
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 0.;
-        let (header, _) = ui.allocate_exact_size(
-            egui::vec2(ui.available_width(), ROW_HEIGHT),
-            egui::Sense::hover(),
-        );
-        ui.painter().rect_filled(header, 0., palette.raised);
-        cells(ui, header, &change, &text("ChangesPath"), palette.muted);
-        ui.painter().hline(
-            header.x_range(),
-            header.bottom(),
-            egui::Stroke::new(1., palette.border),
-        );
+const FILE_ROW_HEIGHT: f32 = 22.;
 
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show_rows(ui, ROW_HEIGHT, entries.len(), |ui, range| {
-                let mut chosen = None;
-                for index in range {
-                    let entry = &entries[index];
-                    let selected = selected_file == Some(entry.path.as_str());
-                    let (rect, response) = ui.allocate_exact_size(
-                        egui::vec2(ui.available_width(), ROW_HEIGHT),
-                        egui::Sense::click(),
-                    );
-                    response.widget_info(|| {
-                        egui::WidgetInfo::selected(
-                            egui::Role::Button,
-                            enabled,
-                            selected,
-                            format!("{} {}", entry.code, entry.path),
-                        )
-                    });
-                    let highlighted = selected || response.hovered();
-                    let color = if highlighted {
-                        let fill = if selected {
-                            palette.selected
-                        } else {
-                            palette.hover
-                        };
-                        ui.painter().rect_filled(rect, 0., fill);
-                        palette.selection_text
-                    } else {
-                        palette.text
-                    };
-                    if response.has_focus() {
-                        ui.painter().rect_stroke(
-                            rect,
-                            0.,
-                            egui::Stroke::new(1., palette.focus),
-                            egui::StrokeKind::Inside,
-                        );
-                    }
-                    cells(
-                        ui,
-                        rect,
-                        entry.code.encode_utf8(&mut [0; 4]),
-                        &entry.path,
-                        color,
-                    );
-                    if response.on_hover_text(&entry.path).clicked() && enabled {
-                        chosen = Some(entry.path.clone());
-                    }
-                }
-                chosen
-            })
-            .inner
-    })
-    .inner
+#[derive(Clone, Copy)]
+enum RowKind {
+    Summary,
+    Diff { selected: bool, enabled: bool },
+}
+
+fn file_row(ui: &mut egui::Ui, entry: &working::Change, kind: RowKind) -> bool {
+    let palette = Palette::current(ui);
+    let (selected, enabled) = match kind {
+        RowKind::Summary => (false, false),
+        RowKind::Diff { selected, enabled } => (selected, enabled && ui.is_enabled()),
+    };
+    let sense = if enabled {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), FILE_ROW_HEIGHT), sense);
+    let path = crate::path_text::PathText::new(ui.ctx(), &entry.path);
+    let original = entry
+        .original
+        .as_ref()
+        .map(|p| crate::path_text::PathText::new(ui.ctx(), p));
+    let label = format!("{} {}", entry.code, path.spoken());
+    response.widget_info(|| match kind {
+        RowKind::Summary => egui::WidgetInfo::labeled(egui::Role::Label, true, &label),
+        RowKind::Diff { .. } => {
+            egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, &label)
+        }
+    });
+    let tooltip = original.map_or_else(
+        || path.visual().to_owned(),
+        |old| strings::format("FileActionPath", &[path.visual(), old.visual()]),
+    );
+    let highlighted = selected || enabled && response.hovered();
+    let color = if highlighted {
+        let fill = if selected {
+            palette.selected
+        } else {
+            palette.hover
+        };
+        ui.painter().rect_filled(rect, 0., fill);
+        palette.selection_text
+    } else {
+        palette.text
+    };
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            0.,
+            egui::Stroke::new(1., palette.focus),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let font = egui::FontId::proportional(13.);
+    let x = rect.left() + 6.;
+    let mut path_rect = rect;
+    if matches!(kind, RowKind::Diff { .. }) {
+        let mut badge = rect;
+        badge.min.x = x;
+        badge.max.x = x + 18.;
+        row_text(
+            ui,
+            badge,
+            entry.code.encode_utf8(&mut [0; 4]),
+            font.clone(),
+            if palette.high_contrast {
+                color
+            } else {
+                Palette::change_status(entry.code, ui.visuals().dark_mode || highlighted)
+            },
+        );
+        path_rect.min.x = badge.max.x;
+    } else {
+        path_rect.min.x = x;
+    }
+    path_rect.max.x = (path_rect.max.x - 6.).max(path_rect.min.x);
+    row_text(ui, path_rect, path.visual(), font, color);
+    response.on_hover_text(tooltip).clicked()
 }
 
 impl Drop for Pane {
@@ -457,50 +525,69 @@ fn error_text(error: working::Error) -> String {
 }
 
 pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit, worktree: &std::path::Path) {
+    let palette = Palette::current(ui);
+    ui.horizontal(|ui| {
+        let (avatar, response) = ui.allocate_exact_size(egui::vec2(28., 28.), egui::Sense::hover());
+        crate::history_row::paint_avatar(ui, avatar, commit, &palette, worktree);
+        response.on_hover_text(crate::history_row::author_details(ui.ctx(), commit));
+        ui.strong(&commit.author)
+            .on_hover_text(crate::history_row::author_details(ui.ctx(), commit));
+        ui.label(
+            RichText::new(crate::dates::local(ui.ctx(), &commit.committed)).color(palette.muted),
+        )
+        .on_hover_text(crate::history_row::committer_details(ui.ctx(), commit));
+    });
+    let (subject, body) = commit
+        .message
+        .split_once('\n')
+        .unwrap_or((&commit.message, ""));
+    ui.add(egui::Label::new(RichText::new(subject).strong()).selectable(true));
+    let body = body.trim_start_matches(['\r', '\n']).trim_end();
+    if !body.is_empty() {
+        ui.add(egui::Label::new(body).selectable(true));
+    }
+}
+
+fn inspector_metadata(ui: &mut egui::Ui, commit: &Commit, worktree: &std::path::Path) {
     let ctx = ui.ctx().clone();
     let p = crate::workspace_style::Palette::current(ui);
-    egui::ScrollArea::vertical()
-        .id_salt("metadata")
-        .max_height(125.)
-        .show(ui, |ui| {
-            ui.horizontal_top(|ui| {
-                let (avatar, avatar_response) =
-                    ui.allocate_exact_size(egui::vec2(44., 44.), egui::Sense::hover());
-                crate::history_row::paint_avatar(ui, avatar, commit, &p, worktree);
-                avatar_response.on_hover_text(format!("{} <{}>", commit.author, commit.email));
-                ui.vertical(|ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.strong(&commit.author);
-                        ui.label(
-                            RichText::new(crate::dates::local(ui.ctx(), &commit.committed))
-                                .color(p.muted),
-                        )
-                        .on_hover_text(commit.committed.to_rfc3339());
-                    });
-                    ui.horizontal_wrapped(|ui| {
-                        ui.monospace(&commit.hash);
-                        if ui.button(text("HistoryCopySha")).clicked() {
-                            ctx.copy_text(commit.hash.clone());
-                        }
-                    });
-                    ui.add(
-                        egui::Label::new(RichText::new(&commit.message).strong()).selectable(true),
-                    );
-                    egui::CollapsingHeader::new(text("CommitMetadata")).show(ui, |ui| {
-                        ui.label(crate::history_row::author_details(ui.ctx(), commit))
-                            .on_hover_text(commit.authored.to_rfc3339());
-                        ui.label(crate::history_row::committer_details(ui.ctx(), commit))
-                            .on_hover_text(commit.committed.to_rfc3339());
-                        let parents = if commit.parents.is_empty() {
-                            text("RootCommit")
-                        } else {
-                            commit.parents.join(", ")
-                        };
-                        ui.label(crate::strings::format("RustCommitParentDetails", &[&parents]));
-                    });
-                });
+    ui.horizontal_top(|ui| {
+        let (avatar, avatar_response) =
+            ui.allocate_exact_size(egui::vec2(44., 44.), egui::Sense::hover());
+        crate::history_row::paint_avatar(ui, avatar, commit, &p, worktree);
+        avatar_response.on_hover_text(format!("{} <{}>", commit.author, commit.email));
+        ui.vertical(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong(&commit.author);
+                ui.label(
+                    RichText::new(crate::dates::local(ui.ctx(), &commit.committed)).color(p.muted),
+                )
+                .on_hover_text(commit.committed.to_rfc3339());
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.monospace(&commit.hash);
+                if ui.button(text("HistoryCopySha")).clicked() {
+                    ctx.copy_text(commit.hash.clone());
+                }
+            });
+            ui.add(egui::Label::new(RichText::new(&commit.message).strong()).selectable(true));
+            egui::CollapsingHeader::new(text("CommitMetadata")).show(ui, |ui| {
+                ui.label(crate::history_row::author_details(ui.ctx(), commit))
+                    .on_hover_text(commit.authored.to_rfc3339());
+                ui.label(crate::history_row::committer_details(ui.ctx(), commit))
+                    .on_hover_text(commit.committed.to_rfc3339());
+                let parents = if commit.parents.is_empty() {
+                    text("RootCommit")
+                } else {
+                    commit.parents.join(", ")
+                };
+                ui.label(crate::strings::format(
+                    "RustCommitParentDetails",
+                    &[&parents],
+                ));
             });
         });
+    });
 }
 
 #[cfg(test)]
@@ -598,6 +685,7 @@ mod tests {
                 .iter()
                 .any(|l| l.text == "immutable text")
         );
+        let settings = std::cell::RefCell::new(Settings::default());
         let frame = |pane: &mut Pane, size: [f32; 2], events| {
             ctx.run_ui(
                 egui::RawInput {
@@ -605,7 +693,9 @@ mod tests {
                     events,
                     ..Default::default()
                 },
-                |ui| pane.show(ui),
+                |ui| {
+                    pane.show_history(ui, &mut settings.borrow_mut());
+                },
             )
         };
         let click = |pane: &mut Pane, label: &str| {
@@ -644,6 +734,20 @@ mod tests {
                 .drop_without_applying_deltas();
             }
         };
+        let output = frame(&mut pane, [1200., 500.], vec![]);
+        let paints = |label| {
+            output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == label)
+            })
+        };
+        for label in ["initial", "full message", "file.txt", other_file] {
+            assert!(paints(label), "{label}");
+        }
+        for label in ["immutable text", "Path", "Refresh"] {
+            assert!(!paints(label), "{label}");
+        }
+        output.drop_without_applying_deltas();
+
         click(&mut pane, "Changed files");
         assert_eq!(pane.details_index, 1);
         for size in [[1200., 500.], [760., 320.]] {
@@ -659,11 +763,66 @@ mod tests {
                     .reduce(f32::min)
                     .unwrap()
             };
-            let path_column = text_left("Path");
-            assert_eq!(text_left("file.txt"), path_column);
+            let path_column = text_left("file.txt");
             assert_eq!(text_left(other_file), path_column);
+            assert!(text_left("A") < path_column);
             output.drop_without_applying_deltas();
         }
+        let size = [1200., 500.];
+        let start = egui::pos2(337.5, 200.);
+        let end = start + egui::vec2(70., 0.);
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        for event in [
+            egui::Event::PointerMoved(start),
+            button(start, true),
+            egui::Event::PointerMoved(end),
+            button(end, false),
+        ] {
+            frame(&mut pane, size, vec![event]).drop_without_applying_deltas();
+        }
+        let width = settings
+            .borrow()
+            .get("HistoryFilesWidth")
+            .and_then(serde_json::Value::as_f64);
+        assert!(
+            width.is_some_and(|width| (405. ..415.).contains(&width)),
+            "{width:?}"
+        );
+        let directory = temp.path().join("profile");
+        let mut store = shovel_core::settings::SettingsStore::new(directory.clone());
+        store.load().unwrap();
+        store.save(&settings.borrow()).unwrap();
+        let mut restored = shovel_core::settings::SettingsStore::new(directory)
+            .load()
+            .unwrap();
+        assert_eq!(
+            restored
+                .get("HistoryFilesWidth")
+                .and_then(serde_json::Value::as_f64),
+            width
+        );
+        let reopened = egui::Context::default().run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size.into())),
+                ..Default::default()
+            },
+            |ui| assert!(!pane.show_history(ui, &mut restored)),
+        );
+        let divider_x = width.unwrap() as f32;
+        assert!(reopened.shapes.iter().any(|shape| {
+            matches!(
+                &shape.shape,
+                egui::Shape::Text(text)
+                  if text.galley.text() == "file.txt" && text.pos.x >= divider_x
+            )
+        }));
+        reopened.drop_without_applying_deltas();
+
         click(&mut pane, &format!("A {other_file}"));
         settle(&mut pane);
         assert_eq!(pane.displayed_file, other_file);

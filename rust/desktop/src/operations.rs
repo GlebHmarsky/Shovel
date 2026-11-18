@@ -2571,6 +2571,9 @@ mod activity_layout_test {
             y
         };
         let before = tab_y(&mut app);
+        app.tabs[app.selected].loading = true;
+        assert_eq!(before, tab_y(&mut app));
+        app.tabs[app.selected].loading = false;
         for seq in 1..=8 {
             app.operations.runs.push(Run {
                 background: false,

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Workspace and confirmations in Rust 0.51.3
+
+The repository header keeps a two-line layout during Git work. Local Changes counts distinct paths before the editor opens. The history inspector keeps a fixed height, with a full-width Commit summary and a separate Changed Files list and diff. The file-list divider saves its width and restores it in a fresh profile session. Common confirmations ask one question and show the affected targets.
+
+Twenty-five focused checks passed across the sandbox and three Windows shell fixture reruns. The checks exercised header geometry, a partially staged file plus multiple untracked paths, discard cancellation and scope, and divider restoration from saved settings. All-target Clippy and `git diff --check` passed. The 18-check smoke suite passed in 51.92 seconds on fingerprint `732A5AA9440DC6E46FB41DAA72A5F2C10024983455B1021D9DAD27481A9AB07C`. Live desktop appearance remains unverified.
+
 ## Stash graph in Rust 0.51.2
 
 Shovel inserts each saved stash just above its first parent in Git's topological walk. The gray marker sits in the gap beside that parent's lane, and its connector ends at the parent. Stashes on a shared base have separate markers on one connector. The layout keeps ordinary commit lanes and colors intact and regenerates cached previews from the previous graph format.

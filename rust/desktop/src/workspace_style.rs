@@ -91,6 +91,21 @@ impl Palette {
 }
 
 impl Palette {
+    pub fn change_status(code: char, on_dark: bool) -> Color32 {
+        let (light, dark) = match code {
+            'D' => (0xFF8A8A, 0xA42532),
+            'A' => (0x8DDD9E, 0x21703C),
+            'M' => (0xF6DD72, 0x745600),
+            'R' => (0x89D8FF, 0x12628D),
+            'C' => (0xDBC4FF, 0x634098),
+            'T' => (0xFFBA82, 0x8B4619),
+            'U' => (0xFFB5DB, 0x92275E),
+            _ => (0xBFC5CD, 0x515762),
+        };
+        let rgb = if on_dark { light } else { dark };
+        Color32::from_rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+    }
+
     pub fn current(ui: &egui::Ui) -> Self {
         ui.ctx()
             .data(|d| d.get_temp(egui::Id::unique("workspace-palette")))

@@ -462,7 +462,7 @@ impl Editor {
         let mut accept = false;
         let mut cancel = false;
         let response = egui::Modal::new(egui::Id::unique("discard-files")).show(ctx, |ui| {
-            ui.set_width(620.);
+            ui.set_width(460.);
             ui.heading(text(if stash {
                 "FileStashTitle"
             } else {
@@ -471,27 +471,19 @@ impl Editor {
             let repository = &selection.context.repository;
             let root = repository.worktree.to_string_lossy();
             let root = crate::path_text::PathText::new(ctx, &root);
-            let explain = |root: &str| {
-                strings::format(
-                    if stash {
-                        "FileStashExplanation"
-                    } else {
-                        "FileDiscardExplanation"
-                    },
-                    &[
-                        repository.head.as_deref().unwrap_or(&text("NoBranch")),
-                        root,
-                    ],
-                )
-            };
+            ui.label(text(if stash {
+                "FileStashExplanation"
+            } else {
+                "FileDiscardExplanation"
+            }));
             crate::path_text::label(
                 ui,
-                explain(root.visual()),
-                root.reordered().then(|| explain(root.spoken())),
+                root.visual().to_owned(),
+                root.reordered().then(|| root.spoken().to_owned()),
             );
             egui::ScrollArea::vertical().max_height(260.).show_rows(
                 ui,
-                42.,
+                19.,
                 selection.entries.len(),
                 |ui, range| {
                     for index in range {
@@ -523,12 +515,18 @@ impl Editor {
                         };
                         let reordered =
                             path.reordered() || old.as_ref().is_some_and(|p| p.reordered());
-                        crate::path_text::label(
-                            ui,
-                            message(path.visual(), old.as_ref().map(|p| p.visual())),
-                            reordered
-                                .then(|| message(path.spoken(), old.as_ref().map(|p| p.spoken()))),
-                        );
+                        let target = message(path.visual(), old.as_ref().map(|p| p.visual()));
+                        let response = ui
+                            .add(egui::Label::new(&target).truncate())
+                            .on_hover_text(&target);
+                        if reordered {
+                            ctx.accesskit_node_builder(response.id, |node| {
+                                node.set_value(message(
+                                    path.spoken(),
+                                    old.as_ref().map(|p| p.spoken()),
+                                ));
+                            });
+                        }
                     }
                 },
             );

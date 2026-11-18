@@ -2,6 +2,10 @@
 
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
+## Confirmation copy
+
+Use one direct question, the actual affected targets, and a verb for the action beside Cancel. Add one short consequence when the action and targets alone would hide a material effect. Keep instructions and recovery details in tooltips or failure results.
+
 ## Checkout and workspace-state acceptance (0.47.0)
 
 Old-base stashes must stay adjacent to their base regardless of timestamp, retain ordinary branch lanes and paginate/navigate without duplicates or gaps. Many same-base stashes must not exhaust lane capacity. Verify native stash metadata and separately reachable internal objects.

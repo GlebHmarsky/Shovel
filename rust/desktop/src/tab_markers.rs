@@ -141,14 +141,20 @@ pub(super) fn picker(ui: &mut egui::Ui, current: Option<Color>) -> Option<Option
 }
 
 struct Observation {
-    status: Status,
-    due: Instant,
+    read: Read,
+    due: Option<Instant>,
+}
+
+enum Read {
+    Marker(Status),
+    Count(Option<usize>),
 }
 
 struct Scan {
     id: u64,
+    count: bool,
     cancel: Cancellation,
-    result: Receiver<Status>,
+    result: Receiver<Read>,
 }
 
 #[derive(Default)]
@@ -164,12 +170,28 @@ impl Controller {
         }
         self.observations
             .get(&tab.id)
-            .map_or(Status::Checking, |read| read.status)
+            .map_or(Status::Checking, |observation| match observation.read {
+                Read::Marker(status) => status,
+                Read::Count(Some(0)) => Status::Clean,
+                Read::Count(Some(_)) => Status::Changed,
+                Read::Count(None) => Status::Unavailable,
+            })
+    }
+
+    pub fn count(&self, tab: &Tab) -> Option<usize> {
+        if tab.view.identity_blocked {
+            return None;
+        }
+        match self.observations.get(&tab.id)?.read {
+            Read::Count(count) => count,
+            Read::Marker(Status::Clean) => Some(0),
+            Read::Marker(_) => None,
+        }
     }
 
     pub fn invalidate(&mut self, id: u64) {
         if let Some(read) = self.observations.get_mut(&id) {
-            read.due = Instant::now();
+            read.due = Some(Instant::now());
         }
         if let Some(scan) = &self.scan
             && scan.id == id
@@ -216,6 +238,9 @@ impl Workspace {
 
     pub(super) fn poll_tab_markers(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
+        let active = self.tabs.get(self.selected).and_then(|tab| {
+            (!tab.view.identity_blocked && tab.history.is_some()).then_some(tab.id)
+        });
         let marked =
             |tab: &Tab| !tab.view.identity_blocked && color(&self.settings, &tab.path).is_some();
         let markers = &mut self.tab_markers;
@@ -224,13 +249,21 @@ impl Workspace {
                 Err(mpsc::TryRecvError::Empty) => return,
                 result => {
                     if !scan.cancel.is_cancelled()
-                        && self.tabs.iter().any(|tab| tab.id == scan.id && marked(tab))
+                        && let Some(tab) = self.tabs.iter().find(|tab| {
+                            tab.id == scan.id
+                                && !tab.view.identity_blocked
+                                && (Some(tab.id) == active || marked(tab))
+                        })
                     {
                         markers.observations.insert(
                             scan.id,
                             Observation {
-                                status: result.unwrap_or(Status::Unavailable),
-                                due: now + INTERVAL,
+                                read: result.unwrap_or(if scan.count {
+                                    Read::Count(None)
+                                } else {
+                                    Read::Marker(Status::Unavailable)
+                                }),
+                                due: marked(tab).then_some(now + INTERVAL),
                             },
                         );
                     }
@@ -249,12 +282,28 @@ impl Workspace {
         let Some(git) = &self.git else {
             return;
         };
+        let selected = self
+            .tabs
+            .get(self.selected)
+            .filter(|tab| Some(tab.id) == active);
+        let count = selected.filter(|tab| {
+            markers.observations.get(&tab.id).is_none_or(|observation| {
+                observation.due.is_some_and(|due| due <= now)
+                    || matches!(observation.read, Read::Marker(_))
+            })
+        });
         let next = self
             .tabs
             .iter()
             .filter(|tab| marked(tab))
-            .map(|tab| (tab, markers.observations.get(&tab.id).map(|read| read.due)))
+            .map(|tab| {
+                (
+                    tab,
+                    markers.observations.get(&tab.id).and_then(|read| read.due),
+                )
+            })
             .min_by_key(|(_, due)| *due);
+        let next = count.map(|tab| (tab, None)).or(next);
         let Some((tab, due)) = next else {
             return;
         };
@@ -268,8 +317,10 @@ impl Workspace {
 
         let (tx, result) = mpsc::channel();
         let cancel = Cancellation::default();
+        let count = Some(tab.id) == active;
         markers.scan = Some(Scan {
             id: tab.id,
+            count,
             cancel: cancel.clone(),
             result,
         });
@@ -283,12 +334,19 @@ impl Workspace {
         let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
             let _lease = lease;
-            let status = match git.has_local_changes(&path, expected.as_deref(), &cancel) {
-                Ok(true) => Status::Changed,
-                Ok(false) => Status::Clean,
-                Err(_) => Status::Unavailable,
+            let read = match expected.as_deref().filter(|_| count) {
+                Some(expected) => {
+                    Read::Count(git.local_change_count(&path, expected, &cancel).ok())
+                }
+                None => Read::Marker(
+                    match git.has_local_changes(&path, expected.as_deref(), &cancel) {
+                        Ok(true) => Status::Changed,
+                        Ok(false) => Status::Clean,
+                        Err(_) => Status::Unavailable,
+                    },
+                ),
             };
-            let _ = tx.send(status);
+            let _ = tx.send(read);
             ctx.request_repaint();
         });
     }
@@ -308,6 +366,8 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let mut app = fixture.app(&ctx);
+        app.settings
+            .set("CommitInWorkspace", serde_json::json!(true));
         let other_path = fixture._temp.path().join("unmarked");
         app.ensure_tab(other_path.clone());
         let id = app.tabs[0].id;
@@ -329,8 +389,41 @@ mod tests {
             output.drop_without_applying_deltas();
             markers
         };
+        let wait_count = |app: &mut Workspace, expected| {
+            let deadline = Instant::now() + Duration::from_secs(15);
+            loop {
+                app.receive(&ctx);
+                if app.tab_markers.count(&app.tabs[0]) == Some(expected)
+                    && app.tab_markers.scan.is_none()
+                {
+                    return;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "expected {expected} changed paths"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+        };
+        wait_count(&mut app, 0);
         assert!(painted(&mut app).is_empty());
-        assert!(app.tab_markers.scan.is_none());
+        let partial = fixture.root.join("partial.txt");
+        std::fs::write(&partial, "staged").unwrap();
+        fixture.command(&["add", "partial.txt"], &[]);
+        std::fs::write(&partial, "unstaged").unwrap();
+        let untracked_dir = fixture.root.join("untracked");
+        std::fs::create_dir(&untracked_dir).unwrap();
+        for name in ["one.txt", "two.txt"] {
+            std::fs::write(untracked_dir.join(name), name).unwrap();
+        }
+        wait_count(&mut app, 3);
+        assert!(sidebar_point(&ctx, &mut app, "Local Changes (3)").is_some());
+        fixture.command(&["reset", "--", "partial.txt"], &[]);
+        std::fs::remove_file(partial).unwrap();
+        for name in ["one.txt", "two.txt"] {
+            std::fs::remove_file(untracked_dir.join(name)).unwrap();
+        }
+        wait_count(&mut app, 0);
         sidebar_click(&ctx, &mut app, "history", egui::PointerButton::Secondary);
         assert!(sidebar_point(&ctx, &mut app, "Red tab marker").is_some());
         sidebar_click(
@@ -360,7 +453,7 @@ mod tests {
             assert_eq!(app.tab_markers.observations.len(), 1);
         };
         let poll_due = |app: &mut Workspace| {
-            app.tab_markers.observations.get_mut(&id).unwrap().due = Instant::now();
+            app.tab_markers.observations.get_mut(&id).unwrap().due = Some(Instant::now());
         };
         wait_status(&mut app, Status::Clean);
         assert_eq!(painted(&mut app), [false]);
@@ -395,7 +488,7 @@ mod tests {
         app.receive(&ctx);
         assert!(painted(&mut app).is_empty());
         assert!(color(&app.settings, &fixture.root).is_none());
-        assert!(app.tab_markers.observations.is_empty());
-        assert!(app.tab_markers.scan.is_none());
+        wait_count(&mut app, 0);
+        assert_eq!(app.tab_markers.observations.len(), 1);
     }
 }

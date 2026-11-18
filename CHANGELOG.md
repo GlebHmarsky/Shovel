@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.51.3 - 2026-11-19
+
+- Ask short confirmation questions with the affected targets and direct action buttons.
+- Keep progress on the branch line in the repository header. Show the selected repository's changed-file count on Local Changes.
+- Give Commit a full-width summary and file list. In Changed Files, show a color-coded path list beside the diff and remember the divider. Refresh lives in the Repository menu and on F5.
+
 ## Rust 0.51.2 - 2026-11-18
 
 - Draw each saved stash as a small gray marker beside its original base commit. The stash connection ends at that commit and regular history keeps its Git topology, lane colors, and connections.

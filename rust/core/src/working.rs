@@ -624,24 +624,51 @@ impl Git {
         expected: Option<&str>,
         cancel: &Cancellation,
     ) -> Result<bool, Error> {
+        Ok(!self
+            .local_changes(root, expected, false, cancel)?
+            .is_empty())
+    }
+
+    pub fn local_change_count(
+        &self,
+        root: &Path,
+        expected: &str,
+        cancel: &Cancellation,
+    ) -> Result<usize, Error> {
+        let entries = self.local_changes(root, Some(expected), true, cancel)?;
+        Ok(entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect::<BTreeSet<_>>()
+            .len())
+    }
+
+    fn local_changes(
+        &self,
+        root: &Path,
+        expected: Option<&str>,
+        full: bool,
+        cancel: &Cancellation,
+    ) -> Result<Vec<Change>, Error> {
         let before = identity::read(root)?;
         if expected.is_some_and(|id| id != before.fingerprint) {
             return Err(Error::Stale);
         }
         let (filters, standard_lfs) = self.working_filters(root, cancel)?;
         let mut entries =
-            self.read_worktree_status(root, &filters, false, &BTreeSet::new(), cancel)?;
+            self.read_worktree_status(root, &filters, full, &BTreeSet::new(), cancel)?;
         if standard_lfs
-            && entries
-                .iter()
-                .all(|entry| entry.group == Group::Unstaged && entry.code == 'M')
+            && (full
+                || entries
+                    .iter()
+                    .all(|entry| entry.group == Group::Unstaged && entry.code == 'M'))
         {
             crate::lfs::normalize(self, root, &mut entries, cancel)?;
         }
         if identity::read(root)? != before || cancel.is_cancelled() {
             return Err(Error::Stale);
         }
-        Ok(!entries.is_empty())
+        Ok(entries)
     }
 
     pub fn working_copy(&self, root: &Path, cancel: &Cancellation) -> Result<Context, Error> {

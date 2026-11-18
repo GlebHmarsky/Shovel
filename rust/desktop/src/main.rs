@@ -332,6 +332,13 @@ impl Workspace {
         if let Some(index) = self.inline_editor() {
             self.editors[index].request_refresh(ctx);
         } else {
+            if let Some(pane) = self
+                .tabs
+                .get_mut(self.selected)
+                .and_then(|tab| tab.comparison.as_mut())
+            {
+                pane.load_files(ctx);
+            }
             self.refresh_at(self.selected, ctx);
         }
     }
@@ -2214,15 +2221,23 @@ impl eframe::App for Workspace {
                             self.git.as_ref(),
                             &self.scheduler,
                         );
-                        if !sidebar_commit
-                            && workspace_style::action(
+                        if !sidebar_commit {
+                            let count = self
+                                .tabs
+                                .get(self.selected)
+                                .and_then(|tab| self.tab_markers.count(tab))
+                                .filter(|count| *count > 0)
+                                .map(|count| count.to_string());
+                            if workspace_style::action_with_count(
                                 ui,
                                 "Commit",
                                 self.git.is_some() && !self.tabs.is_empty(),
+                                count.as_deref().map(|count| (count, "WorkspaceLocalChanges")),
                             )
                             .clicked()
-                        {
-                            self.open_commit();
+                            {
+                                self.open_commit();
+                            }
                         }
                         let offer = self.updater.available_version(self.settings.channel());
                         let reserved = 180. + offer.map_or(0., |_| updater::UPDATE_CARD_WIDTH + 2.);
@@ -2250,7 +2265,7 @@ impl eframe::App for Workspace {
                                         let label = ui
                                             .add(
                                                 egui::Label::new(
-                                                    RichText::new(name.visual()).strong(),
+                                                    RichText::new(name.visual()).size(15.).strong(),
                                                 )
                                                 .truncate(),
                                             )
@@ -2260,21 +2275,13 @@ impl eframe::App for Workspace {
                                                 node.set_value(name.spoken())
                                             });
                                         }
-                                        if let Some(snapshot) =
-                                            tab.history.as_ref().map(|h| &h.snapshot).or_else(
-                                                || tab.view.preview.as_ref().map(|(s, _)| s),
-                                            )
-                                            && let Some(branch) = &snapshot.branch
-                                        {
-                                            ui.add(
-                                                egui::Label::new(
-                                                    RichText::new(branch)
-                                                    .small()
-                                                    .color(palette.muted),
-                                                )
-                                                .truncate(),
-                                            );
-                                        }
+                                        let branch = tab
+                                            .history
+                                            .as_ref()
+                                            .map(|h| &h.snapshot)
+                                            .or_else(|| tab.view.preview.as_ref().map(|(s, _)| s))
+                                            .and_then(|snapshot| snapshot.branch.as_deref())
+                                            .unwrap_or_default();
                                         let editor =
                                             self.editors.iter().find(|e| tab.owns_editor(e));
                                         let progress = self
@@ -2300,34 +2307,56 @@ impl eframe::App for Workspace {
                                                 (run, local) => run.or(local),
                                             }
                                         });
-                                        if let Some(status) = status {
-                                            ui.horizontal(|ui| {
-                                                if active {
-                                                    ui.add(egui::Spinner::new().size(14.));
+                                        let width = ui.available_width();
+                                        let branch_width = ui
+                                            .painter()
+                                            .layout_no_wrap(
+                                                branch.to_owned(),
+                                                egui::FontId::proportional(14.),
+                                                palette.text,
+                                            )
+                                            .size()
+                                            .x
+                                            .min(width * 0.55);
+                                        ui.allocate_ui_with_layout(
+                                            egui::vec2(width, 20.),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                ui.spacing_mut().item_spacing.x = 4.;
+                                                ui.add_space((width - branch_width) / 2.);
+                                                if !branch.is_empty() {
+                                                    ui.add_sized(
+                                                        egui::vec2(branch_width, 18.),
+                                                        egui::Label::new(
+                                                            RichText::new(branch).size(14.),
+                                                        )
+                                                        .truncate(),
+                                                    )
+                                                    .on_hover_text(branch);
                                                 }
-                                                let response = ui
-                                                    .add(
+                                                if active {
+                                                    ui.add(egui::Spinner::new().size(13.));
+                                                }
+                                                if let Some(status) = status {
+                                                    ui.add(
                                                         egui::Label::new(
                                                             RichText::new(&status)
                                                                 .small()
                                                                 .color(palette.muted),
                                                         )
-                                                        .truncate()
-                                                        .sense(egui::Sense::click()),
+                                                        .truncate(),
                                                     )
                                                     .on_hover_text(status);
-                                                if response.clicked() {
-                                                    self.activity_open = true;
                                                 }
-                                            });
-                                        } else {
-                                            ui.allocate_space(egui::vec2(
-                                                0.,
-                                                ui.text_style_height(&egui::TextStyle::Small),
-                                            ));
-                                        }
+                                            },
+                                        );
                                     } else {
-                                        ui.label(RichText::new(strings::text("AppTitle")).strong());
+                                        ui.label(
+                                            RichText::new(strings::text("AppTitle"))
+                                                .size(15.)
+                                                .strong(),
+                                        );
+                                        ui.allocate_space(egui::vec2(0., 20.));
                                     }
                                 });
                             });
@@ -2682,9 +2711,14 @@ impl eframe::App for Workspace {
                     if ui.selectable_label(!local, strings::text("FileHistoryTab")).clicked() {
                         self.show_history(&ctx);
                     }
+                    let tab = &self.tabs[self.selected];
+                    let label = self.tab_markers.count(tab).map_or_else(
+                        || strings::text("WorkspaceLocalChanges"),
+                        |count| strings::format("WorkspaceLocalChangesCount", &[&count.to_string()]),
+                    );
                     if ui.add_enabled(
                         self.git.is_some() && self.draft_store.is_some(),
-                        egui::Button::selectable(local, strings::text("WorkspaceLocalChanges")),
+                        egui::Button::selectable(local, label),
                     ).clicked() {
                         self.open_commit();
                     }
@@ -3054,6 +3088,10 @@ impl eframe::App for Workspace {
             .resizable(false);
         let details = inline_editor.is_none().then(|| {
             details_panel.show(ui, |ui| {
+                let bounds = ui.max_rect();
+                let mut content = ui.new_child(egui::UiBuilder::new().max_rect(bounds));
+                content.set_clip_rect(ui.clip_rect().intersect(bounds));
+                let ui = &mut content;
                 if modal_open {
                     ui.disable();
                 }
@@ -3069,7 +3107,9 @@ impl eframe::App for Workspace {
                         .map(|e| e.commit.clone())
                 {
                     if tab.view.preview.is_some() || tab.view.initial_history {
-                        comparison::metadata(ui, &commit, &tab.path);
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| comparison::metadata(ui, &commit, &tab.path));
                         return;
                     }
                     if tab.comparison.is_none()
@@ -3077,11 +3117,6 @@ impl eframe::App for Workspace {
                     {
                         let mut pane = comparison::Pane::new(tab.path.clone(), git.clone())
                             .with_read_workers(self.read_workers.clone());
-                        pane.files_width = self
-                            .settings
-                            .get("HistoryFilesWidth")
-                            .and_then(|v| v.as_f64())
-                            .unwrap_or(340.) as f32;
                         pane.details_index = self
                             .settings
                             .get("RustDetailsTab")
@@ -3108,21 +3143,12 @@ impl eframe::App for Workspace {
                             .unwrap_or(12.) as f32;
                         pane.select(&commit, &ctx);
                         let before = pane.details_index;
-                        let old_width = pane.files_width;
-                        let h = ui.available_height();
-                        egui::ScrollArea::vertical()
-                            .id_salt(("details-viewport", tab.id))
-                            .max_height(h)
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                ui.set_max_height(h);
-                                pane.show(ui);
-                            });
-                        if (old_width - pane.files_width).abs() > 1. {
-                            self.settings
-                                .set("HistoryFilesWidth", serde_json::json!(pane.files_width));
-                            self.preferences_dirty = true;
-                        }
+                        let changed = ui
+                            .push_id(("details-viewport", tab.id), |ui| {
+                                pane.show_history(ui, &mut self.settings)
+                            })
+                            .inner;
+                        self.preferences_dirty |= changed;
                         if before != pane.details_index {
                             self.settings
                                 .set("RustDetailsTab", serde_json::json!(pane.details_index));
