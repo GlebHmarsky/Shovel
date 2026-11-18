@@ -176,27 +176,44 @@ fn quote(value: &OsStr) -> std::io::Result<Vec<u16>> {
     out.push(b'"' as u16);
     Ok(out)
 }
+fn compare_environment_names(left: &[u16], right: &[u16]) -> std::cmp::Ordering {
+    use windows_sys::Win32::Globalization::{
+        CSTR_EQUAL, CSTR_GREATER_THAN, CSTR_LESS_THAN, CompareStringOrdinal,
+    };
+    let (Ok(left_len), Ok(right_len)) = (left.len().try_into(), right.len().try_into()) else {
+        return left.cmp(right);
+    };
+    // Windows compares variable names ordinally. Each count is the exact size
+    // of its UTF-16 buffer, including any unpaired surrogate code units.
+    match unsafe { CompareStringOrdinal(left.as_ptr(), left_len, right.as_ptr(), right_len, 1) } {
+        CSTR_LESS_THAN => std::cmp::Ordering::Less,
+        CSTR_EQUAL => std::cmp::Ordering::Equal,
+        CSTR_GREATER_THAN => std::cmp::Ordering::Greater,
+        _ => left.cmp(right),
+    }
+}
 fn environment(request: &Request) -> std::io::Result<Vec<u16>> {
-    let mut values: BTreeMap<String, (OsString, OsString)> = std::env::vars_os()
-        .map(|(k, v)| (k.to_string_lossy().to_uppercase(), (k, v)))
-        .collect();
+    let mut values = Vec::new();
+    for (name, value) in std::env::vars_os() {
+        values.push((wide(&name)?, Some(value)));
+    }
     for (name, value) in &request.environment {
-        if name.is_empty() || name.to_string_lossy().contains('=') {
+        let name = wide(name)?;
+        if name.len() == 1 || name.contains(&u16::from(b'=')) {
             return Err(invalid());
         }
-        let key = name.to_string_lossy().to_uppercase();
-        if let Some(value) = value {
-            values.insert(key, (name.clone(), value.clone()));
-        } else {
-            values.remove(&key);
-        }
+        values.push((name, value.clone()));
     }
+    // Stable ordering puts explicit overrides after inherited names, including
+    // alternate spellings. A final removal omits the inherited entry entirely.
+    values.sort_by(|a, b| compare_environment_names(&a.0, &b.0));
     let mut block = Vec::new();
-    for (_, (name, value)) in values {
-        let mut entry = name;
-        entry.push("=");
-        entry.push(value);
-        block.extend(wide(&entry)?);
+    for group in values.chunk_by(|a, b| compare_environment_names(&a.0, &b.0).is_eq()) {
+        if let Some((name, Some(value))) = group.last() {
+            block.extend_from_slice(&name[..name.len() - 1]);
+            block.push(u16::from(b'='));
+            block.extend(wide(value)?);
+        }
     }
     block.push(0);
     if block.len() == 1 {
@@ -572,7 +589,39 @@ mod tests {
             println!("\nARGV:{}", serde_json::to_string(&arguments).unwrap());
         } else if mode == "environment" {
             println!("{}", std::env::var("SHOVEL_LITERAL_VALUE").unwrap());
+        } else if mode == "environment-parent" {
+            let mut nested = request(&std::env::current_dir().unwrap(), "environment-names");
+            nested
+                .environment
+                .insert("shovel_fixture_omitted".into(), None);
+            nested
+                .environment
+                .insert("shovel_fixture_strasse".into(), Some("double s".into()));
+            let result = run(&nested, &Cancellation::default(), None).unwrap();
+            assert!(
+                result.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+        } else if mode == "environment-names" {
+            for (key, value) in fixture_environment_names() {
+                assert_eq!(std::env::var_os(&key), Some(value));
+            }
+            assert!(std::env::var_os("SHOVEL_FIXTURE_OMITTED").is_none());
         }
+    }
+    fn fixture_environment_names() -> Vec<(OsString, OsString)> {
+        use std::os::windows::ffi::OsStringExt;
+        let mut raw: Vec<u16> = "SHOVEL_FIXTURE_".encode_utf16().collect();
+        raw.push(0xd800);
+        let first = OsString::from_wide(&raw);
+        *raw.last_mut().unwrap() = 0xd801;
+        vec![
+            ("SHOVEL_FIXTURE_Straße".into(), "sharp s".into()),
+            ("SHOVEL_FIXTURE_STRASSE".into(), "double s".into()),
+            (first, "first surrogate".into()),
+            (OsString::from_wide(&raw), OsString::from_wide(&[0xd802])),
+        ]
     }
     fn request(temp: &std::path::Path, mode: &str) -> Request {
         let mut request = Request::new(
@@ -872,6 +921,39 @@ mod tests {
             .map(|s| OsStr::new(s).encode_wide().collect())
             .collect();
         assert_eq!(observed, expected);
+    }
+    #[test]
+    fn child_receives_distinct_native_environment_names_and_values() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut request = request(temp.path(), "environment-parent");
+        for (name, value) in fixture_environment_names() {
+            request.environment.insert(name, Some(value));
+        }
+        request
+            .environment
+            .insert("SHOVEL_FIXTURE_OMITTED".into(), Some("earlier".into()));
+        request.environment.insert(
+            "SHOVEL_FIXTURE_STRASSE".into(),
+            Some("inherited value".into()),
+        );
+        let result = run(&request, &Cancellation::default(), None).unwrap();
+        assert!(
+            result.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    #[test]
+    fn malformed_environment_names_are_rejected_even_on_removal() {
+        let temp = tempfile::tempdir().unwrap();
+        for name in ["", "=C:", "has=equals", "embedded\0nul"] {
+            let mut request = request(temp.path(), "environment");
+            request.environment.insert(name.into(), None);
+            let Err(error) = environment(&request) else {
+                panic!("invalid removal name was accepted");
+            };
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        }
     }
     #[test]
     fn environment_is_literal_and_argument_quoting_matches_crt() {
