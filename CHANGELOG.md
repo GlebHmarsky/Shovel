@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.51.0 - 2026-11-18
+
+- Check the signed update feed when opening Updates from the toolbar or Help. Use **Later** to close the dialog and keep a verified download ready.
+- Honor Git’s configured SSH command and variant and the credential manager’s interaction settings for foreground authentication. Automatic Fetch stays noninteractive.
+- Skip obsolete Git reads and automatic Fetch requests that are cancelled before Windows starts them.
+- Reject a dangling Windows junction at `commondir` during repository identity checks, including when it appears during a read.
+
 ## Rust 0.50.23 - 2026-11-18
 
 - Use Refresh or F5 in Local Changes to recover after a draft read or save fails. Shovel keeps newer saved text and can confirm a draft that was already written before its worker stopped.

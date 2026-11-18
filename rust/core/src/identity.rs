@@ -104,6 +104,15 @@ fn reject_reparse(path: &Path) -> std::io::Result<()> {
     }
     Ok(())
 }
+
+fn entry_exists(path: &Path) -> std::io::Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
 fn pointer(path: &Path) -> std::io::Result<String> {
     reject_reparse(path)?;
     let mut bytes = Vec::new();
@@ -144,8 +153,7 @@ fn read_with(
     };
     reject_reparse(&git)?;
     let common_file = git.join("commondir");
-    let common_text = common_file
-        .try_exists()?
+    let common_text = entry_exists(&common_file)?
         .then(|| read_pointer(&common_file))
         .transpose()?;
     let common = match &common_text {
@@ -248,7 +256,7 @@ fn read_with(
             if let Some(hash) = &mut previous {
                 append(hash, &contents);
             }
-        } else if path == &common_file && path.try_exists()? {
+        } else if path == &common_file && entry_exists(path)? {
             return Err(unavailable());
         }
     }
@@ -269,6 +277,61 @@ fn read_with(
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn dangling_commondir_junction_is_not_treated_as_a_missing_pointer() {
+        use std::os::windows::process::CommandExt;
+        use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        let git = root.join(".git");
+        let shared = root.join("shared");
+        fs::create_dir_all(&git).unwrap();
+        fs::create_dir(&shared).unwrap();
+        let before = read(&root).unwrap();
+        let command = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let junction = std::process::Command::new(command)
+            .current_dir(&git)
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path commondir -Target $env:SHOVEL_TEST_JUNCTION_TARGET | Out-Null",
+            ])
+            .env("SHOVEL_TEST_JUNCTION_TARGET", &shared)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .unwrap();
+        assert!(junction.status.success(), "{junction:?}");
+        fs::rename(&shared, root.join("retired")).unwrap();
+        let marker = git.join("commondir");
+        assert_ne!(
+            fs::symlink_metadata(&marker).unwrap().file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT,
+            0,
+        );
+        let observed = read(&root);
+        assert!(observed.is_err(), "dangling pointer yielded {observed:?}");
+        let held = git.join("held-commondir");
+        fs::rename(&marker, &held).unwrap();
+        assert_eq!(read(&root).unwrap(), before);
+
+        let linked = temp.path().join("linked");
+        fs::create_dir(&linked).unwrap();
+        fs::write(linked.join(".git"), "gitdir: ../repo/.git\n").unwrap();
+        let reads = Cell::new(0);
+        let observed = read_with(&linked, |path| {
+            reads.set(reads.get() + 1);
+            if reads.get() == 2 {
+                fs::rename(&held, &marker)?;
+            }
+            pointer(path)
+        });
+        fs::remove_dir(&marker).unwrap();
+        assert_eq!(reads.get(), 2);
+        assert!(observed.is_err(), "late dangling pointer yielded {observed:?}");
+    }
 
     #[test]
     fn retargeting_a_linked_pointer_during_read_rejects_the_identity() {

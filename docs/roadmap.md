@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Windows Rust 0.51.0 local build checks
+
+The 0.51.0 source includes fresh checks when opening Updates, a **Later** action that keeps verified downloads, native SSH and credential-manager preferences, and cancellation checks before Windows starts obsolete background Git work.
+
+The native Windows fixture reproduced a dangling `commondir` junction being treated as a missing pointer. Shovel now checks the directory entry itself. It rejects the junction both when already present and when it appears during the final identity recheck. Removing it restores the original repository identity.
+
+Release policy, 68 focused Windows and Git test runs, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 38.10 seconds on source fingerprint `8E1EA7298F5A1C1A67EE5A37ABA69BE73ACE2891C4E01B82C0CA8BD91CDAFFB5`. Installed update, live provider and physical desktop acceptance remain open.
+
 ## Preserve native SSH and credential manager preferences
 
 Git receives `GIT_SSH`, `GIT_SSH_COMMAND` and `GIT_SSH_VARIANT` when explicitly configured. Its own command and variant take precedence over Shovel’s bundled OpenSSH defaults. A Windows child process verified that Git received the inherited SSH settings and that Shovel still stripped an inherited repository-directory override. Native Fetch selected the configured wrapper and transferred a real pack from a disposable bare repository. [Git SSH environment](https://git-scm.com/docs/git#Documentation/git.txt-codeGITSSHCOMMANDcode)
