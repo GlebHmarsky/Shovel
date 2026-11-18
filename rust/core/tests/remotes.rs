@@ -159,6 +159,36 @@ fn validation_matches_native_location_contract() {
     assert!(valid(&"x".repeat(255), "repo"));
 }
 #[test]
+fn effective_config_does_not_treat_included_remotes_as_locally_editable() {
+    let f = Fixture::new();
+    assert!(f.add("Primary.Team", "../direct.git").succeeded());
+    assert!(f.add("other", "../other.git").succeeded());
+    let included = f.temp.path().join("included.config");
+    fs::write(
+        &included,
+        "[remote \"Primary.Team\"]\n pushurl = ../included-push.git\n[remote \"included-only\"]\n url = ../shared.git\n",
+    )
+    .unwrap();
+    command(
+        &f.git,
+        &f.root,
+        &["config", "--local", "include.path", included.to_str().unwrap()],
+    );
+    let config = f.config();
+    assert_eq!(config.remotes.len(), 2);
+    let direct = &config.remotes[0];
+    assert_eq!(direct.name, "Primary.Team");
+    assert_eq!(direct.location, "../direct.git");
+    assert!(direct.push_location.is_empty() && !direct.can_edit);
+    assert_eq!(config.remotes[1].name, "other");
+    assert!(config.remotes[1].can_edit);
+    assert_eq!(
+        config.stamp,
+        f.git.config_stamp(&f.root, &Cancellation::default()).unwrap()
+    );
+}
+
+#[test]
 fn native_remote_outcomes_preserve_index_worktree_and_local_tips() {
     let f = Fixture::new();
     let before = f.preserved();

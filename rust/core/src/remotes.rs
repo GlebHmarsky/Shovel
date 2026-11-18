@@ -6,7 +6,7 @@ use crate::{
     network::redact,
     operation::{Completed, Error, Transcript},
     process::{self, Cancellation, Lifetime},
-    working::MutationGate,
+    working::{MutationGate, config_values},
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -54,9 +54,18 @@ pub fn valid(name: &str, location: &str) -> bool {
     true
 }
 type Values = BTreeMap<String, (Vec<String>, Vec<String>)>;
-fn parse(value: &str) -> Result<Values, Error> {
+const MAX_REMOTE_VALUES: usize = 1024 * 1024;
+
+fn parse<'a>(records: impl IntoIterator<Item = &'a [u8]>) -> Result<Values, Error> {
     let mut values = Values::new();
-    for record in value.split('\0').filter(|s| !s.is_empty()) {
+    let mut size = 0;
+    for record in records.into_iter().filter(|record| !record.is_empty()) {
+        size += record.len() + 1;
+        if size > MAX_REMOTE_VALUES {
+            return Err(Error::Code("ActionReadFailed"));
+        }
+        let record = std::str::from_utf8(record)
+            .map_err(|_| Error::Code("ActionUnsupportedRemote"))?;
         let (key, value) = record
             .split_once('\n')
             .ok_or(Error::Code("ActionUnsupportedRemote"))?;
@@ -75,30 +84,31 @@ fn parse(value: &str) -> Result<Values, Error> {
     }
     Ok(values)
 }
+
+fn remote_location_record(record: &[u8]) -> bool {
+    record
+        .split(|byte| *byte == b'\n')
+        .next()
+        .and_then(|key| key.strip_prefix(b"remote."))
+        .is_some_and(|key| key.ends_with(b".url") || key.ends_with(b".pushurl"))
+}
+
 impl Git {
-    fn remote_values(
-        &self,
-        path: &Path,
-        local: bool,
-        cancel: &Cancellation,
-    ) -> Result<Values, Error> {
-        let mut args = vec!["config"];
-        if local {
-            args.push("--local");
-        }
-        args.extend(["--null", "--get-regexp", r"^remote\..*\.(url|pushurl)$"]);
+    fn local_remote_values(&self, path: &Path, cancel: &Cancellation) -> Result<Values, Error> {
         let result = process::run(
-            &self.request(path, args, Lifetime::Read, 1024 * 1024),
+            &self.request(
+                path,
+                ["config", "--local", "--null", "--get-regexp", r"^remote\..*\.(url|pushurl)$"],
+                Lifetime::Read,
+                MAX_REMOTE_VALUES,
+            ),
             cancel,
             None,
         )?;
         if result.outcome != process::Outcome::Exited || !matches!(result.exit_code, 0 | 1) {
             return Err(Error::Code("ActionReadFailed"));
         }
-        parse(
-            std::str::from_utf8(&result.stdout)
-                .map_err(|_| Error::Code("ActionUnsupportedRemote"))?,
-        )
+        parse(result.stdout.split(|byte| *byte == 0))
     }
     pub fn remote_configuration(
         &self,
@@ -109,9 +119,9 @@ impl Git {
         if identity::read(path)? != expected.identity {
             return Err(Error::Code("ActionIdentityChanged"));
         }
-        let stamp = self.config_stamp(path, cancel)?;
-        let local = self.remote_values(path, true, cancel)?;
-        let effective = self.remote_values(path, false, cancel)?;
+        let (stamp, config) = self.stamped_config(path, cancel)?;
+        let local = self.local_remote_values(path, cancel)?;
+        let effective = parse(config_values(&config)?.filter(|record| remote_location_record(record)))?;
         if local.len() > 32 {
             return Err(Error::Code("ActionUnsupportedRemote"));
         }

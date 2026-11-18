@@ -130,6 +130,30 @@ The changed build showed rows ahead of validation in every run. Against the base
 
 Five core history checks, ten desktop history checks, eleven cache checks, three repository watcher checks and the Windows path alias check passed. Fixtures advanced a ref between first display and verification, tested an overridden worktree, and exercised selection and scroll retention. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 38.19 seconds on source fingerprint `4693714E1556C066F2A410ACB325F4D3401F53E7B91854973AC8022B858EFB23`.
 
+### Reuse the effective remote configuration
+
+Remotes now derives effective URL records from the scoped Git configuration it already captures for the review stamp. A native local-only query still identifies values the form can edit, and a final stamp and identity check protect the review. The included-config regression verifies that an included push URL prevents editing a direct remote and that included-only remotes stay outside the local editor. [Git configuration scopes and includes](https://git-scm.com/docs/git-config/2.51.0)
+
+Five interleaved command-line pairs used the same two repositories, native Windows development builds and isolated profiles. Git Trace2 recorded two local remote URL queries in every launch. Every baseline launch also ran two separate effective URL queries. The changed build reused the initial capture and ran zero separate effective URL queries. The table separates this process reduction from the measured cold-history latency.
+
+| Native scenario | Baseline `184ea15` median (range) | Changed median (range) |
+| --- | ---: | ---: |
+| Small cold open to readable history | 527 ms (471–706) | 563 ms (457–777) |
+| Merge-heavy cold open to readable history | 787 ms (616–966) | 906 ms (788–1,156) |
+| Small cold open to fully verified history | 675 ms (602–931) | 701 ms (580–944) |
+| Merge-heavy cold open to fully verified history | 1,107 ms (901–1,188) | 1,260 ms (1,056–1,666) |
+| Explicit refresh to validated layout | 453 ms (408–618) | 404 ms (346–541) |
+
+Raw timings, traces and executable hashes are in `Build/navigation-remote-scan-*`. These pairs confirm fewer Git launches for Remotes. Both cold-opening medians rose in these runs, and the 400 ms target remains open.
+
+### Verify accepted Fetch through native tab closure
+
+The opt-in `accepted_fetch_finishes_after_tab_closure_in_native_workspace` test runs the native Windows workspace from the command line with an isolated profile. It prepares a disposable repository, peer and bare remote and holds the real local upload-pack process until the app has switched to a second repository, closed the Fetch owner's tab and refused an exit request. Fetch then transfers the peer's commit. The test checks the original owner and successful outcome, the other tab's selection and lack of Fetch activity, and the updated `origin/main` after reopening the owner. Native Git confirms the exact incoming object, the previous local HEAD and a clean worktree after window exit. The test invokes workspace actions directly without sending mouse or keyboard input.
+
+The scenario passed three times. The two repeat logs and test executable hash are in `Build/navigation-native-fetch.log` and `Build/navigation-native-fetch.sha256`. Use the same isolated Git settings as the navigation benchmark and set `SHOVEL_NATIVE_ASKPASS` to the absolute path of a locally built `ShovelAskPass.exe`. The test runs with `cargo test --locked -p shovel-desktop accepted_fetch_finishes_after_tab_closure_in_native_workspace -- --ignored --nocapture --test-threads=1`.
+
+All six core Remotes checks, seven Working Copy checks, and four desktop Remotes checks passed. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 37.58 seconds on source fingerprint `10827F4E612588E6FB9813FEA5A8F4A39D72A51806B1A80B3593B7C8165B6A08`.
+
 
 ## Windows Rust 0.51.0 local build checks
 

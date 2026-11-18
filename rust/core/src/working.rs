@@ -236,6 +236,23 @@ impl Drop for HeldMutex {
         unsafe { ReleaseMutex(self.0.as_raw_handle()) };
     }
 }
+/// Each record from Git's scoped, NUL-delimited config list contains scope,
+/// origin, and key/value. Callers that need only values can skip the first two.
+pub(crate) fn config_values(raw: &[u8]) -> Result<impl Iterator<Item = &[u8]>, Error> {
+    let fields = if raw.is_empty() {
+        Vec::new()
+    } else {
+        raw.strip_suffix(b"\0")
+            .ok_or(Error::Invalid)?
+            .split(|byte| *byte == 0)
+            .collect::<Vec<_>>()
+    };
+    if !fields.len().is_multiple_of(3) {
+        return Err(Error::Invalid);
+    }
+    Ok(fields.into_iter().skip(2).step_by(3))
+}
+
 fn hash(bytes: &[u8]) -> String {
     format!("{:X}", Sha256::digest(bytes))
 }
@@ -521,10 +538,15 @@ impl Git {
         filter_overrides(result.stdout.split(|byte| *byte == 0))
     }
     pub fn config_stamp(&self, root: &Path, cancel: &Cancellation) -> Result<String, Error> {
-        Ok(hash(&self.read_config(root, cancel)?))
+        let (stamp, _) = self.stamped_config(root, cancel)?;
+        Ok(stamp)
     }
-    fn read_config(&self, root: &Path, cancel: &Cancellation) -> Result<Vec<u8>, Error> {
-        Ok(self
+    pub(crate) fn stamped_config(
+        &self,
+        root: &Path,
+        cancel: &Cancellation,
+    ) -> Result<(String, Vec<u8>), Error> {
+        let raw = self
             .read(
                 root,
                 [
@@ -537,30 +559,17 @@ impl Git {
                 cancel,
                 4 * 1024 * 1024,
             )?
-            .stdout)
+            .stdout;
+        Ok((hash(&raw), raw))
     }
     fn working_configuration(
         &self,
         root: &Path,
         cancel: &Cancellation,
     ) -> Result<(String, Vec<OsString>, bool), Error> {
-        let raw = self.read_config(root, cancel)?;
-        // With both options Git supplies scope, origin, and key/value for
-        // each record. The exact same bytes authorize later config checks.
-        let records = if raw.is_empty() {
-            Vec::new()
-        } else {
-            raw.strip_suffix(b"\0")
-                .ok_or(Error::Invalid)?
-                .split(|byte| *byte == 0)
-                .collect::<Vec<_>>()
-        };
-        let (records, leftover) = records.as_chunks::<3>();
-        if !leftover.is_empty() {
-            return Err(Error::Invalid);
-        }
-        let (filters, standard_lfs) = filter_overrides(records.iter().map(|record| record[2]))?;
-        Ok((hash(&raw), filters, standard_lfs))
+        let (stamp, raw) = self.stamped_config(root, cancel)?;
+        let (filters, standard_lfs) = filter_overrides(config_values(&raw)?)?;
+        Ok((stamp, filters, standard_lfs))
     }
     fn read_worktree_status(
         &self,

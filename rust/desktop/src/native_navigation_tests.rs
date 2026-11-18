@@ -4,6 +4,9 @@ use eframe::App;
 use std::time::{Duration, Instant};
 use winit::platform::windows::EventLoopBuilderExtWindows;
 
+#[path = "native_operation_tests.rs"]
+mod operation;
+
 #[derive(Clone, Copy, Debug)]
 enum Step {
     Start,
@@ -208,12 +211,9 @@ impl App for Scenario {
     }
 }
 
-#[test]
-#[ignore = "launches native Windows viewports; requires disposable repositories and isolated Git config"]
-fn measure_native_repository_navigation() {
+fn navigation_fixtures() -> PathBuf {
     let fixtures = PathBuf::from(std::env::var_os("SHOVEL_NAVIGATION_FIXTURES").unwrap());
-    let repositories = ["Small", "Merge-20k"].map(|name| fixtures.join(name));
-    assert!(fixtures.is_absolute() && repositories.iter().all(|path| path.join(".git").is_dir()));
+    assert!(fixtures.is_absolute());
     let expected_config = fixtures.join("gitconfig");
     assert!(expected_config.is_file());
     assert_eq!(
@@ -221,24 +221,40 @@ fn measure_native_repository_navigation() {
         Some(expected_config.as_os_str())
     );
     assert_eq!(std::env::var("GIT_CONFIG_NOSYSTEM").as_deref(), Ok("1"));
+    fixtures
+}
 
+fn isolated_profile() -> tempfile::TempDir {
     let profile = tempfile::tempdir().unwrap();
-    let directory = profile.path().to_owned();
-    let mut store = SettingsStore::new(directory.clone());
+    let mut store = SettingsStore::new(profile.path().to_owned());
     let mut settings = store.load().unwrap();
     settings.set("AutoFetchEnabled", serde_json::json!(false));
     settings.set("CheckUpdatesPeriodically", serde_json::json!(false));
     store.save(&settings).unwrap();
+    profile
+}
 
+fn test_options() -> eframe::NativeOptions {
     let mut options = native_options();
     options.viewport = options.viewport.with_active(false);
     options.event_loop_builder = Some(Box::new(|builder| {
         builder.with_any_thread(true);
     }));
+    options
+}
+
+#[test]
+#[ignore = "launches native Windows viewports; requires disposable repositories and isolated Git config"]
+fn measure_native_repository_navigation() {
+    let fixtures = navigation_fixtures();
+    let repositories = ["Small", "Merge-20k"].map(|name| fixtures.join(name));
+    assert!(repositories.iter().all(|path| path.join(".git").is_dir()));
+    let profile = isolated_profile();
+    let directory = profile.path().to_owned();
     let (result, verified) = mpsc::channel();
     eframe::run_native(
         "Shovel navigation check",
-        options,
+        test_options(),
         Box::new(move |context| {
             Ok(Box::new(Scenario {
                 app: Workspace::new(context, Some(directory)),
