@@ -8,6 +8,8 @@ The native Windows fixture reproduced a dangling `commondir` junction being trea
 
 Release policy, 68 focused Windows and Git test runs, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 38.10 seconds on source fingerprint `8E1EA7298F5A1C1A67EE5A37ABA69BE73ACE2891C4E01B82C0CA8BD91CDAFFB5`. Installed update, live provider and physical desktop acceptance remain open.
 
+The local portable build in `Build/rust-0.51.0-local-win-x64` was built from clean commit `005757ca844fbfed98cbe8db6685e3c44bb571d7`. Both executables report version 0.51.0 and use the static CRT on Windows x64. All 19 app files and the update verifier matched the SHA-256 hashes in `VERIFICATION.json`. The included `SMOKE.json` matches the source fingerprint. `Run-Test.cmd` points to a separate profile seeded with an empty repository list and automatic fetching and update checks disabled. The checkpoint ends at local artifact verification, with desktop and installer acceptance pending.
+
 ## Preserve native SSH and credential manager preferences
 
 Git receives `GIT_SSH`, `GIT_SSH_COMMAND` and `GIT_SSH_VARIANT` when explicitly configured. Its own command and variant take precedence over Shovel’s bundled OpenSSH defaults. A Windows child process verified that Git received the inherited SSH settings and that Shovel still stripped an inherited repository-directory override. Native Fetch selected the configured wrapper and transferred a real pack from a disposable bare repository. [Git SSH environment](https://git-scm.com/docs/git#Documentation/git.txt-codeGITSSHCOMMANDcode)
