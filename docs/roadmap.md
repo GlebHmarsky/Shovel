@@ -2,6 +2,10 @@
 
 ## Overnight Rust Beta work (2026-11-18)
 
+**Closing during a preferences write (R24).** Closing could return to the workspace after an ordinary preferences write finished, even though the final repository list and window layout were still waiting to be saved. A deterministic regression delivered the earlier completion between Close and the final write and reproduced the lost exit request. Shovel now retains Close and waits for the final save. The fixture reopened the saved profile and checked all three repository paths in order.
+
+All eleven history-cache and shutdown tests passed in 11.28 s, including closing the last tab with a history read still held. Thirteen updater checks, workspace all-target Clippy and diff checks also passed. Native window-manager closure and installed restart remain separate acceptance items.
+
 **History dates and row descriptions (R12/R30/R34).** History previously displayed the author's calendar date. It now shows the committer's local date and time, matching the archived C# history row. File history, blame, stashes, cached history notices and upstream observations use Windows regional formatting. Commit details and hover help retain the author's and committer's original wall times and numeric offsets. Visible dates share a frame cache. The history row announces its date, full hash, refs, upstream status and same-author status through AccessKit, including an explicit label for an empty subject.
 
 Windows tests verified US and UK formats, an out-of-range calendar fallback and one instant appearing on different calendar dates at UTC+14 and UTC−10. Headless row tests checked the painted commit date and screen-reader label in both palettes with different author and commit times. Eight native history navigation checks, three file history and blame checks, two stash checks and the comparison check passed. The previous Local Changes checkpoint at `49f6825` also passed its [hosted Windows build](https://github.com/GlebHmarsky/Shovel/actions/runs/44219275509). Native screen-reader interaction and full RTL layout remain open.

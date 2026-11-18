@@ -398,6 +398,33 @@ fn automatic_fetch_updates_an_evicted_repository_without_preloading_inactive_his
 }
 
 #[test]
+fn closing_during_an_earlier_preferences_save_still_finishes_the_final_save() {
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = egui::Context::default();
+    let mut app = workspace();
+    profile(&mut app, temp.path());
+    for tab in &mut app.tabs {
+        tab.path = temp.path().join(&tab.path);
+        fs::create_dir(&tab.path).unwrap();
+    }
+    let earlier_store = app.store.take().unwrap();
+    app.saving = true;
+    app.close(&ctx);
+    assert!(app.closing && app.preferences_dirty && !app.exit_ready);
+    app.sender
+        .send(Event::Saved(Box::new(earlier_store), Ok(())))
+        .unwrap();
+    app.receive(&ctx);
+    assert!(app.closing && app.saving && !app.exit_ready);
+    settle_save(&mut app, &ctx);
+    assert!(app.exit_ready);
+    let saved = SettingsStore::new(temp.path().join("rust-profile"))
+        .load()
+        .unwrap();
+    assert_eq!(saved.repositories(), app.tabs.iter().map(|tab| tab.path.clone()).collect::<Vec<_>>());
+}
+
+#[test]
 fn shutdown_waits_for_closed_tab_history_worker_and_blocks_new_history_reads() {
     let fixture = Fixture::new();
     let ctx = egui::Context::default();

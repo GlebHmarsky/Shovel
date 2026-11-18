@@ -971,6 +971,8 @@ impl Workspace {
         } else if self.closing
             && !self.updater.restart_requested
             && !self.saving
+            // A closing layout can still be queued behind an earlier write.
+            && !self.preferences_dirty
             && !self.exit_ready
         {
             self.closing = false;
