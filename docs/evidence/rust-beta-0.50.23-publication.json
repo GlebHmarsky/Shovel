@@ -1,0 +1,48 @@
+{
+  "Version": "0.50.23",
+  "Channel": "win-rust-beta",
+  "Commit": "e76ebf3376a6a1b230601403ee924554167b6914",
+  "ActionsRun": 44352067022,
+  "Release": "https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.23-win-rust-beta",
+  "VerifiedUTC": "2026-11-18T17:03:46.4347981+00:00",
+  "AssetSHA256": {
+    "Shovel-Setup.exe": "1B330C416260964F4735076CDA37E51818B14C807B09F578592002E2CEF82609",
+    "ShovelRust-0.50.23-win-rust-beta-full.nupkg": "08AA5832CC89E3F75FA709C88A8F27C1A82E4ACB8315AAA2F37861C0E40CF6AB",
+    "releases.win-rust-beta.json": "BC1428008473D89E08C2B231786D4AEA551B93633E9F8817D8D84970BA7E33F1",
+    "releases.win-rust-beta.json.sig": "C168818A4B8DDD07A3682D359206747798416474BBBB73A47D1FC60BD799F5D1",
+    "release-info.json": "1D2F2FFE55C8ED796FF0F49D22F2E3A19003117F20B06DC11F46F047051B9CCA",
+    "release-notes.md": "E8EFEDB15E9EC51F21D20AFAAFA52C1D069C9996E6F187A0F87717388022C465",
+    "SHA256SUMS.txt": "519FE88CE3F182A417C82597AB241809CAD5BB60A768D3727E5D69A3E39085CA"
+  },
+  "LiveFeedMatchesVerifiedSignature": true,
+  "InstallerSize": 21718813,
+  "InstallerProductVersion": "0.50.23",
+  "InstallerAuthenticode": "NotSigned",
+  "HostedSourceFingerprint": "248C969A85743A53C82D46C7879B7CF9AD9593E16531985B52FB07B9424600D5",
+  "NativeUpdaterVerified": true,
+  "InstalledApplyVerified": false,
+  "LocalWorkspaceTests": {
+    "Passed": 413,
+    "Ignored": 4
+  },
+  "UnchangedReleaseIds": {
+    "GitHubLatest": 430591871,
+    "CSharpBeta": 430216325,
+    "RustStable": 449252728
+  },
+  "CompilerCache": {
+    "RestoredFrom": 10735079709,
+    "SavedAs": 10738350543,
+    "SavedSize": 1490146485,
+    "CrossVersionRestoreVerified": true
+  },
+  "HostedSeconds": {
+    "Run": 689,
+    "Lint": 18,
+    "SmokeWithCompilation": 65,
+    "NativePayload": 328,
+    "SaveCache": 57,
+    "SignAndPackage": 28,
+    "Publish": 28
+  }
+}

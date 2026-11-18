@@ -12,6 +12,12 @@ The Windows process, network, Clone, submodule and AskPass groups passed 40 focu
 
 This build includes Local Changes draft recovery, queued checkout review retry, and recovery when the update restart checks are interrupted. The versioned source passed 23 updater tests, three draft retry tests and the queued checkout regression. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 60.23 seconds on source fingerprint `640F8B9470FBCB0ADD44C861FE67669506A35AF2D9CB3484137B7530E743704D`. The public bundle verifier and headless native updater probe were built from this source.
 
+## Windows Rust Beta 0.50.23 published
+
+Run `44352067022` published master `e76ebf3376a6a1b230601403ee924554167b6914`. The exact source passed 413 standard workspace tests with four opt-in tests skipped. GitHub passed release policy, automatic Fetch, lint and bounded smoke. All seven public assets downloaded anonymously. The feed and signature matched the live alias, and the exact signed update package verified independently. The 21,718,813-byte installer reports 0.50.23 and Windows reports `NotSigned` for Authenticode. The native updater separately exercised discovery, package download and restart readiness. GitHub Latest, C# Beta and Rust Stable retained the same release and asset IDs, digests and timestamps. Installed apply remains open. [Release](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.23-win-rust-beta) · [Publication receipt](evidence/rust-beta-0.50.23-publication.json)
+
+GitHub restored the 0.50.22 cache, ID `10735079709`, and saved the 1,490,146,485-byte cache as `10738350543`. The optimized build took 328 seconds and the full run took 689 seconds. [Hosted checks](https://github.com/GlebHmarsky/Shovel/actions/runs/44352067022)
+
 ## Retry queued checkout without losing its place
 
 An interrupted checkout read left the review waiting indefinitely. It now offers **Retry reading changes** and keeps the original worktree, branch, commit and place in the queue. If the repository changed, the review asks the user to reopen it. Checkout still requires confirmation after a successful read.
