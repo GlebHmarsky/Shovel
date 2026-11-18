@@ -1166,6 +1166,7 @@
   "RustUpdateInstallNeeded": "Install Shovel using its Windows installer before applying updates.",
   "RustUpdateDownload": "Download update",
   "RustUpdateRestart": "Install update and restart",
+  "RustUpdateLater": "Later",
   "RustUpdateBlocked": "Finish accepted work and save your edits before restarting.",
   "RustUpdateSaveBlocked": "Shovel could not save this session’s settings. The update is still ready. Check access to the settings folder. If another instance changed this profile, reopen Shovel before retrying.",
   "RustUpdateInstances": "Close other Shovel instances before restarting. Other Windows sessions are included.",

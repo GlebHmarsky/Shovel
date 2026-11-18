@@ -2089,8 +2089,7 @@ impl eframe::App for Workspace {
                     });
                     ui.menu_button(strings::text("HelpMenu"), |ui| {
                         if ui.button(strings::text("RustUpdatesTitle")).clicked() {
-                            self.updater.open = true;
-                            self.updater.check(&ctx);
+                            self.updater.open_window(&ctx);
                             ui.close();
                         }
                     });
@@ -2137,7 +2136,7 @@ impl eframe::App for Workspace {
                             ((ui.available_width() - reserved - context_width) / 2.).max(0.);
                         ui.add_space(margin);
                         if updater::offer_card(ui, offer) {
-                            self.updater.open = true;
+                            self.updater.open_window(&ctx);
                         }
                         let context_response = egui::Frame::new()
                             .fill(palette.raised)

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Refresh updates on open and keep downloads for later
+
+The toolbar Update Shovel card and Help menu now open the same background check. Opening during an active check preserves that check. The update dialog offers **Later** when a release is available and **Close** otherwise. A verified download remains ready after dismissal, and download and restart keep their own approval actions.
+
+Headless input clicked the visible Later control and verified that Shovel kept the offer and stayed open. A held check verified that opening starts discovery immediately, repeated opening starts no second request and an offline result preserves the downloaded offer for retry. The 25 standard updater checks, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 35.22 seconds on source fingerprint `20D885EA07E8778214FA1D4D3F1BAF5562A9990C4565CE5FA09C48E270C0666F`. Installed apply and cross-session restart acceptance remain open.
+
 ## Honor configured SSH and check cancellation before launch
 
 The network path used to reject even a local Fetch when `core.sshCommand` was set. It now lets native Git select that command, its SSH variant and whether the remote requires SSH. The fixture fetched from a local bare repository without invoking the configured SSH program. Manual and automatic Fetch then used a disposable upload-pack wrapper with the exact configured SSH arguments and left HEAD, the index and Git configuration bytes intact. [Git SSH configuration](https://git-scm.com/docs/git-config.html#Documentation/git-config.txt-coresshCommand)

@@ -14,6 +14,8 @@ Right-click a tab to pick a colored circle or clear it with the crossed circle. 
 
 Shovel checks the selected Rust Beta or Rust Stable channel at startup and every hour while running. **File → Settings → Updates** controls the hourly check. A verified newer release adds an **Update Shovel** button to the left of the central repository status. The button opens the updater, where download and restart each require approval. Discovery runs in the background.
 
+Both **Update Shovel** and **Help → Shovel updates** start a fresh check when they open the dialog. **Later** closes the dialog and keeps a verified download ready.
+
 Before restarting, Shovel checks the selected channel again, verifies the downloaded package and checks each open worktree. An unfinished Git operation or unresolved index conflict keeps the affected repository open. A newly offered version requires fresh approval.
 
 ## Operation progress (0.50.8)

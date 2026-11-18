@@ -733,8 +733,18 @@ impl Controller {
             Some(_) => {}
         }
     }
-    pub fn check(&mut self, ctx: &egui::Context) {
-        self.begin_check(ctx, Instant::now(), discover);
+    pub fn open_window(&mut self, ctx: &egui::Context) {
+        self.open_at(ctx, Instant::now(), discover);
+    }
+
+    fn open_at(
+        &mut self,
+        ctx: &egui::Context,
+        now: Instant,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError> + Send + 'static,
+    ) {
+        self.open = true;
+        self.begin_check(ctx, now, run);
     }
     fn begin_check(
         &mut self,
@@ -785,6 +795,7 @@ impl Controller {
             return;
         }
         let mut open = true;
+        let mut dismiss = false;
         egui::Window::new(text("RustUpdatesTitle"))
             .open(&mut open)
             .enabled(!self.restart_requested && !self.workers.stopping())
@@ -824,12 +835,12 @@ impl Controller {
                     ui.checkbox(&mut self.tools_confirmed, text("UpdateToolsQuestion"));
                 }
                 let blocked = blocked || self.needs_tool_confirmation(tools_opened);
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     if ui
                         .add_enabled(!self.busy(), egui::Button::new(text("UpdateRetry")))
                         .clicked()
                     {
-                        self.check(ctx);
+                        self.begin_check(ctx, Instant::now(), discover);
                     }
                     if matches!(self.phase, Phase::Checking | Phase::Downloading(_))
                         && ui
@@ -929,9 +940,16 @@ impl Controller {
                             ctx.request_repaint();
                         }
                     }
+                    dismiss = ui
+                        .button(text(if self.offer.is_some() {
+                            "RustUpdateLater"
+                        } else {
+                            "UpdateClose"
+                        }))
+                        .clicked();
                 });
             });
-        self.open = open;
+        self.open = open && !dismiss;
     }
     pub fn apply(
         &mut self,
@@ -1881,6 +1899,80 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         assert_eq!(controller.status, text("RustUpdateCurrent"));
+    }
+
+    #[test]
+    fn later_closes_updates_and_preserves_the_verified_offer() {
+        use crate::workspace_interaction_tests::{frame, sidebar_click, workspace};
+
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut app = workspace();
+        app.tabs.clear();
+        app.updater.open = true;
+        app.updater.ready = true;
+        app.updater.offer = Some(published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        ));
+        frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        sidebar_click(
+            &ctx,
+            &mut app,
+            &text("RustUpdateLater"),
+            egui::PointerButton::Primary,
+        );
+
+        assert!(!app.updater.open && app.updater.ready);
+        assert_eq!(
+            app.updater.available_version(Channel::Beta),
+            Some(&semver::Version::new(0, 50, 14)),
+        );
+        assert!(!app.updater.restart_requested && !app.updater.exit_ready());
+        assert!(!app.closing && !app.exit_ready);
+    }
+
+    #[test]
+    fn opening_updates_refreshes_once_and_keeps_restart_ready_if_offline() {
+        let ctx = egui::Context::default();
+        let now = Instant::now();
+        let mut controller = Controller {
+            ready: true,
+            offer: Some(published_offer(
+                include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+                include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+            )),
+            ..Default::default()
+        };
+        let (started, checking) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        controller.open_at(&ctx, now, move |channel, _| {
+            started.send(channel).unwrap();
+            held.recv_timeout(Duration::from_secs(5)).unwrap();
+            Err(CheckError::Unavailable(text("RustUpdateFailed")))
+        });
+        assert_eq!(
+            checking.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Channel::Beta,
+        );
+        assert!(controller.open && controller.ready && controller.busy());
+        assert!(controller.phase == Phase::Checking);
+        let generation = controller.generation;
+        controller.open_at(&ctx, now, |_, _| panic!("overlapping discovery"));
+        assert_eq!(controller.generation, generation);
+        assert_eq!(controller.last, Some(now));
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while controller.busy() {
+            controller.tick_at(&ctx, Channel::Beta, false, now, |_, _| {
+                panic!("unexpected periodic discovery")
+            });
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(controller.status, text("RustUpdateFailed"));
+        assert!(controller.open && controller.ready && controller.offer.is_some());
+        assert!(!controller.restart_requested && !controller.exit_ready());
     }
 
     #[test]
