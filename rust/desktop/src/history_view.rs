@@ -21,6 +21,8 @@ pub(super) struct State {
     pub checking_identity: bool,
     pub reopen_commit_owner: Option<String>,
     pub validated: Option<Instant>,
+    pub watch: Option<repository_watch::Watch>,
+    pub external_history_change: bool,
     pub offset: egui::Vec2,
     pub restore_offset: Option<egui::Vec2>,
     views: BTreeMap<usize, SavedView>,
@@ -194,13 +196,18 @@ impl Workspace {
         let Some(tab) = self.tabs.get_mut(index) else {
             return;
         };
-        if tab.loading || tab.view.identity_blocked {
+        if tab.view.identity_blocked {
+            return;
+        }
+        if tab.loading {
+            let _ = tab.start_watching(ctx);
             return;
         }
         if tab.history.is_none()
             || tab.view.reopen_commit_owner.is_some()
             || tab.refresh_again
             || tab.view.stale
+            || tab.view.watch.as_ref().is_none_or(|watch| !watch.available())
             || tab
                 .view
                 .validated

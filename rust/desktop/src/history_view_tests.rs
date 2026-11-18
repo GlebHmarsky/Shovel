@@ -371,6 +371,8 @@ fn changed_boundary_failed_refresh_and_retry_keep_useful_rows_until_validated() 
     page(&mut app, &ctx, true);
     let before = position(&mut app, &ctx, 21, egui::vec2(0., 480.));
     let allocation = app.tabs[0].page.as_ref().unwrap().entries.as_ptr() as usize;
+    // Exercise the paging/error path when filesystem notifications are unavailable.
+    app.tabs[0].view.watch = None;
     fixture.command(&["commit", "--allow-empty", "-m", "external change"], &[]);
     app.page(true, &ctx);
     wait(&mut app, &ctx);

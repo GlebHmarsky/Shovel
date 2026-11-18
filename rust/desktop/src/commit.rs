@@ -683,6 +683,9 @@ impl Editor {
             match event {
                 Event::Loaded(generation, result) if generation == self.generation => {
                     self.loading = false;
+                    if self.refresh_pending {
+                        continue;
+                    }
                     match *result {
                         Ok(context) => self.apply(context, ctx),
                         Err(error) => self.snapshot_error = Some(error_text(error)),

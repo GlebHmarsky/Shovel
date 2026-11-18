@@ -44,6 +44,8 @@ On orderly exit, Rust saves the selected verified history page. The next launch 
 
 Each open repository retains its current history page, selection, scroll position and comparison pane. Recently closed tabs can also reuse their page and comparison when reopened. The closed-tab cache is bounded, and active work remains attached to its original repository. Automatic fetch can update an inactive repository without loading its history. [Mechanism and bounds](architecture.md#rust-history-cache-2026-11-10).
 
+External file and Git changes refresh the affected repository automatically. A worktree edit updates open Local Changes and the optional dirty marker. Ref changes refresh selected history in the background, with the existing rows visible while Git reads. Inactive tabs keep their view and refresh on return when they have pending ref changes.
+
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
 Stashes appear as short leaf connections immediately above their actual base commit. Their timestamps do not reorder ordinary branch history; multiple stashes on one base share a compact connection. Details retain the real stash parents and contents.

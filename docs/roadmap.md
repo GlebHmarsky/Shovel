@@ -33,6 +33,14 @@ Repository-owned dialogs permit tab selection and closure while keeping Git cont
 
 Both focused dialog checks, all-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 32.79 seconds on source fingerprint `F2753DDBEDC5E2113BC6579EF6AB2A01A34820E11D6CB487DB4B8076B260AE5F`.
 
+### Refresh the repository that changed
+
+Windows filesystem notifications now reach the workspace through each repository owner. An edit only refreshes the affected status consumers. Ref changes refresh the selected page and mark inactive owners stale until they are selected. The retained-owner test exercises a replaced Git directory while the tab is closed. A linked-worktree fixture receives a tag written to the shared repository. The change burst is coalesced before Git validates actual state; generations continue to reject older reads.
+
+In the final headless Windows fixture, a burst of eight writes reached the dirty marker in 394 ms with the same history generation. An external branch update reached fresh selected history in 866 ms. Returning to an inactive tab made the cached rows available to the view model in under 1 ms and published the fresh page in 1.18 seconds. Inline Commit laid out in 44 ms, loaded its first fresh status in 2.45 seconds, and reflected an external edit in 1.84 seconds. These single runs measure the actual workspace code and native Git with an offscreen layout. The external branch timer starts when the Git command returns. Raw results are in `Build/navigation-watch-acceptance-final.log`.
+
+The three watcher checks, nine history checks, draft preservation and initialization reattachment passed. The latter guards against reopening a tab scheduling a second initialization. All-target Clippy, `git diff --check` and all 18 bounded smoke checks passed. Smoke took 33.50 seconds on source fingerprint `2023B26D4E07BBC7FD16C63AF7A8AC3DFF667D3021DE3B94B20646229A0FD07F`.
+
 
 ## Windows Rust 0.51.0 local build checks
 

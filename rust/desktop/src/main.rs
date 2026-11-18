@@ -26,6 +26,7 @@ mod read_workers;
 mod remotes;
 mod repository_init;
 mod repository_tools;
+mod repository_watch;
 mod settings_ui;
 mod sidebar;
 mod stashes;
@@ -279,7 +280,13 @@ impl Workspace {
             .iter()
             .position(|t| t.matches_path(&path))
         {
-            let owner = self.retained_tabs.remove(index);
+            let mut owner = self.retained_tabs.remove(index);
+            if owner.view.watch.as_ref().is_none_or(|watch| !watch.available())
+                && !owner.view.identity_blocked
+            {
+                // The cached page can display immediately while observation resumes.
+                owner.view.stale = owner.history.is_some();
+            }
             self.tabs.push(owner);
             self.update_tab_names();
             return self.tabs.len() - 1;
@@ -378,6 +385,7 @@ impl Workspace {
         let Some(git) = self.git.clone() else {
             return;
         };
+        let open = self.tabs.iter().any(|tab| tab.id == id);
         let Some(tab) = self
             .tabs
             .iter_mut()
@@ -400,6 +408,7 @@ impl Workspace {
         tab.remotes.invalidate();
         tab.sidebar.invalidate();
         tab.error = None;
+        tab.view.external_history_change = false;
         let generation = tab.view.begin();
         let previous = tab
             .history
@@ -413,11 +422,20 @@ impl Workspace {
             });
         let path = tab.path.clone();
         let id = tab.id;
+        let watching = if open {
+            tab.start_watching(ctx)
+        } else {
+            None
+        };
         let cancel = Cancellation::default();
         self.spawn_history_read(
             ctx,
             cancel.clone(),
             move || {
+                if let Some(ready) = watching {
+                    // Keep startup responsive on filesystems that stall watch setup.
+                    let _ = ready.recv_timeout(std::time::Duration::from_millis(75));
+                }
                 #[cfg(test)]
                 history_cache::tests::wait_for_read(&path);
                 let result = history_view::read_expected(
@@ -602,6 +620,7 @@ impl Workspace {
         }
         self.sync_ui_scale(ctx);
         self.poll_git_selection(ctx);
+        self.poll_repository_changes(ctx);
         if let Some(result) = self
             .repository_picker
             .as_ref()
@@ -783,6 +802,17 @@ impl Workspace {
                     }
                 }
                 Event::Loaded(id, generation, read, first) => {
+                    if let Some(tab) = self
+                        .tabs
+                        .iter_mut()
+                        .chain(self.retained_tabs.iter_mut())
+                        .find(|tab| tab.id == id && tab.view.generation == generation)
+                        && tab.view.external_history_change
+                        && tab.history.is_some()
+                    {
+                        tab.loading = false;
+                        continue;
+                    }
                     let Some(owner_path) = self
                         .tabs
                         .iter()
@@ -833,7 +863,15 @@ impl Workspace {
                                 self.notice = Some(strings::text("FailedCommitOwnerUnavailable"));
                             }
                         }
+                        let watch_mismatch = tab.view.watch.as_ref().is_some_and(|watch| {
+                            !watch.covers(&snapshot.identity.fingerprint)
+                        });
                         tab.publish_history(read, first);
+                        if watch_mismatch {
+                            tab.view.watch = None;
+                            tab.view.stale = true;
+                            tab.refresh_again = true;
+                        }
                         if !self.closing
                             && !self.pending_exit
                             && !self.confirm_exit_without_save
@@ -870,21 +908,17 @@ impl Workspace {
                     }
                 }
                 Event::Page(id, generation, page, older) => {
-                    if !self
-                        .tabs
-                        .iter()
-                        .chain(self.retained_tabs.iter())
-                        .any(|t| t.id == id && t.view.generation == generation)
-                    {
-                        continue;
-                    }
                     if let Some(tab) = self
                         .tabs
                         .iter_mut()
                         .chain(self.retained_tabs.iter_mut())
-                        .find(|t| t.id == id)
+                        .find(|t| t.id == id && t.view.generation == generation)
                     {
-                        tab.publish_page(*page, older);
+                        if tab.view.external_history_change {
+                            tab.loading = false;
+                        } else {
+                            tab.publish_page(*page, older);
+                        }
                     }
                 }
                 Event::Located(id, generation, hash, result) => {
@@ -897,6 +931,9 @@ impl Workspace {
                         && tab.view.locate_generation == generation
                     {
                         tab.locating = None;
+                        if tab.view.external_history_change {
+                            continue;
+                        }
                         match result {
                             Ok((page, previous)) => {
                                 tab.error = None;
@@ -977,6 +1014,7 @@ impl Workspace {
                             tab.comparison = None;
                             tab.view.clear_views();
                             tab.view.identity_blocked = true;
+                            tab.view.watch = None;
                             tab.refresh_again = false;
                         }
                         tab.view.stale = true;
@@ -1775,6 +1813,7 @@ impl eframe::App for Workspace {
                 tab.view
                     .validated
                     .is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(30))
+                    || tab.view.watch.as_ref().is_none_or(|watch| !watch.available())
             }) {
                 self.activate_history(self.selected, &ctx);
             }

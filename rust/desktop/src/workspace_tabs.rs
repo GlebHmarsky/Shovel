@@ -238,6 +238,13 @@ impl Workspace {
     }
 
     pub(super) fn prune_retained_tabs(&mut self) {
+        // Retain observation for the three most recently closed tabs. Accepted
+        // owners can outlive this allowance without keeping OS watchers open.
+        for owner in self.retained_tabs.iter_mut().rev().skip(3) {
+            if owner.view.watch.take().is_some() {
+                owner.view.stale = true;
+            }
+        }
         if self.retained_tabs.len() <= 3 {
             return;
         }
