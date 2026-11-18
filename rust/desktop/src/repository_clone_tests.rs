@@ -175,8 +175,11 @@ impl HttpChallenge {
                     }
                     Err(_) => return,
                 };
+                // Winsock accepts inherit the listening socket's nonblocking mode.
+                // An early WouldBlock is not a complete unauthenticated request.
+                stream.set_nonblocking(false).unwrap();
                 stream
-                    .set_read_timeout(Some(Duration::from_millis(250)))
+                    .set_read_timeout(Some(Duration::from_secs(2)))
                     .unwrap();
                 let mut request = Vec::new();
                 let mut bytes = [0; 1024];
@@ -185,6 +188,9 @@ impl HttpChallenge {
                         Ok(0) | Err(_) => break,
                         Ok(n) => request.extend_from_slice(&bytes[..n]),
                     }
+                }
+                if !request.ends_with(b"\r\n\r\n") {
+                    continue;
                 }
                 let has_auth = String::from_utf8_lossy(&request)
                     .to_ascii_lowercase()
@@ -237,8 +243,14 @@ fn native_clone_uses_rust_authentication_ui_and_decline_does_not_cancel_the_proc
         } else {
             for reply in ["fixture-user", "fixture-password"] {
                 h.until(|a| a.operations.modal_open());
-                h.render(vec![egui::Event::Text(reply.into())])
-                    .drop_without_applying_deltas();
+                let typed = h.render(vec![egui::Event::Text(reply.into())]);
+                let tree = typed.platform_output.accesskit_update.as_ref().unwrap();
+                let (id, field) = tree.nodes.iter()
+                    .find(|(_, node)| node.role() == egui::Role::PasswordInput)
+                    .expect("active response field");
+                assert_eq!(tree.focus, *id, "typing must reach the active Git question");
+                assert_eq!(field.value().unwrap_or_default().chars().count(), reply.len(), "the masked input must contain the whole synthetic reply");
+                typed.drop_without_applying_deltas();
                 h.click(&text("AuthSubmit"));
             }
         }

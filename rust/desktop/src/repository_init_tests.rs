@@ -228,6 +228,8 @@ fn failed_init_retains_files_and_picker_ownership_blocks_exit() {
     assert!(h.app.tabs.is_empty());
     assert_eq!(h.app.notice, Some(text("InitInvalidDirectory")));
     assert_eq!(fs::read(&target).unwrap(), b"keep");
+    assert_eq!(h.app.operations.failure_path(), Some(target.as_path()));
+    h.click(&text("OperationAttentionDismiss"));
     h.options("FileMenu", &target);
     let (tx, rx) = mpsc::channel::<()>();
     let receiver = std::sync::Mutex::new(rx);

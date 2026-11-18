@@ -1498,17 +1498,20 @@ impl Controller {
                 });
             ui.label(text("RustAuthExplanation"));
             if question.prompt.kind == authentication::Kind::Secret {
-                ui.label(text("AuthResponse"));
+                let label = ui.label(text("AuthResponse"));
+                let field = ui.make_persistent_id("askpass_response");
+                if question.focus && ui.is_visible() && !ui.is_sizing_pass() {
+                    ui.memory_mut(|memory| memory.request_focus(field));
+                    question.focus = false;
+                }
                 let mut output = egui::TextEdit::singleline(&mut *question.response)
+                    .id(field)
                     .password(true)
                     .char_limit(4096)
                     .show(ui);
                 output.state.clear_undoer();
                 output.state.store(ctx, output.response.id);
-                if question.focus {
-                    output.response.request_focus();
-                    question.focus = false;
-                }
+                output.response.response.labelled_by(label.id);
                 if ui.button(text("AuthSubmit")).clicked()
                     || ui.input(|i| i.key_pressed(egui::Key::Enter))
                 {
@@ -1970,18 +1973,31 @@ mod tests {
             response: Zeroizing::new("fixture-secret".into()),
             focus: true,
         });
-        let output = ctx.run_ui(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(900., 620.),
-                )),
-                ..Default::default()
-            },
-            |_ui| controller.show_prompt(&ctx),
-        );
+        let mut frame = |events| {
+            ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900., 620.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |_ui| controller.show_prompt(&ctx),
+            )
+        };
+        frame(vec![]).drop_without_applying_deltas();
+        let output = frame(vec![egui::Event::Text("x".into())]);
         let update = output.platform_output.accesskit_update.as_ref().unwrap();
         assert!(!format!("{update:?}").contains("fixture-secret"));
+        let (input, node) = update.nodes.iter().find(|(_, node)| {
+            node.role() == egui::Role::PasswordInput
+        }).expect("password input");
+        assert_eq!(update.focus, *input);
+        assert!(update.nodes.iter().any(|(id, label)| {
+            node.labelled_by().contains(id) && label.value() == Some(text("AuthResponse").as_str())
+        }));
+        assert_eq!(controller.prompts.front().unwrap().response.len(), "fixture-secret".len() + 1);
         output.drop_without_applying_deltas();
         assert!(controller.modal_open());
         closed.cancel();
