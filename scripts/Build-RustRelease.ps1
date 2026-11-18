@@ -7,6 +7,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'Get-RustSourceFingerprint.ps1')
 . (Join-Path $PSScriptRoot 'Get-RustReleasePlan.ps1')
+. (Join-Path $PSScriptRoot 'Assert-RustReleaseArtifacts.ps1')
 $commit=git -C $root rev-parse HEAD
 $branch=git -C $root branch --show-current
 $pending=git -C $root status --porcelain
@@ -19,7 +20,8 @@ if(-not $PackageOnly -and $Channel -eq 'win-rust-stable'){
 }
 $smokePath=Join-Path $root 'Build/rust-smoke.json'
 $smoke=if(Test-Path -LiteralPath $smokePath){Get-Content -LiteralPath $smokePath -Raw | ConvertFrom-Json}else{$null}
-if(!$smoke -or !$smoke.Passed -or $smoke.SourceFingerprint -ne (Get-RustSourceFingerprint $root)){
+$fingerprint=Get-RustSourceFingerprint $root
+if(!$smoke -or !$smoke.Passed -or $smoke.SourceFingerprint -ne $fingerprint){
     & (Join-Path $PSScriptRoot 'Test-RustSmoke.ps1')
 }
 $payload=Join-Path $root "Build/rust-$version-win-x64"
@@ -27,6 +29,8 @@ if(!(Test-Path -LiteralPath $payload)){& (Join-Path $PSScriptRoot 'Build-RustPay
 $installer=Join-Path $root "Build/rust-$version-installer-$Channel"
 if(!(Test-Path -LiteralPath $installer)){
     & (Join-Path $PSScriptRoot 'Build-RustInstaller.ps1') -PayloadDirectory $payload -Channel $Channel -PrivateKeyPath $PrivateKeyPath -StableApproval $StableApproval
+}elseif($PackageOnly){
+    $null=Get-VerifiedRustReleaseHashes $installer $payload $plan $fingerprint
 }
 if($PackageOnly){Write-Output 'Signed Rust installer built. No branches were merged and no public release or feed was changed.';return}
-& (Join-Path $PSScriptRoot 'Publish-RustRelease.ps1') -ArtifactDirectory (Join-Path $root "Build/rust-$version-installer-$Channel") -PayloadDirectory $payload -StableApproval $StableApproval
+& (Join-Path $PSScriptRoot 'Publish-RustRelease.ps1') -ArtifactDirectory $installer -PayloadDirectory $payload -Channel $Channel -StableApproval $StableApproval

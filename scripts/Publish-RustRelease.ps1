@@ -1,37 +1,26 @@
 #requires -Version 7.4
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$ArtifactDirectory,[Parameter(Mandatory)][string]$PayloadDirectory,[string]$StableApproval)
+param([Parameter(Mandatory)][string]$ArtifactDirectory,[Parameter(Mandatory)][string]$PayloadDirectory,
+    [ValidateSet('win-rust-beta','win-rust-stable')][string]$Channel='win-rust-beta',[string]$StableApproval)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'Get-RustReleasePlan.ps1')
 . (Join-Path $PSScriptRoot 'Get-RustSourceFingerprint.ps1')
+. (Join-Path $PSScriptRoot 'Assert-RustReleaseArtifacts.ps1')
+. (Join-Path $PSScriptRoot 'Get-RustReleaseTag.ps1')
 $directory=(Resolve-Path -LiteralPath $ArtifactDirectory).Path
-$info=Get-Content (Join-Path $directory 'release-info.json') -Raw | ConvertFrom-Json
 $commit=git -C $root rev-parse HEAD
 $branch=git -C $root branch --show-current
 $pending=git -C $root status --porcelain
-if($LASTEXITCODE -ne 0 -or $pending -or $commit -ne $info.SourceCommit -or $info.SourceFingerprint -ne (Get-RustSourceFingerprint $root)){throw 'Rust source does not match packaged artifacts.'}
-$plan=Get-RustReleasePlan -Channel $info.Channel -Version $info.Version -SourceCommit $commit -SourceBranch $branch -StableApproval $StableApproval
-if($info.Product -ne $plan.Product -or $info.Repository -ne $plan.Repository -or $info.Tag -ne $plan.Tag -or $info.FeedTag -ne $plan.FeedTag){throw 'Artifact identity differs from the Rust release plan.'}
+if($LASTEXITCODE -ne 0 -or $pending){throw 'Commit intended Rust changes before publication.'}
+$plan=Get-RustReleasePlan -Channel $Channel -Version (Get-RustVersion $root) -SourceCommit $commit -SourceBranch $branch -StableApproval $StableApproval
 if($plan.Channel -eq 'win-rust-stable' -and @(Select-String -LiteralPath (Join-Path $root 'TODO.md') -Pattern '^- \[ \] \*\*R\d+').Count){throw 'Rust Stable requires complete parity acceptance as well as owner approval.'}
 $origin=git -C $root remote get-url origin
 if($origin -notin @('https://github.com/GlebHmarsky/Shovel.git','https://github.com/GlebHmarsky/Shovel','git@github.com:GlebHmarsky/Shovel.git')){throw 'Unexpected publishing repository.'}
-$receipt=Get-Content (Join-Path $PayloadDirectory 'VERIFICATION.json') -Raw | ConvertFrom-Json
-if($receipt.Dirty -or !$receipt.SmokeVerified -or $receipt.SourceCommit -ne $commit -or $receipt.SourceFingerprint -ne $info.SourceFingerprint){throw 'A matching clean payload and smoke receipt are required.'}
-$hashes=@{}
-foreach($line in Get-Content (Join-Path $directory 'SHA256SUMS.txt')){
-    if($line -notmatch '^([a-f0-9]{64})  ([A-Za-z0-9_.-]+)$'){throw 'Invalid checksum entry.'}
-    $hash=$Matches[1];$name=$Matches[2]
-    if($hashes.ContainsKey($name) -or $name -match '\.(key|pem|pfx|p12)$'){throw 'Unexpected release asset.'}
-    if((Get-FileHash -LiteralPath (Join-Path $directory $name)).Hash -ne $hash){throw "Changed release artifact: $name"}
-    $hashes[$name]=$hash
-}
+$PayloadDirectory=(Resolve-Path -LiteralPath $PayloadDirectory).Path
+$hashes=Get-VerifiedRustReleaseHashes $directory $PayloadDirectory $plan (Get-RustSourceFingerprint $root)
 $assetNames=@($plan.Installer,$plan.Package,$plan.Feed,"$($plan.Feed).sig",'SHA256SUMS.txt','release-info.json','release-notes.md')
-foreach($name in $assetNames){if($name -ne 'SHA256SUMS.txt' -and !$hashes.ContainsKey($name)){throw "Missing verified artifact: $name"}}
 $verifier=Join-Path $PayloadDirectory 'verify_update_bundle.exe'
-if((Get-FileHash $verifier).Hash -ne $receipt.VerifierSHA256){throw 'Package verifier changed.'}
-& $verifier $plan.Channel $plan.Version $commit (Join-Path $directory $plan.Feed) (Join-Path $directory "$($plan.Feed).sig") (Join-Path $directory $plan.Package)
-if($LASTEXITCODE -ne 0){throw 'Production Rust verification failed.'}
 # Reuse the established GCM login without printing, persisting or forwarding it to download hosts.
 $priorPrompt=$env:GIT_TERMINAL_PROMPT;$priorInteractive=$env:GCM_INTERACTIVE
 $env:GIT_TERMINAL_PROMPT='0';$env:GCM_INTERACTIVE='Never'
@@ -82,10 +71,14 @@ try {
         }
         if($history.Count -lt 100){break}
     }
-    git -C $root push origin "HEAD:refs/heads/$($plan.SourceBranch)" "HEAD:refs/heads/$($plan.ReleaseBranch)"
+    $tagRef="refs/tags/$($plan.Tag)"
+    $refs=@("HEAD:refs/heads/$($plan.SourceBranch)","HEAD:refs/heads/$($plan.ReleaseBranch)")
+    if (!(Get-RustReleaseTag $root origin $plan)) { $refs+="HEAD:$tagRef" }
+    git -C $root push --atomic origin @refs
     if($LASTEXITCODE -ne 0){throw 'Rust branch push failed. No release published.'}
     $remote=Invoke-RestMethod "$api/commits/$($plan.ReleaseBranch)" -Headers $headers
     if($remote.sha -ne $commit){throw 'Rust release branch differs from packaged commit.'}
+    if (!(Get-RustReleaseTag $root origin $plan)) { throw 'Version tag is missing after branch push.' }
     $body=@{tag_name=$plan.Tag;target_commitish=$commit;name="Shovel $($plan.Version) - $($plan.Channel)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$plan.GitHubPrerelease;make_latest='false'} | ConvertTo-Json
     $release=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body $body
     foreach($name in $assetNames){Upload-Asset $release $name}

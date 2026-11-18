@@ -25,3 +25,4 @@ foreach ($plan in @($beta,$stable)) {
     if ($entry.Count -ne 1 -or $entry[0].Branch -ne $plan.ReleaseBranch -or $entry[0].FeedTag -ne $plan.FeedTag -or $entry[0].Feed -ne $plan.Feed -or $entry[0].GitHubPrerelease -ne $plan.GitHubPrerelease -or $entry[0].MakeLatest) {throw 'Channel manifest differs from release policy'}
 }
 Write-Output 'PASS Rust release identity, Beta/Stable branch policy, Stable approval requirement and C# latest isolation (8 checks). No publication.'
+& (Join-Path $PSScriptRoot 'Test-RustReleaseArtifacts.ps1')

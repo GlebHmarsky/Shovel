@@ -10,6 +10,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'Get-RustReleasePlan.ps1')
 . (Join-Path $PSScriptRoot 'Get-RustSourceFingerprint.ps1')
+. (Join-Path $PSScriptRoot 'Assert-RustReleaseArtifacts.ps1')
 $branch=git -C $root branch --show-current
 $commit=git -C $root rev-parse HEAD
 $pending=git -C $root status --porcelain
@@ -17,17 +18,8 @@ if($LASTEXITCODE -ne 0 -or $pending){throw 'Commit intended Rust source before p
 $version=Get-RustVersion $root
 $plan=Get-RustReleasePlan -Channel $Channel -Version $version -SourceCommit $commit -SourceBranch $branch -StableApproval $StableApproval
 $payload=[IO.Path]::GetFullPath($PayloadDirectory)
-$evidence=Get-Content (Join-Path $payload 'VERIFICATION.json') -Raw | ConvertFrom-Json
-if($evidence.Dirty -or $evidence.Product -ne 'ShovelRust' -or $evidence.Version -ne $version -or
-   $evidence.SourceCommit -ne $commit -or $evidence.SourceFingerprint -ne (Get-RustSourceFingerprint $root)){
-    throw 'Installer requires a matching clean native Rust payload.'
-}
-foreach($file in $evidence.Files){
-    $path=Join-Path (Join-Path $payload 'app') $file.Name
-    if((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.SHA256){
-        throw 'Verified Rust payload changed before packaging.'
-    }
-}
+$fingerprint=Get-RustSourceFingerprint $root
+Assert-RustPayload $payload $plan $fingerprint
 $output=Join-Path $root "Build/rust-$version-installer-$Channel"
 if(Test-Path -LiteralPath $output){throw 'Installer already exists. Increment the version instead of overwriting it.'}
 if(!(Test-Path -LiteralPath $PrivateKeyPath)){throw 'The existing signing key is required. Do not create a replacement.'}
@@ -75,7 +67,7 @@ try{
     [IO.File]::WriteAllBytes("$feed.sig",$signature)
     & (Join-Path $payload 'verify_update_bundle.exe') $Channel $version $commit $feed "$feed.sig" $package
     if($LASTEXITCODE -ne 0){throw 'Production Rust signature/package verification failed.'}
-    [ordered]@{Version=$version;Product='ShovelRust';Channel=$Channel;Repository=$plan.Repository;Tag=$plan.Tag;FeedTag=$plan.FeedTag;SourceCommit=$commit;SourceFingerprint=$evidence.SourceFingerprint;Published=$false;Authenticode=$false;ParityVerified=$false} |
+    [ordered]@{Version=$version;Product='ShovelRust';Channel=$Channel;Repository=$plan.Repository;Tag=$plan.Tag;FeedTag=$plan.FeedTag;SourceCommit=$commit;SourceFingerprint=$fingerprint;Published=$false;Authenticode=$false;ParityVerified=$false} |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'release-info.json') -Encoding utf8NoBOM
     Get-ChildItem -LiteralPath $output -File | Sort-Object Name | ForEach-Object {
         (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+$_.Name

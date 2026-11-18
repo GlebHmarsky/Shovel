@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Overnight Rust Beta work (2026-11-18)
+
+**Release provenance (R04).** Previously, the presence of both output directories was enough for PackageOnly to report success. Packaging and publication now check every application file against the payload receipt and verify the console verifier itself. Reusing an installer also checks its receipt against the requested Cargo version, commit, fingerprint and channel, verifies asset hashes, and runs the production signed-package verifier. Publication checks lightweight and annotated remote tags and reserves a new immutable version tag in the same Git push as the release branch.
+
+The offline release policy and disposable fixtures passed for missing, matching and conflicting tags, a valid payload, stale source, stale fingerprint, wrong channel, changed verifier, changed payload bytes and an extra file. Workspace all-target Clippy and diff checks passed. All 18 smoke checks passed in 28.54 s on source fingerprint `F0277E0E147AA44ACF21A970AC07260D1EEB5E4FB09DEBF2D8D7B53EA7D7343C`. Git for Windows needed its local transport outside the sandbox. Hosted publication with these scripts remains to be verified.
+
 ## Owner-approved Rust Stable promotion (2026-11-18)
 
 [Rust Stable 0.50.3](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.3-win-rust-stable) promotes the existing application from source 9d75ec962d714646276f9c2ca25619767437fe5d. Owner approval is specific to this version despite unfinished parity. The Stable package contains all 19 application files byte-for-byte identical to the signed Beta package. Stable installer/feed/package and anonymous downloads passed production verification; the verifier rejects Stable as Beta. C# releases, Rust Beta and GitHub Latest stayed unchanged. Stable is a normal GitHub release; its metadata alias remains a prerelease to preserve Latest.
