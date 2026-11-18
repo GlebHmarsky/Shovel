@@ -190,14 +190,19 @@ impl Controller {
                     // A background failure must not clear queued user work.
                     Outcome::Succeeded
                 },
-                move |_| {
+                move |outcome| {
+                    let (status, detail) = if outcome == Outcome::WorkerFailed {
+                        ("RustAutoFetchFailed", "ActionWorkerFailed")
+                    } else {
+                        ("ActionStoppedShort", "ActionResultCancelled")
+                    };
                     let _ = discard.send((
                         id,
                         Finished {
                             path: dp,
                             succeeded: false,
-                            status: "ActionStoppedShort",
-                            output: crate::strings::text("ActionResultCancelled"),
+                            status,
+                            output: crate::strings::text(detail),
                         },
                     ));
                     dc.request_repaint();

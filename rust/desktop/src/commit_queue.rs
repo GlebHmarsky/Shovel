@@ -496,6 +496,25 @@ impl Editor {
         self.finish_working(id, output);
     }
     pub(super) fn working_removed(&mut self, id: u64, outcome: Outcome) {
+        let Some(entry) = self
+            .queue
+            .entries
+            .get_mut(&id)
+            .filter(|entry| !entry.activity.done)
+        else {
+            return;
+        };
+        if outcome == Outcome::WorkerFailed {
+            let message = text("ActionWorkerFailed");
+            self.status = Some(message.clone());
+            self.snapshot_error = Some(message);
+            self.refresh_pending = true;
+            self.refresh_history = true;
+            entry.activity.failed = true;
+            let output = std::mem::take(&mut entry.activity.output);
+            self.finish_working(id, output);
+            return;
+        }
         self.status = Some(text(if outcome == Outcome::Removed {
             "QueuedRequestCancelled"
         } else {

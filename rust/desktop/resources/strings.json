@@ -320,6 +320,7 @@
   "ActionReinspecting": "Refreshing repository",
   "ActionCompletedShort": "Completed",
   "ActionFailedShort": "Failed — see details",
+  "ActionWorkerFailed": "Shovel lost the command result. Review the repository state before retrying.",
   "ActionStoppedShort": "Stopped — see details",
   "ActionRefreshFailedShort": "Refresh failed — see details",
   "ActionReinspectionFailed": "{0} Repository refresh failed. Use Repository → Refresh to check the current state before another operation.",

@@ -1385,9 +1385,12 @@ impl Controller {
                 }
                 Event::Removed(id, outcome, reason) => {
                     self.pending.retain(|p| p.sequence != id);
-                    if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
+                    if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id && !r.done) {
                         run.done = true;
-                        run.show_failure = outcome == Outcome::Failed;
+                        run.show_failure = matches!(outcome, Outcome::Failed | Outcome::WorkerFailed);
+                        if outcome == Outcome::WorkerFailed {
+                            self.refresh_paths.push(run.path.clone());
+                        }
                         if let Some(reason) = reason {
                             run.output = text(reason);
                         }
@@ -1395,6 +1398,7 @@ impl Controller {
                             Outcome::Removed => "QueuedRequestCancelled",
                             Outcome::Coalesced => "RustRequestCoalesced",
                             Outcome::Failed => "ActionFailedShort",
+                            Outcome::WorkerFailed => "ActionWorkerFailed",
                             _ => "ActionStoppedShort",
                         });
                     }

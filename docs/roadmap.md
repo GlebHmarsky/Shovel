@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Report lost command results and prepare native pipes before launch
+
+When a Git worker unwinds before returning a result, the scheduler reports the failure to its owner, releases the lane and stops later same-repository work. Automatic Fetch still reports through Activity and keeps the user’s queued work. The working-copy editor invalidates its review on a lost result and requests fresh repository reads. Scheduler fixtures verified both failure paths and the linked-worktree scope. The workspace Activity fixture exercised the terminal message and refresh with unchanged HEAD. Nineteen Commit queue checks and three automatic-fetch checks passed during development.
+
+The Windows process host prepares its stdout, stderr and optional stdin workers before launching Git. This lets it return a thread startup error before any native command starts. When Windows rejects the executable, Shovel closes the unused child handles and joins the pipe workers before returning the launch error. The native tests covered a nonexistent executable with pending input, simultaneous binary traffic on all three pipes and byte-for-byte equality of the streamed and captured output. Existing admission, accepted lifetime, descendant and handle containment checks passed.
+
+For the 0.50.19 cut, the release-policy fixtures, all-target Clippy and diff checks passed. All 18 bounded smoke checks passed in 62.55 seconds on source fingerprint `7455DE7A8437D105622BA8EE9AA247C8746BF3CE201F067F385891973888DE0A`. The full workspace run passed the completed suites through File History before it was halted during History so the required checks could finish for the hourly cut.
+
 ## Recover when Windows rejects the update helper
 
 An update handoff now distinguishes a missing package from a failed helper launch. A missing file returns to Download. When Windows cannot start the helper, Shovel stays open, retains the ready package and displays an installer repair message. The pinned native Velopack launcher exercised both errors in a disposable installation layout. Windows rejected a deliberately malformed helper. The fixture kept the package bytes intact and the controller cleared the restart request. Twenty updater tests and both process guard tests passed. No real installer apply or repair was performed.

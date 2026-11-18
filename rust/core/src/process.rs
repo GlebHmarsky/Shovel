@@ -327,8 +327,8 @@ fn drain(
     overflow: Arc<AtomicBool>,
     callback: Option<OutputCallback>,
     is_error: bool,
-) -> thread::JoinHandle<std::io::Result<Vec<u8>>> {
-    thread::spawn(move || {
+) -> std::io::Result<thread::JoinHandle<std::io::Result<Vec<u8>>>> {
+    thread::Builder::new().spawn(move || {
         let mut file = File::from(handle);
         let mut bytes = Vec::new();
         let mut buffer = [0; 8192];
@@ -423,9 +423,33 @@ pub fn run(
     startup.StartupInfo.hStdOutput = handles[1];
     startup.StartupInfo.hStdError = handles[2];
     startup.lpAttributeList = attributes.ptr();
+    // Reserve the capture threads before starting a native command. If Windows
+    // cannot create a thread, an accepted child has not yet started.
+    let overflow = Arc::new(AtomicBool::new(false));
+    let stdout = drain(
+        stdout_read,
+        request.capture_limit,
+        overflow.clone(),
+        callback.clone(),
+        false,
+    )?;
+    let stderr = drain(
+        stderr_read,
+        request.capture_limit,
+        overflow.clone(),
+        callback,
+        true,
+    )?;
+    let writer = if request.input.is_empty() {
+        drop(stdin_write);
+        None
+    } else {
+        let input = request.input.clone();
+        Some(thread::Builder::new().spawn(move || File::from(stdin_write).write_all(&input))?)
+    };
     let mut process: PROCESS_INFORMATION = unsafe { zeroed() };
     // Atomic job assignment means no child may run outside owned containment.
-    if unsafe {
+    let started = unsafe {
         CreateProcessW(
             executable.as_ptr(),
             command.as_mut_ptr(),
@@ -438,41 +462,23 @@ pub fn run(
             &startup.StartupInfo,
             &mut process,
         )
-    } == 0
-    {
-        return Err(std::io::Error::last_os_error());
-    }
-    let process_handle = owned(process.hProcess)?;
-    let thread_handle = owned(process.hThread)?;
-    drop(thread_handle);
+    };
+    let start_error = (started == 0).then(std::io::Error::last_os_error);
     drop(attributes);
     drop(stdin_read);
     drop(stdout_write);
     drop(stderr_write);
-    let writer = if request.input.is_empty() {
-        drop(stdin_write);
-        None
-    } else {
-        let input = request.input.clone();
-        Some(thread::spawn(move || {
-            File::from(stdin_write).write_all(&input)
-        }))
-    };
-    let overflow = Arc::new(AtomicBool::new(false));
-    let stdout = drain(
-        stdout_read,
-        request.capture_limit,
-        overflow.clone(),
-        callback.clone(),
-        false,
-    );
-    let stderr = drain(
-        stderr_read,
-        request.capture_limit,
-        overflow.clone(),
-        callback,
-        true,
-    );
+    if let Some(error) = start_error {
+        // Closing the unused child handles wakes every pipe worker.
+        let _ = stdout.join();
+        let _ = stderr.join();
+        if let Some(writer) = writer {
+            let _ = writer.join();
+        }
+        return Err(error);
+    }
+    let process_handle = owned(process.hProcess)?;
+    drop(owned(process.hThread)?);
     let mut outcome = Outcome::Exited;
     let wait_ms = if request.lifetime == Lifetime::AcceptedCommand {
         INFINITE
@@ -597,6 +603,13 @@ mod tests {
             let mut bytes = Vec::new();
             std::io::stdin().read_to_end(&mut bytes).unwrap();
             std::fs::write("received-stdin", bytes).unwrap();
+        } else if mode == "duplex" {
+            // Both pipes must drain before this child consumes its input.
+            std::io::stdout().write_all(&vec![0; 128 * 1024]).unwrap();
+            std::io::stderr().write_all(&vec![0xff; 96 * 1024]).unwrap();
+            let mut input = Vec::new();
+            std::io::stdin().read_to_end(&mut input).unwrap();
+            std::fs::write("received-stdin", input).unwrap();
         } else if mode == "reject-input" {
             eprintln!("fixture rejected input");
             std::process::exit(7);
@@ -724,6 +737,62 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn failed_native_start_drains_the_prepared_pipes() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut missing = request(temp.path(), "read-stdin");
+        missing.executable = temp.path().join("missing.exe");
+        missing.lifetime = Lifetime::AcceptedCommand;
+        missing.input = vec![b'x'; 512 * 1024];
+        assert_eq!(
+            run(&missing, &Cancellation::default(), None)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+        assert!(
+            run(
+                &request(temp.path(), "read-stdin"),
+                &Cancellation::default(),
+                None
+            )
+            .unwrap()
+            .success()
+        );
+    }
+
+    #[test]
+    fn simultaneous_output_and_input_do_not_block_the_native_pipes() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut request = request(temp.path(), "duplex");
+        request.input = (0..192 * 1024).map(|index| (index % 256) as u8).collect();
+        request.capture_limit = 256 * 1024;
+        request.deadline = Duration::from_secs(8);
+        let streamed = Arc::new(Mutex::new([Vec::new(), Vec::new()]));
+        let captured = streamed.clone();
+        let result = run(
+            &request,
+            &Cancellation::default(),
+            Some(Arc::new(move |stderr, bytes| {
+                captured.lock().unwrap()[usize::from(stderr)].extend_from_slice(bytes);
+            })),
+        )
+        .unwrap();
+        assert!(result.success(), "{:?}", result.outcome);
+        assert_eq!(
+            std::fs::read(temp.path().join("received-stdin")).unwrap(),
+            request.input
+        );
+        assert_eq!(
+            result.stdout.iter().filter(|byte| **byte == 0).count(),
+            128 * 1024
+        );
+        assert_eq!(result.stderr, vec![0xff; 96 * 1024]);
+        let streamed = streamed.lock().unwrap();
+        assert_eq!(streamed[0], result.stdout);
+        assert_eq!(streamed[1], result.stderr);
+    }
+
     #[test]
     fn incomplete_stdin_is_not_reported_as_success_or_hidden_native_failure() {
         let temp = tempfile::tempdir().unwrap();

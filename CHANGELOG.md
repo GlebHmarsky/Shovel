@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.50.19 - 2026-11-18
+
+- Reopening Shovel restores Restart when the current signed update is already verified in the installation cache. If Windows cannot start the update helper, Shovel stays open with the package ready for retry or installer repair.
+- Coordinate repository mutations across Windows sessions while retaining the original per-session lock for the C# client.
+- Report a Git worker that loses its result and refresh the repository before retry. An automatic Fetch worker failure leaves accepted user commands queued.
+- Prepare Windows pipe workers before launching Git. If Windows rejects the process start, Shovel closes the unused pipes and returns the launch error.
+
 ## Rust 0.50.18 - 2026-11-18
 
 - If saving settings fails during an update restart, Shovel stays open with the update ready and explains how to retry.

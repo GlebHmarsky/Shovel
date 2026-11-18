@@ -25,6 +25,7 @@ fn conflicts(a: Lane, b: Lane) -> bool {
 pub enum Outcome {
     Succeeded,
     Failed,
+    WorkerFailed,
     Conflict,
     Removed,
     Coalesced,
@@ -357,10 +358,20 @@ impl Scheduler {
         for mut work in ready {
             let scheduler = self.clone();
             thread::spawn(move || {
-                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                let outcome = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(
                     work.run.take().expect("ready request"),
-                ))
-                .unwrap_or(Outcome::Failed);
+                )) {
+                    Ok(outcome) => outcome,
+                    Err(_) => {
+                        // The worker could not send its normal terminal event.
+                        // Notify the controller even if the failure was after a
+                        // native mutation. An observer error must not strand the lane.
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            (work.discard)(Outcome::WorkerFailed)
+                        }));
+                        Outcome::WorkerFailed
+                    }
+                };
                 scheduler.finish(work.record.id, outcome);
             });
         }
@@ -374,7 +385,9 @@ impl Scheduler {
             record.running = false;
             record.outcome = Some(outcome);
             let mut stopped = Vec::new();
-            if matches!(outcome, Outcome::Failed | Outcome::Conflict) {
+            if !record.is_automatic_fetch()
+                && matches!(outcome, Outcome::Failed | Outcome::Conflict | Outcome::WorkerFailed)
+            {
                 let mut index = 0;
                 while index < state.waiting.len() {
                     if state.waiting[index].record.repository == record.repository {
@@ -727,6 +740,98 @@ mod tests {
         release_tx.send(()).unwrap();
         next.recv_timeout(Duration::from_secs(2)).unwrap();
     }
+    #[test]
+    fn worker_unwind_notifies_the_owner_and_stops_only_its_remaining_work() {
+        let scheduler = Scheduler::default();
+        let (release, held) = mpsc::channel();
+        let (events, received) = mpsc::channel();
+        let failed = events.clone();
+        let (request, accepted) = scheduler.submit(
+            "original".into(),
+            "common".into(),
+            "panicking action".into(),
+            Lane::Exclusive,
+            move || {
+                held.recv().unwrap();
+                panic!("fixture worker unwind");
+            },
+            move |outcome| failed.send(outcome).unwrap(),
+        );
+        assert!(accepted);
+        scheduler.submit(
+            "original".into(),
+            "common".into(),
+            "stop after failure".into(),
+            Lane::WorkingCopy,
+            || unreachable!(),
+            move |outcome| events.send(outcome).unwrap(),
+        );
+        let (other, started) = mpsc::channel();
+        scheduler.submit(
+            "linked".into(),
+            "common".into(),
+            "unrelated worktree".into(),
+            Lane::WorkingCopy,
+            move || {
+                other.send(()).unwrap();
+                Outcome::Succeeded
+            },
+            |_| unreachable!(),
+        );
+        release.send(()).unwrap();
+        assert_eq!(
+            received.recv_timeout(std::time::Duration::from_secs(2)).unwrap(),
+            Outcome::WorkerFailed
+        );
+        assert_eq!(
+            received.recv_timeout(std::time::Duration::from_secs(2)).unwrap(),
+            Outcome::StoppedAfterFailure
+        );
+        started.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+        assert!(scheduler.records().iter().any(|record| {
+            record.id == request && record.outcome == Some(Outcome::WorkerFailed)
+        }));
+    }
+
+    #[test]
+    fn background_worker_unwind_keeps_accepted_work_for_the_same_repository() {
+        let scheduler = Scheduler::default();
+        let (release, held) = mpsc::channel();
+        let (failed, notified) = mpsc::channel();
+        scheduler.submit(
+            "repo".into(),
+            "common".into(),
+            "automatic-fetch:fixture".into(),
+            Lane::Fetch,
+            move || {
+                held.recv().unwrap();
+                panic!("fixture background unwind");
+            },
+            move |outcome| failed.send(outcome).unwrap(),
+        );
+        let (foreground, completed) = mpsc::channel();
+        scheduler.submit(
+            "repo".into(),
+            "common".into(),
+            "pull".into(),
+            Lane::Exclusive,
+            move || {
+                foreground.send(Outcome::Succeeded).unwrap();
+                Outcome::Succeeded
+            },
+            |_| {},
+        );
+        release.send(()).unwrap();
+        assert_eq!(
+            notified.recv_timeout(std::time::Duration::from_secs(2)).unwrap(),
+            Outcome::WorkerFailed
+        );
+        assert_eq!(
+            completed.recv_timeout(std::time::Duration::from_secs(2)).unwrap(),
+            Outcome::Succeeded
+        );
+    }
+
     #[test]
     fn remove_one_waiting_and_stop_own_queue_on_failure() {
         let scheduler = Scheduler::default();

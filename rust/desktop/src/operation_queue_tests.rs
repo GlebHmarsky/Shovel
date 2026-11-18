@@ -17,6 +17,38 @@ fn controller() -> Controller {
 }
 
 #[test]
+fn lost_worker_result_finishes_its_activity_and_requests_a_fresh_read() {
+    let (_temp, git, snapshot) = fixture();
+    let ctx = egui::Context::default();
+    let scheduler = Scheduler::default();
+    let mut ops = controller();
+    let common = shovel_core::case::path_key(&snapshot.common_directory);
+    let (request, _) = ops
+        .reserve_run(
+            RequestKind::Network(Kind::Push),
+            &snapshot.worktree,
+            (&snapshot.identity.fingerprint, &common),
+            "fixture failing worker".into(),
+            &scheduler,
+            &ctx,
+        )
+        .unwrap();
+    assert!(scheduler.activate(request, || panic!("fixture worker unwind")));
+    let mut refreshed = Vec::new();
+    wait(|| {
+        refreshed.extend(ops.poll(&ctx));
+        ops.runs[0].done && !scheduler.has_accepted_work()
+    });
+    assert_eq!(refreshed.as_slice(), std::slice::from_ref(&snapshot.worktree));
+    assert_eq!(ops.failure_path(), Some(snapshot.worktree.as_path()));
+    assert_eq!(ops.runs[0].status, text("ActionWorkerFailed"));
+    assert_eq!(
+        command(&git, &snapshot.worktree, &["rev-parse", "HEAD"]),
+        snapshot.head.as_deref().unwrap()
+    );
+}
+
+#[test]
 fn explicit_push_targets_keep_distinct_requests_and_coalesce_the_matching_initialization() {
     let (_temp, git, snapshot) = fixture();
     let ctx = egui::Context::default();
