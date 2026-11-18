@@ -54,6 +54,11 @@ jobs:
         run: cargo clippy --locked -j 1 --workspace --all-targets -- -D warnings
       - name: Bounded smoke suite
         run: ./scripts/Test-RustSmoke.ps1
+      - name: Build verified native payload
+        run: |
+          . ./scripts/Get-RustSourceFingerprint.ps1
+          $version = Get-RustVersion $PWD
+          ./scripts/Build-RustPayload.ps1 -OutputDirectory (Join-Path $PWD "Build/rust-$version-win-x64")
       - name: Cache compiled dependencies
         if: always() && steps.cache.outputs.cache-primary-key != '' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4

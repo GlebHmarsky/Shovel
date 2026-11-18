@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.21 release checks
+
+This Cargo and changelog cut includes scheduler worker launch recovery, retryable updater failures, and consistent linked-worktree identity reads. Nine scheduler checks, the pointer-change regression, ten native identity checks, three draft checks and 22 updater checks passed. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 34.47 seconds on local source fingerprint `5E4142B05B69DD448BE282076889C17BF29C7AA5CD4B71DE4931696359C1C79D`.
+
+The Windows workflow now builds the optimized payload before it saves the compiler cache. The signer uses that exact versioned payload and checks its source commit, source fingerprint and file hashes. The PowerShell compile step parsed successfully and targets the directory expected by packaging. Hosted cache reuse and signed publication have separate checks.
+
 ## Keep linked worktree identity reads consistent
 
 Shovel now rechecks the `.git` and `commondir` contents against the same bytes it used to resolve their target directories. A changed pointer returns an identity error so an operation cannot use the old directory IDs with the new pointer contents. The published fingerprint encoding and draft keys stay compatible for unchanged worktrees. [Git repository layout](https://git-scm.com/docs/gitrepository-layout#Documentation/gitrepository-layout.txt-commondir)

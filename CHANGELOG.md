@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.50.21 - 2026-11-18
+
+- Report a failed Git worker launch in Activity and release its queue so a separate linked worktree can continue.
+- Return interrupted update checks and downloads to a retryable state. Keep a verified update available when a background check fails.
+- Reject a linked worktree identity if its `.git` or `commondir` pointer changes while Shovel checks where the operation would run.
+
 ## Rust 0.50.20 - 2026-11-18
 
 - Protect accepted Git work during an update restart. Shovel pauses command dialogs while closing and checks the queue again before exiting. A competing Windows process that has already exited now releases the restart guard even if it returned status 259.

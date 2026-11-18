@@ -3324,7 +3324,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "shovel-askpass"
-version = "0.50.20"
+version = "0.50.21"
 dependencies = [
  "shovel-core",
  "winresource",
@@ -3332,7 +3332,7 @@ dependencies = [
 
 [[package]]
 name = "shovel-core"
-version = "0.50.20"
+version = "0.50.21"
 dependencies = [
  "chrono",
  "rsa",
@@ -3351,7 +3351,7 @@ dependencies = [
 
 [[package]]
 name = "shovel-desktop"
-version = "0.50.20"
+version = "0.50.21"
 dependencies = [
  "chrono",
  "eframe",
