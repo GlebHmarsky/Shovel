@@ -66,12 +66,7 @@ fn check_records(
             return Err(UpdateError::Replay);
         }
         if offer.version() == saved.version() {
-            if !offer
-                .source_commit()
-                .eq_ignore_ascii_case(saved.source_commit())
-                || offer.digest != saved.digest
-                || offer.size() != saved.size()
-            {
+            if !offer.same_package(&saved) {
                 return Err(UpdateError::InvalidFeed);
             }
             current |= is_current;

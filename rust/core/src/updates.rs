@@ -150,6 +150,13 @@ impl VerifiedRelease {
     pub fn size(&self) -> u64 {
         self.asset.size
     }
+    pub fn same_package(&self, other: &Self) -> bool {
+        self.channel == other.channel
+            && self.version() == other.version()
+            && self.size() == other.size()
+            && self.source_commit.eq_ignore_ascii_case(&other.source_commit)
+            && self.digest == other.digest
+    }
     pub fn notes(&self) -> &str {
         &self.asset.notes_markdown
     }

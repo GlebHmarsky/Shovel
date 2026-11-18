@@ -14,6 +14,8 @@ Right-click a tab to pick a colored circle or clear it with the crossed circle. 
 
 Shovel checks the selected Rust Beta or Rust Stable channel at startup and every hour while running. **File → Settings → Updates** controls the hourly check. A verified newer release adds an **Update Shovel** button to the left of the central repository status. The button opens the updater, where download and restart each require approval. Discovery runs in the background.
 
+Before restarting, Shovel checks the selected channel again, verifies the downloaded package and checks each open worktree. An unfinished Git operation or unresolved index conflict keeps the affected repository open. A newly offered version requires fresh approval.
+
 ## Operation progress (0.50.8)
 
 The central repository status shows the current Git action and phase, and includes the number of queued requests when applicable. A spinner appears during active or queued work and history reads. The lower Commit controls show current Local Changes activity, and Changed files shows a spinner while reading a comparison. Completed results remain available after the spinners stop.

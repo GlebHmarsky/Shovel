@@ -259,6 +259,7 @@ fn installed_locator() -> Result<velopack::locator::VelopackLocator, String> {
 enum ApplyError {
     Retry(String),
     DownloadAgain,
+    OfferChanged(String),
 }
 impl From<String> for ApplyError {
     fn from(message: String) -> Self {
@@ -274,6 +275,17 @@ fn verify_for_restart(package: &Path, release: &VerifiedRelease) -> Result<(), A
         updates::UpdateError::PackageMismatch => ApplyError::DownloadAgain,
         _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
     })
+}
+fn confirm_published_offer(
+    approved: &VerifiedRelease,
+    published: Result<Option<Offer>, CheckError>,
+) -> Result<(), ApplyError> {
+    match published {
+        Ok(Some(current)) if approved.same_package(&current.release) => Ok(()),
+        Ok(_) => Err(ApplyError::OfferChanged(text("RustUpdateOfferChanged"))),
+        Err(CheckError::Rejected(key)) => Err(ApplyError::OfferChanged(text(key))),
+        Err(CheckError::Unavailable(error)) => Err(ApplyError::Retry(error)),
+    }
 }
 enum Event {
     Applied(Result<(), ApplyError>),
@@ -392,6 +404,12 @@ impl Controller {
                         Err(error) => {
                             self.status = match error {
                                 ApplyError::Retry(message) => message,
+                                ApplyError::OfferChanged(message) => {
+                                    self.offer = None;
+                                    self.ready = false;
+                                    self.tools_confirmed = false;
+                                    message
+                                }
                                 ApplyError::DownloadAgain => {
                                     self.ready = false;
                                     self.tools_confirmed = false;
@@ -415,12 +433,7 @@ impl Controller {
                     match result {
                         Ok(Some(offer)) if offer.release.channel() == self.channel => {
                             let same_release = self.offer.as_ref().is_some_and(|current| {
-                                current.release.version() == offer.release.version()
-                                    && current.release.size() == offer.release.size()
-                                    && current
-                                        .asset
-                                        .SHA256
-                                        .eq_ignore_ascii_case(&offer.asset.SHA256)
+                                current.release.same_package(&offer.release)
                             });
                             self.ready &= same_release;
                             self.tools_confirmed &= same_release;
@@ -668,7 +681,7 @@ impl Controller {
         &mut self,
         ctx: &egui::Context,
         git: Option<std::sync::Arc<shovel_core::git::Git>>,
-        paths: Vec<PathBuf>,
+        repositories: Vec<crate::update_restart::Repository>,
     ) {
         let offer = self.offer.clone();
         let ready = self.ready;
@@ -679,26 +692,19 @@ impl Controller {
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let result = (|| {
-                other_instances()?;
-                if let Some(git) = git {
-                    for path in paths {
-                        let snapshot = git
-                            .inspect(&path, &Cancellation::default())
-                            .map_err(|_| text("RustUpdateRepositoryState"))?;
-                        if !snapshot.operations.is_empty() {
-                            return Err(text("RustUpdateRepositoryState").into());
-                        }
-                    }
-                }
                 let offer = offer
                     .filter(|o| ready && o.release.channel() == channel)
                     .ok_or_else(|| text("RustUpdateInvalid"))?;
+                let cancel = Cancellation::default();
+                confirm_published_offer(&offer.release, check(channel, &cancel))?;
                 let target = installed_locator()?
                     .get_packages_dir()
                     .join(offer.release.file_name());
                 verify_for_restart(&target, &offer.release)?;
-                recheck_offer(&offer, &Cancellation::default())?;
-                manager(&offer, Cancellation::default())?
+                crate::update_restart::check_repositories(git.as_deref(), &repositories)?;
+                crate::update_restart::other_instances()?;
+                recheck_offer(&offer, &cancel)?;
+                manager(&offer, cancel)?
                     .wait_exit_then_apply_updates(
                         &offer.asset,
                         false,
@@ -713,84 +719,77 @@ impl Controller {
     }
 }
 
-// Check all Windows sessions for processes using the installation being updated.
-fn other_instances() -> Result<(), String> {
-    use std::os::windows::ffi::OsStringExt;
-    use windows_sys::Win32::{
-        Foundation::{CloseHandle, ERROR_INVALID_PARAMETER, GetLastError, INVALID_HANDLE_VALUE},
-        System::{
-            Diagnostics::ToolHelp::{
-                CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
-                TH32CS_SNAPPROCESS,
-            },
-            Threading::{
-                OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
-            },
-        },
-    };
-    let current = std::env::current_exe().map_err(failure)?;
-    let directory = current
-        .parent()
-        .ok_or_else(|| text("RustUpdateInstances"))?;
-    let mut image = vec![0u16; 32768];
-    unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snapshot == INVALID_HANDLE_VALUE {
-            return Err(text("RustUpdateInstances"));
-        }
-        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-        let mut next = Process32FirstW(snapshot, &mut entry);
-        if next == 0 {
-            CloseHandle(snapshot);
-            return Err(text("RustUpdateInstances"));
-        }
-        while next != 0 {
-            let end = entry
-                .szExeFile
-                .iter()
-                .position(|c| *c == 0)
-                .unwrap_or(entry.szExeFile.len());
-            let name = String::from_utf16_lossy(&entry.szExeFile[..end]);
-            let pid = entry.th32ProcessID;
-            if pid != std::process::id() && name.eq_ignore_ascii_case("ShovelRust.exe") {
-                CloseHandle(snapshot);
-                return Err(text("RustUpdateInstances"));
-            }
-            if pid != std::process::id() && name.eq_ignore_ascii_case("Shovel.exe") {
-                // The older C# client also uses Shovel.exe in a separate installation.
-                let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-                let blocks_update = if process.is_null() {
-                    GetLastError() != ERROR_INVALID_PARAMETER
-                } else {
-                    let mut length = image.len() as u32;
-                    let read =
-                        QueryFullProcessImageNameW(process, 0, image.as_mut_ptr(), &mut length);
-                    CloseHandle(process);
-                    read == 0
-                        || PathBuf::from(std::ffi::OsString::from_wide(&image[..length as usize]))
-                            .parent()
-                            .is_some_and(|parent| {
-                                parent
-                                    .as_os_str()
-                                    .eq_ignore_ascii_case(directory.as_os_str())
-                            })
-                };
-                if blocks_update {
-                    CloseHandle(snapshot);
-                    return Err(text("RustUpdateInstances"));
-                }
-            }
-            next = Process32NextW(snapshot, &mut entry);
-        }
-        CloseHandle(snapshot);
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn published_offer(feed: &[u8], signature: &[u8]) -> Offer {
+        Offer {
+            release: updates::verify_feed(Channel::Beta, feed, signature).unwrap(),
+            asset: serde_json::from_slice::<VelopackAssetFeed>(feed)
+                .unwrap()
+                .Assets
+                .remove(0),
+        }
+    }
+
+    #[test]
+    fn restart_rechecks_the_signed_release_and_requires_new_approval_after_withdrawal() {
+        let old = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.3.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.3.json.sig"),
+        );
+        let new = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        );
+        assert!(confirm_published_offer(&old.release, Ok(Some(old.clone()))).is_ok());
+        let mut controller = Controller::default();
+        for (result, retained) in [
+            (Ok(None), false),
+            (Ok(Some(new)), false),
+            (Err(CheckError::Rejected("RustUpdateInvalid")), false),
+            (Err(CheckError::Unavailable(text("RustUpdateFailed"))), true),
+        ] {
+            controller.offer = Some(old.clone());
+            controller.ready = true;
+            controller.tools_confirmed = true;
+            controller.restart_requested = true;
+            let rechecked = confirm_published_offer(&old.release, result);
+            assert!(rechecked.is_err());
+            controller.tx.send(Event::Applied(rechecked)).unwrap();
+            controller.tick(&egui::Context::default(), Channel::Beta, false);
+            assert_eq!(controller.offer.is_some(), retained);
+            assert_eq!(controller.ready, retained);
+            assert_eq!(controller.tools_confirmed, retained);
+            assert!(controller.open && !controller.restart_requested && !controller.exit_ready);
+        }
+    }
+
+    #[test]
+    fn pending_restart_survives_a_read_found_after_the_settings_save() {
+        let ctx = egui::Context::default();
+        let mut app = crate::workspace_interaction_tests::workspace();
+        app.tabs.clear();
+        app.saving = true;
+        app.closing = true;
+        app.updater.restart_requested = true;
+        app.updater.ready = true;
+        let pending = app.read_workers.start_required();
+        let profile = tempfile::tempdir().unwrap();
+        let store = crate::SettingsStore::new(profile.path().into());
+        app.sender
+            .send(crate::Event::Saved(Box::new(store), Ok(())))
+            .unwrap();
+        app.receive(&ctx);
+        assert!(app.pending_exit && app.updater.restart_requested && !app.exit_ready);
+        assert!(!app.closing && !app.saving);
+        drop(pending);
+        app.sender.send(crate::Event::ToolFinished(Ok(()))).unwrap();
+        app.receive(&ctx);
+        assert!(!app.pending_exit && !app.exit_ready && !app.updater.restart_requested);
+        assert!(app.updater.ready && app.updater.open);
+    }
 
     #[test]
     fn a_new_tool_handoff_reopens_restart_confirmation_while_exit_is_pending() {

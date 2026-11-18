@@ -1428,6 +1428,70 @@ fn shutdown_waits_for_tool_handoff_completion() {
 }
 
 #[test]
+fn update_restart_checks_known_identity_and_index_conflicts_without_touching_git_state() {
+    use crate::update_restart::{Repository, check_repositories};
+    let repo = RepositoryFixture::new();
+    let mut target = Repository {
+        path: repo.root.clone(),
+        observed: None,
+        identity_blocked: false,
+    };
+    let inspect =
+        |target: &Repository| check_repositories(Some(&repo.git), std::slice::from_ref(target));
+    assert!(check_repositories(None, &[]).is_ok());
+    assert!(
+        check_repositories(None, std::slice::from_ref(&target))
+            .unwrap_err()
+            .contains(repo.root.to_str().unwrap())
+    );
+    std::fs::write(repo.root.join("untracked"), "user edit").unwrap();
+    inspect(&target).unwrap();
+    target.observed = Some(shovel_core::identity::read(&repo.root).unwrap());
+    let other = RepositoryFixture::new();
+    target.path = other.root.clone();
+    assert!(inspect(&target).is_err());
+    target.path = repo.root.clone();
+    target.identity_blocked = true;
+    assert!(inspect(&target).is_err());
+    target.identity_blocked = false;
+    repo.command(&["switch", "-c", "side"]);
+    std::fs::write(repo.root.join("file"), "side\n").unwrap();
+    repo.command(&["commit", "-am", "side"]);
+    repo.command(&["switch", "main"]);
+    std::fs::write(repo.root.join("file"), "main\n").unwrap();
+    repo.command(&["commit", "-am", "main"]);
+    let result = shovel_core::process::run(
+        &repo.git.request(
+            &repo.root,
+            ["merge", "--no-edit", "side"],
+            shovel_core::process::Lifetime::AcceptedCommand,
+            65_536,
+        ),
+        &Cancellation::default(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(result.exit_code, 1);
+    assert!(repo.root.join(".git/MERGE_HEAD").is_file());
+    assert!(inspect(&target).is_err());
+    repo.command(&["merge", "--quit"]);
+    assert!(!repo.root.join(".git/MERGE_HEAD").exists());
+    let unresolved = repo.command(&["ls-files", "-u", "-z"]);
+    assert!(!unresolved.is_empty());
+    let index = std::fs::read(repo.root.join(".git/index")).unwrap();
+    assert!(inspect(&target).is_err());
+    assert_eq!(std::fs::read(repo.root.join(".git/index")).unwrap(), index);
+    assert_eq!(repo.command(&["ls-files", "-u", "-z"]), unresolved);
+    std::fs::write(repo.root.join("file"), "resolved\n").unwrap();
+    repo.command(&["add", "file"]);
+    inspect(&target).unwrap();
+    assert_eq!(
+        std::fs::read(repo.root.join("untracked")).unwrap(),
+        b"user edit"
+    );
+}
+
+#[test]
 fn shutdown_refuses_open_repository_picker_and_keeps_single_picker() {
     let ctx = egui::Context::default();
     let mut app = workspace();

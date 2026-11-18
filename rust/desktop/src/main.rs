@@ -26,6 +26,7 @@ mod stashes;
 mod strings;
 mod ui_scale;
 mod updater;
+mod update_restart;
 mod window_geometry;
 mod tab_markers;
 mod workspace_split;
@@ -908,7 +909,9 @@ impl Workspace {
                             if self.closing && !self.preferences_dirty {
                                 if !self.prepare_exit(ctx) {
                                     self.closing = false;
-                                    self.updater.restart_requested = false;
+                                    if !self.pending_exit {
+                                        self.updater.restart_requested = false;
+                                    }
                                     continue;
                                 }
                                 if self.updater.restart_requested {
@@ -918,7 +921,11 @@ impl Workspace {
                                         self.tabs
                                             .iter()
                                             .chain(self.retained_tabs.iter())
-                                            .map(|t| t.path.clone())
+                                            .map(|tab| update_restart::Repository {
+                                                path: tab.path.clone(),
+                                                observed: tab.observed_snapshot().map(|s| s.identity.clone()),
+                                                identity_blocked: tab.view.identity_blocked,
+                                            })
                                             .collect(),
                                     );
                                     continue;
@@ -1130,6 +1137,7 @@ impl Workspace {
         {
             self.pending_exit = false;
             self.discard_settings_on_exit = false;
+            self.updater.restart_requested = false;
         }
         if self.pending_exit && !self.editors.iter().any(commit::Editor::exit_prompt_open) {
             if self.discard_settings_on_exit {

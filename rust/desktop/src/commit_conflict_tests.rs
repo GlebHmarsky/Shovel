@@ -358,6 +358,7 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
         deferred_history: Default::default(),
         tab_markers: Default::default(),
     };
+    workspace.updater.restart_requested = true;
     workspace.close(&h.ctx);
     assert!(workspace.pending_exit && !workspace.closing && !workspace.exit_ready);
     assert!(workspace.editors[0].exit_prompt_open());
@@ -365,6 +366,7 @@ fn app_exit_waits_for_unsaved_conflict_choice_and_resumes_settings_save() {
     workspace.receive(&h.ctx);
     assert!(!workspace.pending_exit && !workspace.closing && !workspace.exit_ready);
     assert!(workspace.editors[0].unsaved_conflict());
+    assert!(!workspace.updater.restart_requested);
     workspace.close(&h.ctx);
     workspace.editors[0].answer_leave(true, &h.ctx);
     workspace.receive(&h.ctx);
