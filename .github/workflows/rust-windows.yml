@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: rust-beta-release
   cancel-in-progress: false
@@ -75,8 +76,9 @@ jobs:
             Remove-Item -LiteralPath $key -ErrorAction SilentlyContinue
           }
       - uses: actions/upload-artifact@v4
+        id: archive
         with:
-          name: Shovel-Windows-${{ github.sha }}
+          name: Shovel-Windows-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             Build/rust-${{ steps.package.outputs.version }}-installer-win-rust-beta/*
             Build/rust-${{ steps.package.outputs.version }}-win-x64/app/
@@ -86,17 +88,30 @@ jobs:
             Build/rust-smoke.json
           if-no-files-found: error
           retention-days: 30
-      - name: Publish new Rust Beta version
+      - name: Check version and original build archive
+        id: publication
         env:
           GH_TOKEN: ${{ github.token }}
+          SHOVEL_VERSION: ${{ steps.package.outputs.version }}
+        run: ./scripts/Get-RustWorkflowPublication.ps1 -Version $env:SHOVEL_VERSION
+      - name: Restore the draft's original signed installer
+        if: steps.publication.outputs.archive != ''
+        id: recovery
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.publication.outputs.archive }}
+          run-id: ${{ steps.publication.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/shovel-original-build
+          merge-multiple: true
+      - name: Publish or finish the exact Rust Beta version
+        if: steps.publication.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHOVEL_VERSION: ${{ steps.package.outputs.version }}
+          SHOVEL_ARCHIVE_ID: ${{ steps.archive.outputs.artifact-id }}
+          SHOVEL_RECOVERY: ${{ steps.recovery.outputs.download-path }}
         run: |
-          . ./scripts/Get-RustSourceFingerprint.ps1
-          $version = Get-RustVersion $PWD
-          $tag = "rust-v$version-win-rust-beta"
-          $releases = gh api --paginate repos/GlebHmarsky/Shovel/releases --jq '.[].tag_name'
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect published versions.' }
-          if ($tag -in $releases) {
-            Write-Host "Immutable version $tag already published; build artifact remains available."
-            exit 0
-          }
-          ./scripts/Publish-RustRelease.ps1 -ArtifactDirectory "$PWD/Build/rust-$version-installer-win-rust-beta" -PayloadDirectory "$PWD/Build/rust-$version-win-x64"
+          $version = $env:SHOVEL_VERSION
+          $source = if ($env:SHOVEL_RECOVERY) { $env:SHOVEL_RECOVERY } else { "$PWD/Build" }
+          ./scripts/Publish-RustRelease.ps1 -ArtifactDirectory "$source/rust-$version-installer-win-rust-beta" -PayloadDirectory "$PWD/Build/rust-$version-win-x64" -Resume -BuildArtifactId $env:SHOVEL_ARCHIVE_ID

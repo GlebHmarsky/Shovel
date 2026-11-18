@@ -1,6 +1,7 @@
 # Offline packaging regressions. Only disposable paths and local Git refs are used.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Assert-RustReleaseArtifacts.ps1')
+. (Join-Path $PSScriptRoot 'Assert-RustPublicationAssets.ps1')
 . (Join-Path $PSScriptRoot 'Get-RustReleaseTag.ps1')
 . (Join-Path $PSScriptRoot 'Get-RustReleasePlan.ps1')
 function Assert-Refusal([scriptblock]$Action, [string]$Expected) {
@@ -67,6 +68,51 @@ try {
     $lines | Set-Content -LiteralPath $checksums
     $verified = Get-RustInstallerHashes $installer $plan
     if ($verified.Count -ne 9) { throw 'Expected all installer and pinned Velopack outputs.' }
+    $assets = @(foreach ($name in Get-RustPublicAssetNames $plan) {
+        $file = Get-Item -LiteralPath (Join-Path $installer $name)
+        @{name=$name; state='uploaded'; size=$file.Length; digest=('sha256:' + (Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant())}
+    })
+    $draft = @{tag_name=$plan.Tag; target_commitish=$commit; prerelease=$true; draft=$true; assets=$assets[0..1]}
+    $missing = @(Get-RustDraftRepairs $draft $plan $installer)
+    if ($missing.Count -ne $assets.Count - 2 -or $assets[0].name -in $missing.Name -or $assets[1].name -in $missing.Name) { throw 'Draft resume did not retain existing assets.' }
+    $starter = $assets[0].Clone()
+    $starter.state='starter'; $starter.size=0; $starter.id=99; $starter.digest=$null
+    $draft.assets=@($starter) + $assets[1..($assets.Count-1)]
+    $missing = @(Get-RustDraftRepairs $draft $plan $installer)
+    if ($missing.Count -ne 1 -or $missing[0].EmptyUploadId -ne 99 -or $missing[0].Name -cne $starter.name) { throw 'Interrupted empty draft upload recovery failed.' }
+    $draft.assets=$assets
+    $feedAsset=$assets.Where({$_.name -ceq $plan.Feed})[0].Clone()
+    $feedAsset.id=100
+    $sigAsset=$assets.Where({$_.name -ceq "$($plan.Feed).sig"})[0].Clone()
+    $sigAsset.id=101
+    $alias=@{tag_name=$plan.FeedTag; prerelease=$true; assets=@($feedAsset,$sigAsset)}
+    if (@(Get-RustFeedRepairs $alias $plan $installer).Count) { throw 'Matching public feed should not be touched.' }
+    $alias.assets=@($feedAsset)
+    $repair=@(Get-RustFeedRepairs $alias $plan $installer)
+    if ($repair.Count -ne 1 -or $repair[0].Name -cne $sigAsset.name -or $repair[0].Existing) { throw 'Missing feed signature recovery failed.' }
+    $sigAsset.digest='sha256:' + ('0'*64)
+    $alias.assets=@($feedAsset,$sigAsset)
+    $repair=@(Get-RustFeedRepairs $alias $plan $installer)
+    if ($repair.Count -ne 1 -or $repair[0].Existing.id -ne 101) { throw 'Feed repair did not identify the single stale asset.' }
+    $alias.tag_name='beta'
+    Assert-Refusal { Get-RustFeedRepairs $alias $plan $installer } 'Unexpected Rust feed identity.'
+    $alias.tag_name=$plan.FeedTag
+    $alias.assets=@($feedAsset,$feedAsset)
+    Assert-Refusal { Get-RustFeedRepairs $alias $plan $installer } 'Unexpected asset in Rust feed alias.'
+    if (@(Get-RustDraftRepairs $draft $plan $installer).Count) { throw 'Complete matching draft should not receive uploads.' }
+    $public=$draft.Clone()
+    $public.draft=$false
+    $assetMap=Get-RustReleaseAssetMap $public $plan
+    if ($assetMap.Count -ne $assets.Count) { throw 'Invalid published release inventory.' }
+    Assert-Refusal { Get-RustDraftRepairs $public $plan $installer } 'Cannot upload to a public*'
+    $public.assets=$assets[0..1]
+    Assert-Refusal { Get-RustReleaseAssetMap $public $plan } 'Incomplete public release*'
+    $draft.target_commitish='c'*40
+    Assert-Refusal { Get-RustDraftRepairs $draft $plan $installer } '*requested source and channel*'
+    $draft.target_commitish=$commit
+    $draft.assets=@($assets + $assets[0])
+    Assert-Refusal { Get-RustDraftRepairs $draft $plan $installer } 'Unexpected or incomplete*'
+    $draft.assets=$assets
     $lines[0..($lines.Count - 2)] | Set-Content -LiteralPath $checksums
     Assert-Refusal { Get-RustInstallerHashes $installer $plan } 'Missing verified artifact:*'
     @($lines + $lines[0]) | Set-Content -LiteralPath $checksums
@@ -81,6 +127,7 @@ try {
     [IO.Directory]::Delete($unexpected)
     [IO.File]::AppendAllText((Join-Path $installer $plan.Installer), 'changed')
     Assert-Refusal { Get-RustInstallerHashes $installer $plan } 'Changed release artifact:*'
+    Assert-Refusal { Get-RustDraftRepairs $draft $plan $installer } '*original Windows build artifact*'
     $history = @(
         '## Rust 0.1.10 - 2026-11-18', '', '- A different version.', '',
         '## Rust 0.1.0 Stable promotion - 2026-11-18', '', 'Promotion only.', '',
@@ -92,7 +139,8 @@ try {
     Assert-Refusal { Get-RustChangelogNotes $history '0.2.0' } 'Expected one nonempty*'
     Assert-Refusal { Get-RustChangelogNotes ($history + [Environment]::NewLine + $history) '0.1.0' } 'Expected one nonempty*'
     Assert-Refusal { Get-RustChangelogNotes ("## Rust 0.1.0 - 2026-11-18" + [Environment]::NewLine) '0.1.0' } 'Expected one nonempty*'
-    Write-Output 'PASS release provenance, exact installer inventory, versioned changelog and immutable tag fixtures.'
+    & (Join-Path $PSScriptRoot 'Test-RustWorkflowPublication.ps1') -Fixture $fixture -Plan $plan
+    Write-Output 'PASS release provenance, installer inventory, versioned changelog, draft recovery, immutable public assets and tag fixtures.'
 } finally {
     $env:GIT_CONFIG_GLOBAL = $priorGlobal
     $env:GIT_CONFIG_NOSYSTEM = $priorNoSystem

@@ -41,11 +41,15 @@ function Get-RustPublicAssetNames($Plan) {
     @($Plan.Installer, $Plan.Package, $Plan.Feed, "$($Plan.Feed).sig", 'release-info.json', 'release-notes.md', 'SHA256SUMS.txt')
 }
 
-# Velopack also produces these three channel-specific files for the CI archive.
-function Get-RustInstallerFiles([string]$Directory, $Plan) {
-    $allowed = @(Get-RustPublicAssetNames $Plan) + @(
+function Get-RustInstallerAssetNames($Plan) {
+    # Velopack also produces these three channel-specific files for the CI archive.
+    @(Get-RustPublicAssetNames $Plan) + @(
         "assets.$($Plan.Channel).json", "RELEASES-$($Plan.Channel)", "$($Plan.Product)-$($Plan.Channel)-Portable.zip"
     )
+}
+
+function Get-RustInstallerFiles([string]$Directory, $Plan) {
+    $allowed = @(Get-RustInstallerAssetNames $Plan)
     foreach ($item in Get-ChildItem -LiteralPath $Directory -Force) {
         if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.Name -cnotin $allowed) {
             throw 'Unexpected file or directory in Rust installer output.'
@@ -54,31 +58,42 @@ function Get-RustInstallerFiles([string]$Directory, $Plan) {
     }
 }
 
-function Get-RustInstallerHashes([string]$Directory, $Plan) {
-    $files = @(Get-RustInstallerFiles $Directory $Plan)
+function Read-RustChecksumMap([string]$Directory, [string[]]$AllowedNames) {
     $hashes = @{}
     foreach ($line in Get-Content -LiteralPath (Join-Path $Directory 'SHA256SUMS.txt')) {
         if ($line -cnotmatch '^([a-f0-9]{64})  ([A-Za-z0-9_.-]+)$') { throw 'Invalid checksum entry.' }
         $hash = $Matches[1]
         $name = $Matches[2]
-        if ($hashes.ContainsKey($name) -or $name -cnotin $files.Name) { throw 'Unexpected release checksum entry.' }
-        if ((Get-FileHash -LiteralPath (Join-Path $Directory $name)).Hash -ne $hash) { throw "Changed release artifact: $name" }
+        if ($hashes.ContainsKey($name) -or $name -ceq 'SHA256SUMS.txt' -or $name -cnotin $AllowedNames) { throw 'Unexpected release checksum entry.' }
         $hashes[$name] = $hash
-    }
-    foreach ($name in @(Get-RustPublicAssetNames $Plan) + $files.Name) {
-        if ($name -cne 'SHA256SUMS.txt' -and !$hashes.ContainsKey($name)) { throw "Missing verified artifact: $name" }
     }
     return $hashes
 }
 
-function Get-VerifiedRustReleaseHashes {
-    param([string]$Directory, [string]$PayloadDirectory, $Plan, [string]$Fingerprint)
-    Assert-RustPayload $PayloadDirectory $Plan $Fingerprint
+function Get-RustInstallerHashes([string]$Directory, $Plan) {
+    $files = @(Get-RustInstallerFiles $Directory $Plan)
+    $hashes = Read-RustChecksumMap $Directory $files.Name
+    foreach ($name in @(Get-RustPublicAssetNames $Plan) + $files.Name) {
+        if ($name -cne 'SHA256SUMS.txt' -and !$hashes.ContainsKey($name)) { throw "Missing verified artifact: $name" }
+    }
+    foreach ($file in $files) {
+        if ((Get-FileHash -LiteralPath $file.FullName).Hash -ne $hashes[$file.Name]) { throw "Changed release artifact: $($file.Name)" }
+    }
+    return $hashes
+}
+
+function Assert-RustInstallerReceipt([string]$Directory, $Plan, [string]$Fingerprint) {
     $info = Get-Content -LiteralPath (Join-Path $Directory 'release-info.json') -Raw | ConvertFrom-Json
     foreach ($field in @('Product','Version','Channel','SourceCommit','Repository','Tag','FeedTag')) {
         if ($info.$field -cne $Plan.$field) { throw "Installer receipt differs from release plan: $field" }
     }
     if ($info.SourceFingerprint -cne $Fingerprint) { throw 'Installer source fingerprint differs.' }
+}
+
+function Get-VerifiedRustReleaseHashes {
+    param([string]$Directory, [string]$PayloadDirectory, $Plan, [string]$Fingerprint)
+    Assert-RustPayload $PayloadDirectory $Plan $Fingerprint
+    Assert-RustInstallerReceipt $Directory $Plan $Fingerprint
     $hashes = Get-RustInstallerHashes $Directory $Plan
     & (Join-Path $PayloadDirectory 'verify_update_bundle.exe') $Plan.Channel $Plan.Version $Plan.SourceCommit `
         (Join-Path $Directory $Plan.Feed) (Join-Path $Directory "$($Plan.Feed).sig") (Join-Path $Directory $Plan.Package) | Out-Host

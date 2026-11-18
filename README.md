@@ -6,6 +6,8 @@ Master now contains the Rust application, including its desktop UI and askpass h
 
 [GitHub Actions](https://github.com/GlebHmarsky/Shovel/actions/workflows/rust-windows.yml) builds Windows x64 on each master push and manual run. It runs release-policy checks, Clippy and bounded smoke, produces an optimized native payload and signed-feed installer, uploads build artifacts, and publishes each new Cargo version as a Rust Beta prerelease. Existing published versions are never overwritten. [Rust releases](https://github.com/GlebHmarsky/Shovel/releases) use rust-vVERSION-win-rust-beta tags. The rust-beta feed serves only ShovelRust; old C# feeds remain unchanged. Rust Stable requires separate owner approval.
 
+To finish an interrupted Beta publication, rerun the Windows workflow on the original tagged commit. For a draft, it restores the original installer archive while GitHub retains it and verifies any existing uploads. For a public version, it downloads the original release, verifies its signature, package and installer, then repairs a missing or stale feed asset. A subsequent master commit with the same Cargo version produces a build artifact.
+
 Requirements: Windows MSVC build tools, Git for Windows, pinned Rust from rust-toolchain.toml, PowerShell 7.4+, and .NET 10 SDK for the Velopack packaging tool only. The application contains no .NET runtime or C# host.
 
 ```powershell

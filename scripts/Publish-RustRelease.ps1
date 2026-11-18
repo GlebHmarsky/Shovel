@@ -1,12 +1,14 @@
 #requires -Version 7.4
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$ArtifactDirectory,[Parameter(Mandatory)][string]$PayloadDirectory,
-    [ValidateSet('win-rust-beta','win-rust-stable')][string]$Channel='win-rust-beta',[string]$StableApproval)
+    [ValidateSet('win-rust-beta','win-rust-stable')][string]$Channel='win-rust-beta',[string]$StableApproval,[switch]$Resume,
+    [ValidatePattern('^[1-9][0-9]*$')][string]$BuildArtifactId)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'Get-RustReleasePlan.ps1')
 . (Join-Path $PSScriptRoot 'Get-RustSourceFingerprint.ps1')
 . (Join-Path $PSScriptRoot 'Assert-RustReleaseArtifacts.ps1')
+. (Join-Path $PSScriptRoot 'Assert-RustPublicationAssets.ps1')
 . (Join-Path $PSScriptRoot 'Get-RustReleaseTag.ps1')
 $directory=(Resolve-Path -LiteralPath $ArtifactDirectory).Path
 $commit=git -C $root rev-parse HEAD
@@ -18,7 +20,8 @@ if($plan.Channel -eq 'win-rust-stable' -and @(Select-String -LiteralPath (Join-P
 $origin=git -C $root remote get-url origin
 if($origin -notin @('https://github.com/GlebHmarsky/Shovel.git','https://github.com/GlebHmarsky/Shovel','git@github.com:GlebHmarsky/Shovel.git')){throw 'Unexpected publishing repository.'}
 $PayloadDirectory=(Resolve-Path -LiteralPath $PayloadDirectory).Path
-$hashes=Get-VerifiedRustReleaseHashes $directory $PayloadDirectory $plan (Get-RustSourceFingerprint $root)
+$fingerprint=Get-RustSourceFingerprint $root
+$hashes=Get-VerifiedRustReleaseHashes $directory $PayloadDirectory $plan $fingerprint
 $assetNames=@(Get-RustPublicAssetNames $plan)
 $verifier=Join-Path $PayloadDirectory 'verify_update_bundle.exe'
 # Reuse the established GCM login without printing, persisting or forwarding it to download hosts.
@@ -31,11 +34,10 @@ function Get-OptionalRelease([string]$tag){
     try {Invoke-RestMethod "$api/releases/tags/$tag" -Headers $headers}
     catch {if([int]$_.Exception.Response.StatusCode -ne 404){throw}}
 }
-function Upload-Asset($release,[string]$name){
-    $file=Get-Item -LiteralPath (Join-Path $directory $name)
+function Upload-Asset($release,[string]$name,[string]$source){
+    $file=Get-Item -LiteralPath (Join-Path $source $name)
     $uploaded=Invoke-RestMethod "https://uploads.github.com/repos/$($plan.Repository)/releases/$($release.id)/assets?name=$name" -Headers $headers -Method Post -ContentType 'application/octet-stream' -InFile $file.FullName
-    $hash=(Get-FileHash $file.FullName).Hash.ToLowerInvariant()
-    if($uploaded.state -ne 'uploaded' -or $uploaded.size -ne $file.Length -or ($uploaded.digest -and $uploaded.digest -ne "sha256:$hash")){throw "Incomplete or changed upload: $name"}
+    if(!(Test-RustAssetBytes $uploaded $file)){throw "Incomplete or changed upload: $name"}
     Write-Host "Uploaded: $name"
 }
 function Get-CSharpState {
@@ -59,47 +61,96 @@ try {
     if($repository.private){throw 'Anonymous updates require the existing public repository; visibility is never changed.'}
     $before=Get-CSharpState
     $before | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $probe 'csharp-before.json')
-    if(Get-OptionalRelease $plan.Tag){throw 'Rust version already exists. Never overwrite immutable releases.'}
+    $existing=Get-OptionalRelease $plan.Tag
     $alias=Get-OptionalRelease $plan.FeedTag
-    if($alias -and (!$alias.prerelease -or @($alias.assets | Where-Object {$_.name -notin @($plan.Feed,"$($plan.Feed).sig")}).Count)){throw 'Unexpected Rust feed identity.'}
     # Examine all pages so a previous newer Rust version cannot be hidden by C# releases.
     for($page=1;;$page++){
         $history=@(Invoke-RestMethod "$api/releases?per_page=100&page=$page" -Headers $headers | ForEach-Object { $_ })
         foreach($prior in $history){
+            if($prior.tag_name -ceq $plan.Tag){
+                if($existing -and $prior.id -ne $existing.id){throw 'Conflicting versioned release identities.'}
+                $existing=$prior
+                continue
+            }
+            if($prior.tag_name -ceq $plan.FeedTag){
+                if($alias -and $prior.id -ne $alias.id){throw 'Conflicting Rust feed identities.'}
+                $alias=$prior
+            }
             $versionMatch=[regex]::Match([string]$prior.tag_name,"^rust-v(\d+\.\d+\.\d+)-$([regex]::Escape($plan.Channel))$")
             if($versionMatch.Success -and [version]$plan.Version -le [version]$versionMatch.Groups[1].Value){throw 'Rust versions must increase.'}
         }
         if($history.Count -lt 100){break}
     }
-    $tagRef="refs/tags/$($plan.Tag)"
-    $refs=@("HEAD:refs/heads/$($plan.SourceBranch)","HEAD:refs/heads/$($plan.ReleaseBranch)")
-    if (!(Get-RustReleaseTag $root origin $plan)) { $refs+="HEAD:$tagRef" }
-    git -C $root push --atomic origin @refs
-    if($LASTEXITCODE -ne 0){throw 'Rust branch push failed. No release published.'}
+    $feedNames=@($plan.Feed,"$($plan.Feed).sig")
+    if($alias -and ($alias.tag_name -cne $plan.FeedTag -or !$alias.prerelease -or @($alias.assets | Where-Object {$_.name -cnotin $feedNames}).Count)){throw 'Unexpected Rust feed identity.'}
+    if($existing){
+        if(!$Resume){throw 'Rust version already exists. Use Resume from its original source to verify and finish publication.'}
+        $null=Get-RustReleaseAssetMap $existing $plan
+        if(!(Get-RustReleaseTag $root origin $plan)){throw 'Cannot resume without the original immutable version tag.'}
+    }else{
+        $tagRef="refs/tags/$($plan.Tag)"
+        $refs=@("HEAD:refs/heads/$($plan.SourceBranch)","HEAD:refs/heads/$($plan.ReleaseBranch)")
+        if (!(Get-RustReleaseTag $root origin $plan)) { $refs+="HEAD:$tagRef" }
+        git -C $root push --atomic origin @refs
+        if($LASTEXITCODE -ne 0){throw 'Rust branch push failed. No release published.'}
+    }
     $remote=Invoke-RestMethod "$api/commits/$($plan.ReleaseBranch)" -Headers $headers
     if($remote.sha -ne $commit){throw 'Rust release branch differs from packaged commit.'}
     if (!(Get-RustReleaseTag $root origin $plan)) { throw 'Version tag is missing after branch push.' }
-    $body=@{tag_name=$plan.Tag;target_commitish=$commit;name="Shovel $($plan.Version) - $($plan.Channel)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$plan.GitHubPrerelease;make_latest='false'} | ConvertTo-Json
-    $release=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body $body
-    foreach($name in $assetNames){Upload-Asset $release $name}
-    $published=Invoke-RestMethod "$api/releases/$($release.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body (@{draft=$false;prerelease=$plan.GitHubPrerelease;make_latest='false'}|ConvertTo-Json)
-    # Anonymous immutable downloads must succeed before advertising the feed.
-    foreach($name in @($plan.Package,$plan.Installer)){
-        Invoke-WebRequest -Uri "https://github.com/$($plan.Repository)/releases/download/$($plan.Tag)/$name" -OutFile (Join-Path $probe $name) -TimeoutSec 300
-        if((Get-FileHash (Join-Path $probe $name)).Hash -ne $hashes[$name]){throw 'Anonymous Rust download differs from built artifact.'}
+    $release=$existing
+    $notes=Get-Content -LiteralPath (Join-Path $directory 'release-notes.md') -Raw
+    if(!$release){
+        $draftNotes=if($BuildArtifactId){$notes + [Environment]::NewLine + [Environment]::NewLine + "<!-- Shovel Windows artifact $BuildArtifactId -->"}else{$notes}
+        $body=@{tag_name=$plan.Tag;target_commitish=$commit;name="Shovel $($plan.Version) - $($plan.Channel)";body=$draftNotes;draft=$true;prerelease=$plan.GitHubPrerelease;make_latest='false'} | ConvertTo-Json
+        $release=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body $body
     }
+    if($release.draft){
+        foreach($repair in @(Get-RustDraftRepairs $release $plan $directory)){
+            if($repair.EmptyUploadId){
+                $latestDraft=Invoke-RestMethod "$api/releases/$($release.id)" -Headers $headers
+                $current=(Get-RustReleaseAssetMap $latestDraft $plan)[$repair.Name]
+                if(!$latestDraft.draft -or $current.state -cne 'starter' -or $current.id -ne $repair.EmptyUploadId){throw 'Incomplete draft upload changed. Retry from its original archive.'}
+                Invoke-RestMethod "$api/releases/assets/$($current.id)" -Headers $headers -Method Delete | Out-Null
+            }
+            Upload-Asset $release $repair.Name $directory
+        }
+        $ready=Invoke-RestMethod "$api/releases/$($release.id)" -Headers $headers
+        if(!$ready.draft -or @(Get-RustDraftRepairs $ready $plan $directory).Count){throw 'Draft changed before publication. Verify the original build and retry.'}
+        $published=Invoke-RestMethod "$api/releases/$($release.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body (@{body=$notes;draft=$false;prerelease=$plan.GitHubPrerelease;make_latest='false'}|ConvertTo-Json)
+    }else{
+        $published=$release
+    }
+    # Fetch the original public bytes before touching an alias. A rebuilt
+    # signature, installer or package can differ even for the same source.
+    $immutable=[IO.Directory]::CreateDirectory((Join-Path $probe 'immutable')).FullName
+    foreach($name in $assetNames){
+        Invoke-WebRequest -Uri "https://github.com/$($plan.Repository)/releases/download/$($plan.Tag)/$name" -OutFile (Join-Path $immutable $name) -TimeoutSec 300
+    }
+    Assert-RustPublishedBundle $published $plan $immutable $fingerprint $verifier
+    if($release.draft){
+        foreach($name in $assetNames){
+            if($name -cne 'SHA256SUMS.txt' -and (Get-FileHash -LiteralPath (Join-Path $immutable $name)).Hash -ne $hashes[$name]){throw 'Public release differs from the submitted build.'}
+        }
+    }
+    $remote=Invoke-RestMethod "$api/commits/$($plan.ReleaseBranch)" -Headers $headers
+    if($remote.sha -cne $commit){throw 'Rust release branch advanced before feed publication.'}
     if(!$alias){
         $alias=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body (@{tag_name=$plan.FeedTag;target_commitish=$commit;name="Shovel $($plan.FeedTag) update feed";body='Signed Rust-only update metadata. Partial Beta; see versioned release and TODO for parity limits.';draft=$true;prerelease=$true;make_latest='false'}|ConvertTo-Json)
     }
-    foreach($name in @($plan.Feed,"$($plan.Feed).sig")){
-        foreach($old in @($alias.assets | Where-Object name -eq $name)){Invoke-RestMethod "$api/releases/assets/$($old.id)" -Headers $headers -Method Delete | Out-Null}
-        Upload-Asset $alias $name
+    foreach($repair in @(Get-RustFeedRepairs $alias $plan $immutable)){
+        if($repair.Existing){
+            Invoke-RestMethod "$api/releases/assets/$($repair.Existing.id)" -Headers $headers -Method Delete | Out-Null
+        }
+        Upload-Asset $alias $repair.Name $immutable
     }
-    Invoke-RestMethod "$api/releases/$($alias.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body (@{draft=$false;prerelease=$true;make_latest='false'}|ConvertTo-Json) | Out-Null
-    foreach($name in @($plan.Feed,"$($plan.Feed).sig")){
+    if($alias.draft){
+        Invoke-RestMethod "$api/releases/$($alias.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body (@{draft=$false;prerelease=$true;make_latest='false'}|ConvertTo-Json) | Out-Null
+    }
+    foreach($name in $feedNames){
         Invoke-WebRequest -Uri "https://github.com/$($plan.Repository)/releases/download/$($plan.FeedTag)/$name" -OutFile (Join-Path $probe $name) -TimeoutSec 60
+        if((Get-FileHash -LiteralPath (Join-Path $probe $name)).Hash -ne (Get-FileHash -LiteralPath (Join-Path $immutable $name)).Hash){throw 'Anonymous feed alias differs from the immutable version.'}
     }
-    & $verifier $plan.Channel $plan.Version $commit (Join-Path $probe $plan.Feed) (Join-Path $probe "$($plan.Feed).sig") (Join-Path $probe $plan.Package)
+    & $verifier $plan.Channel $plan.Version $commit (Join-Path $probe $plan.Feed) (Join-Path $probe "$($plan.Feed).sig") (Join-Path $immutable $plan.Package)
     if($LASTEXITCODE -ne 0){throw 'Anonymous signed Rust feed/package probe failed.'}
     $after=Get-CSharpState
     $after | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $probe 'csharp-after.json')
