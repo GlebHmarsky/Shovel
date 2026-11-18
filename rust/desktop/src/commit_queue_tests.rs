@@ -501,6 +501,143 @@ fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
 }
 
 #[test]
+fn refresh_reloads_a_draft_after_the_native_lock_is_released() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let mut h = Harness::new();
+    let cancel = Cancellation::default();
+    let owner = h.editor.identity.clone().unwrap();
+    let text_on_disk = drafts::Text {
+        subject: "saved before opening Local Changes".into(),
+        description: "description".into(),
+    };
+    let store = h.editor.store.clone();
+    let saved = store.save(&owner, None, &text_on_disk, &cancel).unwrap();
+    let draft_path = store
+        .directory
+        .join(format!("{}.json", drafts::Store::key(&owner)));
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(0)
+        .open(&draft_path)
+        .unwrap();
+    h.editor = Editor::new(
+        h.editor.path.clone(),
+        h.editor.git.clone(),
+        h.editor.scheduler.clone(),
+        store.clone(),
+    );
+    h.editor.initialize(&h.ctx);
+    h.until(|e| e.draft_loaded && !e.loading);
+    assert!(h.editor.draft_error.is_some());
+    assert!(h.editor.draft.is_empty());
+    h.editor.open = false;
+    assert!(h.editor.can_retire());
+    h.editor.activate();
+    drop(lock);
+
+    h.click(&text("CommitRefresh"));
+    h.until(|e| !e.loading && e.draft_loaded);
+    assert_eq!(h.editor.draft, text_on_disk);
+    assert!(h.editor.draft_error.is_none());
+    let unchanged = store.load(&owner, &cancel).unwrap();
+    assert_eq!(unchanged.revision, saved.revision);
+}
+
+#[test]
+fn refresh_retries_a_failed_save_and_preserves_a_competing_draft() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let mut h = Harness::new();
+    let cancel = Cancellation::default();
+    let owner = h.editor.identity.clone().unwrap();
+    let store = h.editor.store.clone();
+    fs::create_dir_all(&store.directory).unwrap();
+    let lock_path = store.directory.join(format!("{}.lock", drafts::Store::key(&owner)));
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .share_mode(0)
+        .open(&lock_path)
+        .unwrap();
+    h.editor.draft.subject = "retry after locking".into();
+    h.editor.edited();
+    h.editor.flush(&h.ctx);
+    h.until(|e| !e.draft_saving);
+    assert!(h.editor.draft_dirty && h.editor.draft_error.is_some());
+    drop(lock);
+
+    h.click(&text("CommitRefresh"));
+    h.until(|e| !e.loading && e.draft_loaded && !e.draft_saving);
+    assert!(h.editor.draft_error.is_none());
+    h.until(|e| !e.draft_dirty);
+    let first = store.load(&owner, &cancel).unwrap();
+    assert_eq!(first.text.subject, "retry after locking");
+
+    let competing = drafts::Text {
+        subject: "saved by a different editor".into(),
+        description: String::new(),
+    };
+    let other = store
+        .save(&owner, first.revision.as_deref(), &competing, &cancel)
+        .unwrap();
+    h.editor.draft.subject = "unsaved local text".into();
+    h.editor.edited();
+    h.editor.flush(&h.ctx);
+    h.until(|e| !e.draft_saving);
+    assert!(h.editor.draft_dirty && h.editor.draft_error.is_some());
+    h.click(&text("CommitRefresh"));
+    h.until(|e| !e.loading && e.draft_loaded && !e.draft_saving);
+    assert!(h.editor.draft_dirty && h.editor.draft_error.is_some());
+    assert_eq!(h.editor.draft.subject, "unsaved local text");
+    let preserved = store.load(&owner, &cancel).unwrap();
+    assert_eq!(preserved.revision, other.revision);
+    assert_eq!(preserved.text, competing);
+    assert!(preserved.has_recovery);
+    assert!(lock_path.is_file());
+}
+
+#[test]
+fn f5_recovers_a_draft_written_before_its_worker_lost_the_result() {
+    let mut h = Harness::new();
+    let owner = h.editor.identity.clone().unwrap();
+    let store = h.editor.store.clone();
+    let (written, release) = crate::history_cache::tests::hold_failed_read(store.directory.clone());
+    h.editor.draft.subject = "saved exactly once".into();
+    h.editor.edited();
+    h.editor.flush(&h.ctx);
+    written.recv_timeout(Duration::from_secs(5)).unwrap();
+    let cancel = Cancellation::default();
+    let saved = store.load(&owner, &cancel).unwrap();
+    assert_eq!(saved.text, h.editor.draft);
+    assert!(h.editor.blocks_exit());
+    release.send(()).unwrap();
+
+    h.until(|e| !e.draft_saving);
+    assert!(h.editor.draft_dirty && h.editor.draft_error.is_some());
+    for pressed in [true, false] {
+        h.render(vec![egui::Event::Key {
+            key: egui::Key::F5,
+            physical_key: Some(egui::Key::F5),
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }])
+        .drop_without_applying_deltas();
+    }
+    h.until(|e| !e.loading && e.draft_loaded && !e.draft_dirty);
+    assert!(h.editor.draft_error.is_none());
+    assert!(!h.editor.blocks_exit());
+    let durable = store.load(&owner, &cancel).unwrap();
+    assert_eq!(durable.text, saved.text);
+    assert_eq!(durable.revision, saved.revision);
+    assert!(!durable.has_recovery);
+}
+
+#[test]
 fn draft_read_finishing_after_replacement_keeps_typed_text_and_never_adopts_the_foreign_draft() {
     let h = Harness::new();
     let mut editor = Editor::new(

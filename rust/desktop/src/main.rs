@@ -316,7 +316,7 @@ impl Workspace {
             self.tab_markers.invalidate(tab.id);
         }
         if let Some(index) = self.inline_editor() {
-            self.editors[index].refresh(ctx);
+            self.editors[index].request_refresh(ctx);
         } else {
             self.refresh_at(self.selected, ctx);
         }

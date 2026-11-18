@@ -106,3 +106,105 @@ fn transient_writer_lock_retries_and_then_saves() {
     worker.join().unwrap();
     assert_eq!(saved.text, text);
 }
+
+#[test]
+fn draft_writer_process_fixture() {
+    let Some(root) = std::env::var_os("SHOVEL_TEST_DRAFT_ROOT") else {
+        return;
+    };
+    let directory = std::path::PathBuf::from(std::env::var_os("SHOVEL_TEST_DRAFT_STORE").unwrap());
+    let writer = std::env::var("SHOVEL_TEST_DRAFT_WRITER").unwrap();
+    let expected = std::env::var("SHOVEL_TEST_DRAFT_REVISION").unwrap();
+    let id = identity::read(std::path::Path::new(&root)).unwrap();
+    let store = Store {
+        directory: directory.clone(),
+        legacy_directory: None,
+    };
+    let cancel = Cancellation::default();
+    let baseline = store.load(&id, &cancel).unwrap();
+    assert_eq!(baseline.revision.as_deref(), Some(expected.as_str()));
+    fs::write(directory.join(format!("{writer}.ready")), []).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !directory.join("release").exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "fixture never released writers"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let text = Text {
+        subject: format!("draft from writer {writer}"),
+        description: "two lines\r\nשלום".into(),
+    };
+    let outcome = match store.save(&id, baseline.revision.as_deref(), &text, &cancel) {
+        Ok(_) => "saved",
+        Err(Error::Changed) => {
+            let recovery_id = format!("{writer:0>32}");
+            store.recovery(&id, &recovery_id, &text, &cancel).unwrap();
+            "recovery"
+        }
+        Err(error) => panic!("unsettled draft writer: {error:?}"),
+    };
+    fs::write(directory.join(format!("{writer}.result")), outcome).unwrap();
+}
+
+#[test]
+fn two_processes_editing_the_same_revision_preserve_both_texts() {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+    use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
+    let (_temp, id, store) = fixture();
+    let cancel = Cancellation::default();
+    let baseline = store.save(&id, None, &Text::default(), &cancel).unwrap();
+    let expected = baseline.revision.as_deref().unwrap();
+    let writers = ["1", "2"].map(|writer| {
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "draft_writer_process_fixture"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .env("SHOVEL_TEST_DRAFT_ROOT", &id.root)
+            .env("SHOVEL_TEST_DRAFT_STORE", &store.directory)
+            .env("SHOVEL_TEST_DRAFT_WRITER", writer)
+            .env("SHOVEL_TEST_DRAFT_REVISION", expected)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap()
+    });
+    let deadline = Instant::now() + Duration::from_secs(8);
+    for writer in ["1", "2"] {
+        while !store.directory.join(format!("{writer}.ready")).exists() {
+            assert!(
+                Instant::now() < deadline,
+                "writer {writer} never loaded the draft"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+    fs::write(store.directory.join("release"), []).unwrap();
+    for writer in writers {
+        let result = writer.wait_with_output().unwrap();
+        assert!(result.status.success(), "{result:?}");
+    }
+    let outcome =
+        |writer| fs::read_to_string(store.directory.join(format!("{writer}.result"))).unwrap();
+    let (winner, loser) = match (outcome("1").as_str(), outcome("2").as_str()) {
+        ("saved", "recovery") => ("1", "2"),
+        ("recovery", "saved") => ("2", "1"),
+        other => panic!("unexpected draft outcomes: {other:?}"),
+    };
+    let durable = store.load(&id, &cancel).unwrap();
+    assert_eq!(durable.text.subject, format!("draft from writer {winner}"));
+    assert_eq!(durable.text.description, "two lines\r\nשלום");
+    assert_ne!(durable.revision, baseline.revision);
+    assert!(durable.has_recovery);
+    let recovery_path = store.directory.join(format!(
+        "{}.{loser:0>32}.recovery.json",
+        Store::key(&id)
+    ));
+    let recovery: serde_json::Value =
+        serde_json::from_slice(&fs::read(recovery_path).unwrap()).unwrap();
+    assert_eq!(recovery["Subject"], format!("draft from writer {loser}"));
+    assert_eq!(recovery["Description"], "two lines\r\nשלום");
+}

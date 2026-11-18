@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Recover Local Changes drafts with Refresh
+
+Refresh and F5 now retry a failed draft read or save alongside Git status. The editor keeps newer typing, and a competing saved revision remains intact. After an interrupted save, Refresh can confirm that the exact message already reached disk and clear the pending state without changing its saved revision. An editor with no pending work or unsaved text can retire after a read failure, allowing its repository owner to expire and the Git executable picker to reopen.
+
+Windows sharing locks reproduced the original failed read and save. The corrected path restored the saved draft, safely retried the pending text after unlock, and preserved both versions after a competing write. The worker interruption fixture wrote the message before losing the result and used F5 to verify the unchanged revision. Two native child processes loaded the same revision, then raced to save. One became the canonical draft and the other wrote a separate recovery copy. Both retained their exact subject and body.
+
+Five core draft checks and 22 Commit queue checks passed. The existing cases cover typing during a held restore, worktree replacement, successful Commit, rejected Git hooks, failed-Commit reopening and explicit recovery export. All-target Clippy and diff checks passed. All 18 smoke checks took 32.20 seconds on source fingerprint `B938E1E5CA6BD0E0626F00842B9D80D5B06D24B80532A622D0EAEA4043C62009`. This closes R18. The installed update and physical desktop checks have their own acceptance rows.
+
 ## Recover an interrupted update restart check
 
 If the background restart checks stopped unexpectedly, Shovel could stay in its closing state with Restart disabled. An interruption before the Windows helper launch now reports an error through the normal updater result. The workspace resumes and keeps the verified package available for a fresh Restart.

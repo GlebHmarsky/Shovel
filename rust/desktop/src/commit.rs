@@ -25,7 +25,10 @@ use std::{
 enum Event {
     Loaded(u64, Box<Result<Context, working::Error>>),
     Diff(u64, Result<shovel_core::diff::FileDiff, working::Error>),
-    DraftLoaded(Result<(Identity, Result<drafts::Snapshot, drafts::Error>), drafts::Error>),
+    DraftLoaded {
+        retry: bool,
+        result: Result<(Identity, Result<drafts::Snapshot, drafts::Error>), drafts::Error>,
+    },
     DraftSaved(u64, Result<drafts::Snapshot, String>),
     DraftCopied(u64, std::io::Result<Option<PathBuf>>),
     WorkingStarted(u64),
@@ -100,6 +103,7 @@ pub struct Editor {
     pub(super) owner_fingerprint: Option<String>,
     identity: Option<Identity>,
     revision: Option<String>,
+    draft_revision_known: bool,
     draft_loaded: bool,
     draft_sequence: u64,
     draft_dirty: bool,
@@ -184,6 +188,7 @@ impl Editor {
             identity: None,
             owner_fingerprint: None,
             revision: None,
+            draft_revision_known: false,
             draft_loaded: false,
             draft_sequence: 0,
             draft_dirty: false,
@@ -214,8 +219,6 @@ impl Editor {
         !self.open
             && !self.loading
             && !self.blocks_exit()
-            && (!self.initialized || self.draft_loaded)
-            && self.draft_error.is_none()
             && !self.inspector.as_ref().is_some_and(|v| v.open || v.busy)
     }
     pub fn current_context(&self) -> Option<&Context> {
@@ -457,25 +460,67 @@ impl Editor {
         }
         self.initialized = true;
         self.refresh(ctx);
+        self.load_draft(ctx, false);
+    }
+
+    fn load_draft(&mut self, ctx: &egui::Context, retry: bool) {
+        self.draft_loaded = false;
         let path = self.path.clone();
         let store = self.store.clone();
-        let tx = self.sender.clone();
-        let ctx = ctx.clone();
         let lease = self.read_workers.start_required();
-        thread::spawn(move || {
-            let _lease = lease;
-            #[cfg(test)]
-            crate::history_cache::tests::wait_for_read(&store.directory);
-            let cancel = Cancellation::default();
-            let result = identity::read(&path)
-                .map_err(drafts::Error::Io)
-                .map(|identity| {
-                    let draft = store.load(&identity, &cancel);
-                    (identity, draft)
-                });
-            let _ = tx.send(Event::DraftLoaded(result));
-            ctx.request_repaint();
+        self.spawn_draft_task(
+            ctx,
+            move || {
+                let _lease = lease;
+                #[cfg(test)]
+                crate::history_cache::tests::wait_for_read(&store.directory);
+                let cancel = Cancellation::default();
+                let result = identity::read(&path)
+                    .map_err(drafts::Error::Io)
+                    .map(|identity| {
+                        let draft = store.load(&identity, &cancel);
+                        (identity, draft)
+                    });
+                Event::DraftLoaded { retry, result }
+            },
+            move || Event::DraftLoaded {
+                retry,
+                result: Err(drafts::Error::Io(std::io::ErrorKind::Interrupted.into())),
+            },
+        );
+    }
+
+    fn spawn_draft_task(
+        &self,
+        ctx: &egui::Context,
+        task: impl FnOnce() -> Event + Send + 'static,
+        failed: impl FnOnce() -> Event + Clone + Send + 'static,
+    ) {
+        let tx = self.sender.clone();
+        let worker_ctx = ctx.clone();
+        let interrupted = failed.clone();
+        let worker = thread::Builder::new().spawn(move || {
+            let event = std::panic::catch_unwind(std::panic::AssertUnwindSafe(task))
+                .unwrap_or_else(|_| interrupted());
+            let _ = tx.send(event);
+            worker_ctx.request_repaint();
         });
+        if worker.is_err() {
+            let _ = self.sender.send(failed());
+            ctx.request_repaint();
+        }
+    }
+
+    pub(super) fn request_refresh(&mut self, ctx: &egui::Context) {
+        if self.draft_loaded
+            && self.draft_error.is_some()
+            && !self.draft_saving
+            && !self.action_busy()
+            && !self.read_workers.stopping()
+        {
+            self.load_draft(ctx, true);
+        }
+        self.refresh(ctx);
     }
     pub fn refresh(&mut self, ctx: &egui::Context) {
         if self.read_workers.stopping() {
@@ -553,7 +598,7 @@ impl Editor {
     fn edited(&mut self) {
         self.draft_sequence += 1;
         self.draft_dirty = true;
-        if self.identity.is_some() {
+        if self.draft_revision_known {
             self.draft_error = None;
         }
         self.draft_saved_at = Instant::now();
@@ -602,24 +647,36 @@ impl Editor {
         let draft = self.draft.clone();
         let expected = self.revision.clone();
         let store = self.store.clone();
-        let tx = self.sender.clone();
-        let ctx = ctx.clone();
+        let directory = store.directory.clone();
         let copy = self.recovery_id.clone();
-        thread::spawn(move || {
-            let cancel = Cancellation::default();
-            let result = store
-                .save(&identity, expected.as_deref(), &draft, &cancel)
-                .map_err(|error| {
-                    let key = if store.recovery(&identity, &copy, &draft, &cancel).is_ok() {
-                        "CommitDraftRecovery".to_owned()
-                    } else {
-                        error.to_string()
-                    };
-                    strings::format(&key, &[&store.directory.to_string_lossy()])
-                });
-            let _ = tx.send(Event::DraftSaved(sequence, result));
-            ctx.request_repaint();
-        });
+        self.spawn_draft_task(
+            ctx,
+            move || {
+                let cancel = Cancellation::default();
+                let result = store
+                    .save(&identity, expected.as_deref(), &draft, &cancel)
+                    .map_err(|error| {
+                        let key = if store.recovery(&identity, &copy, &draft, &cancel).is_ok() {
+                            "CommitDraftRecovery".to_owned()
+                        } else {
+                            error.to_string()
+                        };
+                        strings::format(&key, &[&store.directory.to_string_lossy()])
+                    });
+                #[cfg(test)]
+                crate::history_cache::tests::wait_for_read(&store.directory);
+                Event::DraftSaved(sequence, result)
+            },
+            move || {
+                Event::DraftSaved(
+                    sequence,
+                    Err(strings::format(
+                        "CommitDraftUnavailable",
+                        &[&directory.to_string_lossy()],
+                    )),
+                )
+            },
+        );
     }
     pub fn poll(&mut self, ctx: &egui::Context) -> bool {
         while let Ok(event) = self.receiver.try_recv() {
@@ -637,11 +694,12 @@ impl Editor {
                         Err(error) => self.diff_error = Some(error_text(error)),
                     }
                 }
-                Event::DraftLoaded(result) => {
+                Event::DraftLoaded { retry, result } => {
                     self.draft_loaded = true;
                     match result {
                         Ok((identity, result)) => {
                             if !self.accept_identity(&identity) {
+                                self.draft_revision_known = false;
                                 self.draft_error = Some(strings::format(
                                     "CommitDraftIdentityChanged",
                                     &[&self.store.directory.to_string_lossy()],
@@ -651,16 +709,34 @@ impl Editor {
                             self.identity = Some(identity);
                             match result {
                                 Ok(snapshot) => {
+                                    if retry && self.draft_dirty {
+                                        if snapshot.text == self.draft {
+                                            self.draft_dirty = false;
+                                        } else if snapshot.revision != self.revision
+                                            || !self.draft_revision_known
+                                                && !snapshot.text.is_empty()
+                                        {
+                                            self.draft_revision_known = false;
+                                            self.draft_error = Some(strings::format(
+                                                "CommitDraftChanged",
+                                                &[&self.store.directory.to_string_lossy()],
+                                            ));
+                                            continue;
+                                        }
+                                    }
+                                    self.draft_revision_known = true;
                                     self.revision = snapshot.revision;
                                     if self.draft_sequence == 0 {
                                         self.draft = snapshot.text;
                                     }
-                                    if snapshot.has_recovery {
-                                        self.draft_error = Some(strings::format(
+                                    self.draft_error = (snapshot.has_recovery
+                                        && (!retry || !self.draft_dirty))
+                                    .then(|| {
+                                        strings::format(
                                             "CommitDraftCopies",
                                             &[&self.store.directory.to_string_lossy()],
-                                        ));
-                                    }
+                                        )
+                                    });
                                 }
                                 Err(error) => {
                                     self.draft_error = Some(strings::format(
@@ -685,6 +761,12 @@ impl Editor {
                             self.revision = snapshot.revision;
                             if sequence == self.draft_sequence {
                                 self.draft_dirty = false;
+                                if snapshot.has_recovery {
+                                    self.draft_error = Some(strings::format(
+                                        "CommitDraftCopies",
+                                        &[&self.store.directory.to_string_lossy()],
+                                    ));
+                                }
                             }
                         }
                         Err(error) => self.draft_error = Some(error),
@@ -1026,7 +1108,7 @@ impl Editor {
             && self.leave.is_none()
             && ctx.input(|i| i.key_pressed(egui::Key::F5))
         {
-            self.refresh(&ctx);
+            self.request_refresh(&ctx);
         }
         if enabled
             && !self.has_prompt()
@@ -1064,7 +1146,7 @@ impl Editor {
                     )
                     .clicked()
                 {
-                    self.refresh(&ctx);
+                    self.request_refresh(&ctx);
                 }
                 if let Some(branch) = self
                     .context
