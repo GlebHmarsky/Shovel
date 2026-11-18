@@ -33,8 +33,16 @@ impl Preview {
             && self.identity == identity
             && self.repository.identity.fingerprint == identity
             && same_path(&self.directory, path)
-            && same_path(&self.repository.worktree, path)
-            && same_path(&self.repository.identity.root, path)
+            && {
+                let matches = |selected: &Path| {
+                    same_path(&self.repository.worktree, selected)
+                        && same_path(&self.repository.identity.root, selected)
+                };
+                matches(path)
+                    || crate::identity::read(path).is_ok_and(|live| {
+                        live.matches_recorded_fingerprint(identity) && matches(&live.root)
+                    })
+            }
             && self.entries.len() <= PAGE_SIZE
             && self.offset <= i64::MAX as usize
             && self.offset.checked_add(self.entries.len()).is_some()

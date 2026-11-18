@@ -264,17 +264,13 @@ impl Workspace {
         self.select_tab(index, ctx);
     }
     fn ensure_tab(&mut self, path: PathBuf) -> usize {
-        if let Some(index) = self
-            .tabs
-            .iter()
-            .position(|t| Self::same_path(&t.path, &path))
-        {
+        if let Some(index) = self.tabs.iter().position(|t| t.matches_path(&path)) {
             return index;
         }
         if let Some(index) = self
             .retained_tabs
             .iter()
-            .position(|t| Self::same_path(&t.path, &path))
+            .position(|t| t.matches_path(&path))
         {
             let owner = self.retained_tabs.remove(index);
             self.tabs.push(owner);
@@ -731,21 +727,19 @@ impl Workspace {
                     }
                 }
                 Event::Loaded(id, generation, history, page, keep, first) => {
-                    if !self
+                    let Some(owner_path) = self
                         .tabs
                         .iter()
                         .chain(self.retained_tabs.iter())
-                        .any(|t| t.id == id && t.view.generation == generation)
-                    {
+                        .find(|t| t.id == id && t.view.generation == generation)
+                        .map(|t| t.path.clone())
+                    else {
                         continue;
-                    }
-                    self.remember_identity(
-                        &history.snapshot.worktree,
-                        &history.snapshot.identity.fingerprint,
-                    );
+                    };
+                    self.remember_identity(&owner_path, &history.snapshot.identity.fingerprint);
                     if let Some(git) = &self.git {
                         self.operations.resolve_initialization(
-                            &history.snapshot.worktree,
+                            &owner_path,
                             Ok(&history.snapshot),
                             git,
                             &self.scheduler,
@@ -1031,7 +1025,12 @@ impl Workspace {
             }
         }
         for editor in &mut self.editors {
-            if changed.iter().any(|path| path == &editor.path) {
+            if changed.iter().any(|path| {
+                Self::same_path(path, &editor.path)
+                    || editor
+                        .current_context()
+                        .is_some_and(|c| Self::same_path(path, &c.repository.worktree))
+            }) {
                 editor.external_changed();
             }
             let was_busy = editor.busy;
@@ -1063,27 +1062,29 @@ impl Workspace {
                 );
             }
         }
-        for view in &mut self.stash_views {
-            if changed.iter().any(|path| path == &view.path) {
-                view.changed();
-            }
-            view.poll(ctx, &self.scheduler);
-        }
         let common: Vec<_> = self
             .tabs
             .iter()
             .chain(self.retained_tabs.iter())
-            .filter(|t| changed.iter().any(|p| Self::same_path(p, &t.path)))
+            .filter(|t| changed.iter().any(|p| t.matches_path(p)))
             .filter_map(|t| t.observed_snapshot().map(|s| s.common_directory.clone()))
             .collect();
         for tab in self.tabs.iter().chain(self.retained_tabs.iter()) {
-            if tab
-                .observed_snapshot()
-                .is_some_and(|s| common.contains(&s.common_directory))
-                && !changed.contains(&tab.path)
+            if let Some(snapshot) = tab.observed_snapshot()
+                && common.contains(&snapshot.common_directory)
             {
-                changed.push(tab.path.clone());
+                for path in [&tab.path, &snapshot.worktree] {
+                    if !changed.contains(path) {
+                        changed.push(path.clone());
+                    }
+                }
             }
+        }
+        for view in &mut self.stash_views {
+            if changed.iter().any(|path| Self::same_path(path, &view.path)) {
+                view.changed();
+            }
+            view.poll(ctx, &self.scheduler);
         }
         for path in changed {
             if let Some(index) = self.tabs.iter().position(|tab| tab.path == path) {

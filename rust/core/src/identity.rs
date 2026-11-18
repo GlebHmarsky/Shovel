@@ -7,7 +7,7 @@ use std::{
     io::Read,
     mem::{size_of, zeroed},
     os::windows::{
-        ffi::OsStrExt,
+        ffi::{OsStrExt, OsStringExt},
         fs::MetadataExt,
         io::{AsRawHandle, FromRawHandle, OwnedHandle},
     },
@@ -21,6 +21,10 @@ pub struct Identity {
     pub git: PathBuf,
     pub common: PathBuf,
     pub fingerprint: String,
+    // Read-only fallback for a draft created through this spelling by an older
+    // build. Only the live identity reader can supply an alternate draft key.
+    #[serde(skip)]
+    previous_fingerprint: Option<String>,
 }
 impl PartialEq for Identity {
     fn eq(&self, other: &Self) -> bool {
@@ -34,6 +38,14 @@ impl PartialEq for Identity {
             && same_path(&self.common, &other.common)
     }
 }
+impl Identity {
+    pub fn previous_fingerprint(&self) -> Option<&str> {
+        self.previous_fingerprint.as_deref()
+    }
+    pub fn matches_recorded_fingerprint(&self, value: &str) -> bool {
+        self.fingerprint == value || self.previous_fingerprint() == Some(value)
+    }
+}
 fn unavailable() -> std::io::Error {
     std::io::Error::other("repository identity unavailable")
 }
@@ -42,7 +54,10 @@ fn canonical(path: &Path) -> std::io::Result<PathBuf> {
         return Err(unavailable());
     }
     let absolute = std::path::absolute(path)?;
-    let text = absolute.to_string_lossy().replace('/', "\\");
+    let text = absolute
+        .to_str()
+        .ok_or_else(unavailable)?
+        .replace('/', "\\");
     if text.starts_with("\\\\") {
         return Err(unavailable());
     }
@@ -52,7 +67,29 @@ fn canonical(path: &Path) -> std::io::Result<PathBuf> {
     if unsafe { GetDriveTypeW(drive.as_ptr()) } != 3 {
         return Err(unavailable());
     }
-    Ok(PathBuf::from(text.trim_end_matches('\\')))
+    if absolute.parent().is_none() {
+        Ok(absolute)
+    } else {
+        Ok(PathBuf::from(text.trim_end_matches('\\')))
+    }
+}
+// Preserve the entered spelling when a parent cannot be enumerated. Such
+// paths still go through the native file-ID and Git directory checks.
+pub(crate) fn long_name(path: &Path) -> PathBuf {
+    let source: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut buffer = vec![0; source.len().max(260)];
+    loop {
+        let length =
+            unsafe { GetLongPathNameW(source.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) }
+                as usize;
+        if length == 0 || length > 32768 {
+            return path.to_owned();
+        }
+        if length < buffer.len() {
+            return std::ffi::OsString::from_wide(&buffer[..length]).into();
+        }
+        buffer.resize(length + 1, 0);
+    }
 }
 fn reject_reparse(path: &Path) -> std::io::Result<()> {
     let mut cursor = PathBuf::new();
@@ -94,20 +131,41 @@ pub fn read(path: &Path) -> std::io::Result<Identity> {
     reject_reparse(&root)?;
     let marker = root.join(".git");
     reject_reparse(&marker)?;
-    let git = if marker.is_dir() {
+    let plain = marker.is_dir();
+    let git = if plain {
         canonical(&marker)?
     } else {
         resolve(&marker, "gitdir: ", &root)?
     };
     reject_reparse(&git)?;
     let common_file = git.join("commondir");
-    let common = if common_file.exists() {
+    let linked = common_file.try_exists()?;
+    let common = if linked {
         resolve(&common_file, "", &git)?
     } else {
         git.clone()
     };
+    let long_root = long_name(&root);
+    let long_marker = long_root.join(".git");
+    let long_git = if plain {
+        long_marker.clone()
+    } else {
+        long_name(&git)
+    };
+    let long_common = if linked {
+        long_name(&common)
+    } else {
+        long_git.clone()
+    };
+    let mut previous =
+        (root != long_root || git != long_git || common != long_common).then(Sha256::new);
     let mut digest = Sha256::new();
-    for path in [&root, &marker, &git, &common] {
+    for (path, expanded) in [
+        (&root, &long_root),
+        (&marker, &long_marker),
+        (&git, &long_git),
+        (&common, &long_common),
+    ] {
         reject_reparse(path)?;
         let path = canonical(path)?;
         let wide = path
@@ -160,27 +218,38 @@ pub fn read(path: &Path) -> std::io::Result<Identity> {
         // Published Rust v1 fingerprint encoding: preserve it for existing
         // draft/profile identities. Native shared locks use case::invariant_upper;
         // this opaque, file-ID-backed digest is not a C# interchange field.
-        append(&mut digest, &path.to_string_lossy().to_uppercase());
-        append(
-            &mut digest,
-            &format!(
+        let file_id = format!(
                 "{:016X}:{high:016X}{low:016X}:{:08X}{:08X}",
                 id.VolumeSerialNumber,
                 info.ftCreationTime.dwHighDateTime,
                 info.ftCreationTime.dwLowDateTime
-            ),
         );
+        append(&mut digest, &expanded.to_string_lossy().to_uppercase());
+        append(&mut digest, &file_id);
+        if let Some(hash) = &mut previous {
+            append(hash, &path.to_string_lossy().to_uppercase());
+            append(hash, &file_id);
+        }
     }
-    if !marker.is_dir() {
-        append(&mut digest, &pointer(&marker)?);
+    for path in [(!plain).then_some(&marker), linked.then_some(&common_file)]
+        .into_iter()
+        .flatten()
+    {
+        let bytes = pointer(path)?;
+        append(&mut digest, &bytes);
+        if let Some(hash) = &mut previous {
+            append(hash, &bytes);
+        }
     }
-    if common_file.exists() {
-        append(&mut digest, &pointer(&common_file)?);
-    }
+    let fingerprint = format!("{:X}", digest.finalize());
+    let previous_fingerprint = previous
+        .map(|hash| format!("{:X}", hash.finalize()))
+        .filter(|old| *old != fingerprint);
     Ok(Identity {
-        root,
-        git,
-        common,
-        fingerprint: format!("{:X}", digest.finalize()),
+        root: long_root,
+        git: long_git,
+        common: long_common,
+        fingerprint,
+        previous_fingerprint,
     })
 }

@@ -10,6 +10,15 @@ pub(super) enum TabAction {
     Marker(u64, Option<tab_markers::Color>),
 }
 
+impl Tab {
+    pub(super) fn matches_path(&self, path: &std::path::Path) -> bool {
+        Workspace::same_path(&self.path, path)
+            || self
+                .observed_snapshot()
+                .is_some_and(|snapshot| Workspace::same_path(&snapshot.worktree, path))
+    }
+}
+
 impl Workspace {
     pub(super) fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
         a == b || shovel_core::case::path_key(a) == shovel_core::case::path_key(b)
@@ -138,7 +147,7 @@ impl Workspace {
                 || self
                     .stash_views
                     .iter()
-                    .any(|v| Self::same_path(&v.path, &owner.path) && !v.can_retire());
+                    .any(|v| owner.matches_path(&v.path) && !v.can_retire());
             if !active {
                 idle += 1;
                 if idle > 3 {
@@ -150,8 +159,7 @@ impl Workspace {
             let owner = self.retained_tabs.remove(index);
             self.editors
                 .retain(|e| !Self::same_path(&e.path, &owner.path));
-            self.stash_views
-                .retain(|v| !Self::same_path(&v.path, &owner.path));
+            self.stash_views.retain(|v| !owner.matches_path(&v.path));
         }
     }
 }

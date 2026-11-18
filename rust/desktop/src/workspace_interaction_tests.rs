@@ -1072,6 +1072,74 @@ fn sidebar_enter_and_double_click_open_review_then_switch_the_captured_branch() 
 }
 
 #[test]
+fn selected_dos_alias_binds_waiting_fetch_and_reuses_the_verified_tab_and_preview() {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+    let mut fixture = RepositoryFixture::new();
+    let long = fixture._temp.path().join("Repository With A Long Name");
+    std::fs::rename(&fixture.root, &long).unwrap();
+    fixture.root = long;
+    let wide: Vec<_> = fixture
+        .root
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let mut buffer = vec![0; 32768];
+    let len = unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) }
+        as usize;
+    assert!(len > 0 && len < buffer.len());
+    let alias = PathBuf::from(std::ffi::OsString::from_wide(&buffer[..len]));
+    let remote = fixture._temp.path().join("remote.git");
+    fixture.command(&["clone", "--bare", ".", remote.to_str().unwrap()]);
+    fixture.command(&["remote", "add", "origin", remote.to_str().unwrap()]);
+    let ctx = egui::Context::default();
+    let mut app = fixture.workspace();
+    let mut store = SettingsStore::new(fixture._temp.path().join("profile"));
+    store.load().unwrap();
+    app.store = Some(store);
+    let identity = shovel_core::identity::read(&alias).unwrap();
+    app.remember_identity(
+        &alias,
+        identity
+            .previous_fingerprint()
+            .unwrap_or(&identity.fingerprint),
+    );
+    app.open(alias.clone(), &ctx);
+    let owner = app.tabs[0].id;
+    app.operations.defer_network(
+        crate::operations::Kind::Fetch,
+        &alias,
+        &app.settings,
+        &app.scheduler,
+        &ctx,
+    );
+    app.close_tab(owner, &ctx);
+    until(&mut app, &ctx, |app| {
+        app.scheduler.records()[0].outcome.is_some()
+    });
+    assert_eq!(
+        fixture.command(&["rev-parse", "refs/remotes/origin/main"]),
+        fixture.command(&["rev-parse", "HEAD"])
+    );
+    assert_eq!(
+        app.known_identity(&alias).as_deref(),
+        Some(identity.fingerprint.as_str())
+    );
+    app.open(fixture.root.clone(), &ctx);
+    assert_eq!(app.tabs.len(), 1);
+    assert_eq!(app.tabs[0].id, owner);
+    until(&mut app, &ctx, |app| {
+        !app.tabs[0].loading && !app.tabs[0].view.stale
+    });
+    let preview = app.capture_startup_preview().unwrap();
+    assert_eq!(preview.directory, alias);
+    let cache = app.startup_store().unwrap();
+    cache.save(Some(&preview));
+    assert!(cache.read(&alias, &identity.fingerprint).is_some());
+}
+
+#[test]
 fn distinct_unicode_repository_paths_keep_separate_tabs_and_pending_owners() {
     let temporary = tempfile::tempdir().unwrap();
     let mut app = workspace();
@@ -1243,7 +1311,10 @@ fn shutdown_save_completion_and_failed_save_exit_recheck_accepted_native_work() 
         &strings::text("RustExitWithoutSaving"),
         egui::PointerButton::Primary,
     );
-    assert!(app.exit_ready);
+    // The accepted checkout may have started a fresh history read. The
+    // discard choice remains pending until that native read has drained.
+    assert!(app.exit_ready || (app.pending_exit && app.discard_settings_on_exit));
+    until(&mut app, &ctx, |app| app.exit_ready);
     assert_eq!(
         std::fs::read(profile.join("settings.json")).unwrap(),
         foreign

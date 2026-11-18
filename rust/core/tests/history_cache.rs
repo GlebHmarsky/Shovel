@@ -8,12 +8,11 @@ use shovel_core::{
 };
 use std::{fs, fs::OpenOptions, os::windows::fs::OpenOptionsExt};
 fn preview(root: &std::path::Path) -> Preview {
-    let identity = Identity {
-        root: root.into(),
-        git: root.join(".git"),
-        common: root.join(".git"),
-        fingerprint: "A".repeat(64),
-    };
+    let identity: Identity = serde_json::from_value(serde_json::json!({
+        "root": root, "git": root.join(".git"), "common": root.join(".git"),
+        "fingerprint": "A".repeat(64)
+    }))
+    .unwrap();
     let now = Utc::now();
     Preview {
         schema: PREVIEW_SCHEMA,

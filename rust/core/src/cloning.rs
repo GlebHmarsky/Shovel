@@ -6,7 +6,6 @@ use crate::{
     network::captured_output,
     operation::Error,
     process::{self, Cancellation, Lifetime, OutputCallback},
-    working::MutationGate,
 };
 use std::{
     ffi::OsString,
@@ -73,8 +72,8 @@ impl Git {
             return Err(Error::Code("CloneInvalid"));
         }
         let target = initialization::destination(&options.directory)?;
-        let _gate = MutationGate::acquire_named(&target, "Init")?;
-        let parent = initialization::validate(&target)?;
+        let destination = initialization::DestinationGuard::acquire(&target)?;
+        let parent = destination.parent;
         if target.is_dir() && fs::read_dir(&target)?.next().transpose()?.is_some() {
             return Err(Error::Code("CloneNotEmpty"));
         }

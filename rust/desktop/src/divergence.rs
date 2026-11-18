@@ -300,20 +300,17 @@ mod tests {
                     );
                 }
                 assert!(!labels.iter().any(|n| n.starts_with("Commits behind")));
-                assert!(
-                    labels
-                        .iter()
-                        .any(|n| n.starts_with("local  ") && n.ends_with("Ahead of upstream"))
-                );
+                let snapshot = &app.tabs[0].history.as_ref().unwrap().snapshot;
+                let row = |hash: &str| labels.iter().find(|label| label.contains(hash)).unwrap();
+                let local_row = row(snapshot.head.as_deref().unwrap());
+                assert!(local_row.contains("local") && local_row.contains("Ahead of upstream"));
+                assert!(!row(&base).contains("Ahead of upstream"));
                 assert!(
                     !labels
                         .iter()
-                        .any(|n| n.starts_with("base  ") && n.contains("Ahead of upstream"))
+                        .any(|n| n.contains("team/HEAD") || n == "HEAD")
                 );
-                assert!(!labels.iter().any(|n| n.contains("team/HEAD")
-                    || n == "HEAD"
-                    || (n.starts_with("local  ") && n.contains(" HEAD"))));
-                let snapshot = &app.tabs[0].history.as_ref().unwrap().snapshot;
+                assert!(!local_row.contains(" HEAD"));
                 assert!(
                     app.tabs[0]
                         .divergence

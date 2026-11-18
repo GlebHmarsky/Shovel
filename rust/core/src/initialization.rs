@@ -87,14 +87,39 @@ fn metadata_ancestor(path: &Path) -> Result<bool, Error> {
     Ok(false)
 }
 pub(crate) fn same(a: &Path, b: &Path) -> bool {
-    a.to_string_lossy()
-        .replace('/', "\\")
-        .trim_end_matches('\\')
-        .eq_ignore_ascii_case(
-            b.to_string_lossy()
-                .replace('/', "\\")
-                .trim_end_matches('\\'),
-        )
+    let key = |p: &Path| crate::case::path_key(p).trim_end_matches('\\').to_owned();
+    key(a) == key(b) || key(&crate::identity::long_name(a)) == key(&crate::identity::long_name(b))
+}
+pub(crate) struct DestinationGuard {
+    pub parent: PathBuf,
+    _selected: MutationGate,
+    _expanded: Option<MutationGate>,
+}
+impl DestinationGuard {
+    pub fn acquire(target: &Path) -> Result<Self, Error> {
+        // Keep the selected-spelling mutex for older callers. If a parent
+        // has a DOS alias, also coordinate on the shared long destination.
+        let selected = MutationGate::acquire_named(target, "Init")?;
+        let parent = validate(target)?;
+        let mut canonical = crate::identity::long_name(&parent);
+        if target != parent {
+            canonical.push(
+                target
+                    .strip_prefix(&parent)
+                    .map_err(|_| Error::Code("InitDestinationChanged"))?,
+            );
+        }
+        let expanded = if crate::case::path_key(target) == crate::case::path_key(&canonical) {
+            None
+        } else {
+            Some(MutationGate::acquire_named(&canonical, "Init")?)
+        };
+        Ok(Self {
+            parent,
+            _selected: selected,
+            _expanded: expanded,
+        })
+    }
 }
 fn read_failure(result: process::Result) -> Error {
     git::command_error(&result).into()
@@ -102,8 +127,8 @@ fn read_failure(result: process::Result) -> Error {
 impl Git {
     pub fn initialize_repository(&self, options: &Options) -> Result<Completed, Error> {
         let target = destination(&options.directory)?;
-        let _gate = MutationGate::acquire_named(&target, "Init")?;
-        let parent = validate(&target)?;
+        let destination = DestinationGuard::acquire(&target)?;
+        let parent = destination.parent;
         let cancel = Cancellation::default();
         let probe = process::run(
             &self.request(
@@ -230,5 +255,55 @@ mod tests {
         drop(release_tx);
         owner.join().unwrap();
         assert!(MutationGate::acquire_named(&target, "Init").is_ok());
+    }
+    #[test]
+    fn clone_and_init_share_the_destination_under_a_dos_parent_alias() {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+        let temp = tempfile::tempdir().unwrap();
+        let parent = temp.path().join("Long Directory Name For Clone");
+        fs::create_dir(&parent).unwrap();
+        let wide: Vec<_> = parent.as_os_str().encode_wide().chain(Some(0)).collect();
+        let mut buffer = vec![0; 32768];
+        let len =
+            unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) }
+                as usize;
+        assert!(len > 0 && len < buffer.len());
+        let alias = PathBuf::from(OsString::from_wide(&buffer[..len]));
+        let canonical = crate::identity::long_name(&parent);
+        let git = Git::discover(None, &Cancellation::default()).unwrap();
+        for (owner, contender) in [(&alias, &canonical), (&canonical, &alias)] {
+            let owned = owner.join("nested/new repository");
+            let target = contender.join("nested/new repository");
+            let _gate = DestinationGuard::acquire(&owned).unwrap();
+            std::thread::scope(|scope| {
+                scope
+                    .spawn(|| {
+                        let init = Options {
+                            directory: target.clone(),
+                            initial_branch: String::new(),
+                        };
+                        let clone = crate::cloning::Options {
+                            directory: target.clone(),
+                            source: parent.to_string_lossy().into_owned(),
+                            branch: String::new(),
+                        };
+                        assert_eq!(
+                            git.initialize_repository(&init).err().unwrap().code(),
+                            "ActionOtherInstance"
+                        );
+                        assert_eq!(
+                            git.clone_repository(&clone, None, None)
+                                .err()
+                                .unwrap()
+                                .code(),
+                            "ActionOtherInstance"
+                        );
+                    })
+                    .join()
+                    .unwrap()
+            });
+            assert!(!target.exists());
+        }
     }
 }

@@ -109,7 +109,7 @@ pub(super) fn read_expected(
     cancel: &Cancellation,
 ) -> Result<(History, Page, bool), Failure> {
     let identity = shovel_core::identity::read(path).map_err(|_| identity_failure(false))?;
-    if expected_identity.is_some_and(|expected| expected != identity.fingerprint)
+    if expected_identity.is_some_and(|expected| !identity.matches_recorded_fingerprint(expected))
         || previous.is_some_and(|(history, _)| history.snapshot.identity != identity)
     {
         return Err(identity_failure(true));

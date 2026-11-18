@@ -71,9 +71,12 @@ pub struct Store {
 }
 impl Store {
     pub fn key(identity: &Identity) -> String {
+        Self::fingerprint_key(&identity.fingerprint)
+    }
+    fn fingerprint_key(fingerprint: &str) -> String {
         format!(
             "{:X}",
-            Sha256::digest(identity.fingerprint.to_uppercase().as_bytes())
+            Sha256::digest(fingerprint.to_uppercase().as_bytes())
         )
     }
     pub fn load(&self, identity: &Identity, cancel: &Cancellation) -> Result<Snapshot, Error> {
@@ -82,14 +85,29 @@ impl Store {
             let key = Self::key(identity);
             let destination = self.directory.join(format!("{key}.json"));
             let mut snapshot = read(&destination, &key)?;
-            if snapshot.revision.is_none()
-                && let Some(legacy) = &self.legacy_directory
-            {
-                let imported = read(&legacy.join(format!("{key}.json")), &key)?;
-                // The first Rust save owns a fresh revision; the C# bytes are never changed.
-                snapshot.text = imported.text;
+            let previous = identity.previous_fingerprint().map(Self::fingerprint_key);
+            if snapshot.revision.is_none() {
+                // Look for an old Rust spelling before importing C# drafts.
+                // The first save takes a fresh canonical revision and leaves the source intact.
+                let sources = [
+                    previous.as_ref().map(|key| (&self.directory, key)),
+                    self.legacy_directory
+                        .as_ref()
+                        .map(|directory| (directory, &key)),
+                    self.legacy_directory.as_ref().zip(previous.as_ref()),
+                ];
+                for (directory, key) in sources.into_iter().flatten() {
+                    let imported = read(&directory.join(format!("{key}.json")), key)?;
+                    if imported.revision.is_some() {
+                        snapshot.text = imported.text;
+                        break;
+                    }
+                }
             }
             snapshot.has_recovery = has_recovery(&self.directory, &key)?;
+            if let Some(previous) = &previous {
+                snapshot.has_recovery |= has_recovery(&self.directory, previous)?;
+            }
             validate(identity, cancel)?;
             Ok(snapshot)
         })

@@ -774,6 +774,10 @@ mod tests {
             WAIT_TIMEOUT
         );
     }
+    // Each saturation test deliberately owns every permit in a process-wide
+    // lane. Give it an independent turn when libtest runs tests concurrently.
+    static SATURATION_FIXTURE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     struct Held {
         temp: tempfile::TempDir,
         workers: Vec<thread::JoinHandle<std::io::Result<Result>>>,
@@ -825,6 +829,7 @@ mod tests {
     }
     #[test]
     fn queued_read_receives_full_execution_deadline_after_admission() {
+        let _fixture = SATURATION_FIXTURE.lock().unwrap_or_else(|e| e.into_inner());
         let held = Held::new(Lifetime::Read, 2);
         let temp = tempfile::tempdir().unwrap();
         let mut request = request(temp.path(), "finish");
@@ -845,6 +850,7 @@ mod tests {
     }
     #[test]
     fn saturated_lanes_remain_independent_and_cancelled_waiters_never_start() {
+        let _fixture = SATURATION_FIXTURE.lock().unwrap_or_else(|e| e.into_inner());
         for (blocked, count, available) in [
             (Lifetime::Read, 2, Lifetime::AcceptedCommand),
             (Lifetime::AcceptedCommand, 4, Lifetime::Read),

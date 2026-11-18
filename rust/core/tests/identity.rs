@@ -285,6 +285,113 @@ fn differently_cased_worktree_opens_stages_and_still_rejects_replacement() {
 }
 
 #[test]
+fn dos_short_alias_shares_git_ownership_and_recovers_its_previous_draft() {
+    use shovel_core::{
+        drafts,
+        process::Cancellation,
+        working::{Action, Group},
+    };
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+    let fixture = Fixture::new();
+    let root = fixture._temp.path().join("Repository with a long name");
+    fs::rename(&fixture.root, &root).unwrap();
+    let wide: Vec<_> = root.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut buffer = vec![0; 32768];
+    let count =
+        unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) }
+            as usize;
+    assert!(count > 0 && count < buffer.len());
+    let alias = PathBuf::from(std::ffi::OsString::from_wide(&buffer[..count]));
+    if shovel_core::case::path_key(&root) == shovel_core::case::path_key(&alias) {
+        eprintln!("This volume does not assign a distinct DOS short name.");
+        return;
+    }
+    let reviewed = fixture.review(&alias);
+    let normal = fixture.review(&root);
+    assert_eq!(reviewed.repository.identity, normal.repository.identity);
+    assert_eq!(
+        reviewed.repository.common_directory,
+        normal.repository.common_directory
+    );
+    let from_alias = identity::read(&alias).unwrap();
+    let prior = from_alias
+        .previous_fingerprint()
+        .expect("old short-path fingerprint");
+    assert!(from_alias.matches_recorded_fingerprint(prior));
+    let mut old = from_alias.clone();
+    old.fingerprint = prior.to_owned();
+    let key = drafts::Store::key(&old);
+    let store = drafts::Store {
+        directory: fixture._temp.path().join("drafts"),
+        legacy_directory: None,
+    };
+    fs::create_dir(&store.directory).unwrap();
+    let old_file = store.directory.join(format!("{key}.json"));
+    let original = serde_json::to_vec(&serde_json::json!({
+        "SchemaVersion": 1, "Key": key, "Revision": "a".repeat(32),
+        "Subject": "draft from a previous version", "Description": "retain both files"
+    }))
+    .unwrap();
+    fs::write(&old_file, &original).unwrap();
+    let cancel = Cancellation::default();
+    let imported = store.load(&from_alias, &cancel).unwrap();
+    assert_eq!(imported.text.subject, "draft from a previous version");
+    assert!(imported.revision.is_none());
+    store
+        .save(&from_alias, None, &imported.text, &cancel)
+        .unwrap();
+    assert_eq!(
+        store
+            .load(&normal.repository.identity, &cancel)
+            .unwrap()
+            .text,
+        imported.text
+    );
+    assert_eq!(fs::read(old_file).unwrap(), original);
+
+    let selected = reviewed
+        .entries
+        .iter()
+        .find(|entry| entry.path == "file")
+        .unwrap()
+        .clone();
+    let gate = MutationGate::acquire(&normal.repository.common_directory, false).unwrap();
+    let action = Action::Stage(vec![selected.clone()]);
+    std::thread::scope(|threads| {
+        assert!(
+            threads
+                .spawn(|| matches!(
+                    fixture.git.execute_working(&reviewed, &action, None),
+                    Err(Error::OtherInstance)
+                ))
+                .join()
+                .unwrap()
+        );
+    });
+    drop(gate);
+    let staged = fixture
+        .git
+        .execute_working(&reviewed, &Action::Stage(vec![selected]), None)
+        .unwrap();
+    assert!(
+        staged
+            .updated
+            .unwrap()
+            .change(Group::Staged, "file")
+            .is_some()
+    );
+    let before = fixture.review(&alias);
+    let moved = fixture._temp.path().join("old-root");
+    fs::rename(&root, &moved).unwrap();
+    copy_tree(&moved, &root);
+    fixture.reject_identical_replacement(&before);
+    eprintln!(
+        "Verified distinct DOS alias, shared mutation gate, legacy draft import and worktree replacement."
+    );
+}
+
+#[test]
 fn replaced_root_and_git_directory_reject_stage_despite_identical_git_state() {
     let f = Fixture::new();
     let before = f.review(&f.root);
