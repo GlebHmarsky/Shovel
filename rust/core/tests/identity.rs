@@ -284,6 +284,18 @@ fn differently_cased_worktree_opens_stages_and_still_rejects_replacement() {
     fixture.reject_identical_replacement(&before);
 }
 
+fn dos_short_name(path: &std::path::Path) -> PathBuf {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+    let wide: Vec<_> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut buffer = vec![0; 32768];
+    let count =
+        unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) }
+            as usize;
+    assert!(count > 0 && count < buffer.len());
+    PathBuf::from(std::ffi::OsString::from_wide(&buffer[..count]))
+}
+
 #[test]
 fn dos_short_alias_shares_git_ownership_and_recovers_its_previous_draft() {
     use shovel_core::{
@@ -291,18 +303,10 @@ fn dos_short_alias_shares_git_ownership_and_recovers_its_previous_draft() {
         process::Cancellation,
         working::{Action, Group},
     };
-    use std::os::windows::ffi::{OsStrExt, OsStringExt};
-    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
     let fixture = Fixture::new();
     let root = fixture._temp.path().join("Repository with a long name");
     fs::rename(&fixture.root, &root).unwrap();
-    let wide: Vec<_> = root.as_os_str().encode_wide().chain(Some(0)).collect();
-    let mut buffer = vec![0; 32768];
-    let count =
-        unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) }
-            as usize;
-    assert!(count > 0 && count < buffer.len());
-    let alias = PathBuf::from(std::ffi::OsString::from_wide(&buffer[..count]));
+    let alias = dos_short_name(&root);
     if shovel_core::case::path_key(&root) == shovel_core::case::path_key(&alias) {
         eprintln!("This volume does not assign a distinct DOS short name.");
         return;
@@ -389,6 +393,77 @@ fn dos_short_alias_shares_git_ownership_and_recovers_its_previous_draft() {
     eprintln!(
         "Verified distinct DOS alias, shared mutation gate, legacy draft import and worktree replacement."
     );
+}
+
+#[test]
+fn linked_worktree_with_short_metadata_paths_uses_the_shared_mutation_gate() {
+    use shovel_core::{
+        case::path_key,
+        working::{Action, Group},
+    };
+
+    let fixture = Fixture::new();
+    let primary = fixture
+        ._temp
+        .path()
+        .join("Primary repository with a long name");
+    fs::rename(&fixture.root, &primary).unwrap();
+    let linked = fixture._temp.path().join("Linked worktree with a long name");
+    fixture.command(
+        &primary,
+        &["worktree", "add", "-b", "linked", linked.to_str().unwrap()],
+    );
+    let original = fixture.review(&linked);
+    let metadata = &original.repository.git_directory;
+    let common = &original.repository.common_directory;
+    let metadata_alias = dos_short_name(metadata);
+    let common_alias = dos_short_name(common);
+    if path_key(metadata) == path_key(&metadata_alias) || path_key(common) == path_key(&common_alias)
+    {
+        eprintln!("This volume does not assign distinct DOS short metadata names.");
+        return;
+    }
+
+    let git_path = |path: &std::path::Path| path.to_string_lossy().replace('\\', "/");
+    fs::write(
+        linked.join(".git"),
+        format!("gitdir: {}\n", git_path(&metadata_alias)),
+    )
+    .unwrap();
+    fs::write(
+        metadata.join("commondir"),
+        format!("{}\n", git_path(&common_alias)),
+    )
+    .unwrap();
+    fs::write(linked.join("file"), b"linked worktree edit\n").unwrap();
+    let review = fixture.review(&linked);
+    let primary_review = fixture.review(&primary);
+    assert_eq!(
+        path_key(&review.repository.git_directory),
+        path_key(metadata)
+    );
+    assert_eq!(
+        path_key(&review.repository.common_directory),
+        path_key(&primary_review.repository.common_directory)
+    );
+
+    let selected = review.change(Group::Unstaged, "file").unwrap().clone();
+    let action = Action::Stage(vec![selected]);
+    let gate = MutationGate::acquire(&primary_review.repository.common_directory, false).unwrap();
+    std::thread::scope(|threads| {
+        assert!(
+            threads
+                .spawn(|| matches!(
+                    fixture.git.execute_working(&review, &action, None),
+                    Err(Error::OtherInstance)
+                ))
+                .join()
+                .unwrap()
+        );
+    });
+    drop(gate);
+    let stage = fixture.git.execute_working(&review, &action, None).unwrap();
+    assert!(stage.updated.unwrap().change(Group::Staged, "file").is_some());
 }
 
 #[test]

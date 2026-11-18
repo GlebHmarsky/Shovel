@@ -113,8 +113,7 @@ fn pointer(path: &Path) -> std::io::Result<String> {
     }
     String::from_utf8(bytes).map_err(|_| unavailable())
 }
-fn resolve(path: &Path, prefix: &str, parent: &Path) -> std::io::Result<PathBuf> {
-    let text = pointer(path)?;
+fn resolve(text: &str, prefix: &str, parent: &Path) -> std::io::Result<PathBuf> {
     let text = text.trim_end_matches(['\r', '\n']);
     let value = text
         .strip_prefix(prefix)
@@ -127,32 +126,40 @@ fn append(hash: &mut Sha256, text: &str) {
     hash.update(text.as_bytes());
 }
 pub fn read(path: &Path) -> std::io::Result<Identity> {
+    read_with(path, pointer)
+}
+
+fn read_with(
+    path: &Path,
+    read_pointer: impl Fn(&Path) -> std::io::Result<String>,
+) -> std::io::Result<Identity> {
     let root = canonical(path)?;
     reject_reparse(&root)?;
     let marker = root.join(".git");
     reject_reparse(&marker)?;
-    let plain = marker.is_dir();
-    let git = if plain {
-        canonical(&marker)?
-    } else {
-        resolve(&marker, "gitdir: ", &root)?
+    let marker_text = (!marker.is_dir()).then(|| read_pointer(&marker)).transpose()?;
+    let git = match &marker_text {
+        Some(text) => resolve(text, "gitdir: ", &root)?,
+        None => canonical(&marker)?,
     };
     reject_reparse(&git)?;
     let common_file = git.join("commondir");
-    let linked = common_file.try_exists()?;
-    let common = if linked {
-        resolve(&common_file, "", &git)?
-    } else {
-        git.clone()
+    let common_text = common_file
+        .try_exists()?
+        .then(|| read_pointer(&common_file))
+        .transpose()?;
+    let common = match &common_text {
+        Some(text) => resolve(text, "", &git)?,
+        None => git.clone(),
     };
     let long_root = long_name(&root);
     let long_marker = long_root.join(".git");
-    let long_git = if plain {
+    let long_git = if marker_text.is_none() {
         long_marker.clone()
     } else {
         long_name(&git)
     };
-    let long_common = if linked {
+    let long_common = if common_text.is_some() {
         long_name(&common)
     } else {
         long_git.clone()
@@ -231,14 +238,18 @@ pub fn read(path: &Path) -> std::io::Result<Identity> {
             append(hash, &file_id);
         }
     }
-    for path in [(!plain).then_some(&marker), linked.then_some(&common_file)]
-        .into_iter()
-        .flatten()
-    {
-        let bytes = pointer(path)?;
-        append(&mut digest, &bytes);
-        if let Some(hash) = &mut previous {
-            append(hash, &bytes);
+    // The directory IDs must describe the same pointer contents used to resolve them.
+    for (path, contents) in [(&marker, marker_text), (&common_file, common_text)] {
+        if let Some(contents) = contents {
+            if read_pointer(path)? != contents {
+                return Err(unavailable());
+            }
+            append(&mut digest, &contents);
+            if let Some(hash) = &mut previous {
+                append(hash, &contents);
+            }
+        } else if path == &common_file && path.try_exists()? {
+            return Err(unavailable());
         }
     }
     let fingerprint = format!("{:X}", digest.finalize());
@@ -252,4 +263,48 @@ pub fn read(path: &Path) -> std::io::Result<Identity> {
         fingerprint,
         previous_fingerprint,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn retargeting_a_linked_pointer_during_read_rejects_the_identity() {
+        for retarget_git in [true, false] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().join("linked");
+            let git = temp.path().join("git");
+            let common = temp.path().join("shared");
+            let replacement = temp.path().join("replacement");
+            for directory in [&root, &git, &common, &replacement] {
+                fs::create_dir(directory).unwrap();
+            }
+            let marker = root.join(".git");
+            let common_file = git.join("commondir");
+            fs::write(&marker, "gitdir: ../git\n").unwrap();
+            fs::write(&common_file, "../shared\n").unwrap();
+            let (changed, updated) = if retarget_git {
+                (&marker, "gitdir: ../replacement\n")
+            } else {
+                (&common_file, "../replacement\n")
+            };
+            let reads = Cell::new(0);
+            let observed = read_with(&root, |path| {
+                if path == changed {
+                    reads.set(reads.get() + 1);
+                    if reads.get() == 2 {
+                        fs::write(path, updated)?;
+                    }
+                }
+                pointer(path)
+            });
+            assert_eq!(reads.get(), 2);
+            assert!(observed.is_err(), "mixed identity for {changed:?}");
+            let fresh = read(&root).unwrap();
+            let resolved = if retarget_git { fresh.git } else { fresh.common };
+            assert_eq!(resolved, replacement);
+        }
+    }
 }

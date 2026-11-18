@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Keep linked worktree identity reads consistent
+
+Shovel now rechecks the `.git` and `commondir` contents against the same bytes it used to resolve their target directories. A changed pointer returns an identity error so an operation cannot use the old directory IDs with the new pointer contents. The published fingerprint encoding and draft keys stay compatible for unchanged worktrees. [Git repository layout](https://git-scm.com/docs/gitrepository-layout#Documentation/gitrepository-layout.txt-commondir)
+
+A timed fixture reproduced the mixed result and then verified rejection when either file changes between reads. A native Git fixture wrote distinct DOS short paths into both pointers, verified the shared mutation lock and staged a file after releasing it. The pointer race check, ten native identity checks, three draft checks, all-target Clippy and diff checks passed. The 18 bounded smoke checks took 39.55 seconds on fingerprint `1AB3D618F90F045D5373F7637F0A14A4991A61FF8D67ED51FA775AD81A9CC8DD`. Physical cross-session acceptance remains open.
+
 ## Windows Rust Beta 0.50.20 published
 
 Run `44317954177` published master `29b75c3266f1b0d39775726795dc7614a641aa79`. An independent anonymous download checked all seven immutable assets. The live feed and its signature matched the verified release byte for byte. The 21,699,969-byte installer reports 0.50.20 and Windows reports its Authenticode status as `NotSigned`. The native updater discovered and downloaded the exact signed package with progress and exposed the Restart action in a headless frame. Installed apply remains open. GitHub Latest, C# Beta and Rust Stable retained the same release and asset IDs, digests and update timestamps. [Published release](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.20-win-rust-beta) · [Publication receipt](evidence/rust-beta-0.50.20-publication.json)
