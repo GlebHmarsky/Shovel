@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Reuse the Windows dependency cache across Beta versions
+
+The earlier workflow used the combined Cargo lock and toolchain hash for every cache prefix. Bumping Shovel’s version changes the lock hash on every Beta. The 0.50.18 run spent 147 seconds in lint, 283 seconds in bounded smoke including compilation, and 570 seconds in packaging. The new cache prefers the exact lock and can fall back to the same pinned toolchain and runner architecture. The save step uses the restore step’s primary key and still runs before signing. [Run 44298385990](https://github.com/GlebHmarsky/Shovel/actions/runs/44298385990) · [GitHub cache matching](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-key-matching)
+
+A local check expanded the workflow keys for different Cargo locks, toolchains and architectures. Only the matching Windows runner and toolchain could use the wider prefix. Release policy, all-target Clippy and diff checks passed. All 18 smoke checks took 27.76 seconds on source fingerprint `A18DBF1FBDD397E0AD898ADAB81A2C477C1DC60AD6435CF45666735D9CD509EE`. The current 0.50.19 workflow was already running from its original commit. Hosted cache reuse and timings remain open.
+
 ## Report lost command results and prepare native pipes before launch
 
 When a Git worker unwinds before returning a result, the scheduler reports the failure to its owner, releases the lane and stops later same-repository work. Automatic Fetch still reports through Activity and keeps the user’s queued work. The working-copy editor invalidates its review on a lost result and requests fresh repository reads. Scheduler fixtures verified both failure paths and the linked-worktree scope. The workspace Activity fixture exercised the terminal message and refresh with unchanged HEAD. Nineteen Commit queue checks and three automatic-fetch checks passed during development.
@@ -7,6 +13,8 @@ When a Git worker unwinds before returning a result, the scheduler reports the f
 The Windows process host prepares its stdout, stderr and optional stdin workers before launching Git. This lets it return a thread startup error before any native command starts. When Windows rejects the executable, Shovel closes the unused child handles and joins the pipe workers before returning the launch error. The native tests covered a nonexistent executable with pending input, simultaneous binary traffic on all three pipes and byte-for-byte equality of the streamed and captured output. Existing admission, accepted lifetime, descendant and handle containment checks passed.
 
 For the 0.50.19 cut, the release-policy fixtures, all-target Clippy and diff checks passed. All 18 bounded smoke checks passed in 62.55 seconds on source fingerprint `7455DE7A8437D105622BA8EE9AA247C8746BF3CE201F067F385891973888DE0A`. The full workspace run passed the completed suites through File History before it was halted during History so the required checks could finish for the hourly cut.
+
+The remaining History, core integration and desktop suites completed on the release source while GitHub Actions ran. The desktop suite passed 205 tests with two opt-ins skipped. The thread-bound mutex doc test and the opt-in native SSH signing acceptance also passed.
 
 ## Recover when Windows rejects the update helper
 
