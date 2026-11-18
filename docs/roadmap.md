@@ -10,6 +10,12 @@ The controlled worker interruption reproduced the stuck shutdown. The corrected 
 
 This Cargo and changelog cut includes keyboard navigation for Settings, safer global Git identity editing, direct restart preflight, and terminal outcomes for interrupted History work. The Settings, identity, restart, interruption, operation queue, History cache and native History groups passed 45 focused test runs. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 44.50 seconds on local source fingerprint `3E52EDCD6E352E0AADF5BC66162FCF488A6DA16D6528E0B0C00092D57A03BF64`. The native public bundle verifier was built from this source.
 
+## Windows Rust Beta 0.50.22 published
+
+Run `44340438173` published master `8f518ea004ac8ee5b26dffcc188845e972e80599`. The exact source passed 407 standard workspace tests with four opt-in tests skipped. The hosted release policy, automatic Fetch regression, lint and bounded smoke also passed. All seven public assets downloaded anonymously. The independent verifier checked the feed and its signature against the live alias, verified the exact update package and confirmed that the 21,712,387-byte installer reports 0.50.22. The native updater test separately completed discovery, download and restart readiness. Windows reported `NotSigned` for Authenticode. GitHub Latest, C# Beta and Rust Stable retained the same release and asset IDs, digests and update timestamps. Installed apply remains open. [Release](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.22-win-rust-beta) · [Publication receipt](evidence/rust-beta-0.50.22-publication.json)
+
+GitHub restored the 0.50.21 cache, ID `10732092867`, and saved the resulting 1,369,450,397-byte cache as `10735079709`. The optimized build took 348 seconds, down from 856 seconds on 0.50.21. The full run took 736 seconds, down from 1,183. [Hosted checks](https://github.com/GlebHmarsky/Shovel/actions/runs/44340438173)
+
 ## Finish interrupted History reads and release queued work
 
 An initialization worker that stopped unexpectedly could leave the retained repository owner loading and its accepted Push pending after the tab closed. Opening, paging and reference navigation now report terminal errors on a refused worker launch or unwind. Paging and navigation preserve the visible commits, and a successful reference retry clears the error.
