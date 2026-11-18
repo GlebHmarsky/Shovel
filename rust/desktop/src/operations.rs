@@ -224,7 +224,7 @@ enum Event {
     Prompt(u64, authentication::Prompt),
     ExternalPrompt(u64, PathBuf, &'static str, authentication::Prompt),
     Completed(u64, Box<Result<network::Completed, String>>),
-    Removed(u64, Outcome),
+    Removed(u64, Outcome, Option<&'static str>),
     OptionsReady(u64, Box<ReadyOptions>),
     OptionsClosed(u64),
 }
@@ -633,7 +633,7 @@ impl Controller {
             key,
             action.lane(),
             move |outcome| {
-                let _ = sender.send(Event::Removed(sequence, outcome));
+                let _ = sender.send(Event::Removed(sequence, outcome, None));
                 ctx.request_repaint();
             },
         );
@@ -782,17 +782,31 @@ impl Controller {
         match result {
             Ok(snapshot) => {
                 for request in pending {
-                    if request.bound.as_ref().is_some_and(|(owner, branch)| {
+                    let preparation_error = if request.bound.as_ref().is_some_and(|(owner, branch)| {
                         owner != &snapshot.identity.fingerprint || branch != &snapshot.branch
                     }) {
-                        if let Some(run) = self
-                            .runs
-                            .iter_mut()
-                            .find(|r| r.sequence == request.sequence)
-                        {
-                            run.output = text("ActionChanged");
-                        }
-                        scheduler.fail_reserved(request.request);
+                        Some("ActionChanged")
+                    } else if request.action == RequestKind::NewBranch
+                        && !snapshot.operations.is_empty()
+                    {
+                        Some("ActionSequence")
+                    } else {
+                        None
+                    };
+                    if let Some(error) = preparation_error {
+                        // Report a rejected action in its reserved slot so it cannot
+                        // stop earlier conflicting work that has not yet started.
+                        let sender = self.sender.clone();
+                        let ctx = ctx.clone();
+                        scheduler.activate(request.request, move || {
+                            let _ = sender.send(Event::Removed(
+                                request.sequence,
+                                Outcome::Failed,
+                                Some(error),
+                            ));
+                            ctx.request_repaint();
+                            Outcome::Failed
+                        });
                         continue;
                     }
                     if let RequestKind::Network(kind) = request.action {
@@ -805,19 +819,6 @@ impl Controller {
                             ctx,
                         );
                     } else {
-                        if request.action == RequestKind::NewBranch
-                            && !snapshot.operations.is_empty()
-                        {
-                            if let Some(run) = self
-                                .runs
-                                .iter_mut()
-                                .find(|r| r.sequence == request.sequence)
-                            {
-                                run.output = text("ActionSequence");
-                            }
-                            scheduler.fail_reserved(request.request);
-                            continue;
-                        }
                         let sender = self.sender.clone();
                         let ctx = ctx.clone();
                         let snapshot = snapshot.clone();
@@ -1218,7 +1219,7 @@ impl Controller {
                 outcome
             },
             move |outcome| {
-                let _ = discarded.send(Event::Removed(sequence, outcome));
+                let _ = discarded.send(Event::Removed(sequence, outcome, None));
                 discarded_ctx.request_repaint();
             },
         );
@@ -1379,11 +1380,14 @@ impl Controller {
                         run.status = text("RustOptionsClosed");
                     }
                 }
-                Event::Removed(id, outcome) => {
+                Event::Removed(id, outcome, reason) => {
                     self.pending.retain(|p| p.sequence != id);
                     if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
                         run.done = true;
                         run.show_failure = outcome == Outcome::Failed;
+                        if let Some(reason) = reason {
+                            run.output = text(reason);
+                        }
                         run.status = text(match outcome {
                             Outcome::Removed => "QueuedRequestCancelled",
                             Outcome::Coalesced => "RustRequestCoalesced",

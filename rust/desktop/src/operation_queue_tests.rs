@@ -92,8 +92,10 @@ fn pending_push_bound_by_local_changes_rejects_a_different_history_owner() {
     );
     ops.bind_initialization(&first.worktree, &first, &scheduler);
     ops.resolve_initialization(&first.worktree, Ok(&other), &git, &scheduler, &ctx);
-    ops.poll(&ctx);
-    assert!(!scheduler.has_accepted_work());
+    wait(|| {
+        ops.poll(&ctx);
+        ops.runs[0].done && !scheduler.has_accepted_work()
+    });
     assert_eq!(scheduler.records()[0].outcome, Some(Outcome::Failed));
     assert_eq!(ops.runs[0].output, text("ActionChanged"));
     for snapshot in [first, other] {
@@ -831,6 +833,69 @@ fn initializing_new_branch_keeps_owner_and_submission_order_through_checkout_rev
 }
 
 #[test]
+fn failed_branch_preparation_keeps_earlier_options_and_stops_later_work() {
+    let (temp, git, snapshot) = fixture();
+    let linked = temp.path().join("linked");
+    command(
+        &git,
+        &snapshot.worktree,
+        &["worktree", "add", "--detach", linked.to_str().unwrap()],
+    );
+    let linked = git.inspect(&linked, &Cancellation::default()).unwrap();
+    assert_eq!(snapshot.common_directory, linked.common_directory);
+    fs::write(
+        snapshot.git_directory.join("MERGE_HEAD"),
+        format!("{}\n", snapshot.head.as_deref().unwrap()),
+    )
+    .unwrap();
+    let snapshot = git
+        .inspect(&snapshot.worktree, &Cancellation::default())
+        .unwrap();
+    assert!(!snapshot.operations.is_empty());
+    let mut ops = controller();
+    let scheduler = Scheduler::default();
+    let ctx = egui::Context::default();
+    let settings = Settings::default();
+    let (hold, _) = scheduler.reserve(
+        linked.identity.fingerprint,
+        shovel_core::case::path_key(&linked.common_directory),
+        "hold".into(),
+        Lane::Exclusive,
+        |_| {},
+    );
+    for action in [
+        RequestKind::Options(Kind::Fetch),
+        RequestKind::NewBranch,
+        RequestKind::Options(Kind::Push),
+    ] {
+        ops.defer(action, &snapshot.worktree, &settings, &scheduler, &ctx);
+    }
+    ops.resolve_initialization(&snapshot.worktree, Ok(&snapshot), &git, &scheduler, &ctx);
+    ops.poll(&ctx);
+    assert!(ops.runs.iter().all(|run| !run.done));
+    assert!(ops.ready_options.is_empty());
+    assert!(scheduler.remove_waiting(hold));
+
+    wait(|| {
+        ops.poll(&ctx);
+        !ops.ready_options.is_empty()
+    });
+    let first = ops.ready_options.pop_front().unwrap();
+    assert_eq!(first.options.as_ref().unwrap().kind, Kind::Fetch);
+    assert!(ops.runs.iter().all(|run| !run.done));
+    drop(first);
+    wait(|| {
+        ops.poll(&ctx);
+        ops.runs.iter().all(|run| run.done) && !scheduler.has_accepted_work()
+    });
+    assert!(ops.ready_options.is_empty());
+    assert_eq!(ops.runs[0].status, text("RustOptionsClosed"));
+    assert_eq!(ops.runs[1].status, text("ActionFailedShort"));
+    assert_eq!(ops.runs[1].output, text("ActionSequence"));
+    assert_eq!(ops.runs[2].status, text("ActionStoppedShort"));
+}
+
+#[test]
 fn initializing_new_branch_removal_sequence_failure_and_cancel_do_not_mutate() {
     let (_temp, git, snapshot) = fixture();
     let mut ops = controller();
@@ -846,7 +911,10 @@ fn initializing_new_branch_removal_sequence_failure_and_cancel_do_not_mutate() {
     let mut sequence = snapshot.clone();
     sequence.operations.push("merge".into());
     ops.resolve_initialization(&snapshot.worktree, Ok(&sequence), &git, &scheduler, &ctx);
-    ops.poll(&ctx);
+    wait(|| {
+        ops.poll(&ctx);
+        ops.runs[1].done && !scheduler.has_accepted_work()
+    });
     assert_eq!(ops.runs[1].status, text("ActionFailedShort"));
     assert_eq!(ops.runs[1].output, text("ActionSequence"));
     assert!(ops.ready_options.is_empty());

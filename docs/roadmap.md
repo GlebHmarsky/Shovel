@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Keep preparation failures in queue order
+
+A deferred New Branch request used to stop earlier waiting work immediately if repository initialization found an active merge. Rejections for a changed captured owner or an active Git sequence now use the reserved scheduler slot. They issue no Git command. A disposable repository and a linked worktree held the shared lane while Fetch options, New Branch and Push options queued. The original behavior discarded the Fetch options. After the fix, Fetch options opened first, the branch failure appeared after dismissal, and Push options stayed closed. Thirteen operations queue tests passed, including captured-owner replacement and tab closure.
+
+All-target Clippy, diff checks and all 18 bounded smoke checks passed. The smoke suite took 43.40 seconds on source fingerprint `C7F8258580CAE71BAD35CCC2344B9D5F192EFAFE4286412FBD63E6C3676E4280`.
+
 ## Keep the verified package through restart
 
 Restart checks Git state and other Shovel instances before opening and hashing the approved package. The Windows file handle stays with the updater controller after handoff. Velopack can read it while Shovel closes. A writer already holding the file yields a retryable cache error. Missing or damaged bytes require a fresh download.
