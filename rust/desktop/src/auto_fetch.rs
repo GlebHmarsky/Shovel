@@ -21,7 +21,7 @@ pub struct Finished {
 pub struct Controller {
     due: HashMap<PathBuf, Instant>,
     interval: Option<Duration>,
-    active: HashMap<u64, Cancellation>,
+    active: HashMap<u64, (PathBuf, Cancellation)>,
     tx: mpsc::Sender<(u64, Finished)>,
     rx: mpsc::Receiver<(u64, Finished)>,
     next: u64,
@@ -54,7 +54,7 @@ impl Controller {
             .retain(|p, _| !crate::Workspace::same_path(p, path));
     }
     pub fn cancel(&self) {
-        for cancel in self.active.values() {
+        for (_, cancel) in self.active.values() {
             cancel.cancel();
         }
     }
@@ -99,23 +99,40 @@ impl Controller {
             return completed;
         }
         let Some(git) = git else { return completed };
+        let mut candidates = Vec::new();
+        let mut wake = None;
         for snapshot in snapshots {
-            if self.active.len() >= 2 {
-                break;
-            }
-            if snapshot.remotes.is_empty() {
+            if snapshot.remotes.is_empty() || !snapshot.operations.is_empty() {
                 continue;
             }
-            let Some(due) = self.due.get_mut(&snapshot.worktree) else {
-                self.due.insert(snapshot.worktree.clone(), now + interval);
-                ctx.request_repaint_after(interval);
-                continue;
-            };
-            if *due > now {
-                ctx.request_repaint_after(*due - now);
-                continue;
+            let due = self
+                .due
+                .get(&snapshot.worktree)
+                .copied()
+                .unwrap_or_else(|| {
+                    let initial = now + interval;
+                    self.due.insert(snapshot.worktree.clone(), initial);
+                    initial
+                });
+            if due > now {
+                wake = Some(wake.map_or(due, |old: Instant| old.min(due)));
+            } else if !self
+                .active
+                .values()
+                .any(|(path, _)| path == &snapshot.worktree)
+            {
+                candidates.push((due, snapshot));
             }
-            *due = now + interval;
+        }
+        if let Some(next) = wake {
+            ctx.request_repaint_after(next - now);
+        }
+        candidates.sort_by_key(|(due, _)| *due);
+        for (_, snapshot) in candidates
+            .into_iter()
+            .take(2usize.saturating_sub(self.active.len()))
+        {
+            self.due.insert(snapshot.worktree.clone(), now + interval);
             let id = self.next;
             self.next += 1;
             let cancel = Cancellation::default();
@@ -127,15 +144,23 @@ impl Controller {
             let dc = ctx.clone();
             let path = snapshot.worktree.clone();
             let dp = path.clone();
+            let expected = snapshot.identity.clone();
             let (_, accepted) = scheduler.submit(
                 snapshot.identity.fingerprint.clone(),
                 shovel_core::case::path_key(&snapshot.common_directory),
                 format!("automatic-fetch:{}", path.display()),
                 Lane::Fetch,
                 move || {
-                    let result = g
-                        .prepare_network(&path, &token)
-                        .and_then(|c| g.automatic_fetch(&c, &token));
+                    let result = (|| {
+                        if shovel_core::identity::read(&path)? != expected {
+                            return Err(shovel_core::network::Error::Code("ActionIdentityChanged"));
+                        }
+                        let context = g.prepare_network(&path, &token)?;
+                        if context.repository.identity != expected {
+                            return Err(shovel_core::network::Error::Code("ActionIdentityChanged"));
+                        }
+                        g.automatic_fetch(&context, &token)
+                    })();
                     let (succeeded, output) = match result {
                         Ok(result) => {
                             let succeeded = result.succeeded() && !result.has_conflicts;
@@ -193,7 +218,7 @@ impl Controller {
                 },
             );
             if accepted {
-                self.active.insert(id, cancel);
+                self.active.insert(id, (snapshot.worktree.clone(), cancel));
             }
         }
         completed
@@ -203,6 +228,155 @@ impl Controller {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scheduled_fetch_rejects_a_replaced_worktree_and_fetches_after_reopening() {
+        use crate::history_view::tests::Fixture;
+        let fixture = Fixture::new();
+        let remote = fixture._temp.path().join("source.git");
+        fixture.command(&["clone", "--bare", ".", remote.to_str().unwrap()], &[]);
+        fixture.command(&["remote", "add", "origin", remote.to_str().unwrap()], &[]);
+        let git = Arc::new(fixture.git.clone());
+        let observed = git
+            .inspect(&fixture.root, &Cancellation::default())
+            .unwrap();
+        let original = fixture.root.join(".git");
+        let moved = fixture._temp.path().join("original.git");
+        assert!(
+            original
+                .canonicalize()
+                .unwrap()
+                .starts_with(fixture._temp.path().canonicalize().unwrap())
+        );
+        assert_eq!(moved.parent().unwrap(), fixture._temp.path());
+        std::fs::rename(original, moved).unwrap();
+        fixture.command(&["init", "--initial-branch=main"], &[]);
+        fixture.command(&["remote", "add", "origin", remote.to_str().unwrap()], &[]);
+        std::fs::write(fixture.root.join("local"), "replacement work").unwrap();
+        let before = fixture.command(&["status", "--porcelain=v1"], &[]);
+        let reopened = git
+            .inspect(&fixture.root, &Cancellation::default())
+            .unwrap();
+        assert_ne!(observed.identity, reopened.identity);
+        let mut controller = Controller::default();
+        let scheduler = Scheduler::default();
+        let ctx = egui::Context::default();
+        let mut fetch = |snapshot: &Snapshot| {
+            controller.due_now(snapshot.worktree.clone());
+            let deadline = Instant::now() + Duration::from_secs(12);
+            loop {
+                let mut results = controller.tick(
+                    &ctx,
+                    true,
+                    60,
+                    std::iter::once(snapshot),
+                    Some(git.clone()),
+                    &scheduler,
+                );
+                if let Some(result) = results.pop() {
+                    break result;
+                }
+                assert!(Instant::now() < deadline, "automatic fetch did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        let rejected = fetch(&observed);
+        assert!(!rejected.succeeded);
+        assert!(
+            rejected
+                .output
+                .contains(&crate::strings::text("ActionIdentityChanged"))
+        );
+        assert!(
+            fixture
+                .command(&["for-each-ref", "refs/remotes"], &[])
+                .is_empty()
+        );
+        assert!(!fixture.root.join(".git/FETCH_HEAD").exists());
+        let accepted = fetch(&reopened);
+        assert!(accepted.succeeded, "{}", accepted.output);
+        assert_eq!(
+            fixture.command(&["rev-parse", "refs/remotes/origin/main"], &[]),
+            observed.head.unwrap()
+        );
+        assert_eq!(fixture.command(&["status", "--porcelain=v1"], &[]), before);
+        assert_eq!(
+            std::fs::read(fixture.root.join("local")).unwrap(),
+            b"replacement work"
+        );
+    }
+
+    #[test]
+    fn older_due_repositories_take_the_two_slots_and_active_sequences_are_skipped() {
+        use crate::history_view::tests::Fixture;
+        let fixture = Fixture::new();
+        fixture.command(&["remote", "add", "origin", "."], &[]);
+        let git = Arc::new(fixture.git.clone());
+        let base = git
+            .inspect(&fixture.root, &Cancellation::default())
+            .unwrap();
+        let mut snapshots = Vec::new();
+        for index in 0..5 {
+            let root = fixture._temp.path().join(format!("other-{index}"));
+            fixture.command(&["clone", "--quiet", ".", root.to_str().unwrap()], &[]);
+            snapshots.push(git.inspect(&root, &Cancellation::default()).unwrap());
+        }
+        snapshots[3].operations.push("merge".into());
+        snapshots[4].remotes.clear();
+        let now = Instant::now();
+        let mut controller = Controller::default();
+        for (index, snapshot) in snapshots.iter().enumerate() {
+            controller.due.insert(
+                snapshot.worktree.clone(),
+                now - Duration::from_secs(index as u64 + 1),
+            );
+        }
+        let scheduler = Scheduler::default();
+        let ctx = egui::Context::default();
+        let tick = |c: &mut Controller| {
+            c.tick(
+                &ctx,
+                true,
+                60,
+                snapshots.iter().chain(std::iter::once(&base)),
+                Some(git.clone()),
+                &scheduler,
+            )
+        };
+        assert!(tick(&mut controller).is_empty());
+        assert_eq!(controller.active.len(), 2);
+        assert!(
+            controller
+                .active
+                .values()
+                .any(|(p, _)| p == &snapshots[2].worktree)
+        );
+        assert!(
+            controller
+                .active
+                .values()
+                .any(|(p, _)| p == &snapshots[1].worktree)
+        );
+        assert!(controller.due[&base.worktree] > now);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut results = Vec::new();
+        while results.len() != 3 {
+            results.extend(tick(&mut controller));
+            assert!(controller.active.len() <= 2);
+            assert!(
+                Instant::now() < deadline,
+                "expected the three eligible fetches"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(results.iter().all(|r| r.succeeded));
+        assert!(controller.drained());
+        assert!(
+            results
+                .iter()
+                .all(|r| snapshots[..3].iter().any(|s| s.worktree == r.path))
+        );
+    }
 
     #[test]
     fn changing_the_interval_restarts_the_timer_and_tab_closure_releases_it() {
