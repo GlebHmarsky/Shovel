@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.50.22 - 2026-11-18
+
+- Navigate the vertical Settings categories with Up, Down, Home and End. Tab enters the selected form, and Windows accessibility exposes each category and its associated page.
+- Validate both global Git identity fields before writing. Keep invalid edits available for correction, support the stated Unicode character limit, and recover the form after an interrupted request.
+- Check worktree identity, unfinished Git operations and index conflicts before restarting for an update. An active bisect postpones restart, and a large reference set no longer makes a clean worktree block it.
+- Report interrupted History work and finish pending Git requests with a failure when their repository could not open. The current History page stays visible after interrupted paging or reference navigation.
+
 ## Rust 0.50.21 - 2026-11-18
 
 - Report a failed Git worker launch in Activity and release its queue so a separate linked worktree can continue.

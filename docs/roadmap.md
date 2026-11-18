@@ -1,5 +1,9 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.22 release checks
+
+This Cargo and changelog cut includes keyboard navigation for Settings, safer global Git identity editing, direct restart preflight, and terminal outcomes for interrupted History work. The Settings, identity, restart, interruption, operation queue, History cache and native History groups passed 45 focused test runs. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 44.50 seconds on local source fingerprint `3E52EDCD6E352E0AADF5BC66162FCF488A6DA16D6528E0B0C00092D57A03BF64`. The native public bundle verifier was built from this source.
+
 ## Finish interrupted History reads and release queued work
 
 An initialization worker that stopped unexpectedly could leave the retained repository owner loading and its accepted Push pending after the tab closed. Opening, paging and reference navigation now report terminal errors on a refused worker launch or unwind. Paging and navigation preserve the visible commits, and a successful reference retry clears the error.
