@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Restore the verified update after reopening Shovel
+
+After signed discovery, the updater checks the existing installation manifest and hashes the exact package in its cache off-thread. This uses a read-only lookup so automatic checks use no Velopack write probe or fallback repair. A verified package restores Restart while the window stays closed. The user must still approve restart. A changed or damaged package clears readiness. A sharing error retains a previously verified retry for the same release.
+
+Nineteen updater tests passed. A disposable installation layout retained the probe sentinel and helper bytes and created no cache directory. The opt-in native updater downloaded the signed 0.50.18 package, recovered its ready state in a fresh controller and exposed an enabled Restart action in headless UI. Installed apply, external helper failure and a real redirected installation remain separate acceptance cases. All-target Clippy, diff checks and all 18 smoke checks passed. The smoke suite took 34.93 seconds on source fingerprint `4152CF511EFDAFC7792DAB8764081FBEB0904D803FE8D3A32299572E66802551`.
+
 ## Windows Rust Beta 0.50.18 published
 
 GitHub Actions run `44298385990` published master commit `789be83e899a8fdab2051aedc993347a97f17416`. The public verifier checked the immutable tag, downloaded all seven assets and confirmed the live signed feed exactly matches the versioned release. Anonymous API polling reached GitHub’s rate limit near the end. The final metadata check used the configured GitHub login, and asset downloads were anonymous. Shovel’s native updater independently discovered and verified the exact package and declined an offer for the already-current version. The downloadable installer reports 0.50.18 and has no Authenticode signature. Installed apply and restart are still open. [Release receipt](evidence/rust-beta-0.50.18-publication.json)

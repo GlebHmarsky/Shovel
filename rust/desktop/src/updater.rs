@@ -352,6 +352,112 @@ fn installed_locator() -> Result<velopack::locator::VelopackLocator, String> {
     velopack::locator::auto_locate_app_manifest(velopack::locator::LocationContext::FromCurrentExe)
         .map_err(|_| text("RustUpdateInstallNeeded"))
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CachedPackage {
+    Verified,
+    MissingOrDamaged,
+    Unavailable,
+}
+
+struct Discovered {
+    offer: Offer,
+    cached: CachedPackage,
+}
+
+fn discover(channel: Channel, cancel: Cancellation) -> Result<Option<Discovered>, CheckError> {
+    check(channel, &cancel).map(|offer| {
+        offer.map(|offer| {
+            let cached = std::env::current_exe()
+                .ok()
+                .and_then(|executable| installed_cache_for_check(&executable))
+                .map_or(CachedPackage::Unavailable, |directory| {
+                    let package = directory.join(offer.release.file_name());
+                    inspect_cached_package(&package, &offer.release, &cancel)
+                });
+            Discovered { offer, cached }
+        })
+    })
+}
+
+fn installed_cache_for_check(executable: &Path) -> Option<PathBuf> {
+    use windows_sys::Win32::Storage::FileSystem::{FILE_ADD_FILE, FILE_FLAG_BACKUP_SEMANTICS};
+
+    let directory = executable.parent()?;
+    let root = if directory.join("Update.exe").is_file() {
+        directory
+    } else {
+        directory
+            .ancestors()
+            .find(|path| {
+                path.file_name()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("current"))
+            })?
+            .parent()?
+    };
+    let config = velopack::locator::create_config_from_root_dir(root);
+    if !config.UpdateExePath.is_file() {
+        return None;
+    }
+    let mut manifest = String::new();
+    const MAX_MANIFEST: u64 = 64 * 1024;
+    File::open(&config.ManifestPath)
+        .ok()?
+        .take(MAX_MANIFEST + 1)
+        .read_to_string(&mut manifest)
+        .ok()?;
+    if manifest.len() as u64 > MAX_MANIFEST
+        || velopack::bundle::read_manifest_from_string(&manifest).ok()?.id != updates::PRODUCT
+    {
+        return None;
+    }
+
+    // Velopack's locator can create a probe file and copy an updater to
+    // LocalAppData. Discovery only opens existing paths.
+    if OpenOptions::new()
+        .access_mode(FILE_ADD_FILE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(root)
+        .is_ok()
+    {
+        return Some(config.PackagesDir);
+    }
+    let fallback = velopack::known_path::get_local_app_data()
+        .ok()?
+        .join(updates::PRODUCT);
+    fallback
+        .join("Update.exe")
+        .is_file()
+        .then(|| fallback.join("packages"))
+}
+
+fn open_package_read_only(package: &Path) -> std::io::Result<File> {
+    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+
+    OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(package)
+}
+
+fn inspect_cached_package(
+    package: &Path,
+    release: &VerifiedRelease,
+    cancel: &Cancellation,
+) -> CachedPackage {
+    let file = match open_package_read_only(package) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return CachedPackage::MissingOrDamaged;
+        }
+        Err(_) => return CachedPackage::Unavailable,
+    };
+    match release.verify_package_cancellable(file, || cancel.is_cancelled()) {
+        Ok(()) => CachedPackage::Verified,
+        Err(updates::UpdateError::PackageMismatch) => CachedPackage::MissingOrDamaged,
+        Err(_) => CachedPackage::Unavailable,
+    }
+}
+
 #[derive(Debug)]
 enum ApplyError {
     Retry(String),
@@ -366,16 +472,10 @@ impl From<String> for ApplyError {
 /// Hold the verified file against writes and replacement until Shovel exits.
 /// Velopack waits for this process before applying the update.
 fn verify_for_restart(package: &Path, release: &VerifiedRelease) -> Result<File, ApplyError> {
-    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
-
-    let input = OpenOptions::new()
-        .read(true)
-        .share_mode(FILE_SHARE_READ)
-        .open(package)
-        .map_err(|error| match error.kind() {
-            std::io::ErrorKind::NotFound => ApplyError::DownloadAgain,
-            _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
-        })?;
+    let input = open_package_read_only(package).map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound => ApplyError::DownloadAgain,
+        _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
+    })?;
     release.verify_package(&input).map_err(|error| match error {
         updates::UpdateError::PackageMismatch => ApplyError::DownloadAgain,
         _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
@@ -395,7 +495,7 @@ fn confirm_published_offer(
 }
 enum Event {
     Applied(Result<File, ApplyError>),
-    Checked(u64, Result<Option<Offer>, CheckError>),
+    Checked(u64, Result<Option<Discovered>, CheckError>),
     Downloaded(u64, Result<Offer, String>),
     Progress(u64, i16),
 }
@@ -485,9 +585,7 @@ impl Controller {
             .map(|offer| offer.release.version())
     }
     pub fn tick(&mut self, ctx: &egui::Context, channel: Channel, periodic: bool) {
-        self.tick_at(ctx, channel, periodic, Instant::now(), |channel, cancel| {
-            check(channel, &cancel)
-        });
+        self.tick_at(ctx, channel, periodic, Instant::now(), discover);
     }
     fn tick_at(
         &mut self,
@@ -495,7 +593,7 @@ impl Controller {
         channel: Channel,
         periodic: bool,
         now: Instant,
-        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Offer>, CheckError> + Send + 'static,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError> + Send + 'static,
     ) {
         if self.channel != channel {
             self.cancel();
@@ -545,12 +643,18 @@ impl Controller {
                 Event::Checked(id, result) if id == self.generation => {
                     self.phase = Phase::Idle;
                     match result {
-                        Ok(Some(offer)) if offer.release.channel() == self.channel => {
+                        Ok(Some(Discovered { offer, cached }))
+                            if offer.release.channel() == self.channel =>
+                        {
                             let same_release = self.offer.as_ref().is_some_and(|current| {
                                 current.release.same_package(&offer.release)
                             });
-                            self.ready &= same_release;
-                            self.tools_confirmed &= same_release;
+                            self.ready = match cached {
+                                CachedPackage::Verified => true,
+                                CachedPackage::MissingOrDamaged => false,
+                                CachedPackage::Unavailable => self.ready && same_release,
+                            };
+                            self.tools_confirmed &= same_release && self.ready;
                             self.status = if self.ready {
                                 text("UpdateReadyShort")
                             } else {
@@ -604,15 +708,13 @@ impl Controller {
         }
     }
     pub fn check(&mut self, ctx: &egui::Context) {
-        self.begin_check(ctx, Instant::now(), |channel, cancel| {
-            check(channel, &cancel)
-        });
+        self.begin_check(ctx, Instant::now(), discover);
     }
     fn begin_check(
         &mut self,
         ctx: &egui::Context,
         now: Instant,
-        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Offer>, CheckError> + Send + 'static,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError> + Send + 'static,
     ) {
         if self.busy()
             || self.restart_requested
@@ -866,6 +968,10 @@ mod tests {
         assert_eq!(offer.release.version(), &version);
         assert_eq!(offer.release.source_commit(), commit);
         let target = root.path().join(offer.release.file_name());
+        assert_eq!(
+            inspect_cached_package(&target, &offer.release, &cancel),
+            CachedPackage::MissingOrDamaged
+        );
         let source = FrozenSource {
             offer: offer.clone(),
             cancel: cancel.clone(),
@@ -878,10 +984,54 @@ mod tests {
         assert_eq!(progress.last(), Some(&100));
         assert!(progress.windows(2).all(|pair| pair[0] <= pair[1]));
         assert_eq!(target.metadata().unwrap().len(), offer.release.size());
+        let cached = inspect_cached_package(&target, &offer.release, &cancel);
+        assert_eq!(cached, CachedPackage::Verified);
         let verified = verify_for_restart(&target, &offer.release).unwrap();
         let mut controller = Controller::default();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        controller
+            .tx
+            .send(Event::Checked(
+                0,
+                Ok(Some(Discovered {
+                    offer: offer.clone(),
+                    cached,
+                })),
+            ))
+            .unwrap();
+        controller.tick(&ctx, Channel::Beta, false);
+        assert!(controller.ready && !controller.restart_requested && !controller.exit_ready());
+        assert!(!controller.open);
+        controller.open = true;
+        let label = text("RustUpdateRestart");
+        let frame = |controller: &mut Controller| {
+            ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900., 620.),
+                    )),
+                    ..Default::default()
+                },
+                |_| controller.show(&ctx, false, false),
+            )
+        };
+        frame(&mut controller).drop_without_applying_deltas();
+        let output = frame(&mut controller);
+        let restart_available = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .is_some_and(|access| {
+                access.nodes.iter().any(|(_, node)| {
+                    node.label() == Some(label.as_str()) && !node.is_disabled()
+                })
+            });
+        output.drop_without_applying_deltas();
+        assert!(restart_available);
         controller.tx.send(Event::Applied(Ok(verified))).unwrap();
-        controller.tick(&egui::Context::default(), Channel::Beta, false);
+        controller.tick(&ctx, Channel::Beta, false);
         assert!(controller.exit_ready());
         assert!(
             File::open(&target).is_ok(),
@@ -904,6 +1054,68 @@ mod tests {
                 .Assets
                 .remove(0),
         }
+    }
+
+    #[test]
+    fn discovery_drops_readiness_for_changed_or_damaged_packages_but_keeps_a_sharing_retry() {
+        let older = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.3.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.3.json.sig"),
+        );
+        let newer = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        );
+        let ctx = egui::Context::default();
+        let mut controller = Controller::default();
+        for (offer, cached, ready) in [
+            (older.clone(), CachedPackage::Unavailable, false),
+            (older.clone(), CachedPackage::Verified, true),
+            (older.clone(), CachedPackage::Unavailable, true),
+            (older.clone(), CachedPackage::MissingOrDamaged, false),
+            (older, CachedPackage::Verified, true),
+            (newer.clone(), CachedPackage::Unavailable, false),
+            (newer.clone(), CachedPackage::Verified, true),
+            (newer, CachedPackage::MissingOrDamaged, false),
+        ] {
+            controller
+                .tx
+                .send(Event::Checked(0, Ok(Some(Discovered { offer, cached }))))
+                .unwrap();
+            controller.tick(&ctx, Channel::Beta, false);
+            assert_eq!(controller.ready, ready);
+            assert!(!controller.restart_requested && !controller.exit_ready());
+        }
+    }
+
+    #[test]
+    fn install_cache_discovery_reads_the_manifest_without_touching_installation_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let current = root.join("current");
+        std::fs::create_dir(&current).unwrap();
+        let app = current.join("Shovel.exe");
+        let updater = root.join("Update.exe");
+        std::fs::write(&updater, b"fixture placeholder").unwrap();
+        let marker = root.join(".velopack_dir_test");
+        std::fs::write(&marker, b"keep these bytes").unwrap();
+        let manifest = current.join("sq.version");
+        let set_product = |product| {
+            std::fs::write(
+                &manifest,
+                format!(
+                    "<package><metadata><id>{product}</id><version>0.50.17</version>+                     <mainExe>Shovel.exe</mainExe></metadata></package>"
+                ),
+            )
+            .unwrap();
+        };
+        set_product("Shovel");
+        assert_eq!(installed_cache_for_check(&app), None);
+        set_product(updates::PRODUCT);
+        assert_eq!(installed_cache_for_check(&app), Some(root.join("packages")));
+        assert_eq!(std::fs::read(&marker).unwrap(), b"keep these bytes");
+        assert_eq!(std::fs::read(&updater).unwrap(), b"fixture placeholder");
+        assert!(!root.join("packages").exists());
     }
 
     #[test]
