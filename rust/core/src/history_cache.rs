@@ -1,7 +1,7 @@
 //! Disposable presentation cache; it cannot create a live History or action context.
 use crate::{
     git::{Entry, PAGE_SIZE, Snapshot},
-    graph::MAX_LANES,
+    graph::{MAX_DISPLAY_LANES, MAX_LANES},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -12,8 +12,8 @@ use std::{
 };
 
 pub const MAX_BYTES: usize = 4 * 1024 * 1024;
-// Invalidate cached rows that send detached stash bases into a side lane.
-pub const PREVIEW_SCHEMA: u32 = 3;
+// Invalidate cached graphs that used commit lanes to draw stashes.
+pub const PREVIEW_SCHEMA: u32 = 4;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Preview {
     pub schema: u32,
@@ -52,11 +52,12 @@ impl Preview {
             && self.entries.iter().all(|entry| {
                 let g = &entry.graph;
                 g.node < MAX_LANES
-                    && (1..=MAX_LANES).contains(&g.width)
+                    && g.node + usize::from(g.stash_link.is_some()) < g.width
+                    && g.width <= MAX_DISPLAY_LANES
                     && g.lines.len() <= 256
                     && g.lines.iter().all(|line| {
-                        line.from < MAX_LANES
-                            && line.to < MAX_LANES
+                        line.from < g.width.min(MAX_LANES)
+                            && line.to < g.width.min(MAX_LANES)
                             && [line.from_y, line.to_y]
                                 .iter()
                                 .all(|y| y.is_finite() && (0. ..=1.).contains(y))

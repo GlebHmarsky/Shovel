@@ -51,7 +51,7 @@ fn preview(root: &std::path::Path) -> Preview {
                 color: 0,
                 width: 1,
                 is_merge: false,
-                is_stash: false,
+                stash_link: None,
                 lines: vec![],
             },
             references: vec![],
@@ -123,9 +123,9 @@ fn cache_validation_rejects_malformed_paths_identity_graph_counts_and_offsets() 
     for index in 0..10 {
         let mut bad = valid.clone();
         match index {
-            0 => bad.schema = 1,
+            0 => bad.schema = 3,
             1 => bad.repository.worktree = temp.path().join("elsewhere"),
-            2 => bad.entries[0].graph.width = 65,
+            2 => bad.entries[0].graph.width = graph::MAX_DISPLAY_LANES + 1,
             3 => bad.entries[0].graph.node = 64,
             4 => bad.entries[0].graph.lines.push(graph::Line {
                 from: 0,

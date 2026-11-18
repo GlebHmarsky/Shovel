@@ -1,6 +1,7 @@
 #![cfg(windows)]
 use shovel_core::{
     git::{self, Cursor, Git},
+    graph::StashLink,
     process::{self, Cancellation, Lifetime},
 };
 use std::{fs, path::Path};
@@ -126,13 +127,16 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     );
     fs::write(root.join("tracked.txt"), "changed\n").unwrap();
     command(&git, root, &["stash", "push", "-m", "Old base stash"], b"");
+    command(&git, root, &["checkout", "--detach", &baseline[199]], b"");
+    fs::write(root.join("tracked.txt"), "changed at boundary\n").unwrap();
+    command(&git, root, &["stash", "push", "-m", "Boundary stash"], b"");
     command(&git, root, &["checkout", "main"], b"");
     let cancel = Cancellation::default();
     let snapshot = git.inspect(root, &cancel).unwrap();
     assert_eq!(snapshot.branch.as_deref(), Some("main"));
-    let git::HistoryRead::Page(history, first) =
-        git.read_history(root, &snapshot.identity, None, None, &cancel)
-            .unwrap()
+    let git::HistoryRead::Page(history, first) = git
+        .read_history(root, &snapshot.identity, None, None, &cancel)
+        .unwrap()
     else {
         panic!("a cold read should return the first page");
     };
@@ -141,8 +145,17 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     let second = git
         .page(&history, first.next.as_ref().unwrap(), &cancel)
         .unwrap();
-    assert_eq!(second.entries.len(), 6);
+    assert_eq!(second.entries.len(), 7);
     assert!(second.next.is_none());
+    let boundary_stash = first.entries.last().unwrap();
+    let boundary_base = &second.entries[0];
+    assert!(boundary_stash.graph.is_stash());
+    assert_eq!(boundary_stash.commit.parents[0], boundary_base.commit.hash);
+    assert_eq!(boundary_stash.graph.node, boundary_base.graph.node);
+    assert_eq!(
+        boundary_base.graph.stash_link,
+        Some(StashLink::Base { shared: false })
+    );
     let entries = first
         .entries
         .iter()
@@ -150,16 +163,16 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
         .collect::<Vec<_>>();
     let ordinary = entries
         .iter()
-        .filter(|e| !e.graph.is_stash)
+        .filter(|e| !e.graph.is_stash())
         .map(|e| e.commit.hash.clone())
         .collect::<Vec<_>>();
     assert_eq!(ordinary, baseline);
-    assert!(entries[204].graph.is_stash);
-    assert_eq!(entries[204].commit.parents[0], entries[205].commit.hash);
-    assert_eq!(entries[204].commit.parents.len(), 2);
-    assert_ne!(entries[204].graph.node, entries[205].graph.node);
-    assert_eq!(entries[203].graph.node, entries[205].graph.node);
-    assert_eq!(entries[203].graph.color, entries[205].graph.color);
+    assert!(entries[205].graph.is_stash());
+    assert_eq!(entries[205].commit.parents[0], entries[206].commit.hash);
+    assert_eq!(entries[205].commit.parents.len(), 2);
+    assert_eq!(entries[205].graph.node, entries[206].graph.node);
+    assert_eq!(entries[204].graph.node, entries[206].graph.node);
+    assert_eq!(entries[204].graph.color, entries[206].graph.color);
     assert!(entries[0].commit.message.contains("complete body שלום"));
     command(&git, root, &["branch", "new-reference", "HEAD~3"], b"");
     assert!(matches!(
@@ -173,7 +186,7 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
 }
 
 #[test]
-fn autostash_and_detached_previous_tip_stay_on_the_main_lane() {
+fn detached_autostash_touches_only_its_first_parent() {
     let (temp, mut git) = fixture();
     let root = temp.path();
     fs::write(root.join("tracked.txt"), "base\n").unwrap();
@@ -182,6 +195,12 @@ fn autostash_and_detached_previous_tip_stay_on_the_main_lane() {
     command(&git, root, &["checkout", "--detach", "HEAD"], b"");
     git.environment
         .insert("GIT_COMMITTER_DATE".into(), Some("1600000000 +0000".into()));
+    command(
+        &git,
+        root,
+        &["commit", "--allow-empty", "-m", "Previous ancestor"],
+        b"",
+    );
     command(
         &git,
         root,
@@ -204,36 +223,41 @@ fn autostash_and_detached_previous_tip_stay_on_the_main_lane() {
     let snapshot = git.inspect(root, &cancel).unwrap();
     let history = git.history(snapshot, &cancel).unwrap();
     let page = git.page(&history, &Cursor::default(), &cancel).unwrap();
-    let [tip, stash, base, common] = page.entries.as_slice() else {
-        panic!("expected four history rows");
+    let [tip, stash, base, ancestor, common] = page.entries.as_slice() else {
+        panic!("expected five history rows");
     };
-    assert!(stash.graph.is_stash);
+    assert!(stash.graph.is_stash());
     assert_eq!(stash.commit.parents[0], base.commit.hash);
     let common_parent = std::slice::from_ref(&common.commit.hash);
     assert_eq!(tip.commit.parents, common_parent);
-    assert_eq!(base.commit.parents, common_parent);
+    assert_eq!(
+        base.commit.parents,
+        std::slice::from_ref(&ancestor.commit.hash)
+    );
+    assert_eq!(ancestor.commit.parents, common_parent);
     assert_eq!(stash.graph.node, base.graph.node);
-    assert_eq!(stash.graph.width, 2);
-    assert!(stash.graph.lines.iter().any(|line| {
-        line.from == stash.graph.node
-            && line.from_y == 0.5
-            && line.to == base.graph.node
-            && line.to_y == 1.
-    }));
-    assert_eq!(base.graph.node, 0);
-    assert_eq!(base.graph.node, tip.graph.node);
-    assert_eq!(base.graph.color, tip.graph.color);
+    assert_ne!(stash.graph.node, tip.graph.node);
+    assert_eq!(
+        base.graph.stash_link,
+        Some(StashLink::Base { shared: false })
+    );
+    assert_eq!(base.graph.node, ancestor.graph.node);
+    assert_eq!(base.graph.color, ancestor.graph.color);
+    assert!(ancestor.graph.stash_link.is_none());
+    assert!(common.graph.stash_link.is_none());
+    assert_ne!(tip.graph.node, base.graph.node);
     assert_eq!(tip.graph.node, common.graph.node);
-    let bypass = 1;
-    assert!(stash.graph.lines.iter().any(|line| {
-        line.from == tip.graph.node && line.from_y == 0. && line.to == bypass && line.to_y == 1.
-    }));
-    assert!(base.graph.lines.iter().any(|line| {
-        line.from == bypass && line.from_y == 0. && line.to == bypass && line.to_y == 1.
-    }));
-    assert!(common.graph.lines.iter().any(|line| {
-        line.from == bypass && line.from_y == 0. && line.to == common.graph.node && line.to_y == 0.5
-    }));
+    assert_eq!(tip.graph.color, common.graph.color);
+    assert_eq!(stash.graph.lines.len(), 1);
+    for row in [stash, base, ancestor] {
+        assert!(row.graph.lines.iter().any(|line| {
+            line.from == tip.graph.node
+                && line.to == tip.graph.node
+                && line.from_y == 0.
+                && line.to_y == 1.
+                && line.color == tip.graph.color
+        }));
+    }
 }
 
 #[test]

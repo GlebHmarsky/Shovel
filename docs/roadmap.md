@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Stash graph in Rust 0.51.2
+
+Shovel inserts each saved stash just above its first parent in Git's topological walk. The gray marker sits in the gap beside that parent's lane, and its connector ends at the parent. Stashes on a shared base have separate markers on one connector. The layout keeps ordinary commit lanes and colors intact and regenerates cached previews from the previous graph format.
+
+Fourteen focused checks passed, covering ordinary edge preservation when two tips share a parent, detached base ancestry, a stash split from its base by a page boundary, same-base groups, startup cache validation, and headless rendering in Dark and Light. All-target Clippy, release-policy fixtures, and `git diff --check` passed. The complete 18-check smoke run took 32.59 seconds on source fingerprint `9C27C876E144CBC2570F8EFE1B5EA53548ADCF0D45F8317543D8DB369DF31FEA`. Installed desktop appearance remains unverified.
+
 ## Repository navigation and responsiveness
 
 The desktop now reuses the snapshot from Git inspection to start the first history page. The page still validates refs and directory identity before publishing. When refs and history inputs match the current page, refresh updates repository metadata and retains the page, row allocation, scroll position and backward navigation without another log or graph read. Explicit First and changed-history refresh still read the first page. Ordinary paging keeps checks before and after its log.

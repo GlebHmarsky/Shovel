@@ -4,6 +4,7 @@ use crate::{strings, workspace_style::Palette};
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, Ui};
 use sha2::{Digest, Sha256};
 use shovel_core::git::{Commit, Entry};
+use shovel_core::graph::StashLink;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color32) {
@@ -82,11 +83,8 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
         )
     };
     let painter = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
-    for line in &entry.graph.lines {
-        let a = point(line.from, line.from_y);
-        let b = point(line.to, line.to_y);
-        let stroke = Stroke::new(1.7, lane_color(line.color));
-        if line.from == line.to {
+    let curve = |a: Pos2, b: Pos2, stroke: Stroke| {
+        if a.x == b.x {
             painter.line_segment([a, b], stroke);
         } else {
             painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
@@ -96,14 +94,50 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
                 stroke,
             ));
         }
-    }
+    };
     let center = point(entry.graph.node, 0.5);
+    let stash_color = if p.high_contrast {
+        foreground
+    } else {
+        Color32::from_gray(if ui.visuals().dark_mode { 168 } else { 102 })
+    };
+    let stash_stroke = Stroke::new(1.3, stash_color);
+    let stash_point = |y| point(entry.graph.node, y) + egui::vec2(9., 0.);
+    let rail = |y, shared| stash_point(y) - egui::vec2(if shared { 5. } else { 0. }, 0.);
+    match entry.graph.stash_link {
+        Some(StashLink::Leaf { first, shared }) => {
+            let marker = stash_point(0.5);
+            if shared {
+                painter.line_segment(
+                    [rail(0.5, shared), marker - egui::vec2(3., 0.)],
+                    stash_stroke,
+                );
+            }
+            let start = if !first {
+                rail(0., shared)
+            } else if shared {
+                rail(0.5, shared)
+            } else {
+                marker + egui::vec2(0., 3.)
+            };
+            painter.line_segment([start, rail(1., shared)], stash_stroke);
+        }
+        Some(StashLink::Base { shared }) => curve(rail(0., shared), center, stash_stroke),
+        None => {}
+    }
+    for line in &entry.graph.lines {
+        curve(
+            point(line.from, line.from_y),
+            point(line.to, line.to_y),
+            Stroke::new(1.7, lane_color(line.color)),
+        );
+    }
     let color = lane_color(entry.graph.color);
-    if entry.graph.is_stash {
+    if entry.graph.is_stash() {
         painter.rect_stroke(
-            Rect::from_center_size(center, egui::vec2(8., 8.)),
-            2.,
-            Stroke::new(1.6, color),
+            Rect::from_center_size(stash_point(0.5), egui::vec2(6., 6.)),
+            1.,
+            stash_stroke,
             egui::StrokeKind::Inside,
         );
     } else if entry.graph.is_merge {
@@ -247,6 +281,8 @@ pub fn show(
         }
         let (badge_fg, badge_bg) = if p.high_contrast {
             (fg, None)
+        } else if r.name.starts_with("stash@{") {
+            (secondary, None)
         } else if r.name.starts_with("refs/heads/") {
             (p.diff_added_text, Some(p.diff_added_background))
         } else if r.name.starts_with("refs/remotes/") {
@@ -381,7 +417,7 @@ mod tests {
                 color: 0,
                 width: 1,
                 is_merge: false,
-                is_stash: false,
+                stash_link: None,
                 lines: vec![],
             },
             references: vec![shovel_core::git::Reference {
@@ -389,6 +425,35 @@ mod tests {
                 hash,
                 upstream: None,
             }],
+        }
+    }
+
+    #[test]
+    fn stash_square_and_connector_use_the_same_gray_in_both_themes() {
+        let ctx = egui::Context::default();
+        let rect = Rect::from_min_size(egui::pos2(16., 16.), egui::vec2(48., HEIGHT));
+        let mut stash = entry();
+        stash.graph.node = 1;
+        stash.graph.width = 3;
+        stash.graph.stash_link = Some(StashLink::Leaf {
+            first: false,
+            shared: true,
+        });
+        for (visuals, expected) in [(egui::Visuals::dark(), 168), (egui::Visuals::light(), 102)] {
+            let p = Palette::for_mode(visuals.dark_mode);
+            ctx.set_visuals(visuals);
+            let out = ctx.run_ui(Default::default(), |ui| graph(ui, &stash, rect, &p, p.history_text));
+            let color = Color32::from_gray(expected);
+            let center = egui::pos2(rect.left() + 33., rect.center().y);
+            assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
+                egui::Shape::Rect(marker) if marker.rect.center() == center
+                    && marker.rect.size() == egui::vec2(6., 6.) && marker.stroke.color == color
+            )));
+            assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
+                egui::Shape::LineSegment { points, stroke } if points[0].x == center.x - 5.
+                    && points[1].x == center.x - 5. && stroke.color == color
+            )));
+            out.drop_without_applying_deltas();
         }
     }
 

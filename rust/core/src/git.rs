@@ -889,62 +889,58 @@ impl Git {
             if history.hidden.contains(&commit.hash) {
                 continue;
             }
-            let block = history
+            let stashes = history
                 .stashes
                 .iter()
                 .filter(|s| s.parents[0] == commit.hash)
-                .chain(std::iter::once(commit));
-            for (inserted_index, item) in block.enumerate() {
+                .collect::<Vec<_>>();
+            let stash_count = stashes.len();
+            for (inserted_index, item) in stashes.into_iter().chain([commit]).enumerate() {
                 if raw_index == 0 && inserted_index < cursor.inserted_offset {
                     continue;
                 }
-                projected.push((item.clone(), raw_index, inserted_index));
+                projected.push((item, raw_index, inserted_index, stash_count));
             }
         }
-        if cursor.expected.as_ref().is_some_and(|expected| {
-            projected
-                .first()
-                .is_none_or(|(c, _, _)| c.hash != *expected)
-        }) {
+        if cursor
+            .expected
+            .as_ref()
+            .is_some_and(|expected| projected.first().is_none_or(|(c, ..)| c.hash != *expected))
+        {
             return Err(Error::Changed);
         }
-        let shown = projected
+        let graph_commits = projected
             .iter()
             .take(PAGE_SIZE)
-            .map(|(c, _, _)| c.clone())
-            .collect::<Vec<_>>();
-        let graph_commits = projected.iter().take(PAGE_SIZE).map(|(c, raw_index, _)| {
-            let stash = history.stashes.iter().any(|s| s.hash == c.hash);
-            let base = &raw[*raw_index];
-            let stash_base_parent = (stash
-                && !history.snapshot.references.iter().any(|r| r.hash == base.hash))
-                .then(|| base.parents.first().map(String::as_str))
-                .flatten();
-            (
-                c.hash.as_str(),
-                if stash {
-                    &c.parents[..1]
+            .map(|&(commit, _, index, count)| {
+                if index == count {
+                    (
+                        commit.hash.as_str(),
+                        commit.parents.as_slice(),
+                        graph::Placement::Commit { stashes: count },
+                    )
                 } else {
-                    c.parents.as_slice()
-                },
-                stash,
-                stash_base_parent,
-            )
-        });
+                    (
+                        commit.hash.as_str(),
+                        &commit.parents[..1],
+                        graph::Placement::Stash { index, count },
+                    )
+                }
+            });
         let (graph, next_graph) = graph::build(graph_commits, &cursor.graph)?;
         let next = projected
             .get(PAGE_SIZE)
-            .map(|(commit, raw, inserted)| Cursor {
-                offset: cursor.offset + shown.len(),
+            .map(|(commit, raw, inserted, ..)| Cursor {
+                offset: cursor.offset + graph.len(),
                 raw_offset: cursor.raw_offset + raw,
                 inserted_offset: *inserted,
                 expected: Some(commit.hash.clone()),
                 graph: next_graph,
             });
-        let entries = shown
+        let entries = projected
             .into_iter()
             .zip(graph)
-            .map(|(commit, graph)| {
+            .map(|((commit, ..), graph)| {
                 let references = history
                     .snapshot
                     .references
@@ -953,7 +949,7 @@ impl Git {
                     .cloned()
                     .collect();
                 Entry {
-                    commit,
+                    commit: commit.clone(),
                     graph,
                     references,
                 }

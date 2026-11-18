@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.51.2 - 2026-11-18
+
+- Draw each saved stash as a small gray marker beside its original base commit. The stash connection ends at that commit and regular history keeps its Git topology, lane colors, and connections.
+
 ## Rust 0.51.1 - 2026-11-18
 
 - Start reading and selecting commits while Shovel checks the current refs. Paging and repository actions become available after verification.
