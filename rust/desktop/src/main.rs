@@ -1027,7 +1027,7 @@ impl Workspace {
                     .unwrap_or(true),
             );
         }
-        if self.updater.exit_ready {
+        if self.updater.exit_ready() {
             self.exit_ready = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         } else if self.closing

@@ -6,8 +6,9 @@ use shovel_core::{
     updates::{self, Channel, VerifiedRelease},
 };
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{Read, Write},
+    os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     sync::mpsc,
     time::{Duration, Instant},
@@ -351,6 +352,7 @@ fn installed_locator() -> Result<velopack::locator::VelopackLocator, String> {
     velopack::locator::auto_locate_app_manifest(velopack::locator::LocationContext::FromCurrentExe)
         .map_err(|_| text("RustUpdateInstallNeeded"))
 }
+#[derive(Debug)]
 enum ApplyError {
     Retry(String),
     DownloadAgain,
@@ -361,15 +363,24 @@ impl From<String> for ApplyError {
         Self::Retry(message)
     }
 }
-fn verify_for_restart(package: &Path, release: &VerifiedRelease) -> Result<(), ApplyError> {
-    let input = File::open(package).map_err(|error| match error.kind() {
-        std::io::ErrorKind::NotFound => ApplyError::DownloadAgain,
-        _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
-    })?;
-    release.verify_package(input).map_err(|error| match error {
+/// Hold the verified file against writes and replacement until Shovel exits.
+/// Velopack waits for this process before applying the update.
+fn verify_for_restart(package: &Path, release: &VerifiedRelease) -> Result<File, ApplyError> {
+    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+
+    let input = OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(package)
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::NotFound => ApplyError::DownloadAgain,
+            _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
+        })?;
+    release.verify_package(&input).map_err(|error| match error {
         updates::UpdateError::PackageMismatch => ApplyError::DownloadAgain,
         _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
-    })
+    })?;
+    Ok(input)
 }
 fn confirm_published_offer(
     approved: &VerifiedRelease,
@@ -383,7 +394,7 @@ fn confirm_published_offer(
     }
 }
 enum Event {
-    Applied(Result<(), ApplyError>),
+    Applied(Result<File, ApplyError>),
     Checked(u64, Result<Option<Offer>, CheckError>),
     Downloaded(u64, Result<Offer, String>),
     Progress(u64, i16),
@@ -400,7 +411,7 @@ pub struct Controller {
     pub open: bool,
     pub restart_requested: bool,
     pub ready: bool,
-    pub exit_ready: bool,
+    applying_package: Option<File>,
     generation: u64,
     tools_confirmed: bool,
     channel: Channel,
@@ -420,7 +431,7 @@ impl Default for Controller {
             open: false,
             restart_requested: false,
             ready: false,
-            exit_ready: false,
+            applying_package: None,
             generation: 0,
             tools_confirmed: false,
             channel: Channel::Beta,
@@ -442,6 +453,9 @@ impl Default for Controller {
 impl Controller {
     fn busy(&self) -> bool {
         self.phase != Phase::Idle
+    }
+    pub fn exit_ready(&self) -> bool {
+        self.applying_package.is_some()
     }
     pub fn stop_and_drained(&self) -> bool {
         self.cancel();
@@ -500,7 +514,7 @@ impl Controller {
                 Event::Applied(result) => {
                     self.phase = Phase::Idle;
                     match result {
-                        Ok(()) => self.exit_ready = true,
+                        Ok(package) => self.applying_package = Some(package),
                         Err(error) => {
                             self.status = match error {
                                 ApplyError::Retry(message) => message,
@@ -573,7 +587,7 @@ impl Controller {
                 _ => {}
             }
         }
-        if self.busy() || self.restart_requested || self.exit_ready || self.workers.stopping() {
+        if self.busy() || self.restart_requested || self.exit_ready() || self.workers.stopping() {
             return;
         }
         match self.last {
@@ -602,7 +616,7 @@ impl Controller {
     ) {
         if self.busy()
             || self.restart_requested
-            || self.exit_ready
+            || self.exit_ready()
             || self.workers.stopping()
             || !self.workers.idle()
         {
@@ -797,12 +811,12 @@ impl Controller {
                     .ok_or_else(|| text("RustUpdateInvalid"))?;
                 let cancel = Cancellation::default();
                 confirm_published_offer(&offer.release, check(channel, &cancel))?;
+                crate::update_restart::check_repositories(git.as_deref(), &repositories)?;
+                crate::update_restart::other_instances()?;
                 let target = installed_locator()?
                     .get_packages_dir()
                     .join(offer.release.file_name());
-                verify_for_restart(&target, &offer.release)?;
-                crate::update_restart::check_repositories(git.as_deref(), &repositories)?;
-                crate::update_restart::other_instances()?;
+                let package = verify_for_restart(&target, &offer.release)?;
                 recheck_offer(&offer, &cancel)?;
                 manager(&offer, cancel)?
                     .wait_exit_then_apply_updates(
@@ -811,7 +825,8 @@ impl Controller {
                         true,
                         std::env::args_os().skip(1),
                     )
-                    .map_err(|error| failure(error).into())
+                    .map_err(|error| ApplyError::Retry(failure(error)))?;
+                Ok(package)
             })();
             let _ = tx.send(Event::Applied(result));
             ctx.request_repaint();
@@ -863,7 +878,19 @@ mod tests {
         assert_eq!(progress.last(), Some(&100));
         assert!(progress.windows(2).all(|pair| pair[0] <= pair[1]));
         assert_eq!(target.metadata().unwrap().len(), offer.release.size());
-        assert!(verify_for_restart(&target, &offer.release).is_ok());
+        let verified = verify_for_restart(&target, &offer.release).unwrap();
+        let mut controller = Controller::default();
+        controller.tx.send(Event::Applied(Ok(verified))).unwrap();
+        controller.tick(&egui::Context::default(), Channel::Beta, false);
+        assert!(controller.exit_ready());
+        assert!(
+            File::open(&target).is_ok(),
+            "the updater can still read the package"
+        );
+        assert!(OpenOptions::new().write(true).open(&target).is_err());
+        assert!(std::fs::remove_file(&target).is_err());
+        drop(controller);
+        assert!(OpenOptions::new().write(true).open(&target).is_ok());
         updates::floor::recheck(&trusted, &offer.release, &cancel).unwrap();
         assert!(discover(&version).unwrap().is_none());
     }
@@ -901,14 +928,16 @@ mod tests {
             controller.ready = true;
             controller.tools_confirmed = true;
             controller.restart_requested = true;
-            let rechecked = confirm_published_offer(&old.release, result);
-            assert!(rechecked.is_err());
-            controller.tx.send(Event::Applied(rechecked)).unwrap();
+            let error = confirm_published_offer(&old.release, result).unwrap_err();
+            controller
+                .tx
+                .send(Event::Applied(Err(error)))
+                .unwrap();
             controller.tick(&egui::Context::default(), Channel::Beta, false);
             assert_eq!(controller.offer.is_some(), retained);
             assert_eq!(controller.ready, retained);
             assert_eq!(controller.tools_confirmed, retained);
-            assert!(controller.open && !controller.restart_requested && !controller.exit_ready);
+            assert!(controller.open && !controller.restart_requested && !controller.exit_ready());
         }
     }
 
@@ -951,7 +980,7 @@ mod tests {
         app.receive(&ctx);
         assert!(app.updater.open && app.updater.ready);
         assert!(app.updater.needs_tool_confirmation(true));
-        assert!(!app.updater.restart_requested && !app.updater.exit_ready);
+        assert!(!app.updater.restart_requested && !app.updater.exit_ready());
         assert!(!app.pending_exit && !app.closing && !app.exit_ready);
     }
 
@@ -1031,7 +1060,7 @@ mod tests {
             controller.tx.send(Event::Applied(result)).unwrap();
             controller.tick(&ctx, Channel::Beta, false);
             assert!(controller.open && controller.offer.is_some());
-            assert!(!controller.ready && !controller.restart_requested && !controller.exit_ready);
+            assert!(!controller.ready && !controller.restart_requested && !controller.exit_ready());
             assert_eq!(controller.status, text("RustUpdateDownloadAgain"));
         }
         assert_eq!(std::fs::read(path).unwrap(), b"incomplete");
@@ -1043,8 +1072,28 @@ mod tests {
             )))))
             .unwrap();
         controller.tick(&ctx, Channel::Beta, false);
-        assert!(controller.ready && !controller.exit_ready);
+        assert!(controller.ready && !controller.exit_ready());
         assert_eq!(controller.status, text("RustUpdateInstances"));
+    }
+
+    #[test]
+    fn package_open_for_writing_blocks_restart_without_marking_it_damaged() {
+        let directory = tempfile::tempdir().unwrap();
+        let offer = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        );
+        let path = directory.path().join(offer.release.file_name());
+        let writer = File::create(&path).unwrap();
+        assert!(matches!(
+            verify_for_restart(&path, &offer.release),
+            Err(ApplyError::Retry(message)) if message == text("RustUpdateCacheUnavailable")
+        ));
+        drop(writer);
+        assert!(matches!(
+            verify_for_restart(&path, &offer.release),
+            Err(ApplyError::DownloadAgain)
+        ));
     }
 
     #[test]

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Keep the verified package through restart
+
+Restart checks Git state and other Shovel instances before opening and hashing the approved package. The Windows file handle stays with the updater controller after handoff. Velopack can read it while Shovel closes. A writer already holding the file yields a retryable cache error. Missing or damaged bytes require a fresh download.
+
+Seventeen updater checks and the opt-in public 0.50.17 test passed. A native Windows writer blocked restart and the package could be checked again after its handle closed. Separately, the verified public package remained readable after transfer to the controller, denied write and delete access, and became writable after the controller dropped. This exercises the downloaded bytes and handle lifetime. External installer apply and restart still need installed acceptance. All-target Clippy and diff checks passed. All 18 smoke checks passed in 64.37 seconds on source fingerprint `FDB4325909DA0B8716AA5FB2B8DDF66AC2C91E649A9D2063B702B87F8D8F597D`.
+
 ## Restart after a failed profile save
 
 An update restart now returns to the ready offer if saving the profile fails. In the Windows test fixture, a competing writer replaced the settings file after it was loaded. Clicking Restart repeatedly started save attempts on the old source. The corrected path completes the failed attempt, leaves those bytes intact, keeps Shovel open and shows why restart stopped. Sixteen updater tests and the two normal-shutdown failure tests passed. The published Beta transport test ran separately. The fixture uses a signed offer and headless UI input. An installed updater apply and multi-session acceptance remain open.
