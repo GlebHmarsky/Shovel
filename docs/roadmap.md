@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Restore update controls after a worker fails
+
+A discovery worker unwind previously left Updates stuck in Checking after the worker had exited. Discovery and download now report interrupted work as a retryable result. Download progress drains with its work, and a thread creation refusal reports through the existing error path for discovery, download or restart. A controlled discovery interruption kept a verified offer ready and a subsequent manual check completed normally.
+
+Twenty-two updater checks, two string catalogue checks, all-target Clippy and diff checks passed. All 18 smoke checks passed in 36.33 seconds on source fingerprint `52584EDC48B556FC725E0FBB41CE92040EDB5FB78A85F5B43E453AE3921EA331`. The live package and installed apply have their own acceptance checks.
+
 ## Recover when Windows cannot start a queued worker
 
 The scheduler used Rust's panicking thread launcher after reserving the request's lane. A thread creation failure could leave that request marked running without an Activity outcome. The scheduler now retains the request until thread creation succeeds and routes a refusal through the existing worker-failure path. It records the outcome, stops later requests for the same owner and lets linked worktrees continue. Result callbacks that unwind leave the scheduler able to dispatch. [Rust thread creation behavior](https://doc.rust-lang.org/std/thread/fn.spawn.html#panics)

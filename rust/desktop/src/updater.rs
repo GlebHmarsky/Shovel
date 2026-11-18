@@ -10,6 +10,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
     os::windows::fs::OpenOptionsExt,
+    panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     sync::mpsc,
     time::{Duration, Instant},
@@ -177,19 +178,28 @@ fn copy_response(
         }
     }
 }
+fn background_result<T, E: From<String>>(run: impl FnOnce() -> Result<T, E>) -> Result<T, E> {
+    catch_unwind(AssertUnwindSafe(run))
+        .unwrap_or_else(|_| Err(text("RustUpdateWorkerFailed").into()))
+}
+
 fn with_progress(
     run: impl FnOnce(mpsc::Sender<i16>) -> Result<(), String>,
     report: impl Fn(i16) + Send + 'static,
 ) -> Result<(), String> {
-    let (progress, rx) = mpsc::channel();
-    let worker = std::thread::spawn(move || {
-        while let Ok(value) = rx.recv() {
-            report(value);
-        }
-    });
-    let result = run(progress);
-    worker.join().map_err(|_| text("RustUpdateFailed"))?;
-    result
+    std::thread::scope(|scope| {
+        let (progress, rx) = mpsc::channel();
+        let worker = std::thread::Builder::new()
+            .spawn_scoped(scope, move || {
+                while let Ok(value) = rx.recv() {
+                    report(value);
+                }
+            })
+            .map_err(|_| text("RustUpdateWorkerFailed"))?;
+        let result = run(progress);
+        worker.join().map_err(|_| text("RustUpdateWorkerFailed"))?;
+        result
+    })
 }
 fn trusted_directory() -> PathBuf {
     std::env::var_os("LOCALAPPDATA")
@@ -747,12 +757,12 @@ impl Controller {
         self.status = text("RustUpdateChecking");
         self.cancel = Cancellation::default();
         let tx = self.tx.clone();
-        let ctx = ctx.clone();
+        let worker_ctx = ctx.clone();
         let channel = self.channel;
         let cancel = self.cancel.clone();
         let lease = self.workers.start(cancel.clone());
-        std::thread::spawn(move || {
-            let result = run(channel, cancel.clone());
+        let worker = std::thread::Builder::new().spawn(move || {
+            let result = background_result(|| run(channel, cancel.clone()));
             let result = if cancel.is_cancelled() {
                 Err(text("ActionResultCancelled").into())
             } else {
@@ -760,8 +770,15 @@ impl Controller {
             };
             drop(lease);
             let _ = tx.send(Event::Checked(generation, result));
-            ctx.request_repaint();
+            worker_ctx.request_repaint();
         });
+        if worker.is_err() {
+            let _ = self.tx.send(Event::Checked(
+                generation,
+                Err(text("RustUpdateWorkerFailed").into()),
+            ));
+            ctx.request_repaint();
+        }
     }
     pub fn show(&mut self, ctx: &egui::Context, blocked: bool, tools_opened: bool) {
         if !self.open {
@@ -844,10 +861,10 @@ impl Controller {
                         let offer = self.offer.clone().unwrap();
                         let cancel = self.cancel.clone();
                         let tx = self.tx.clone();
-                        let ctx = ctx.clone();
+                        let worker_ctx = ctx.clone();
                         let lease = self.workers.start(cancel.clone());
-                        std::thread::spawn(move || {
-                            let result = (|| {
+                        let worker = std::thread::Builder::new().spawn(move || {
+                            let result = background_result(|| {
                                 recheck_offer(&offer, &cancel)?;
                                 let manager = manager(&offer, cancel.clone())?;
                                 let locator = installed_locator()?;
@@ -867,7 +884,7 @@ impl Controller {
                                     }
                                 }
                                 let pt = tx.clone();
-                                let pc = ctx.clone();
+                                let pc = worker_ctx.clone();
                                 with_progress(
                                     |progress| {
                                         manager
@@ -894,7 +911,7 @@ impl Controller {
                                     )
                                     .map_err(|_| text("RustUpdateInvalid"))?;
                                 Ok(offer)
-                            })();
+                            });
                             drop(lease);
                             let result = if cancel.is_cancelled() {
                                 Err(text("ActionResultCancelled"))
@@ -902,8 +919,15 @@ impl Controller {
                                 result
                             };
                             let _ = tx.send(Event::Downloaded(generation, result));
-                            ctx.request_repaint();
+                            worker_ctx.request_repaint();
                         });
+                        if worker.is_err() {
+                            let _ = self.tx.send(Event::Downloaded(
+                                generation,
+                                Err(text("RustUpdateWorkerFailed")),
+                            ));
+                            ctx.request_repaint();
+                        }
                     }
                 });
             });
@@ -921,8 +945,8 @@ impl Controller {
         self.phase = Phase::Applying;
         self.status = text("UpdateInstalling");
         let tx = self.tx.clone();
-        let ctx = ctx.clone();
-        std::thread::spawn(move || {
+        let worker_ctx = ctx.clone();
+        let worker = std::thread::Builder::new().spawn(move || {
             let result = (|| {
                 let offer = offer
                     .filter(|o| ready && o.release.channel() == channel)
@@ -940,8 +964,14 @@ impl Controller {
                 Ok(package)
             })();
             let _ = tx.send(Event::Applied(result));
-            ctx.request_repaint();
+            worker_ctx.request_repaint();
         });
+        if worker.is_err() {
+            let _ = self.tx.send(Event::Applied(Err(ApplyError::Retry(text(
+                "RustUpdateWorkerFailed",
+            )))));
+            ctx.request_repaint();
+        }
     }
 }
 
@@ -1680,6 +1710,41 @@ mod tests {
             assert_eq!(*seen.lock().unwrap(), vec![12, 47]);
             assert_eq!(result.is_err(), fail);
         }
+    }
+
+    #[test]
+    fn interrupted_discovery_releases_the_update_worker_and_allows_retry() {
+        let ctx = egui::Context::default();
+        let offer = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        );
+        let mut controller = Controller {
+            offer: Some(offer),
+            ready: true,
+            ..Default::default()
+        };
+        let start = Instant::now();
+        let settle = |controller: &mut Controller| {
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while controller.busy() {
+                controller.tick_at(&ctx, Channel::Beta, false, start, |_, _| {
+                    unreachable!("manual checks must not trigger automatic retries")
+                });
+                assert!(Instant::now() < deadline, "update worker did not settle");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            assert!(controller.workers.idle());
+        };
+
+        controller.begin_check(&ctx, start, |_, _| panic!("fixture discovery unwind"));
+        settle(&mut controller);
+        assert_eq!(controller.status, text("RustUpdateWorkerFailed"));
+        assert!(controller.ready && controller.offer.is_some());
+
+        controller.begin_check(&ctx, start, |_, _| Ok(None));
+        settle(&mut controller);
+        assert_eq!(controller.status, text("RustUpdateCurrent"));
     }
 
     #[test]
