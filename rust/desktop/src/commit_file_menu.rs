@@ -430,15 +430,18 @@ impl Editor {
                 11 => self.begin_patch(menu.selected.clone(), ctx),
                 12 | 13 => self.begin_shell(menu.selected.clone(), action == 13, ctx),
                 14 | 15 => {
-                    self.inspector = Some(
-                        crate::file_history::Inspector::new(
-                            menu.selected.context.clone(),
-                            menu.selected.entries[0].clone(),
-                            self.git.clone(),
-                            action == 15,
-                        )
-                        .with_read_workers(self.read_workers.clone()),
-                    );
+                    let mut inspector = crate::file_history::Inspector::new(
+                        menu.selected.context.clone(),
+                        menu.selected.entries[0].clone(),
+                        self.git.clone(),
+                        action == 15,
+                    )
+                    .with_read_workers(self.read_workers.clone());
+                    if let Some(mut previous) = self.inspector.take() {
+                        std::mem::swap(&mut inspector.layout, &mut previous.layout);
+                        inspector.layout.new_viewport();
+                    }
+                    self.inspector = Some(inspector);
                     ctx.request_repaint();
                 }
                 _ => unreachable!(),

@@ -120,6 +120,135 @@ impl Harness {
     }
 }
 #[test]
+fn inspector_windows_restore_independent_sizes_and_keep_normal_bounds() {
+    use crate::{
+        SettingsStore,
+        commit::Editor,
+        window_geometry::{fixture_input, saved_layout},
+        workspace_interaction_tests::workspace,
+    };
+    let h = Harness::new();
+    let profile = h.temp.path().join("profile");
+    let mut store = SettingsStore::new(profile.clone());
+    let mut settings = store.load().unwrap();
+    settings.set(
+        "WindowLayouts",
+        serde_json::json!([
+            {"Key":"FileHistoryWindow","Width":1170,"Height":720,"Maximized":false,
+             "Panes":[{"Key":"history.pane"}],"Imported":7},
+            {"Key":"StashWindow","Width":990,"Height":670,"Maximized":false,"Panes":[]}
+        ]),
+    );
+    store.save(&settings).unwrap();
+    let mut app = workspace();
+    app.tabs.clear();
+    app.settings = store.load().unwrap();
+    app.store = Some(store);
+    let snapshot = h.view.context.repository.clone();
+    let git = h.view.git.clone();
+    let mut editor = Editor::new(
+        snapshot.worktree.clone(),
+        git.clone(),
+        app.scheduler.clone(),
+        shovel_core::drafts::Store {
+            directory: profile.join("drafts"),
+            legacy_directory: None,
+        },
+    );
+    editor.open = false;
+    editor.inspector = Some(h.view);
+    app.editors.push(editor);
+    app.stash_views
+        .push(crate::stashes::View::new(snapshot, git));
+    app.sync_inspector_layouts(false);
+    let ctx = egui::Context::default();
+    ctx.set_zoom_factor(2.);
+    let native = egui::vec2(1300., 820.);
+    let stash_native = egui::vec2(1100., 700.);
+    let observe = |layout: &mut crate::window_geometry::InspectorLayout, size, maximized, class| {
+        ctx.run_ui(fixture_input(size, 1.5, maximized), |ui| {
+            layout.observe(ui.ctx(), class)
+        })
+        .drop_without_applying_deltas();
+    };
+    let history = app.editors[0].inspector.as_mut().unwrap();
+    observe(
+        &mut history.layout,
+        native / 2.,
+        false,
+        egui::ViewportClass::Immediate,
+    );
+    assert_eq!(
+        history.layout.builder(&ctx).inner_size,
+        Some(egui::vec2(585., 360.))
+    );
+    assert_eq!(
+        app.stash_views[0].layout.builder(&ctx).inner_size,
+        Some(egui::vec2(495., 335.))
+    );
+    observe(
+        &mut history.layout,
+        native / 2.,
+        false,
+        egui::ViewportClass::Immediate,
+    );
+    observe(
+        &mut history.layout,
+        egui::vec2(980., 580.),
+        true,
+        egui::ViewportClass::Immediate,
+    );
+    observe(
+        &mut history.layout,
+        egui::vec2(350., 220.),
+        false,
+        egui::ViewportClass::EmbeddedWindow,
+    );
+    assert_eq!(history.layout.builder(&ctx).inner_size, Some(native / 2.));
+    assert_eq!(history.layout.builder(&ctx).maximized, Some(true));
+    for _ in 0..2 {
+        observe(
+            &mut app.stash_views[0].layout,
+            stash_native / 2.,
+            false,
+            egui::ViewportClass::Immediate,
+        );
+    }
+    app.editors[0].inspector.as_mut().unwrap().close();
+    app.receive(&ctx);
+    assert_eq!(
+        saved_layout(&app.settings, "FileHistoryWindow").unwrap()["Width"],
+        1300.
+    );
+    assert_eq!(
+        saved_layout(&app.settings, "StashWindow").unwrap()["Width"],
+        990
+    );
+    let start = Instant::now();
+    while app.saving {
+        app.receive(&ctx);
+        assert!(start.elapsed() < Duration::from_secs(10));
+        thread::sleep(Duration::from_millis(5));
+    }
+    app.close(&ctx);
+    while !app.exit_ready {
+        app.receive(&ctx);
+        assert!(start.elapsed() < Duration::from_secs(10));
+        thread::sleep(Duration::from_millis(5));
+    }
+    let settings = SettingsStore::new(profile).load().unwrap();
+    let history = saved_layout(&settings, "FileHistoryWindow").unwrap();
+    assert_eq!(history["Height"], 820.);
+    assert_eq!(history["Maximized"], true);
+    assert_eq!(history["Panes"][0]["Key"], "history.pane");
+    assert_eq!(history["Imported"], 7);
+    let stash = saved_layout(&settings, "StashWindow").unwrap();
+    assert_eq!(stash["Width"], 1100.);
+    assert_eq!(stash["Height"], 700.);
+    assert_eq!(stash["Maximized"], false);
+}
+
+#[test]
 fn file_history_opens_after_layout_and_compares_the_requested_file_then_shows_committed_blame() {
     let mut h = Harness::new();
     assert!(!h.view.initialized && !h.view.busy && h.view.page.is_none());

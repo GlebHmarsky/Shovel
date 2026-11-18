@@ -122,7 +122,7 @@ pub struct Editor {
     files_focus: Option<egui::Id>,
     patch_picking: bool,
     shell_launcher: crate::file_shell::Launcher,
-    inspector: Option<crate::file_history::Inspector>,
+    pub(super) inspector: Option<crate::file_history::Inspector>,
     patch_picker: Arc<dyn Fn(rfd::FileDialog) -> Option<PathBuf> + Send + Sync>,
 }
 impl Editor {

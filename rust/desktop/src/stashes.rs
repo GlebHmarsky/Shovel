@@ -34,6 +34,7 @@ pub struct View {
     snapshot: Snapshot,
     git: Arc<Git>,
     viewport: egui::ViewportId,
+    pub(super) layout: crate::window_geometry::InspectorLayout,
     list: Option<List>,
     selected: Option<String>,
     navigation: Option<String>,
@@ -80,6 +81,10 @@ impl View {
             snapshot,
             git,
             viewport: egui::ViewportId::from_hash_of(uuid::Uuid::new_v4()),
+            layout: crate::window_geometry::InspectorLayout::new(
+                "StashWindow",
+                egui::vec2(1200., 760.),
+            ),
             list: None,
             selected: None,
             navigation: None,
@@ -303,12 +308,9 @@ impl View {
         let mut action: Option<(Action, Snapshot)> = None;
         ctx.show_viewport_immediate(
             self.viewport,
-            egui::ViewportBuilder::default()
-                .with_title(text("Stashes"))
-                .with_inner_size([1200., 760.])
-                .with_min_inner_size([900., 620.])
-                .with_minimize_button(false),
-            |ui, _| {
+            self.layout.builder(ctx).with_title(text("Stashes")),
+            |ui, class| {
+                self.layout.observe(ui.ctx(), class);
                 visible |= ui.is_visible();
                 if !enabled {
                     ui.disable();

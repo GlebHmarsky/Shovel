@@ -2,6 +2,10 @@
 
 ## Overnight Rust Beta work (2026-11-18)
 
+**File History, Blame and Stashes window sizes after the 0.50.16 cut (R16).** Each inspector uses its existing profile key and restores normal dimensions and maximize state at the active UI scale. Closing File History saves its layout independently of Commit. Closing the app also saves an open Stashes window. Switching inspected files carries forward the current geometry. Resize observations skip zoom transitions, minimized rectangles and embedded parent-window dimensions.
+
+A disk-backed profile fixture at 200% zoom and 150% display scaling restored two different imported sizes. After resizing, maximizing and closing File History, its 1300 × 820 normal bounds, imported pane data and maximize state survived. Stashes independently retained 1100 × 700 at application exit. Four File History tests, two Stashes tests, four earlier geometry tests, all-target Clippy, diff checks and 18 smoke checks passed. Smoke took 18.76 seconds on `52471394922DDD3198F30E2C61A540FE48757587190B4730492D0091EBFFC574`. Physical desktop resizing and multi-monitor placement remain open.
+
 **Reopening a failed commit after its tab closes (R09/R11/R18).** Activity remembers which worktree submitted a failed commit and provides a separate Copy submitted message action. Reopen waits for the existing background history inspection before it opens the current draft. The original draft and staged index were recovered after its editor and retained tab had both been evicted. When an unrelated Git repository took the same folder, Reopen kept its draft and index intact, and Copy returned the original subject and body. Closing the tab during a held read prevented a late Commit window from opening.
 
 Nineteen Commit queue tests, the history cache regressions, all-target Clippy, diff checks and all 18 smoke checks passed. Smoke took 18.44 seconds on `FCEE13377D97C374CD8AC647FAAFBF98A3FA0AA3A1EF1F2CCECD6409DBB508D7`. This fix follows the 0.50.16 release cut.

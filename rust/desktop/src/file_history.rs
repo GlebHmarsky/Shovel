@@ -55,7 +55,7 @@ pub struct Inspector {
     cursors: BTreeMap<usize, Option<Cursor>>,
     selected: Option<String>,
     comparison: comparison::Pane,
-    size: egui::Vec2,
+    pub(super) layout: crate::window_geometry::InspectorLayout,
 }
 impl Inspector {
     pub fn with_read_workers(mut self, workers: crate::read_workers::Workers) -> Self {
@@ -88,7 +88,10 @@ impl Inspector {
             blame: vec![],
             cursors: BTreeMap::from([(0, None)]),
             selected: None,
-            size: egui::vec2(1200., 800.),
+            layout: crate::window_geometry::InspectorLayout::new(
+                "FileHistoryWindow",
+                egui::vec2(1200., 800.),
+            ),
         }
     }
     fn offset(&self) -> usize {
@@ -365,22 +368,18 @@ impl Inspector {
         let mut visible = false;
         ctx.show_viewport_immediate(
             self.id,
-            egui::ViewportBuilder::default()
-                .with_title(strings::format("FileHistoryTitle", &[&self.entry.path]))
-                .with_inner_size(self.size)
-                .with_min_inner_size([900., 620.])
-                .with_minimize_button(false),
-            |ui, _| {
+            self.layout
+                .builder(ctx)
+                .with_title(strings::format("FileHistoryTitle", &[&self.entry.path])),
+            |ui, class| {
                 visible = ui.is_visible();
                 let ctx = ui.ctx().clone();
+                self.layout.observe(&ctx, class);
                 if ctx.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape))
                 {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                     self.close();
                     return;
-                }
-                if let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
-                    self.size = rect.size();
                 }
                 egui::Panel::top("file_history_scope").show(ui, |ui| {
                     ui.label(strings::format(

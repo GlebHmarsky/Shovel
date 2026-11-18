@@ -553,6 +553,7 @@ impl Workspace {
         });
     }
     fn receive(&mut self, ctx: &egui::Context) {
+        self.sync_inspector_layouts(false);
         if !self.closing
             && !self.pending_exit
             && !self.confirm_exit_without_save
@@ -1353,6 +1354,7 @@ impl Workspace {
     // Recheck immediately before every final close: saving settings yields to
     // other views and must never turn a previously safe exit into a command kill.
     fn prepare_exit(&mut self, ctx: &egui::Context) -> bool {
+        self.sync_inspector_layouts(true);
         if self.updater.restart_requested
             && self.updater.needs_tool_confirmation(self.external_tools_opened)
         {
@@ -3232,6 +3234,7 @@ impl eframe::App for Workspace {
             && !self.operations.modal_open()
             && !self.branches.is_open()
             && !self.remotes.is_open();
+        self.sync_inspector_layouts(false);
         let mut stash_navigation = None;
         for view in &mut self.stash_views {
             view.show(&ctx, &mut self.operations, &self.scheduler, stash_input);

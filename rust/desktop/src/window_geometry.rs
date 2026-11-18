@@ -86,7 +86,102 @@ impl Geometry {
     }
 }
 
+pub(super) struct InspectorLayout {
+    key: &'static str,
+    size: egui::Vec2,
+    maximized: bool,
+    geometry: Geometry,
+    restored: bool,
+    changed: bool,
+}
+impl InspectorLayout {
+    pub fn new(key: &'static str, size: egui::Vec2) -> Self {
+        Self {
+            key,
+            size,
+            maximized: false,
+            geometry: Geometry::default(),
+            restored: false,
+            changed: false,
+        }
+    }
+    pub fn builder(&self, ctx: &egui::Context) -> egui::ViewportBuilder {
+        egui::ViewportBuilder::default()
+            .with_inner_size(points(ctx, self.size))
+            .with_min_inner_size(points(ctx, egui::vec2(900., 620.)))
+            .with_maximized(self.maximized)
+            .with_minimize_button(false)
+    }
+    pub fn new_viewport(&mut self) {
+        self.geometry = Geometry::default();
+    }
+    pub fn observe(&mut self, ctx: &egui::Context, class: egui::ViewportClass) {
+        if class == egui::ViewportClass::EmbeddedWindow {
+            return;
+        }
+        let stable_zoom = self.geometry.last_zoom == Some(ctx.zoom_factor());
+        self.geometry.observe(ctx);
+        if !stable_zoom {
+            return;
+        }
+        let (minimized, maximized) =
+            ctx.input(|i| (i.viewport().minimized, i.viewport().maximized));
+        if minimized == Some(true) {
+            return;
+        }
+        if let Some(maximized) = maximized {
+            self.changed |= self.maximized != maximized;
+            self.maximized = maximized;
+        }
+        if let Some(size) = self.geometry.native_size {
+            self.changed |= self.size != size;
+            self.size = size;
+        }
+    }
+    fn sync(
+        &mut self,
+        settings: &mut shovel_core::settings::Settings,
+        open: bool,
+        exiting: bool,
+    ) -> bool {
+        if open && !self.restored {
+            if let Some(layout) = saved_layout(settings, self.key) {
+                self.size = egui::vec2(
+                    layout["Width"].as_f64().unwrap().clamp(900., 7680.) as f32,
+                    layout["Height"].as_f64().unwrap().clamp(620., 4320.) as f32,
+                );
+                self.maximized = layout["Maximized"].as_bool().unwrap_or(false);
+            }
+            self.restored = true;
+        }
+        let save = (!open || exiting) && std::mem::take(&mut self.changed);
+        if save {
+            save_layout(settings, self.key, self.size, self.maximized);
+        }
+        if !open && self.restored {
+            self.restored = false;
+            self.geometry = Geometry::default();
+        }
+        save
+    }
+}
+
 impl crate::Workspace {
+    pub(super) fn sync_inspector_layouts(&mut self, exiting: bool) {
+        for view in &mut self.stash_views {
+            self.preferences_dirty |= view.layout.sync(&mut self.settings, view.open, exiting);
+        }
+        for inspector in self
+            .editors
+            .iter_mut()
+            .filter_map(|editor| editor.inspector.as_mut())
+        {
+            self.preferences_dirty |=
+                inspector
+                    .layout
+                    .sync(&mut self.settings, inspector.open, exiting);
+        }
+    }
     pub(super) fn restore_main_window_layout(&mut self, ctx: &egui::Context) {
         if !self.restore_window_layout {
             return;
