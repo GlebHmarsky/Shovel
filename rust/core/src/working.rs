@@ -179,7 +179,8 @@ fn created_commit(command: &process::Result) -> Option<String> {
 /// std::thread::spawn(move || drop(gate));
 /// ```
 pub struct MutationGate {
-    handle: OwnedHandle,
+    _global: HeldMutex,
+    _session: HeldMutex,
     _thread: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl MutationGate {
@@ -194,27 +195,45 @@ impl MutationGate {
                     .as_bytes()
             )
         );
-        // Share the baseline's native lock to coordinate C# and Rust profiles.
-        let name = format!("Local\\Shovel.{scope}.{key}");
+        let name = format!("Shovel.{scope}.{key}");
+        // Keep the C# lock in the current session. Rust instances also use
+        // the system-wide namespace to coordinate across Windows sessions.
+        let session = HeldMutex::acquire(&format!("Local\\{name}"))?;
+        let global = HeldMutex::acquire(&format!("Global\\{name}"))?;
+        Ok(Self {
+            _global: global,
+            _session: session,
+            _thread: std::marker::PhantomData,
+        })
+    }
+}
+
+struct HeldMutex(OwnedHandle);
+impl HeldMutex {
+    fn acquire(name: &str) -> Result<Self, Error> {
         let wide = name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
-        let raw = unsafe { CreateMutexW(std::ptr::null(), 0, wide.as_ptr()) };
+        let raw = unsafe {
+            CreateMutexExW(
+                std::ptr::null(),
+                wide.as_ptr(),
+                0,
+                SYNCHRONIZATION_SYNCHRONIZE | MUTEX_MODIFY_STATE,
+            )
+        };
         if raw.is_null() {
             return Err(std::io::Error::last_os_error().into());
         }
         let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
         match unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) } {
-            WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Self {
-                handle,
-                _thread: std::marker::PhantomData,
-            }),
+            WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Self(handle)),
             WAIT_TIMEOUT => Err(Error::OtherInstance),
             _ => Err(std::io::Error::last_os_error().into()),
         }
     }
 }
-impl Drop for MutationGate {
+impl Drop for HeldMutex {
     fn drop(&mut self) {
-        unsafe { ReleaseMutex(self.handle.as_raw_handle()) };
+        unsafe { ReleaseMutex(self.0.as_raw_handle()) };
     }
 }
 fn hash(bytes: &[u8]) -> String {

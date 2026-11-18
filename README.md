@@ -8,6 +8,8 @@ Master now contains the Rust application, including its desktop UI and askpass h
 
 To finish an interrupted Beta publication, rerun the Windows workflow on the original tagged commit. For a draft, it restores the original installer archive while GitHub retains it and verifies any existing uploads. For a public version, it downloads the original release, verifies its signature, package and installer, then repairs a missing or stale feed asset. A subsequent master commit with the same Cargo version produces a build artifact.
 
+`scripts/Test-RustPublicBeta.ps1` independently checks a completed Beta run and downloads all seven assets. Pass the version, exact source commit, GitHub run ID and the production verifier built with `cargo build --locked -p shovel-core --example verify_update_bundle`. The script verifies the tag, signed feed, package and installer, compares the live alias and writes a receipt under `Build`.
+
 Requirements: Windows MSVC build tools, Git for Windows, pinned Rust from rust-toolchain.toml, PowerShell 7.4+, and .NET 10 SDK for the Velopack packaging tool only. The application contains no .NET runtime or C# host.
 
 ```powershell

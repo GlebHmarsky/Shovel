@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Coordinate Git mutations across Windows sessions
+
+The native guard holds the existing per-session mutex for compatibility with the C# client. It also holds a system-wide mutex so Rust instances can share the same lock across Windows sessions. Each guard requests the rights needed to wait and release, and releases the first mutex if it cannot acquire the second. Fetch retains its separate lane. [Windows kernel object namespaces](https://learn.microsoft.com/en-us/windows/win32/termserv/kernel-object-namespaces)
+
+A separate native process holding the system-wide mutex did not block linked-worktree Stage before the fix. With the fix, Stage refused that mutex and the original session mutex without changing the index, while the Fetch lane remained available. Stage succeeded after release. The Windows identity suite passed. The fixture covers two native processes in one session. The optional C# pairing and two actual login sessions were outside this check.
+
+The native gate test and the compile-fail thread ownership check passed. All-target Clippy, diff checks and the bounded suite passed. All 18 smoke checks took 47.75 seconds on source fingerprint `83F5179CE630CF6689B698565C120E7788033E11E10D262571B054BF1FC78D99`. The same checkout adds a read-only public Beta verifier that checks the GitHub run and tag before downloading all seven assets. It passed against the live 0.50.17 feed and matching immutable installer.
+
 ## Activity paths and native SSH signing
 
 Activity rows now show mixed-direction repository names in visual order and expose the full logical path to assistive technology. They also show the full path on hover. Authentication and failure details use the existing path formatter. Copy full path in a mixed-direction failure copies the original path. The headless fixture rendered two repositories both named שלום, distinguished them by accessible full paths and verified the clipboard text. Three Activity interaction and layout tests passed. A physical screen reader and whole-window RTL remain open.

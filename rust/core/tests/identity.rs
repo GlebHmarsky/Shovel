@@ -392,6 +392,107 @@ fn dos_short_alias_shares_git_ownership_and_recovers_its_previous_draft() {
 }
 
 #[test]
+fn native_lock_holder_fixture() {
+    use std::os::windows::{
+        ffi::OsStrExt,
+        io::{AsRawHandle, FromRawHandle, OwnedHandle},
+    };
+    use windows_sys::Win32::{
+        Foundation::WAIT_OBJECT_0,
+        System::Threading::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
+    };
+    let Some(name) = std::env::var_os("SHOVEL_TEST_NATIVE_MUTEX") else {
+        return;
+    };
+    let name: Vec<_> = name.encode_wide().chain(Some(0)).collect();
+    let raw = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    assert!(!raw.is_null(), "{}", std::io::Error::last_os_error());
+    let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
+    assert_eq!(
+        unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) },
+        WAIT_OBJECT_0
+    );
+    fs::write(std::env::var_os("SHOVEL_TEST_MUTEX_READY").unwrap(), b"ready").unwrap();
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).unwrap();
+    assert_ne!(unsafe { ReleaseMutex(handle.as_raw_handle()) }, 0);
+}
+
+#[test]
+fn stage_in_linked_worktree_respects_both_native_mutex_namespaces() {
+    use shovel_core::working::Action;
+    use sha2::{Digest, Sha256};
+
+    struct ChildLock(Child);
+    impl Drop for ChildLock {
+        fn drop(&mut self) {
+            drop(self.0.stdin.take());
+            let _ = self.0.wait();
+        }
+    }
+
+    let fixture = Fixture::new();
+    let linked = fixture._temp.path().join("linked");
+    fixture.command(
+        &fixture.root,
+        &["worktree", "add", "--detach", linked.to_str().unwrap()],
+    );
+    fs::write(linked.join("file"), b"linked edit\n").unwrap();
+    let review = fixture.review(&linked);
+    let common = &review.repository.common_directory;
+    assert_eq!(&identity::read(&fixture.root).unwrap().common, common);
+    let key = Sha256::digest(
+        shovel_core::case::invariant_upper(&common.to_string_lossy().replace('/', "\\"))
+            .unwrap()
+            .as_bytes(),
+    );
+    let index_path = review.repository.git_directory.join("index");
+    let before = fs::read(&index_path).unwrap();
+    let selected = Action::Stage(review.entries.clone());
+    for scope in ["Global", "Local"] {
+        let signal = fixture._temp.path().join(format!("{scope}-ready"));
+        let mut owner = ChildLock(
+            Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "native_lock_holder_fixture"])
+                .env(
+                    "SHOVEL_TEST_NATIVE_MUTEX",
+                    format!("{scope}\\Shovel.GitAction.{key:X}"),
+                )
+                .env("SHOVEL_TEST_MUTEX_READY", &signal)
+                .creation_flags(0x08000000)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !signal.exists() {
+            assert!(owner.0.try_wait().unwrap().is_none(), "{scope} holder exited");
+            assert!(Instant::now() < deadline, "{scope} holder did not acquire");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            matches!(
+                fixture.git.execute_working(&review, &selected, None),
+                Err(Error::OtherInstance)
+            ),
+            "{scope} mutex did not block Stage"
+        );
+        assert_eq!(fs::read(&index_path).unwrap(), before);
+        // A failed acquisition must never strand the other lock or block Fetch's separate lane.
+        drop(MutationGate::acquire(common, true).unwrap());
+        drop(owner);
+        drop(MutationGate::acquire(common, false).unwrap());
+    }
+    let staged = fixture
+        .git
+        .execute_working(&review, &selected, None)
+        .unwrap();
+    assert!(staged.command.success());
+    assert_ne!(fs::read(index_path).unwrap(), before);
+}
+
+#[test]
 fn replaced_root_and_git_directory_reject_stage_despite_identical_git_state() {
     let f = Fixture::new();
     let before = f.review(&f.root);
