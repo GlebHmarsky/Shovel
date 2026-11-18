@@ -11,7 +11,7 @@ use std::{
 
 #[test]
 fn native_git_credential_fill_invokes_the_rust_helper() {
-    let helper = Path::new(env!("CARGO_BIN_EXE_ShovelRustAskPass"));
+    let helper = Path::new(env!("CARGO_BIN_EXE_ShovelAskPass"));
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let recorded = prompts.clone();
     let session = Session::start(
@@ -61,7 +61,7 @@ fn native_git_credential_fill_invokes_the_rust_helper() {
 
 #[test]
 fn compiled_helper_preserves_ssh_confirmation_and_refusal_exit_codes() {
-    let helper = Path::new(env!("CARGO_BIN_EXE_ShovelRustAskPass"));
+    let helper = Path::new(env!("CARGO_BIN_EXE_ShovelAskPass"));
     let session = Session::start(
         helper,
         Arc::new(move |prompt| {

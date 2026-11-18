@@ -479,7 +479,7 @@ impl Controller {
             .collapsible(false)
             .show(ctx, |ui| {
                 ui.label(format!(
-                    "Shovel Rust {} · {}",
+                    "Shovel {} · {}",
                     env!("CARGO_PKG_VERSION"),
                     self.channel.label()
                 ));
@@ -616,15 +616,24 @@ impl Controller {
     }
 }
 
-// Check all Windows sessions, not just windows in this profile.
+// Check all Windows sessions for processes using the installation being updated.
 fn other_instances() -> Result<(), String> {
+    use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::{
-        Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
-        System::Diagnostics::ToolHelp::{
-            CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
-            TH32CS_SNAPPROCESS,
+        Foundation::{CloseHandle, ERROR_INVALID_PARAMETER, GetLastError, INVALID_HANDLE_VALUE},
+        System::{
+            Diagnostics::ToolHelp::{
+                CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+                TH32CS_SNAPPROCESS,
+            },
+            Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW},
         },
     };
+    let current = std::env::current_exe().map_err(failure)?;
+    let directory = current
+        .parent()
+        .ok_or_else(|| text("RustUpdateInstances"))?;
+    let mut image = vec![0u16; 32768];
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if snapshot == INVALID_HANDLE_VALUE {
@@ -644,11 +653,31 @@ fn other_instances() -> Result<(), String> {
                 .position(|c| *c == 0)
                 .unwrap_or(entry.szExeFile.len());
             let name = String::from_utf16_lossy(&entry.szExeFile[..end]);
-            if entry.th32ProcessID != std::process::id()
-                && name.eq_ignore_ascii_case("ShovelRust.exe")
-            {
+            let pid = entry.th32ProcessID;
+            if pid != std::process::id() && name.eq_ignore_ascii_case("ShovelRust.exe") {
                 CloseHandle(snapshot);
                 return Err(text("RustUpdateInstances"));
+            }
+            if pid != std::process::id() && name.eq_ignore_ascii_case("Shovel.exe") {
+                // The older C# client also uses Shovel.exe in a separate installation.
+                let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                let blocks_update = if process.is_null() {
+                    GetLastError() != ERROR_INVALID_PARAMETER
+                } else {
+                    let mut length = image.len() as u32;
+                    let read = QueryFullProcessImageNameW(process, 0, image.as_mut_ptr(), &mut length);
+                    CloseHandle(process);
+                    read == 0
+                        || PathBuf::from(std::ffi::OsString::from_wide(&image[..length as usize]))
+                            .parent()
+                            .is_some_and(|parent| {
+                                parent.as_os_str().eq_ignore_ascii_case(directory.as_os_str())
+                            })
+                };
+                if blocks_update {
+                    CloseHandle(snapshot);
+                    return Err(text("RustUpdateInstances"));
+                }
             }
             next = Process32NextW(snapshot, &mut entry);
         }

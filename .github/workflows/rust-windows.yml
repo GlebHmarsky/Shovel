@@ -73,7 +73,7 @@ jobs:
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: ShovelRust-Windows-${{ github.sha }}
+          name: Shovel-Windows-${{ github.sha }}
           path: |
             Build/rust-*-installer-win-rust-beta/*
             Build/rust-*-win-x64/*

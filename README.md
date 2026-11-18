@@ -20,7 +20,7 @@ Requirements: Windows MSVC build tools, Git for Windows, pinned Rust from rust-t
 
 The local signing key remains outside Git at ~/.shovel-signing/shovel-update.key. GitHub uses the encrypted RUST_UPDATE_PRIVATE_KEY repository secret containing that same key; it is materialized only in runner temporary storage and removed after packaging. Publisher/Authenticode signing is not configured.
 
-Keep ShovelRustAskPass.exe next to ShovelRust.exe. Launch with --data-directory PATH for an isolated test profile. Native UI acceptance, final-version installed updates and paired C#/Rust benchmarks remain distinct from build/smoke checks. Historical product/architecture/roadmap sections document the parity baseline; old C# build commands and source paths are not current master commands. Old paired C# fixture scripts are preserved in the Rust development history at bb278e1 for future baseline extraction.
+Keep ShovelAskPass.exe next to Shovel.exe. Launch with --data-directory PATH for an isolated test profile. Native UI acceptance, final-version installed updates and paired C#/Rust benchmarks remain distinct from build/smoke checks. Historical product/architecture/roadmap sections document the parity baseline; old C# build commands and source paths are not current master commands. Old paired C# fixture scripts are preserved in the Rust development history at bb278e1 for future baseline extraction.
 
 ## Rust Stable 0.50.3 promotion
 

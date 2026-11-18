@@ -43,8 +43,9 @@ try{
         & dotnet tool restore
         if($LASTEXITCODE -ne 0){throw 'Pinned Velopack tool restore failed.'}
         $notes=Join-Path $output 'release-notes.md'
-        [IO.File]::WriteAllText($notes,"Shovel Rust $version Beta. Native Rust workspace preview. Full C# parity is still in progress. Independent Rust-only updates. See TODO and roadmap for verification limits.")
-        & dotnet vpk pack --packId ShovelRust --packVersion $version --packDir (Join-Path $payload 'app') --mainExe ShovelRust.exe --packTitle 'Shovel Rust' --packAuthors 'Shovel contributors' --channel $Channel --runtime win-x64 --delta None --icon (Join-Path $root 'rust/assets/Shovel.ico') --outputDir $output --releaseNotes $notes
+        $releaseChannel=if($plan.GitHubPrerelease){'Beta'}else{'Stable'}
+        [IO.File]::WriteAllText($notes,"Shovel $version $releaseChannel. See the changelog for changes and TODO for verification limits.")
+        & dotnet vpk pack --packId $plan.Product --packVersion $version --packDir (Join-Path $payload 'app') --mainExe $plan.Executable --packTitle 'Shovel' --packAuthors 'Shovel contributors' --channel $Channel --runtime win-x64 --delta None --icon (Join-Path $root 'rust/assets/Shovel.ico') --outputDir $output --releaseNotes $notes
         if($LASTEXITCODE -ne 0){throw 'Rust installer packaging failed.'}
     }finally{Pop-Location}
     $setups=@(Get-ChildItem -LiteralPath $output -Filter '*Setup.exe' -File)
@@ -55,11 +56,24 @@ try{
     $metadata=Get-Content -LiteralPath $feed -Raw | ConvertFrom-Json
     $assets=@($metadata.Assets | Where-Object {$_.Type -eq 'Full' -and $_.Version -eq $version -and $_.PackageId -eq 'ShovelRust'})
     if($assets.Count -ne 1 -or $assets[0].FileName -ne $plan.Package){throw 'Unexpected Rust package identity.'}
+    $package=Join-Path $output $plan.Package
+    $archive=[IO.Compression.ZipFile]::OpenRead($package)
+    try{
+        $entry=$archive.GetEntry("$($plan.Product).nuspec")
+        if(!$entry){throw 'Installer package manifest is missing.'}
+        $reader=[IO.StreamReader]::new($entry.Open())
+        try{[xml]$manifest=$reader.ReadToEnd()}finally{$reader.Dispose()}
+        $app=$manifest.package.metadata
+        if($app.id -ne $plan.Product -or $app.title -cne 'Shovel' -or $app.mainExe -cne $plan.Executable -or
+           !$archive.GetEntry("lib/app/$($plan.Executable)") -or !$archive.GetEntry('lib/app/ShovelAskPass.exe')){
+            throw 'Installer package must use the Shovel display name and contain the expected executables.'
+        }
+    }finally{$archive.Dispose()}
     $signed=[ordered]@{SchemaVersion=1;Product='ShovelRust';Channel=$Channel;Architecture='win-x64';SourceCommit=$commit;Assets=$assets}
     $signed | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $feed -Encoding utf8NoBOM
     $signature=$key.SignData([IO.File]::ReadAllBytes($feed),[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pss)
     [IO.File]::WriteAllBytes("$feed.sig",$signature)
-    & (Join-Path $payload 'verify_update_bundle.exe') $Channel $version $commit $feed "$feed.sig" (Join-Path $output $plan.Package)
+    & (Join-Path $payload 'verify_update_bundle.exe') $Channel $version $commit $feed "$feed.sig" $package
     if($LASTEXITCODE -ne 0){throw 'Production Rust signature/package verification failed.'}
     [ordered]@{Version=$version;Product='ShovelRust';Channel=$Channel;Repository=$plan.Repository;Tag=$plan.Tag;FeedTag=$plan.FeedTag;SourceCommit=$commit;SourceFingerprint=$evidence.SourceFingerprint;Published=$false;Authenticode=$false;ParityVerified=$false} |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'release-info.json') -Encoding utf8NoBOM

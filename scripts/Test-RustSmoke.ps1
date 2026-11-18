@@ -20,14 +20,14 @@ try{
         @('shovel-core','--lib','settings::tests::competing_writer_preserved_and_successful_save_keeps_backup'),
         @('shovel-core','--lib','settings::tests::explicit_fetch_interval_survives_and_channels_cannot_be_csharp'),
         @('shovel-core','--test=network','automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation'),
-        @('shovel-desktop','--bin=ShovelRust','workspace_interaction_tests::tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop'),
-        @('shovel-desktop','--bin=ShovelRust','workspace_interaction_tests::details_splitter_reserves_history_and_saves_drag_proportion'),
-        @('shovel-desktop','--bin=ShovelRust','workspace_interaction_tests::reference_navigation_finds_old_tags_and_stashes_beyond_first_page'),
-        @('shovel-desktop','--bin=ShovelRust','operations::tests::network_options_are_modal_persist_on_close_and_do_not_execute'),
-        @('shovel-desktop','--bin=ShovelRust','operations::activity_layout_test::retained_operation_output_does_not_push_down_repository_tabs'),
-        @('shovel-desktop','--bin=ShovelRust','git_identity::tests::global_identity_preserves_other_config_and_rejects_stale_review'),
-        @('shovel-desktop','--bin=ShovelRust','updater::tests::obsolete_update_events_cannot_restore_previous_channel_or_progress'),
-        @('shovel-desktop','--bin=ShovelRust','caption::tests::hidden_window_extends_client_area_and_separates_drag_from_buttons')
+        @('shovel-desktop','--bin=Shovel','workspace_interaction_tests::tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop'),
+        @('shovel-desktop','--bin=Shovel','workspace_interaction_tests::details_splitter_reserves_history_and_saves_drag_proportion'),
+        @('shovel-desktop','--bin=Shovel','workspace_interaction_tests::reference_navigation_finds_old_tags_and_stashes_beyond_first_page'),
+        @('shovel-desktop','--bin=Shovel','operations::tests::network_options_are_modal_persist_on_close_and_do_not_execute'),
+        @('shovel-desktop','--bin=Shovel','operations::activity_layout_test::retained_operation_output_does_not_push_down_repository_tabs'),
+        @('shovel-desktop','--bin=Shovel','git_identity::tests::global_identity_preserves_other_config_and_rejects_stale_review'),
+        @('shovel-desktop','--bin=Shovel','updater::tests::obsolete_update_events_cannot_restore_previous_channel_or_progress'),
+        @('shovel-desktop','--bin=Shovel','caption::tests::hidden_window_extends_client_area_and_separates_drag_from_buttons')
     )
     if($checks.Count -gt 30){throw 'Smoke count exceeded.'}
     $suite=[Diagnostics.Stopwatch]::StartNew()

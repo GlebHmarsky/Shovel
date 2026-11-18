@@ -45,7 +45,7 @@ fn source(h: &Harness) -> PathBuf {
 }
 fn options(h: &mut Harness, source: &str, target: &Path) {
     h.app.operations.set_authentication_helper(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelRustAskPass.exe"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelAskPass.exe"),
     );
     h.click(&text("FileMenu"));
     h.click(&text("ActionTitleClone"));

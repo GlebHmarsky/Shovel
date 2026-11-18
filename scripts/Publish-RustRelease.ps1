@@ -86,7 +86,7 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Rust branch push failed. No release published.'}
     $remote=Invoke-RestMethod "$api/commits/$($plan.ReleaseBranch)" -Headers $headers
     if($remote.sha -ne $commit){throw 'Rust release branch differs from packaged commit.'}
-    $body=@{tag_name=$plan.Tag;target_commitish=$commit;name="Shovel Rust $($plan.Version) - $($plan.Channel)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$plan.GitHubPrerelease;make_latest='false'} | ConvertTo-Json
+    $body=@{tag_name=$plan.Tag;target_commitish=$commit;name="Shovel $($plan.Version) - $($plan.Channel)";body=(Get-Content (Join-Path $directory 'release-notes.md') -Raw);draft=$true;prerelease=$plan.GitHubPrerelease;make_latest='false'} | ConvertTo-Json
     $release=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body $body
     foreach($name in $assetNames){Upload-Asset $release $name}
     $published=Invoke-RestMethod "$api/releases/$($release.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body (@{draft=$false;prerelease=$plan.GitHubPrerelease;make_latest='false'}|ConvertTo-Json)
@@ -96,7 +96,7 @@ try {
         if((Get-FileHash (Join-Path $probe $name)).Hash -ne $hashes[$name]){throw 'Anonymous Rust download differs from built artifact.'}
     }
     if(!$alias){
-        $alias=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body (@{tag_name=$plan.FeedTag;target_commitish=$commit;name="Shovel Rust $($plan.FeedTag) update feed";body='Signed Rust-only update metadata. Partial Beta; see versioned release and TODO for parity limits.';draft=$true;prerelease=$true;make_latest='false'}|ConvertTo-Json)
+        $alias=Invoke-RestMethod "$api/releases" -Headers $headers -Method Post -ContentType 'application/json' -Body (@{tag_name=$plan.FeedTag;target_commitish=$commit;name="Shovel $($plan.FeedTag) update feed";body='Signed Rust-only update metadata. Partial Beta; see versioned release and TODO for parity limits.';draft=$true;prerelease=$true;make_latest='false'}|ConvertTo-Json)
     }
     foreach($name in @($plan.Feed,"$($plan.Feed).sig")){
         foreach($old in @($alias.assets | Where-Object name -eq $name)){Invoke-RestMethod "$api/releases/assets/$($old.id)" -Headers $headers -Method Delete | Out-Null}

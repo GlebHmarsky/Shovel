@@ -18,8 +18,8 @@ function Get-RustReleasePlan {
         Channel=$Channel; Version=$Version; SourceCommit=$SourceCommit; SourceBranch=$SourceBranch
         ReleaseBranch="codex/rust-$suffix"; FeedTag="rust-$suffix"
         Tag="rust-v$Version-$Channel"; Feed="releases.$Channel.json"
-        Package="ShovelRust-$Version-$Channel-full.nupkg"; Installer='ShovelRust-Setup.exe'
-        Executable='ShovelRust.exe'; GitHubPrerelease=($Channel -eq 'win-rust-beta'); MakeLatest='false'
+        Package="ShovelRust-$Version-$Channel-full.nupkg"; Installer='Shovel-Setup.exe'
+        Executable='Shovel.exe'; GitHubPrerelease=($Channel -eq 'win-rust-beta'); MakeLatest='false'
         StableApproval=$(if ($Channel -eq 'win-rust-stable') {$StableApproval} else {$null})
     }
 }

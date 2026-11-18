@@ -36,7 +36,7 @@ fn submodule_fixture(
     let tip = f.command(&["-C", source_arg, "rev-parse", "HEAD"], &[]);
     let mut app = f.app(ctx);
     app.operations.set_authentication_helper(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelRustAskPass.exe"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelAskPass.exe"),
     );
     settle_submodule(&mut app, ctx);
     let child = f.root.join("modules/child");

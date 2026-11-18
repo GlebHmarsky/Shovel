@@ -316,7 +316,7 @@ impl Controller {
                 Some(path) => path,
                 None => std::env::current_exe()
                     .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))?
-                    .with_file_name("ShovelRustAskPass.exe"),
+                    .with_file_name("ShovelAskPass.exe"),
             };
             authentication::Session::start(&helper, handler)
                 .map_err(|_| shovel_core::operation::Error::Code("ActionAskPassMissing"))
@@ -878,7 +878,7 @@ impl Controller {
                     Some(path) => path,
                     None => std::env::current_exe()
                         .map_err(|_| text("ActionAskPassMissing"))?
-                        .with_file_name("ShovelRustAskPass.exe"),
+                        .with_file_name("ShovelAskPass.exe"),
                 };
                 let auth = authentication::Session::start(&helper, handler)
                     .map_err(|_| text("ActionAskPassMissing"))?;
@@ -1083,7 +1083,7 @@ impl Controller {
                                 Some(path) => path.clone(),
                                 None => std::env::current_exe()
                                     .map_err(|_| text("ActionAskPassMissing"))?
-                                    .with_file_name("ShovelRustAskPass.exe"),
+                                    .with_file_name("ShovelAskPass.exe"),
                             };
                             let prompt_sender = sender.clone();
                             let prompt_ctx = ctx.clone();
@@ -1805,7 +1805,7 @@ mod tests {
         let (temporary, git, snapshot) = fixture();
         let path = temporary.path();
         let helper = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/debug/ShovelRustAskPass.exe");
+            .join("../../target/debug/ShovelAskPass.exe");
         assert!(
             helper.is_file(),
             "build shovel-askpass before this focused check"

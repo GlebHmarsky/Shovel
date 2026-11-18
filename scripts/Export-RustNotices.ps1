@@ -52,7 +52,7 @@ foreach ($package in ($metadata.packages | Where-Object { $_.source -and $resolv
     $components.Add([ordered]@{Name=$package.name;Version=$package.version;License=$package.license;Repository=$package.repository;Licenses=$licenses})
 }
 $builder = [Text.StringBuilder]::new()
-[void]$builder.AppendLine('Shovel Rust — third-party notices')
+[void]$builder.AppendLine('Shovel — third-party notices')
 [void]$builder.AppendLine('This conservative inventory includes the Windows target dependency graph, including build and test dependencies. Their inclusion does not imply that every component is present in the installed executable. Rust code and fonts are compiled into the native executables; the Velopack installer/updater is distributed with its own upstream notices.')
 [void]$builder.AppendLine('Full license texts follow the component index. Repeated texts are included once and identified by their SHA-256. Upstream attributions and license terms are preserved.')
 [void]$builder.AppendLine('The Rust standard-library copyright and license notices are included separately in rust-standard-library/COPYRIGHT-library.html and its licenses directory, copied from the pinned toolchain distribution.')

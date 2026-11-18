@@ -19,6 +19,7 @@ foreach ($case in @('stable-without-approval','csharp-channel','foreign-source',
     if (!$rejected) {throw "Release policy admitted $case"}
 }
 $config=Get-Content (Join-Path $PSScriptRoot '../distribution/rust-channels.json') -Raw | ConvertFrom-Json
+if ($config.Product -ne $beta.Product -or $config.Executable -cne 'Shovel.exe' -or $config.Executable -cne $beta.Executable -or $beta.Installer -cne 'Shovel-Setup.exe') {throw 'Windows installer naming or package identity differs from release policy'}
 foreach ($plan in @($beta,$stable)) {
     $entry=@($config.Channels | Where-Object Channel -eq $plan.Channel)
     if ($entry.Count -ne 1 -or $entry[0].Branch -ne $plan.ReleaseBranch -or $entry[0].FeedTag -ne $plan.FeedTag -or $entry[0].Feed -ne $plan.Feed -or $entry[0].GitHubPrerelease -ne $plan.GitHubPrerelease -or $entry[0].MakeLatest) {throw 'Channel manifest differs from release policy'}

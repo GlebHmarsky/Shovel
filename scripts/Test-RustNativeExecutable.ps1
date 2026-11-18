@@ -4,7 +4,7 @@ function Test-RustNativeExecutable {
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][string]$Version,
-        [Parameter(Mandatory)][ValidateSet('ShovelRust.exe','ShovelRustAskPass.exe')][string]$Executable
+        [Parameter(Mandatory)][ValidateSet('Shovel.exe','ShovelAskPass.exe')][string]$Executable
     )
     $ErrorActionPreference = 'Stop'
     if ($null -eq ('ShovelRust.Packaging.NativeImage' -as [type])) {
@@ -85,13 +85,13 @@ namespace ShovelRust.Packaging {
     }
     $resolved = (Resolve-Path -LiteralPath $Path).Path
     $image = [ShovelRust.Packaging.NativeImage]::Read($resolved)
-    $subsystem = if ($Executable -eq 'ShovelRust.exe') { 2 } else { 3 }
+    $subsystem = if ($Executable -eq 'Shovel.exe') { 2 } else { 3 }
     if ($image.Machine -ne 0x8664 -or $image.Managed -or $image.Subsystem -ne $subsystem) { throw 'Rust executable must be native x64 with the intended Windows subsystem.' }
     $forbidden = @($image.Imports | Where-Object { $_ -match '(?i)^(vcruntime|msvcp|msvcr|coreclr|hostfxr|hostpolicy|mscoree|clr)\d*.*\.dll$' })
     if ($forbidden.Count) { throw "Unexpected runtime dependency: $($forbidden -join ', '). Build Rust with static CRT linking." }
     foreach ($type in @(3,14,16,24)) { if ($type -notin $image.ResourceTypes) { throw "Missing native resource type $type." } }
     $metadata = [Diagnostics.FileVersionInfo]::GetVersionInfo($resolved)
-    if ($metadata.ProductName -ne 'ShovelRust' -or $metadata.ProductVersion -ne $Version -or $metadata.FileVersion -ne "$Version.0" -or $metadata.OriginalFilename -ne $Executable) { throw 'Native executable identity/version does not match the Rust package.' }
+    if ($metadata.ProductName -ne 'Shovel' -or $metadata.ProductVersion -ne $Version -or $metadata.FileVersion -ne "$Version.0" -or $metadata.OriginalFilename -ne $Executable) { throw 'Native executable identity/version does not match the Rust package.' }
     [xml]$manifest = $image.Manifest.TrimStart([char]0xfeff)
     if ($manifest.assembly.assemblyIdentity.name -ne [IO.Path]::GetFileNameWithoutExtension($Executable) -or
         $manifest.assembly.trustInfo.security.requestedPrivileges.requestedExecutionLevel.level -ne 'asInvoker' -or

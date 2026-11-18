@@ -862,7 +862,7 @@ fn sidebar_remote_fetch_uses_clicked_target_without_changing_toolbar_flags() {
     ctx.enable_accesskit();
     let mut app = f.app(&ctx);
     app.operations.set_authentication_helper(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelRustAskPass.exe"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelAskPass.exe"),
     );
     let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
     let prefs = serde_json::json!([{"Path":snapshot.worktree.to_string_lossy(),"Action":2,"Branch":"main",

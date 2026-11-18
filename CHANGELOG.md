@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.14 - 2026-11-18
+
+- Name the installed Windows app and shortcuts Shovel. Ship `Shovel.exe` in `Shovel-Setup.exe` and retain the existing signed update package and profile identities.
+
 ## Rust 0.50.13 - 2026-11-18
 
 - Grey history commits ahead of the checked-out branch's configured upstream. Show green local branch badges and red remote branch badges, and hide HEAD aliases from the workspace.

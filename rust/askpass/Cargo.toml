@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "ShovelRustAskPass"
+name = "ShovelAskPass"
 path = "src/main.rs"
 
 [dependencies]

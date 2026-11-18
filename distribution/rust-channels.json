@@ -5,7 +5,7 @@
   "DevelopmentBranch": "master",
   "BaselineCommit": "2175458",
   "DefaultChannel": "win-rust-beta",
-  "Executable": "ShovelRust.exe",
+  "Executable": "Shovel.exe",
   "ProfileDirectory": "ShovelRust/Foundation",
   "Channels": [
     {

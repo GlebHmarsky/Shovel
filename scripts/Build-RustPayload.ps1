@@ -26,7 +26,7 @@ try {
     $env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS = '-C target-feature=+crt-static'
     & cargo build --locked --release --target x86_64-pc-windows-msvc -j 1 -p shovel-desktop -p shovel-askpass -p shovel-core --bins --example verify_update_bundle
     if ($LASTEXITCODE -ne 0) { throw 'Native Rust payload compilation failed.' }
-    $binaries = foreach ($executable in @('ShovelRust.exe','ShovelRustAskPass.exe')) {
+    $binaries = foreach ($executable in @('Shovel.exe','ShovelAskPass.exe')) {
         $path = Join-Path $root "target/x86_64-pc-windows-msvc/release/$executable"
         $verified = Test-RustNativeExecutable -Path $path -Version $version -Executable $executable
         Copy-Item -LiteralPath $path -Destination $app

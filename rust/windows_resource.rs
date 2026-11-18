@@ -14,7 +14,7 @@ pub fn compile(executable: &str, description: &str) {
     let version = std::env::var("CARGO_PKG_VERSION").expect("Cargo supplies a package version");
     let mut resource = winresource::WindowsResource::new();
     resource
-        .set("ProductName", "ShovelRust")
+        .set("ProductName", "Shovel")
         .set("FileDescription", description)
         .set("OriginalFilename", executable)
         .set("InternalName", executable.trim_end_matches(".exe"))

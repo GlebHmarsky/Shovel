@@ -5,7 +5,7 @@ use std::fs;
 
 fn controller() -> Controller {
     let helper =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelRustAskPass.exe");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelAskPass.exe");
     assert!(
         helper.is_file(),
         "build shovel-askpass before this focused check"
