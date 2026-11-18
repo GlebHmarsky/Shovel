@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.50.23 - 2026-11-18
+
+- Use Refresh or F5 in Local Changes to recover after a draft read or save fails. Shovel keeps newer saved text and can confirm a draft that was already written before its worker stopped.
+- Retry an interrupted checkout review without closing it or giving up its place in the repository queue. Shovel still checks the original worktree, branch and commit before accepting checkout.
+- Keep the verified update available for another Restart if the background restart checks stop unexpectedly.
+
 ## Rust 0.50.22 - 2026-11-18
 
 - Navigate the vertical Settings categories with Up, Down, Home and End. Tab enters the selected form, and Windows accessibility exposes each category and its associated page.

@@ -1,5 +1,9 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.23 release checks
+
+This build includes Local Changes draft recovery, queued checkout review retry, and recovery when the update restart checks are interrupted. The versioned source passed 23 updater tests, three draft retry tests and the queued checkout regression. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 60.23 seconds on source fingerprint `640F8B9470FBCB0ADD44C861FE67669506A35AF2D9CB3484137B7530E743704D`. The public bundle verifier and headless native updater probe were built from this source.
+
 ## Retry queued checkout without losing its place
 
 An interrupted checkout read left the review waiting indefinitely. It now offers **Retry reading changes** and keeps the original worktree, branch, commit and place in the queue. If the repository changed, the review asks the user to reopen it. Checkout still requires confirmation after a successful read.
