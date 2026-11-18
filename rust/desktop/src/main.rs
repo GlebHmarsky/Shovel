@@ -1516,7 +1516,7 @@ impl Workspace {
 fn error_text(error: shovel_core::git::Error) -> String {
     match error {
         shovel_core::git::Error::Command { output, .. } => {
-            format!("{}\n{output}", strings::text("HistoryFailed"))
+            operations::git_error_message(&strings::text("HistoryFailed"), &output)
         }
         shovel_core::git::Error::MissingGit => strings::text("GitErrorMissingGit"),
         shovel_core::git::Error::Invalid => strings::text("GitErrorInvalidOutput"),

@@ -3,7 +3,7 @@ use crate::{
     authentication,
     git::Git,
     initialization::{self, Completed},
-    network::redact,
+    network::captured_output,
     operation::Error,
     process::{self, Cancellation, Lifetime, OutputCallback},
     working::MutationGate,
@@ -114,19 +114,6 @@ impl Git {
         let mut request = self.request(&parent, args, Lifetime::AcceptedCommand, 1024 * 1024);
         request.environment.extend(environment);
         let result = process::run(&request, &cancel, progress)?;
-        // A bounded final chunk can end in the middle of a credential-bearing
-        // URL. Publish only complete lines when native output was truncated.
-        let captured = |bytes: &[u8]| {
-            let bytes = if result.outcome == process::Outcome::OutputLimit {
-                &bytes[..bytes
-                    .iter()
-                    .rposition(|b| matches!(b, b'\r' | b'\n'))
-                    .map_or(0, |n| n + 1)]
-            } else {
-                bytes
-            };
-            redact(&String::from_utf8_lossy(bytes))
-        };
         let mut completed = Completed {
             repository: None,
             succeeded: result.success(),
@@ -137,7 +124,7 @@ impl Git {
             } else {
                 "CloneIncomplete"
             },
-            output: format!("{}{}", captured(&result.stdout), captured(&result.stderr)),
+            output: captured_output(&result),
         };
         if target.is_dir()
             && initialization::validate(&target).is_ok()

@@ -189,7 +189,9 @@ impl Controller {
                             (None, status.clone(), output, Some(status))
                         }
                     };
-                    self.capture.finish();
+                    // The final operation result owns complete output. The streaming
+                    // fallback can retain a partial line if a pipe was interrupted.
+                    self.capture.finish(false);
                     let output = if output.is_empty() {
                         &self.capture.text
                     } else {

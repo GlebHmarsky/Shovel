@@ -53,9 +53,10 @@ impl Capture {
         let bytes = &bytes[..bytes.len().min(room)];
         self.captured += bytes.len();
         let pending = &mut self.lines[usize::from(stderr)];
+        let previous = pending.len();
         pending.extend_from_slice(bytes);
-        if let Some(end) = pending.iter().rposition(|b| matches!(b, b'\r' | b'\n')) {
-            let complete: Vec<_> = pending.drain(..=end).collect();
+        if let Some(end) = bytes.iter().rposition(|b| matches!(b, b'\r' | b'\n')) {
+            let complete: Vec<_> = pending.drain(..=previous + end).collect();
             self.publish(&complete);
         }
     }
@@ -68,8 +69,8 @@ impl Capture {
         }
         self.text.push_str(&redacted[..end]);
     }
-    pub(crate) fn finish(&mut self) {
-        if !self.overflow {
+    pub(crate) fn finish(&mut self, complete: bool) {
+        if complete && !self.overflow {
             for index in 0..2 {
                 let bytes = std::mem::take(&mut self.lines[index]);
                 self.publish(&bytes);
@@ -309,9 +310,12 @@ impl Editor {
             if let Err(working::Error::Git(shovel_core::git::Error::Command { output, .. })) =
                 &result
             {
-                entry.capture.append(true, output.as_bytes());
+                entry.capture.publish(output.as_bytes());
             }
         }
+        let complete = result
+            .as_ref()
+            .is_ok_and(|r| r.command.outcome == shovel_core::process::Outcome::Exited);
         match result {
             Ok(result) => {
                 if result.succeeded() {
@@ -351,7 +355,7 @@ impl Editor {
                 self.failed_commit |= submitted.is_some();
             }
         }
-        self.finish_working(id);
+        self.finish_working(id, complete);
     }
     pub(super) fn working_removed(&mut self, id: u64, outcome: Outcome) {
         self.status = Some(text(if outcome == Outcome::Removed {
@@ -359,11 +363,11 @@ impl Editor {
         } else {
             "ActionStoppedShort"
         }));
-        self.finish_working(id);
+        self.finish_working(id, false);
     }
-    fn finish_working(&mut self, id: u64) {
+    fn finish_working(&mut self, id: u64, complete: bool) {
         if let Some(entry) = self.queue.entries.get_mut(&id) {
-            entry.capture.finish();
+            entry.capture.finish(complete);
             entry.activity.output.clone_from(&entry.capture.text);
             self.output.clone_from(&entry.activity.output);
             entry.activity.status = self.status.clone().unwrap_or_default();
@@ -408,14 +412,18 @@ mod tests {
             "failure https://[redacted]@host/path?[redacted]\n"
         );
         capture.append(false, "completed \u{2713}".as_bytes());
-        capture.finish();
+        capture.finish(true);
         assert!(capture.text.ends_with("completed \u{2713}"));
         assert!(!capture.text.contains("secret"));
         let mut overflow = Capture::default();
         overflow.append(true, b"https://user:");
         overflow.append(true, &vec![b'x'; 1024 * 1024]);
-        overflow.finish();
+        overflow.finish(true);
         assert!(overflow.text.is_empty());
         assert!(overflow.lines.iter().all(Vec::is_empty));
+        let mut interrupted = Capture::default();
+        interrupted.append(false, b"progress\nhttps://fixture:unfinished");
+        interrupted.finish(false);
+        assert_eq!(interrupted.text, "progress\n");
     }
 }

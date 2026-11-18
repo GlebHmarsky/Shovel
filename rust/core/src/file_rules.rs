@@ -3,7 +3,7 @@
 use crate::{
     files::{self, Completed},
     git::Git,
-    network::redact,
+    network::captured_stream,
     operation::Error,
     process::{self, Cancellation, Lifetime},
     working::{Change, Context, Group, MutationGate},
@@ -212,7 +212,7 @@ impl Git {
             let result = process::run(&request, &cancel, None);
             let matches = match result {
                 Ok(r) => {
-                    output = redact(&String::from_utf8_lossy(&r.stderr));
+                    output = captured_stream(&r.stderr, r.outcome);
                     output_truncated = r.outcome == process::Outcome::OutputLimit;
                     if r.outcome != process::Outcome::Exited
                         || r.exit_code > u32::from(action.ignore())

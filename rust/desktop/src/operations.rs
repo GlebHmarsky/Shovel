@@ -1599,11 +1599,17 @@ pub(crate) fn error_log(error: &shovel_core::operation::Error) -> String {
         Error::Git(git::Error::Command { output, .. })
         | Error::Working(shovel_core::working::Error::Git(git::Error::Command {
             output, ..
-        })) => {
-            let output: String = network::redact(output).chars().take(32768).collect();
-            format!("{status}\n{output}")
-        }
+        })) => git_error_message(&status, output),
         _ => status,
+    }
+}
+
+pub(crate) fn git_error_message(status: &str, output: &str) -> String {
+    let output: String = network::redact(output).chars().take(32768).collect();
+    if output.is_empty() {
+        status.to_owned()
+    } else {
+        format!("{status}\n{output}")
     }
 }
 

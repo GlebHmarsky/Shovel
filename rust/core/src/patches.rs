@@ -153,11 +153,7 @@ impl Git {
                 if r.outcome != process::Outcome::Exited
                     || r.exit_code != 0 && !(allow_one && r.exit_code == 1)
                 {
-                    return Err(Error::Git(crate::git::Error::Command {
-                        outcome: r.outcome,
-                        code: r.exit_code,
-                        output: crate::network::redact(&String::from_utf8_lossy(&r.stderr)),
-                    }));
+                    return Err(Error::Git(crate::git::command_error(&r)));
                 }
                 bytes.extend_from_slice(&r.stdout);
                 Ok(())

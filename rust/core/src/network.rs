@@ -80,50 +80,69 @@ fn trim(value: &str) -> &str {
 fn oid(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
-// Redact complete captured output before it is exposed. Streaming chunks are
-// deliberately not forwarded: credentials can straddle arbitrary pipe chunks.
+// Interpret complete HTTP(S) URLs in each token without changing other Git text.
 pub fn redact(text: &str) -> String {
+    if !text.contains("://") {
+        return text.to_owned();
+    }
     let mut result = String::with_capacity(text.len());
-    let lower = text.to_ascii_lowercase();
-    let mut remaining = text;
-    loop {
-        let offset = text.len() - remaining.len();
-        let start = [
-            lower[offset..].find("https://"),
-            lower[offset..].find("http://"),
-        ]
-        .into_iter()
-        .flatten()
-        .min();
-        let Some(start) = start else {
-            result.push_str(remaining);
-            break;
-        };
-        result.push_str(&remaining[..start]);
-        remaining = &remaining[start..];
-        let end = remaining
-            .find(char::is_whitespace)
-            .unwrap_or(remaining.len());
-        let url = &remaining[..end];
-        let scheme = url.find("://").unwrap() + 3;
-        result.push_str(&url[..scheme]);
-        let tail = &url[scheme..];
-        let auth_end = tail.find(['/', '?', '#']).unwrap_or(tail.len());
-        let tail = if let Some(at) = tail[..auth_end].rfind('@') {
-            result.push_str("[redacted]@");
-            &tail[at + 1..]
-        } else {
-            tail
-        };
-        if let Some(query) = tail.find(['?', '#']) {
-            result.push_str(&tail[..query]);
-            result.push_str("?[redacted]");
-        } else {
+    for part in text.split_inclusive(char::is_whitespace) {
+        let word = part.trim_end_matches(char::is_whitespace);
+        let mut schemes = word
+            .match_indices("://")
+            .filter_map(|(colon, _)| {
+                ["https", "http"].iter().find_map(|scheme| {
+                    let start = colon.checked_sub(scheme.len())?;
+                    word.get(start..colon)?
+                        .eq_ignore_ascii_case(scheme)
+                        .then_some((start, colon + 3))
+                })
+            })
+            .peekable();
+        let mut cursor = 0;
+        while let Some((_, authority)) = schemes.next() {
+            result.push_str(&word[cursor..authority]);
+            let end = schemes.peek().map_or(word.len(), |&(next, _)| next);
+            let url = &word[authority..end];
+            let auth_end = url.find(['/', '?', '#']).unwrap_or(url.len());
+            let tail = if let Some(at) = url[..auth_end].rfind('@') {
+                result.push_str("[redacted]@");
+                &url[at + 1..]
+            } else {
+                url
+            };
+            if let Some(query) = tail.find(['?', '#']) {
+                result.push_str(&tail[..query]);
+                result.push_str("?[redacted]");
+                cursor = word.len();
+                break;
+            }
             result.push_str(tail);
+            cursor = end;
         }
-        remaining = &remaining[end..];
+        result.push_str(&part[cursor..]);
     }
     result
+}
+
+// Truncation, timeout or cancellation can split a URL before its @ or query.
+// Each pipe has independent boundaries. Keep complete lines from both.
+pub(crate) fn captured_stream(bytes: &[u8], outcome: process::Outcome) -> String {
+    let complete = if outcome == process::Outcome::Exited {
+        bytes.len()
+    } else {
+        bytes
+            .iter()
+            .rposition(|b| matches!(b, b'\r' | b'\n'))
+            .map_or(0, |i| i + 1)
+    };
+    redact(&String::from_utf8_lossy(&bytes[..complete]))
+}
+
+pub(crate) fn captured_output(result: &process::Result) -> String {
+    let mut output = captured_stream(&result.stdout, result.outcome);
+    output.push_str(&captured_stream(&result.stderr, result.outcome));
+    output
 }
 fn append(output: &mut String, value: &str, truncated: &mut bool) {
     let mut available = LIMIT.saturating_sub(output.len()).min(value.len());
@@ -544,11 +563,7 @@ impl Git {
             output_truncated |= result.outcome == process::Outcome::OutputLimit;
             append(
                 &mut output,
-                &redact(&format!(
-                    "{}{}",
-                    String::from_utf8_lossy(&result.stdout),
-                    String::from_utf8_lossy(&result.stderr)
-                )),
+                &captured_output(&result),
                 &mut output_truncated,
             );
             commands.push(command);
@@ -831,5 +846,50 @@ mod tests {
         assert!(overlap(&["Build/".into()], &["build/a".into()]));
         assert!(overlap(&["build/a".into()], &["Build".into()]));
         assert!(!overlap(&["builder/a".into()], &["Build".into()]));
+    }
+
+    #[test]
+    fn adjacent_urls_dense_output_and_unicode_whitespace_keep_their_boundaries() {
+        let input = "ח Thu\t(HTTPS://u:x@one/repo),(http://u:y@two/path?private)\u{2003}done\r\n";
+        let expected = "ח Thu\t(HTTPS://[redacted]@one/repo),(http://[redacted]@two/path?[redacted]\u{2003}done\r\n";
+        assert_eq!(redact(input), expected);
+        assert_eq!(
+            redact("https://one/?next=https://two/private"),
+            "https://one/?[redacted]"
+        );
+        assert_eq!(
+            redact("https://u:x@host/p ".repeat(10000).as_str()),
+            "https://[redacted]@host/p ".repeat(10000)
+        );
+    }
+
+    #[test]
+    fn stopped_processes_keep_only_complete_lines_from_each_pipe() {
+        use crate::git;
+        for outcome in [
+            process::Outcome::OutputLimit,
+            process::Outcome::TimedOut,
+            process::Outcome::Cancelled,
+        ] {
+            let result = process::Result {
+                outcome,
+                exit_code: 1,
+                elapsed: Default::default(),
+                stdout: b"progress\rhttps://fixture:incomplete".to_vec(),
+                stderr: b"error https://fixture:pass@host/path?token\nhttps://fixture:cut".to_vec(),
+            };
+            assert_eq!(
+                captured_output(&result),
+                "progress\rerror https://[redacted]@host/path?[redacted]\n"
+            );
+            let git::Error::Command { output, .. } = git::require(result).unwrap_err() else {
+                panic!("expected command failure")
+            };
+            assert_eq!(output, "error https://[redacted]@host/path?[redacted]\n");
+        }
+        assert_eq!(
+            captured_stream(b"ordinary final line", process::Outcome::Exited),
+            "ordinary final line"
+        );
     }
 }

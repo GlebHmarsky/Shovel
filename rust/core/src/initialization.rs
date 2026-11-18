@@ -2,7 +2,7 @@
 //! performed on submission. Existing repositories are inspected, never reinitialized.
 use crate::{
     git::{self, Git, Snapshot},
-    network::redact,
+    network::captured_output,
     operation::Error,
     process::{self, Cancellation, Lifetime},
     working::MutationGate,
@@ -97,12 +97,7 @@ pub(crate) fn same(a: &Path, b: &Path) -> bool {
         )
 }
 fn read_failure(result: process::Result) -> Error {
-    git::Error::Command {
-        outcome: result.outcome,
-        code: result.exit_code,
-        output: redact(&String::from_utf8_lossy(&result.stderr)),
-    }
-    .into()
+    git::command_error(&result).into()
 }
 impl Git {
     pub fn initialize_repository(&self, options: &Options) -> Result<Completed, Error> {
@@ -179,11 +174,7 @@ impl Git {
             None,
         )?;
         let succeeded = result.success();
-        let output = redact(&format!(
-            "{}{}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
-        ));
+        let output = captured_output(&result);
         let mut completed = Completed {
             repository: None,
             succeeded,

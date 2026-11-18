@@ -453,12 +453,7 @@ impl Drop for Pane {
     }
 }
 fn error_text(error: working::Error) -> String {
-    match error {
-        working::Error::Git(shovel_core::git::Error::Command { output, .. }) => {
-            format!("{}\n{output}", text("ActionReadFailed"))
-        }
-        other => text(&other.to_string()),
-    }
+    crate::operations::error_log(&error.into())
 }
 
 pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit) {
@@ -513,6 +508,26 @@ mod tests {
     use super::*;
     use shovel_core::process::{self, Lifetime};
     use std::time::{Duration, Instant};
+    #[test]
+    fn comparison_and_history_read_errors_bound_and_redact_git_output() {
+        let failure = || shovel_core::git::Error::Command {
+            outcome: shovel_core::process::Outcome::Exited,
+            code: 128,
+            output: format!(
+                "fatal HTTPS://fixture:password@host/path?private\n{}",
+                "ש".repeat(40000)
+            ),
+        };
+        for (message, key) in [
+            (error_text(failure().into()), "ActionReadFailed"),
+            (crate::error_text(failure()), "HistoryFailed"),
+        ] {
+            let (status, detail) = message.split_once('\n').unwrap();
+            assert_eq!(status, text(key));
+            assert!(detail.starts_with("fatal HTTPS://[redacted]@host/path?[redacted]\n"));
+            assert_eq!(detail.chars().count(), 32768);
+        }
+    }
     #[test]
     fn comparison_renders_and_retains_exact_old_result_when_new_read_fails() {
         let temp = tempfile::tempdir().unwrap();

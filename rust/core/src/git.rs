@@ -676,11 +676,18 @@ pub fn require(result: process::Result) -> Result<process::Result, Error> {
     if result.success() {
         Ok(result)
     } else {
-        Err(Error::Command {
-            outcome: result.outcome,
-            code: result.exit_code,
-            output: text(&result.stderr),
-        })
+        Err(command_error(&result))
+    }
+}
+
+pub(crate) fn command_error(result: &process::Result) -> Error {
+    Error::Command {
+        outcome: result.outcome,
+        code: result.exit_code,
+        output: crate::network::captured_stream(&result.stderr, result.outcome)
+            .chars()
+            .take(32768)
+            .collect(),
     }
 }
 pub(crate) fn log_options() -> Vec<String> {

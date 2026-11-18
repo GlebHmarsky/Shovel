@@ -3,7 +3,7 @@
 use crate::{
     authentication,
     git::{self, Git, Snapshot},
-    network::redact,
+    network::captured_output,
     process::{self, Cancellation, Lifetime},
     working,
 };
@@ -120,11 +120,7 @@ impl Transcript {
         request: &process::Request,
     ) -> Result<process::Result, Error> {
         let result = process::run(request, &Cancellation::default(), None)?;
-        let output = redact(&format!(
-            "{}{}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
-        ));
+        let output = captured_output(&result);
         let mut available = LIMIT.saturating_sub(self.output.len()).min(output.len());
         while !output.is_char_boundary(available) {
             available -= 1;
