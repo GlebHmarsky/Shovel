@@ -83,6 +83,14 @@ pub(super) struct Failure {
     pub message: String,
     pub identity: bool,
 }
+impl Failure {
+    pub(super) fn interrupted() -> Self {
+        Self {
+            message: strings::text("RustHistoryWorkerFailed"),
+            identity: false,
+        }
+    }
+}
 impl From<shovel_core::git::Error> for Failure {
     fn from(error: shovel_core::git::Error) -> Self {
         Self {

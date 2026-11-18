@@ -87,6 +87,39 @@ pub(crate) fn wait(app: &mut Workspace, ctx: &egui::Context) {
         thread::sleep(Duration::from_millis(5));
     }
 }
+
+#[test]
+fn interrupted_page_and_locate_keep_the_visible_history_available() {
+    let fixture = Fixture::new();
+    let ctx = egui::Context::default();
+    let mut app = fixture.app(&ctx);
+    let visible = app.tabs[0].page.as_ref().unwrap().entries[0].commit.hash.clone();
+    let target = fixture.command(&["rev-parse", "HEAD~400"], &[]);
+    let (started, fail) = crate::history_cache::tests::hold_failed_read(fixture.root.clone());
+    app.page(true, &ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    fail.send(()).unwrap();
+    wait(&mut app, &ctx);
+    assert!(app.tabs[0].view.stale);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().entries[0].commit.hash, visible);
+    assert_eq!(app.tabs[0].error.as_deref(), Some(strings::text("RustHistoryWorkerFailed").as_str()));
+
+    app.refresh(&ctx);
+    wait(&mut app, &ctx);
+    assert!(!app.tabs[0].view.stale);
+    let (started, fail) = crate::history_cache::tests::hold_failed_read(fixture.root.clone());
+    app.locate(target.clone(), &ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    fail.send(()).unwrap();
+    wait(&mut app, &ctx);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().entries[0].commit.hash, visible);
+    assert_eq!(app.tabs[0].error.as_deref(), Some(strings::text("RustHistoryWorkerFailed").as_str()));
+    app.locate(target.clone(), &ctx);
+    wait(&mut app, &ctx);
+    assert_eq!(app.tabs[0].selected.as_deref(), Some(target.as_str()));
+    assert!(app.tabs[0].error.is_none());
+}
+
 pub(crate) fn paint(app: &mut Workspace, ctx: &egui::Context, events: Vec<egui::Event>) {
     frame(ctx, app, events).drop_without_applying_deltas();
 }

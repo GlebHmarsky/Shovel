@@ -335,6 +335,30 @@ impl Workspace {
             self.refresh_history(tab.id, true, ctx);
         }
     }
+    fn spawn_history_read(
+        &self,
+        ctx: &egui::Context,
+        cancel: Cancellation,
+        read: impl FnOnce() -> Event + Send + 'static,
+        failed: impl FnOnce() -> Event + Clone + Send + 'static,
+    ) {
+        let sender = self.sender.clone();
+        let worker_ctx = ctx.clone();
+        let lease = self.read_workers.start(cancel);
+        let worker_failed = failed.clone();
+        let worker = thread::Builder::new().spawn(move || {
+            let _lease = lease;
+            let event = std::panic::catch_unwind(std::panic::AssertUnwindSafe(read))
+                .unwrap_or_else(|_| worker_failed());
+            let _ = sender.send(event);
+            worker_ctx.request_repaint();
+        });
+        if worker.is_err() {
+            let _ = self.sender.send(failed());
+            ctx.request_repaint();
+        }
+    }
+
     fn refresh_history(&mut self, id: u64, first: bool, ctx: &egui::Context) {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
             return;
@@ -383,36 +407,35 @@ impl Workspace {
             .zip(tab.page.as_ref().map(|p| p.cursor.clone()));
         let path = tab.path.clone();
         let id = tab.id;
-        let sender = self.sender.clone();
-        let ctx = ctx.clone();
         let cancel = Cancellation::default();
-        let lease = self.read_workers.start(cancel.clone());
-        thread::spawn(move || {
-            let _lease = lease;
-            #[cfg(test)]
-            history_cache::tests::wait_for_read(&path);
-            let result = history_view::read_expected(
-                &git,
-                &path,
-                previous.as_ref().map(|(h, c)| (h, c)),
-                first,
-                known_identity.as_deref(),
-                &cancel,
-            );
-            let event = match result {
-                Ok((history, page, keep)) => Event::Loaded(
-                    id,
-                    generation,
-                    Box::new(history),
-                    Box::new(page),
-                    keep,
+        self.spawn_history_read(
+            ctx,
+            cancel.clone(),
+            move || {
+                #[cfg(test)]
+                history_cache::tests::wait_for_read(&path);
+                let result = history_view::read_expected(
+                    &git,
+                    &path,
+                    previous.as_ref().map(|(h, c)| (h, c)),
                     first,
-                ),
-                Err(error) => Event::Failed(id, generation, error),
-            };
-            let _ = sender.send(event);
-            ctx.request_repaint();
-        });
+                    known_identity.as_deref(),
+                    &cancel,
+                );
+                match result {
+                    Ok((history, page, keep)) => Event::Loaded(
+                        id,
+                        generation,
+                        Box::new(history),
+                        Box::new(page),
+                        keep,
+                        first,
+                    ),
+                    Err(error) => Event::Failed(id, generation, error),
+                }
+            },
+            move || Event::Failed(id, generation, history_view::Failure::interrupted()),
+        );
     }
     fn page(&mut self, older: bool, ctx: &egui::Context) {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
@@ -448,19 +471,20 @@ impl Workspace {
         let generation = tab.view.begin();
         let history = history.clone();
         let id = tab.id;
-        let sender = self.sender.clone();
-        let ctx = ctx.clone();
         let cancel = Cancellation::default();
-        let lease = self.read_workers.start(cancel.clone());
-        thread::spawn(move || {
-            let _lease = lease;
-            let result = history_view::read_page(&git, &history, &cursor, &cancel);
-            let _ = sender.send(match result {
-                Ok(page) => Event::Page(id, generation, Box::new(page), older),
-                Err(error) => Event::Failed(id, generation, error),
-            });
-            ctx.request_repaint();
-        });
+        self.spawn_history_read(
+            ctx,
+            cancel.clone(),
+            move || {
+                #[cfg(test)]
+                history_cache::tests::wait_for_read(&history.snapshot.worktree);
+                match history_view::read_page(&git, &history, &cursor, &cancel) {
+                    Ok(page) => Event::Page(id, generation, Box::new(page), older),
+                    Err(error) => Event::Failed(id, generation, error),
+                }
+            },
+            move || Event::Failed(id, generation, history_view::Failure::interrupted()),
+        );
     }
     fn locate(&mut self, hash: String, ctx: &egui::Context) {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
@@ -496,29 +520,39 @@ impl Workspace {
         let cancel = tab.locate_cancel.clone();
         tab.locating = Some(hash.clone());
         let id = tab.id;
-        let tx = self.sender.clone();
-        let ctx = ctx.clone();
-        let lease = self.read_workers.start(cancel.clone());
-        thread::spawn(move || {
-            let _lease = lease;
-            let result = (|| {
-                let mut cursor = Cursor::default();
-                let mut previous = Vec::new();
-                loop {
-                    let page = git.page(&history, &cursor, &cancel).map_err(error_text)?;
-                    if page.entries.iter().any(|e| e.commit.hash == hash) {
-                        return Ok((page, previous));
+        let failed_hash = hash.clone();
+        self.spawn_history_read(
+            ctx,
+            cancel.clone(),
+            move || {
+                #[cfg(test)]
+                history_cache::tests::wait_for_read(&history.snapshot.worktree);
+                let result = (|| {
+                    let mut cursor = Cursor::default();
+                    let mut previous = Vec::new();
+                    loop {
+                        let page = git.page(&history, &cursor, &cancel).map_err(error_text)?;
+                        if page.entries.iter().any(|e| e.commit.hash == hash) {
+                            return Ok((page, previous));
+                        }
+                        let Some(next) = page.next else {
+                            return Err(strings::text("RustRefNotFound"));
+                        };
+                        history_view::push_cursor(&mut previous, cursor);
+                        cursor = next;
                     }
-                    let Some(next) = page.next else {
-                        return Err(strings::text("RustRefNotFound"));
-                    };
-                    history_view::push_cursor(&mut previous, cursor);
-                    cursor = next;
-                }
-            })();
-            let _ = tx.send(Event::Located(id, generation, hash, result));
-            ctx.request_repaint();
-        });
+                })();
+                Event::Located(id, generation, hash, result)
+            },
+            move || {
+                Event::Located(
+                    id,
+                    generation,
+                    failed_hash,
+                    Err(strings::text("RustHistoryWorkerFailed")),
+                )
+            },
+        );
     }
     fn pick_repository(&mut self, ctx: &egui::Context) {
         self.begin_repository_picker(ctx, || rfd::FileDialog::new().pick_folder());
@@ -865,6 +899,7 @@ impl Workspace {
                         tab.locating = None;
                         match result {
                             Ok((page, previous)) => {
+                                tab.error = None;
                                 tab.view.remember(tab.page.as_ref(), &tab.selected);
                                 tab.view.restore(&page, &mut tab.selected);
                                 tab.page = Some(page);

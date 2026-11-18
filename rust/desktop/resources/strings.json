@@ -143,6 +143,7 @@
   "HistoryEnd": "End of available history for this scope. Tab activation checks for refresh when the snapshot is older than 30 seconds.",
   "HistoryShallowEnd": "End of locally available history in this shallow clone. No additional objects were fetched.",
   "HistoryFailed": "History is unavailable. See the status and Git output, then refresh to retry.",
+  "RustHistoryWorkerFailed": "Shovel could not finish reading history. Refresh to try again.",
   "HistoryLoaded": "History loaded — select a commit to inspect it",
   "SectionUnavailable": "This workspace is not implemented yet. Choose History to inspect commits.",
   "GitErrorHistoryTooWide": "This page exceeds the 64-lane graph limit. The history was not truncated; try Current branch / HEAD or inspect it in another Git tool.",

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Finish interrupted History reads and release queued work
+
+An initialization worker that stopped unexpectedly could leave the retained repository owner loading and its accepted Push pending after the tab closed. Opening, paging and reference navigation now report terminal errors on a refused worker launch or unwind. Paging and navigation preserve the visible commits, and a successful reference retry clears the error.
+
+The controlled failure left the disposable remote untouched, delivered the queued Push failure in Activity and loaded History after reopening the original owner. The page and reference fixture preserved the visible History and completed a fresh navigation on retry. Four interruption checks, 15 operation queue checks, 11 History cache checks, all-target Clippy and diff checks passed. All 18 smoke checks took 28.61 seconds on `F7D04BA826F05F6BF86DAA32E23781532B4D3FBE8D6043C8C1770A676510BBCA`.
+
 ## Check worktree state directly before restart
 
 The updater now checks the native worktree directories, unfinished-operation markers and unresolved index entries without reading refs, stashes or remotes. It reads the operation markers again after the index and identity checks. An active bisect postpones restart alongside existing merge, rebase, cherry-pick and revert checks. [Git bisect lifecycle](https://git-scm.com/docs/git-bisect#_bisect_reset)

@@ -271,7 +271,7 @@ fn corrupt_cache_never_replaces_the_actual_error_or_changes_profile_settings() {
 
 // A per-disposable-path gate holds only the test read before its real native Git
 // call. It is absent from release builds and cannot affect another fixture.
-type ReadGate = (mpsc::Sender<()>, mpsc::Receiver<()>);
+type ReadGate = (mpsc::Sender<()>, mpsc::Receiver<()>, bool);
 fn read_gates() -> &'static std::sync::Mutex<std::collections::HashMap<PathBuf, ReadGate>> {
     static GATES: std::sync::OnceLock<
         std::sync::Mutex<std::collections::HashMap<PathBuf, ReadGate>>,
@@ -279,16 +279,23 @@ fn read_gates() -> &'static std::sync::Mutex<std::collections::HashMap<PathBuf, 
     GATES.get_or_init(Default::default)
 }
 pub(crate) fn hold_read(path: PathBuf) -> (mpsc::Receiver<()>, mpsc::Sender<()>) {
+    gate_read(path, false)
+}
+pub(crate) fn hold_failed_read(path: PathBuf) -> (mpsc::Receiver<()>, mpsc::Sender<()>) {
+    gate_read(path, true)
+}
+fn gate_read(path: PathBuf, fail: bool) -> (mpsc::Receiver<()>, mpsc::Sender<()>) {
     let (ready, started) = mpsc::channel();
     let (release, held) = mpsc::channel();
-    read_gates().lock().unwrap().insert(path, (ready, held));
+    read_gates().lock().unwrap().insert(path, (ready, held, fail));
     (started, release)
 }
 pub(crate) fn wait_for_read(path: &std::path::Path) {
     let gate = read_gates().lock().unwrap().remove(path);
-    if let Some((started, release)) = gate {
+    if let Some((started, release, fail)) = gate {
         let _ = started.send(());
         let _ = release.recv_timeout(Duration::from_secs(20));
+        assert!(!fail, "fixture history worker unwind");
     }
 }
 #[test]
@@ -306,12 +313,7 @@ fn preview_publishes_before_held_native_initialization_and_actions_wait_for_live
     let settings = store.load().unwrap();
     let mut app = workspace();
     app.tabs.clear();
-    let (ready, started) = mpsc::channel();
-    let (release, held) = mpsc::channel();
-    read_gates()
-        .lock()
-        .unwrap()
-        .insert(fixture.root.clone(), (ready, held));
+    let (started, release) = hold_read(fixture.root.clone());
     app.sender
         .send(Event::Initialized(
             Box::new(settings),
@@ -432,12 +434,7 @@ fn shutdown_waits_for_closed_tab_history_worker_and_blocks_new_history_reads() {
     profile(&mut app, fixture._temp.path());
     settle_save(&mut app, &ctx);
     let owner = app.tabs[0].id;
-    let (ready, started) = mpsc::channel();
-    let (release, held) = mpsc::channel();
-    read_gates()
-        .lock()
-        .unwrap()
-        .insert(fixture.root.clone(), (ready, held));
+    let (started, release) = hold_read(fixture.root.clone());
     app.refresh(&ctx);
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     app.close_tab(owner, &ctx);
@@ -479,12 +476,7 @@ fn shutdown_waits_for_invalidated_metadata_workers_after_cache_replacement() {
             thread::sleep(Duration::from_millis(2));
         }
         let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
-        let (ready, started) = mpsc::channel();
-        let (release, held) = mpsc::channel();
-        read_gates()
-            .lock()
-            .unwrap()
-            .insert(fixture.root.clone(), (ready, held));
+        let (started, release) = hold_read(fixture.root.clone());
         let git = app.git.clone().unwrap();
         match kind {
             0 => app.tabs[0]
@@ -530,12 +522,7 @@ fn shutdown_tracks_removed_comparison_and_commit_reads_and_blocks_new_comparison
         app.read_workers.resume();
         let git = app.git.clone().unwrap();
         let commit = app.tabs[0].page.as_ref().unwrap().entries[0].commit.clone();
-        let (ready, started) = mpsc::channel();
-        let (release, held) = mpsc::channel();
-        read_gates()
-            .lock()
-            .unwrap()
-            .insert(fixture.root.clone(), (ready, held));
+        let (started, release) = hold_read(fixture.root.clone());
         if editor_read {
             let mut editor = crate::commit::Editor::new(
                 fixture.root.clone(),

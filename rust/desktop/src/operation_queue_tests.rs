@@ -17,6 +17,46 @@ fn controller() -> Controller {
 }
 
 #[test]
+fn interrupted_initialization_finishes_queued_push_after_tab_closure_and_allows_reopen() {
+    let (_temp, git, snapshot) = fixture();
+    let ctx = egui::Context::default();
+    let (started, fail) = crate::history_cache::tests::hold_failed_read(snapshot.worktree.clone());
+    let mut app = workspace();
+    app.tabs.clear();
+    app.selected = 0;
+    app.git = Some(git.clone());
+    app.operations = controller();
+    app.settings.set("AutoFetchEnabled", serde_json::json!(false));
+    app.open(snapshot.worktree.clone(), &ctx);
+    started.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+    let owner = app.tabs[0].id;
+    app.operations.defer_network(Kind::Push, &snapshot.worktree, &app.settings, &app.scheduler, &ctx);
+    let request = app.operations.pending[0].request;
+    app.close_tab(owner, &ctx);
+    assert!(app.tabs.is_empty() && app.scheduler.has_accepted_work());
+    fail.send(()).unwrap();
+    wait(|| {
+        app.receive(&ctx);
+        !app.scheduler.has_accepted_work() && app.operations.runs[0].done
+    });
+    let record = app.scheduler.records().into_iter().find(|record| record.id == request).unwrap();
+    assert_eq!(record.outcome, Some(Outcome::Failed));
+    assert_eq!(app.operations.runs[0].output, text("RustHistoryWorkerFailed"));
+    let retained = app.retained_tabs.iter().find(|tab| tab.id == owner).unwrap();
+    assert!(!retained.loading && retained.history.is_none());
+    assert!(command(&git, &snapshot.worktree.join("remote.git"), &["for-each-ref", "refs/heads"]).is_empty());
+
+    app.open(snapshot.worktree.clone(), &ctx);
+    wait(|| {
+        app.receive(&ctx);
+        !app.tabs[0].loading
+    });
+    assert_eq!(app.tabs[0].id, owner);
+    assert!(app.tabs[0].history.is_some());
+    assert!(command(&git, &snapshot.worktree.join("remote.git"), &["for-each-ref", "refs/heads"]).is_empty());
+}
+
+#[test]
 fn lost_worker_result_finishes_its_activity_and_requests_a_fresh_read() {
     let (_temp, git, snapshot) = fixture();
     let ctx = egui::Context::default();
