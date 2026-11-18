@@ -1,5 +1,14 @@
 # Changelog
 
+## Rust 0.50.16 - 2026-11-18
+
+- Hold Shift when clicking Commit, or press Ctrl+Shift+Enter, to commit and push that exact commit to the configured upstream. A rejected push keeps the local commit and explains what happened.
+- Scroll large Local Changes lists without laying out every row, keep files selected as they move between Staged and Unstaged, and see modified files update before the wider scan finishes. Failed refreshes keep the last rows visible and disable stale actions until a successful refresh.
+- Queue Pull and Push while a repository opens. Accepted work continues after its tab closes, and automatic Fetch allows staging to proceed. Localized commit dates and accessible file and history rows make changes easier to review.
+- Open the same repository through different Windows path spellings. Preserve its drafts and pending work, and keep an old commit draft separate when a different repository replaces the selected folder.
+- Keep Git output responsive during Clone and hooks. Show redacted diagnostics for interrupted reads and give the masked AskPass response keyboard focus immediately.
+- Show download progress and version-specific release notes. Retry interrupted or damaged downloads, keep the highest verified version for each channel, and recheck the signed offer and open worktrees before restart.
+
 ## Rust 0.50.15 - 2026-11-18
 
 - Keep an autostash and its detached former branch tip on the shared parent's history lane. Route the newer commit's edge around them to preserve Git's parent relationships.
