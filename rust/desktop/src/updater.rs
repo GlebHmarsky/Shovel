@@ -453,6 +453,11 @@ impl Controller {
     pub fn cancel(&self) {
         self.cancel.cancel();
     }
+    pub fn profile_save_failed(&mut self) {
+        self.restart_requested = false;
+        self.open = true;
+        self.status = text("RustUpdateSaveBlocked");
+    }
     pub fn tool_opened(&mut self) {
         self.tools_confirmed = false;
     }
@@ -948,6 +953,55 @@ mod tests {
         assert!(app.updater.needs_tool_confirmation(true));
         assert!(!app.updater.restart_requested && !app.updater.exit_ready);
         assert!(!app.pending_exit && !app.closing && !app.exit_ready);
+    }
+
+    #[test]
+    fn failed_profile_save_returns_to_the_ready_update_without_retrying_or_exiting() {
+        use crate::workspace_interaction_tests::{frame, sidebar_click, workspace};
+        use shovel_core::settings::SettingsStore;
+
+        let directory = tempfile::tempdir().unwrap();
+        let mut store = SettingsStore::new(directory.path().into());
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut app = workspace();
+        app.tabs.clear();
+        app.settings = store.load().unwrap();
+        store.save(&app.settings).unwrap();
+        app.store = Some(store);
+        app.updater.offer = Some(published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        ));
+        app.updater.ready = true;
+        app.updater.open = true;
+        let foreign = b"competing profile writer";
+        let profile = directory.path().join("settings.json");
+        std::fs::write(&profile, foreign).unwrap();
+
+        sidebar_click(
+            &ctx,
+            &mut app,
+            &text("RustUpdateRestart"),
+            egui::PointerButton::Primary,
+        );
+        assert!(app.saving);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while app.saving {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+            app.receive(&ctx);
+            frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        }
+        for _ in 0..3 {
+            app.receive(&ctx);
+            frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        }
+        assert!(!app.saving && !app.closing && !app.exit_ready);
+        assert!(!app.confirm_exit_without_save && !app.updater.restart_requested);
+        assert!(app.updater.open && app.updater.ready && app.updater.offer.is_some());
+        assert_eq!(app.updater.status, text("RustUpdateSaveBlocked"));
+        assert_eq!(std::fs::read(profile).unwrap(), foreign);
     }
 
     #[test]

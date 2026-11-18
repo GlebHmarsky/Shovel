@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Restart after a failed profile save
+
+An update restart now returns to the ready offer if saving the profile fails. In the Windows test fixture, a competing writer replaced the settings file after it was loaded. Clicking Restart repeatedly started save attempts on the old source. The corrected path completes the failed attempt, leaves those bytes intact, keeps Shovel open and shows why restart stopped. Sixteen updater tests and the two normal-shutdown failure tests passed. The published Beta transport test ran separately. The fixture uses a signed offer and headless UI input. An installed updater apply and multi-session acceptance remain open.
+
+All-target Clippy and diff checks passed. The bounded smoke suite passed all 18 checks in 53.77 seconds on source fingerprint `54A7F91AB0A0D70E11BCC9C6929C79DDB72C673DAE42472972CE661509B66806`.
+
 ## Native Settings layout (2026-11-18)
 
 The seven categories stay in a vertical rail. Diff previews a local numbered patch using the comparison view’s line formatting, colors and pairing logic. Tools groups four launchers into an editable path table. Narrow forms stack the application label above its path. Save and Cancel stay below the scrolling content. Global Git identity still requires its own explicit Load and Apply actions.

@@ -994,8 +994,12 @@ impl Workspace {
                             }
                         }
                         Err(error) => {
-                            self.notice = Some(error);
-                            self.confirm_exit_without_save = self.closing;
+                            if self.closing && self.updater.restart_requested {
+                                self.updater.profile_save_failed();
+                            } else {
+                                self.notice = Some(error);
+                                self.confirm_exit_without_save = self.closing;
+                            }
                             self.closing = false;
                         }
                     }
@@ -1485,7 +1489,7 @@ impl Workspace {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        if self.closing {
+        if self.closing || self.confirm_exit_without_save {
             return;
         }
         self.discard_settings_on_exit = false;

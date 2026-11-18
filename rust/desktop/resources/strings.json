@@ -1160,6 +1160,7 @@
   "RustUpdateDownload": "Download update",
   "RustUpdateRestart": "Install update and restart",
   "RustUpdateBlocked": "Finish accepted work and save your edits before restarting.",
+  "RustUpdateSaveBlocked": "Shovel could not save this session’s settings. The update is still ready. Check access to the settings folder. If another instance changed this profile, reopen Shovel before retrying.",
   "RustUpdateInstances": "Close other Shovel instances before restarting. Other Windows sessions are included.",
   "RustUpdateRepositoryState": "Finish repository merge/rebase operations and refresh unavailable repositories before installing an update.",
   "RustUpdateWorktreeBlocked": "Cannot restart with the current state of {0}. Resolve any unfinished Git operation or index conflicts, then refresh or close this repository.",

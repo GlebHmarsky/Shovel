@@ -1,0 +1,14 @@
+{
+  "Commit": "b2a1d83a869789b0f13cc81d77889278f5e2edd6",
+  "Version": "0.50.17",
+  "Channel": "win-rust-beta",
+  "ActionsRun": 44287112605,
+  "Release": "https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.17-win-rust-beta",
+  "VerifiedUTC": "2026-11-18T11:01:39.9830961+00:00",
+  "Assets": 7,
+  "LiveFeedMatchesVerifiedSignature": true,
+  "InstallerSize": 21692893,
+  "InstallerSHA256": "7AFE903F19A30A5DB18B8F7DD18AA059724CD2F76BF723A945A18DF5879FCC88",
+  "InstallerProductVersion": "0.50.17",
+  "InstallerAuthenticode": "NotSigned"
+}
