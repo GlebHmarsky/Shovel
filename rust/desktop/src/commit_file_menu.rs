@@ -465,22 +465,27 @@ impl Editor {
             } else {
                 "FileDiscardTitle"
             }));
-            ui.label(strings::format(
-                if stash {
-                    "FileStashExplanation"
-                } else {
-                    "FileDiscardExplanation"
-                },
-                &[
-                    selection
-                        .context
-                        .repository
-                        .head
-                        .as_deref()
-                        .unwrap_or(&text("NoBranch")),
-                    &selection.context.repository.worktree.to_string_lossy(),
-                ],
-            ));
+            let repository = &selection.context.repository;
+            let root = repository.worktree.to_string_lossy();
+            let root = crate::path_text::PathText::new(ctx, &root);
+            let explain = |root: &str| {
+                strings::format(
+                    if stash {
+                        "FileStashExplanation"
+                    } else {
+                        "FileDiscardExplanation"
+                    },
+                    &[
+                        repository.head.as_deref().unwrap_or(&text("NoBranch")),
+                        root,
+                    ],
+                )
+            };
+            crate::path_text::label(
+                ui,
+                explain(root.visual()),
+                root.reordered().then(|| explain(root.spoken())),
+            );
             egui::ScrollArea::vertical().max_height(260.).show_rows(
                 ui,
                 42.,
@@ -488,27 +493,39 @@ impl Editor {
                 |ui, range| {
                     for index in range {
                         let entry = &selection.entries[index];
-                        let path = entry
+                        let path = crate::path_text::PathText::new(ctx, &entry.path);
+                        let old = entry
                             .original
                             .as_ref()
                             .filter(|_| entry.code == 'R')
-                            .map(|old| strings::format("FileActionPath", &[&entry.path, old]))
-                            .unwrap_or_else(|| entry.path.clone());
-                        ui.label(strings::format(
-                            if stash {
-                                "FileStashTarget"
-                            } else if entry.group == Group::Untracked
-                                || entry.group == Group::Staged
-                                    && selection.context.repository.head.is_none()
-                            {
-                                "FileDiscardNewTarget"
-                            } else if entry.group == Group::Staged {
-                                "FileDiscardStagedTarget"
-                            } else {
-                                "FileDiscardWorktreeTarget"
-                            },
-                            &[&path],
-                        ));
+                            .map(|p| crate::path_text::PathText::new(ctx, p));
+                        let key = if stash {
+                            "FileStashTarget"
+                        } else if entry.group == Group::Untracked
+                            || entry.group == Group::Staged
+                                && selection.context.repository.head.is_none()
+                        {
+                            "FileDiscardNewTarget"
+                        } else if entry.group == Group::Staged {
+                            "FileDiscardStagedTarget"
+                        } else {
+                            "FileDiscardWorktreeTarget"
+                        };
+                        let message = |path: &str, old: Option<&str>| match old {
+                            Some(old) => strings::format(
+                                key,
+                                &[&strings::format("FileActionPath", &[path, old])],
+                            ),
+                            None => strings::format(key, &[path]),
+                        };
+                        let reordered =
+                            path.reordered() || old.as_ref().is_some_and(|p| p.reordered());
+                        crate::path_text::label(
+                            ui,
+                            message(path.visual(), old.as_ref().map(|p| p.visual())),
+                            reordered
+                                .then(|| message(path.spoken(), old.as_ref().map(|p| p.spoken()))),
+                        );
                     }
                 },
             );

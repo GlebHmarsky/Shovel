@@ -142,6 +142,49 @@ fn native_copy_event_and_full_path_shortcut_follow_the_focused_file_list() {
 }
 
 #[test]
+fn bidi_file_rows_and_discard_review_keep_the_logical_target_on_the_clipboard() {
+    let mut h = Harness::new();
+    let file = "שלום.txt";
+    let target = h.editor.path.join(file);
+    fs::write(&target, b"keep this file").unwrap();
+    h.editor.refresh(&h.ctx);
+    h.until(|e| {
+        !e.loading
+            && e.current_context()
+                .is_some_and(|c| c.change(Group::Untracked, file).is_some())
+    });
+    let name = "Untracked · \u{2066}שלום.txt\u{2069}";
+    let out = h.render(vec![]);
+    assert!(
+        out.shapes.iter().any(
+            |s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text().contains("םולש.txt"))
+        )
+    );
+    out.drop_without_applying_deltas();
+    h.click(name);
+    h.render(vec![egui::Event::Copy])
+        .drop_without_applying_deltas();
+    assert_eq!(h.copied, [file]);
+    h.key(egui::Key::Delete, egui::Modifiers::NONE);
+    assert!(h.editor.file_confirmation.is_some());
+    let out = h.render(vec![]);
+    assert!(out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text().contains("םולש.txt") && t.galley.text().contains("permanently remove"))));
+    assert!(
+        out.platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| node.value().is_some_and(
+                |v| v.contains("\u{2066}שלום.txt\u{2069}") && v.contains("permanently remove")
+            ))
+    );
+    out.drop_without_applying_deltas();
+    assert_eq!(fs::read(target).unwrap(), b"keep this file");
+}
+
+#[test]
 fn large_snapshot_groups_visible_rows_and_names_both_message_fields() {
     let mut h = Harness::new();
     let mut context = (**h.editor.context.as_ref().unwrap()).clone();
@@ -188,7 +231,7 @@ fn large_snapshot_groups_visible_rows_and_names_both_message_fields() {
             "Tracked files (1)",
             "Untracked (19997)",
             "Conflicted · Unmerged · conflict.txt",
-            "Unstaged · Modified · src/שלום.txt",
+            "Unstaged · Modified · \u{2066}src/שלום.txt\u{2069}",
             "Staged · Renamed · src/новое.rs\nOriginal path: old/name.rs",
             "Untracked · nested/new-00000.txt",
         ] {

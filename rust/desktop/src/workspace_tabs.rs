@@ -26,7 +26,9 @@ pub(super) fn paint_drag(
         egui::StrokeKind::Inside,
     );
     let text = painter.layout_no_wrap(
-        label.to_owned(),
+        crate::path_text::PathText::new(ctx, label)
+            .visual()
+            .to_owned(),
         egui::FontId::proportional(13.),
         palette.text,
     );

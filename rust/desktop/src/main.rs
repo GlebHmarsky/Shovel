@@ -19,6 +19,7 @@ mod history_row;
 mod history_view;
 mod numbers;
 mod operations;
+mod path_text;
 mod read_workers;
 mod remotes;
 mod repository_init;
@@ -2036,11 +2037,23 @@ impl eframe::App for Workspace {
                                 ui.spacing_mut().item_spacing.y = 1.;
                                 ui.vertical_centered(|ui| {
                                     if let Some(tab) = self.tabs.get(self.selected) {
-                                        ui.add(
-                                            egui::Label::new(RichText::new(tab.name()).strong())
+                                        let name = tab.name();
+                                        let name = path_text::PathText::new(&ctx, &name);
+                                        let root = tab.path.to_string_lossy();
+                                        let root = path_text::PathText::new(&ctx, &root);
+                                        let label = ui
+                                            .add(
+                                                egui::Label::new(
+                                                    RichText::new(name.visual()).strong(),
+                                                )
                                                 .truncate(),
-                                        )
-                                        .on_hover_text(tab.path.to_string_lossy());
+                                            )
+                                            .on_hover_text(root.visual());
+                                        if name.reordered() {
+                                            ctx.accesskit_node_builder(label.id, |node| {
+                                                node.set_value(name.spoken())
+                                            });
+                                        }
                                         if let Some(snapshot) =
                                             tab.history.as_ref().map(|h| &h.snapshot).or_else(
                                                 || tab.view.preview.as_ref().map(|(s, _)| s),
@@ -2315,7 +2328,11 @@ impl eframe::App for Workspace {
                 let mut action = None;
                 ui.horizontal(|ui| {
                     for (index, tab) in self.tabs.iter().enumerate() {
-                        let label = RichText::new(tab.name()).color(palette.text);
+                        let name = tab.name();
+                        let name = path_text::PathText::new(&ctx, &name);
+                        let root = tab.path.to_string_lossy();
+                        let root = path_text::PathText::new(&ctx, &root);
+                        let label = RichText::new(name.visual()).color(palette.text);
                         let marker = tab_markers::color(&self.settings, &tab.path);
                         let status = if self.git.is_some() {
                             self.tab_markers.status(tab)
@@ -2346,7 +2363,10 @@ impl eframe::App for Workspace {
                                 }),
                         );
                         ctx.accesskit_node_builder(response.id, |node| {
-                            node.set_description(tab.path.to_string_lossy().into_owned());
+                            if name.reordered() {
+                                node.set_label(name.spoken());
+                            }
+                            node.set_description(root.spoken());
                         });
                         if response.drag_started() {
                             self.tab_drag =
@@ -2389,11 +2409,11 @@ impl eframe::App for Workspace {
                         if marker.is_some() {
                             response.on_hover_text(format!(
                                 "{}\n{}",
-                                tab.path.display(),
+                                root.visual(),
                                 strings::text(status.label())
                             ));
                         } else {
-                            response.on_hover_text(tab.path.to_string_lossy());
+                            response.on_hover_text(root.visual());
                         }
                     }
                 });

@@ -121,7 +121,13 @@ pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egu
         egui::FontId::monospace(12.),
         secondary,
     );
-    let (directory, name) = entry.path.rsplit_once('/').unwrap_or(("", &entry.path));
+    let path = crate::path_text::PathText::new(ui.ctx(), &entry.path);
+    let original = entry
+        .original
+        .as_ref()
+        .map(|p| crate::path_text::PathText::new(ui.ctx(), p));
+    let visible = path.visual();
+    let (directory, name) = visible.rsplit_once('/').unwrap_or(("", visible));
     let mut job = egui::text::LayoutJob::simple_singleline(
         name.to_owned(),
         egui::FontId::proportional(13.),
@@ -143,24 +149,27 @@ pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egu
         fg,
     );
     let kind = text(&format!("ChangeCode{}", entry.code));
-    let label = if entry.group == Group::Untracked {
-        strings::format(
-            "CommitUntrackedRow",
-            &[&group_name(entry.group), &entry.path],
-        )
-    } else {
-        strings::format(
-            "CommitChangeRow",
-            &[&group_name(entry.group), &kind, &entry.path],
-        )
-    };
-    let label = if let Some(original) = &entry.original {
-        strings::format("CommitOriginalPath", &[&label, original])
-    } else {
-        label
+    let group = group_name(entry.group);
+    let label = |path: &str, original: Option<&str>| {
+        let status = if entry.group == Group::Untracked {
+            strings::format("CommitUntrackedRow", &[&group, path])
+        } else {
+            strings::format("CommitChangeRow", &[&group, &kind, path])
+        };
+        match original {
+            Some(old) => strings::format("CommitOriginalPath", &[&status, old]),
+            None => status,
+        }
     };
     response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, &label)
+        egui::WidgetInfo::selected(
+            egui::Role::Button,
+            ui.is_enabled(),
+            selected,
+            label(path.spoken(), original.as_ref().map(|p| p.spoken())),
+        )
     });
-    response.on_hover_text(label)
+    response.on_hover_ui(|ui| {
+        ui.label(label(path.visual(), original.as_ref().map(|p| p.visual())));
+    })
 }
