@@ -195,6 +195,7 @@ fn trusted_directory() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir)
         .join("ShovelRust/TrustedUpdates")
 }
+#[derive(Debug)]
 enum CheckError {
     Unavailable(String),
     Rejected(&'static str),
@@ -228,16 +229,23 @@ fn recheck_offer(offer: &Offer, cancel: &Cancellation) -> Result<(), String> {
     })
 }
 fn check(channel: Channel, cancel: &Cancellation) -> Result<Option<Offer>, CheckError> {
+    check_for_installation(
+        channel,
+        &semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap(),
+        &trusted_directory(),
+        cancel,
+    )
+}
+fn check_for_installation(
+    channel: Channel,
+    installed: &semver::Version,
+    trusted: &Path,
+    cancel: &Cancellation,
+) -> Result<Option<Offer>, CheckError> {
     let feed = bytes(&channel.feed_url(), updates::MAX_FEED_BYTES as u64, cancel)?;
     let signature = bytes(&format!("{}.sig", channel.feed_url()), 2048, cancel)?;
-    let release = updates::floor::verify_and_record(
-        &trusted_directory(),
-        channel,
-        &feed,
-        &signature,
-        cancel,
-    )?;
-    if !release.is_newer_than(&semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap()) {
+    let release = updates::floor::verify_and_record(trusted, channel, &feed, &signature, cancel)?;
+    if !release.is_newer_than(installed) {
         return Ok(None);
     }
     let feed: VelopackAssetFeed = serde_json::from_slice(&feed).map_err(failure)?;
@@ -822,6 +830,38 @@ fn release_notes(ui: &mut egui::Ui, notes: &str) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "downloads the current public Beta and requires its expected version and commit"]
+    fn published_beta_downloads_with_native_updater() {
+        let version =
+            semver::Version::parse(&std::env::var("SHOVEL_VERIFY_BETA_VERSION").unwrap()).unwrap();
+        let commit = std::env::var("SHOVEL_VERIFY_BETA_COMMIT").unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let trusted = root.path().join("trusted");
+        let cancel = Cancellation::default();
+        let discover = |installed: &semver::Version| {
+            check_for_installation(Channel::Beta, installed, &trusted, &cancel)
+        };
+        let offer = discover(&semver::Version::new(0, 0, 0)).unwrap().unwrap();
+        assert_eq!(offer.release.version(), &version);
+        assert_eq!(offer.release.source_commit(), commit);
+        let target = root.path().join(offer.release.file_name());
+        let source = FrozenSource {
+            offer: offer.clone(),
+            cancel: cancel.clone(),
+        };
+        let (send, progress) = mpsc::channel();
+        source
+            .download_release_entry(&offer.asset, &target, Some(send))
+            .unwrap();
+        let progress: Vec<_> = progress.into_iter().collect();
+        assert_eq!(progress.last(), Some(&100));
+        assert!(progress.windows(2).all(|pair| pair[0] <= pair[1]));
+        assert_eq!(target.metadata().unwrap().len(), offer.release.size());
+        assert!(verify_for_restart(&target, &offer.release).is_ok());
+        updates::floor::recheck(&trusted, &offer.release, &cancel).unwrap();
+        assert!(discover(&version).unwrap().is_none());
+    }
     use super::*;
 
     fn published_offer(feed: &[u8], signature: &[u8]) -> Offer {
