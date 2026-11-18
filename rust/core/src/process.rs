@@ -36,6 +36,16 @@ impl Cancellation {
     }
 }
 
+// Coordinate Rust's broad-inheritance tool launches with the short window in
+// which CreateProcessW needs Git's child pipe handles to be inheritable.
+static PROCESS_CREATION: Mutex<()> = Mutex::new(());
+
+/// Start a configured external tool on a worker while keeping Git's pipes private.
+pub fn spawn_external(command: &mut std::process::Command) -> std::io::Result<std::process::Child> {
+    let _creation = PROCESS_CREATION.lock().unwrap_or_else(|e| e.into_inner());
+    command.spawn()
+}
+
 // Background reads cannot exhaust capacity reserved for accepted user work.
 // A permit covers the entire process tree and both output drains.
 struct Admission {
@@ -407,6 +417,7 @@ pub fn run(
     {
         return Err(std::io::Error::last_os_error());
     }
+    let creation = PROCESS_CREATION.lock().unwrap_or_else(|e| e.into_inner());
     let (stdout_read, stdout_write) = pipe(true)?;
     let (stderr_read, stderr_write) = pipe(true)?;
     let (stdin_read, stdin_write) = pipe(false)?;
@@ -468,6 +479,7 @@ pub fn run(
     drop(stdin_read);
     drop(stdout_write);
     drop(stderr_write);
+    drop(creation);
     if let Some(error) = start_error {
         // Closing the unused child handles wakes every pipe worker.
         let _ = stdout.join();
@@ -885,6 +897,57 @@ mod tests {
             WAIT_TIMEOUT
         );
     }
+
+    #[test]
+    fn external_tool_waits_until_gits_inheritable_handles_are_closed() {
+        use std::{
+            os::windows::process::CommandExt,
+            process::{Command, Stdio},
+            sync::mpsc,
+        };
+
+        let creation = PROCESS_CREATION.lock().unwrap();
+        let attributes = SECURITY_ATTRIBUTES {
+            nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: std::ptr::null_mut(),
+            bInheritHandle: 1,
+        };
+        let event = owned(unsafe { CreateEventW(&attributes, 1, 0, std::ptr::null()) }).unwrap();
+        let handle = (event.as_raw_handle() as usize).to_string();
+        let (attempted, starting) = mpsc::channel();
+        let (created, child_created) = mpsc::channel();
+        let tool = thread::spawn(move || {
+            let mut command = Command::new(std::env::current_exe().unwrap());
+            command
+                .args(["--exact", "process::tests::child_fixture"])
+                .env("SHOVEL_PROCESS_FIXTURE", "inherited-event")
+                .env("SHOVEL_FIXTURE_HANDLE", handle)
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            attempted.send(()).unwrap();
+            let mut child = spawn_external(&mut command).unwrap();
+            created.send(()).unwrap();
+            assert!(child.wait().unwrap().success());
+        });
+
+        starting.recv_timeout(Duration::from_secs(3)).unwrap();
+        let early = child_created.recv_timeout(Duration::from_millis(500));
+        // Keep our own handle open for the check, but release the inheritance window.
+        assert_ne!(
+            unsafe { SetHandleInformation(event.as_raw_handle(), HANDLE_FLAG_INHERIT, 0) },
+            0
+        );
+        drop(creation);
+        tool.join().unwrap();
+        assert_eq!(
+            unsafe { WaitForSingleObject(event.as_raw_handle(), 0) },
+            WAIT_TIMEOUT
+        );
+        assert_eq!(early, Err(mpsc::RecvTimeoutError::Timeout));
+    }
+
     // Each saturation test deliberately owns every permit in a process-wide
     // lane. Give it an independent turn when libtest runs tests concurrently.
     static SATURATION_FIXTURE: std::sync::Mutex<()> = std::sync::Mutex::new(());

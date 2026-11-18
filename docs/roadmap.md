@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Keep Git pipes out of configured tools
+
+Git uses a Windows handle allowlist, but the Rust standard launcher used for configured tools can inherit any eligible handle in the parent. Launching an editor or Git Bash while a Git child was being prepared could let the tool retain a pipe and keep the Git command waiting. The two launch paths now coordinate until Git closes its inheritable ends in the parent. The guard releases before either process is awaited. Configured paths, arguments and detached tool lifetime use their existing launcher. [Windows handle inheritance](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw#remarks) · [Pinned Rust Windows launcher](https://github.com/rust-lang/rust/blob/58cf8f9c35b355199727627d07ae34a4e2846d67/library/std/src/sys/process/windows.rs)
+
+The hidden native fixture reproduced an unrelated child signaling a handle inherited during preparation. With the guard, the child launched after inheritance was disabled and the event stayed unset. All 17 process tests, two headless handoff checks, all-target Clippy and diff checks passed. The 18 bounded smoke checks took 31.23 seconds on `CC459D8D44F65145242BB6E73AE29EE52B7196E7635A280157F1E2E41F484D3E`. The fixture covered the configured-command path. Real desktop tool launches still require acceptance.
+
 ## Guard the final Windows update restart
 
 During shutdown, Shovel suspends the New Repository, Settings and queued command dialogs and keeps their state available if restart fails. Authentication stays available for accepted Git work. A final scheduler check after helper handoff defers native close while accepted work remains. The competing-process guard checks the live image name and waits zero milliseconds on the Windows process handle. It ignores a process that has already exited even when the real exit code is 259. [Windows process exit codes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getexitcodeprocess) · [Windows wait API](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)

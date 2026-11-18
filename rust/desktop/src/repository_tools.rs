@@ -132,9 +132,8 @@ pub fn launch(kind: &str, root: &Path, settings: &Settings) -> Result<(), String
     } else {
         command.arg(target);
     }
-    command
-        .creation_flags(0x00000008)
-        .spawn()
+    command.creation_flags(0x00000008);
+    shovel_core::process::spawn_external(&mut command)
         .map_err(|_| crate::strings::text("RustToolFailed"))?;
     Ok(())
 }
