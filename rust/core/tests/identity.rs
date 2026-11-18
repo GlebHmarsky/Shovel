@@ -495,7 +495,10 @@ fn native_lock_holder_fixture() {
 
 #[test]
 fn stage_in_linked_worktree_respects_both_native_mutex_namespaces() {
-    use shovel_core::working::Action;
+    use shovel_core::{
+        scheduler::{Lane, Outcome, Scheduler},
+        working::{Action, Group},
+    };
     use sha2::{Digest, Sha256};
 
     struct ChildLock(Child);
@@ -525,6 +528,8 @@ fn stage_in_linked_worktree_respects_both_native_mutex_namespaces() {
     let before = fs::read(&index_path).unwrap();
     let selected = Action::Stage(review.entries.clone());
     for scope in ["Global", "Local"] {
+        let independent = Fixture::new();
+        let independent_review = independent.review(&independent.root);
         let signal = fixture._temp.path().join(format!("{scope}-ready"));
         let mut owner = ChildLock(
             Command::new(std::env::current_exe().unwrap())
@@ -546,12 +551,82 @@ fn stage_in_linked_worktree_respects_both_native_mutex_namespaces() {
             assert!(Instant::now() < deadline, "{scope} holder did not acquire");
             std::thread::sleep(Duration::from_millis(10));
         }
+        let scheduler = Scheduler::default();
+        let repository = review.repository.identity.fingerprint.clone();
+        let common_key = shovel_core::case::path_key(common);
+        let (waiting, _) = scheduler.reserve(
+            repository.clone(),
+            common_key.clone(),
+            "review fixture barrier".into(),
+            Lane::WorkingCopy,
+            |_| {},
+        );
+        let git = fixture.git.clone();
+        let blocked_review = review.clone();
+        let blocked_action = selected.clone();
+        let (blocked, _) = scheduler.submit(
+            repository.clone(),
+            common_key.clone(),
+            "Stage".into(),
+            Lane::WorkingCopy,
+            move || {
+                assert!(
+                    matches!(
+                        git.execute_working(&blocked_review, &blocked_action, None),
+                        Err(Error::OtherInstance)
+                    ),
+                    "{scope} mutex did not block Stage"
+                );
+                Outcome::Failed
+            },
+            |_| {},
+        );
+        let (stopped, _) = scheduler.submit(
+            repository,
+            common_key,
+            "Commit".into(),
+            Lane::WorkingCopy,
+            || panic!("failed Stage did not stop the following Commit"),
+            |_| {},
+        );
+        let git = independent.git.clone();
+        let independent_action = Action::Stage(independent_review.entries.clone());
+        let (other, _) = scheduler.submit(
+            independent_review.repository.identity.fingerprint.clone(),
+            shovel_core::case::path_key(&independent_review.repository.common_directory),
+            "Stage".into(),
+            Lane::WorkingCopy,
+            move || {
+                let result = git
+                    .execute_working(&independent_review, &independent_action, None)
+                    .unwrap();
+                assert!(result.command.success());
+                Outcome::Succeeded
+            },
+            |_| {},
+        );
+        assert!(scheduler.remove_waiting(waiting));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while scheduler.has_accepted_work() {
+            assert!(Instant::now() < deadline, "native queue did not finish");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let records = scheduler.records();
+        for (id, outcome) in [
+            (blocked, Outcome::Failed),
+            (stopped, Outcome::StoppedAfterFailure),
+            (other, Outcome::Succeeded),
+        ] {
+            assert_eq!(
+                records.iter().find(|r| r.id == id).unwrap().outcome,
+                Some(outcome)
+            );
+        }
         assert!(
-            matches!(
-                fixture.git.execute_working(&review, &selected, None),
-                Err(Error::OtherInstance)
-            ),
-            "{scope} mutex did not block Stage"
+            independent
+                .review(&independent.root)
+                .change(Group::Staged, "file")
+                .is_some()
         );
         assert_eq!(fs::read(&index_path).unwrap(), before);
         // A failed acquisition must never strand the other lock or block Fetch's separate lane.

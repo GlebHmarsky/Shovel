@@ -838,7 +838,37 @@ fn initializing_new_branch_keeps_owner_and_submission_order_through_checkout_rev
         "refs/heads/main"
     );
     enter_branch_name(&ctx, &mut app, "queued-branch");
+    let (review_started, interrupt) =
+        crate::history_cache::tests::hold_failed_read(snapshot.worktree.clone());
     click_label(&ctx, &mut app, &text("ActionTitleNewBranch"));
+    wait(|| {
+        frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        review_started.try_recv().is_ok()
+    });
+    interrupt.send(()).unwrap();
+    wait(|| {
+        let output = frame(&ctx, &mut app, vec![]);
+        let retry = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .is_some_and(|update| {
+                update.nodes.iter().any(|(_, node)| {
+                    node.role() == egui::Role::Button
+                        && node.label() == Some(text("CheckoutRetry").as_str())
+                        && !node.is_disabled()
+                })
+            });
+        output.drop_without_applying_deltas();
+        retry
+    });
+    let active = app.scheduler.active_records();
+    let push = active
+        .iter()
+        .find(|record| record.key.starts_with("network:Push"))
+        .expect("later Push remains queued");
+    assert!(!push.running);
+    click_label(&ctx, &mut app, &text("CheckoutRetry"));
     // Creating with checkout first opens real clean/dirty review.
     wait(|| {
         app.receive(&ctx);

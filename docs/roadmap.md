@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Retry queued checkout without losing its place
+
+An interrupted checkout read left the review waiting indefinitely. It now offers **Retry reading changes** and keeps the original worktree, branch, commit and place in the queue. If the repository changed, the review asks the user to reopen it. Checkout still requires confirmation after a successful read.
+
+The headless New Branch fixture interrupted the review after the repository tab closed. The later Push stayed queued while Retry loaded the review. The user confirmed and created the intended branch. The Push then refused branch drift, the remote refs stayed empty and the index was unchanged. In a separate Windows fixture, child processes held each native mutex namespace in turn. A linked-worktree Stage refused the competing lock, its waiting Commit stopped and an independent repository staged successfully. The linked worktree staged successfully after the lock holders exited.
+
+This closes R09. The repository and Commit queue checks cover independent initialization, duplicate coalescing, linked-worktree ordering, individual waiting removal, scoped failure and failed Commit reopening. The accepted-command process check passed after cancellation and deadline. Closed-owner and Activity checks verified three idle retained owners, 128 completed records and active-work exemptions. The native Git picker and shutdown exercised preemption of automatic Fetch, while accepted user work kept the picker blocked. The queue, branch, cross-process, scheduler, deadline, History, Activity, Fetch, retention and Git selection groups passed 63 focused test runs. All-target Clippy and diff checks passed. All 18 smoke checks took 30.28 seconds on source fingerprint `7EEF341328586763355DF255C7237CA8B879051B01DF15C6184C2E879BCD7779`. Physical window interaction and Windows cross-session identity checks remain under R70 and R11.
+
 ## Recover Local Changes drafts with Refresh
 
 Refresh and F5 now retry a failed draft read or save alongside Git status. The editor keeps newer typing, and a competing saved revision remains intact. After an interrupted save, Refresh can confirm that the exact message already reached disk and clear the pending state without changing its saved revision. An editor with no pending work or unsaved text can retire after a read failure, allowing its repository owner to expire and the Git executable picker to reopen.

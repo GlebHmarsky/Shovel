@@ -2,7 +2,7 @@ use crate::{
     operations,
     strings::{self, text},
 };
-use eframe::egui::{self, Color32};
+use eframe::egui;
 use shovel_core::{
     branches::{Action, Changes, Checkout, Manage},
     git::{Git, Reference, Snapshot},
@@ -73,9 +73,10 @@ struct Review {
     target: Checkout,
     changes: Changes,
     context: Option<Arc<working::Context>>,
-    receiver: Option<Receiver<Result<working::Context, String>>>,
+    receiver: Option<Receiver<Result<working::Context, &'static str>>>,
     cancel: Cancellation,
     started: bool,
+    can_retry: bool,
     status: String,
 }
 impl Review {
@@ -87,6 +88,7 @@ impl Review {
             receiver: None,
             cancel: Cancellation::default(),
             started: false,
+            can_retry: false,
             status: text("CheckoutReading"),
         }
     }
@@ -122,48 +124,60 @@ impl Review {
             return;
         }
         self.started = true;
+        self.cancel = Cancellation::default();
         let (sender, receiver) = mpsc::channel();
         self.receiver = Some(receiver);
         let expected = snapshot.clone();
         let cancel = self.cancel.clone();
-        let ctx = ctx.clone();
+        let worker_ctx = ctx.clone();
         let lease = workers.start(cancel.clone());
-        thread::spawn(move || {
+        let worker = thread::Builder::new().spawn(move || {
             let _lease = lease;
-            #[cfg(test)]
-            crate::history_cache::tests::wait_for_read(&expected.worktree);
-            let result = git
-                .working_copy(&expected.worktree, &cancel)
-                .map_err(|_| text("CheckoutReadFailed"))
-                .and_then(|context| {
-                    if context.repository.identity != expected.identity
-                        || context.repository.branch != expected.branch
-                        || context.repository.head != expected.head
-                    {
-                        Err(text("CheckoutChanged"))
-                    } else {
-                        Ok(context)
-                    }
-                });
+            let read = || {
+                #[cfg(test)]
+                crate::history_cache::tests::wait_for_read(&expected.worktree);
+                let context = git
+                    .working_copy(&expected.worktree, &cancel)
+                    .map_err(|_| "CheckoutReadFailed")?;
+                if context.repository.identity != expected.identity
+                    || context.repository.branch != expected.branch
+                    || context.repository.head != expected.head
+                {
+                    return Err("CheckoutChanged");
+                }
+                Ok(context)
+            };
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(read))
+                .unwrap_or(Err("CheckoutReadFailed"));
             let _ = sender.send(result);
-            ctx.request_repaint();
+            worker_ctx.request_repaint();
         });
+        if worker.is_err() {
+            ctx.request_repaint();
+        }
     }
     fn poll(&mut self) {
-        if let Some(receiver) = &self.receiver
-            && let Ok(result) = receiver.try_recv()
-        {
-            self.receiver = None;
-            match result {
-                Ok(context) => {
-                    self.status = text(if context.entries.is_empty() {
-                        "CheckoutClean"
-                    } else {
-                        "CheckoutDirtyHelp"
-                    });
-                    self.context = Some(Arc::new(context));
-                }
-                Err(error) => self.status = error,
+        let Some(receiver) = &self.receiver else {
+            return;
+        };
+        let result = match receiver.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => Err("CheckoutReadFailed"),
+        };
+        self.receiver = None;
+        match result {
+            Ok(context) => {
+                self.status = text(if context.entries.is_empty() {
+                    "CheckoutClean"
+                } else {
+                    "CheckoutDirtyHelp"
+                });
+                self.context = Some(Arc::new(context));
+            }
+            Err(error) => {
+                self.status = text(error);
+                self.can_retry = error == "CheckoutReadFailed";
             }
         }
     }
@@ -857,12 +871,19 @@ impl Dialogs {
                                                 && review.receiver.is_none()
                                                 && review.context.is_none()
                                             {
-                                                Color32::LIGHT_RED
+                                                ui.visuals().error_fg_color
                                             } else {
                                                 ui.visuals().text_color()
                                             },
                                             &review.status,
                                         );
+                                        if review.can_retry
+                                            && ui.button(text("CheckoutRetry")).clicked()
+                                        {
+                                            review.can_retry = false;
+                                            review.started = false;
+                                            review.status = text("CheckoutReading");
+                                        }
                                         let confirmation = if discard {
                                             "RustConfirmDiscardCheckout"
                                         } else {
