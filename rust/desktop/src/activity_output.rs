@@ -227,6 +227,20 @@ mod tests {
     }
 
     #[test]
+    fn streamed_activity_holds_a_chunked_authorization_header_until_redacted() {
+        let mut capture = Capture::default();
+        capture.append(true, b"http.c:957 => Send header: Auth");
+        capture.append(true, b"orization: Bearer fixture-to");
+        assert!(capture.text.is_empty());
+        capture.append(false, b"remote: still working\n");
+        capture.append(true, b"ken\r\n");
+        assert_eq!(
+            capture.text,
+            "remote: still working\nhttp.c:957 => Send header: Authorization: [redacted]\r\n"
+        );
+    }
+
+    #[test]
     fn streamed_activity_redacts_chunked_urls_and_never_publishes_truncated_lines() {
         let mut capture = Capture::default();
         capture.append(true, b"failure https://user:sec");

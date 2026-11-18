@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Mask explicit credentials in Git diagnostics
+
+Git trace and Activity redaction now cover Authorization, Proxy-Authorization, Cookie and Set-Cookie fields, credential-helper password and token records, and password-bearing SSH URLs. Surrounding trace context, SSH usernames without passwords and unrelated Git diagnostics keep their original text. A streamed Authorization field fragmented across three chunks stayed hidden until the complete line could be safely published. The fixture uses synthetic data and covers explicit credential syntax. Arbitrary hook messages still require review when they contain unstructured sensitive output.
+
+Four network redaction tests, five native remote tests and four Activity output tests passed. All-target Clippy, diff checks and all 18 smoke checks passed. The smoke suite finished in 29.97 seconds on source fingerprint `2604E69298A7DC1EF9B041BD3837F452C54AA0126C63F6F89D53C489A7DE7195`.
+
 ## Windows Rust Beta 0.50.19 published
 
 GitHub Actions run `44307865905` published master `50497772d60bb997a224e2c5dc8118e074df1e3a`. The public verifier checked the exact tag and all seven downloaded assets. The immutable signed feed matched the live alias byte for byte. The Windows installer reports 0.50.19 and has no Authenticode signature. Shovel’s native updater independently verified the same release and downloaded the package. Installed apply, restart, repair and uninstall require separate acceptance. [Release receipt](evidence/rust-beta-0.50.19-publication.json)

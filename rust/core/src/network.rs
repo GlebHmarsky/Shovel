@@ -81,32 +81,94 @@ fn trim(value: &str) -> &str {
 fn oid(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
-// Interpret complete HTTP(S) URLs in each token without changing other Git text.
+fn strip_ascii_prefix<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
+    let start = text.get(..prefix.len())?;
+    start
+        .eq_ignore_ascii_case(prefix)
+        .then(|| &text[prefix.len()..])
+}
+
+fn secret_value_start(line: &str) -> Option<usize> {
+    let value = line.trim_start();
+    let header = value
+        .split_once("=> Send header:")
+        .or_else(|| value.split_once("<= Recv header:"))
+        .map(|(_, header)| header.trim_start())
+        .or_else(|| strip_ascii_prefix(value, "http.extraHeader=").map(str::trim_start))
+        .unwrap_or(value);
+    let value = [
+        "authorization:",
+        "proxy-authorization:",
+        "cookie:",
+        "set-cookie:",
+    ]
+    .iter()
+    .find_map(|field| strip_ascii_prefix(header, field))
+    .or_else(|| {
+        ["password=", "credential=", "oauth_refresh_token="]
+            .iter()
+            .find_map(|field| strip_ascii_prefix(value, field))
+    })?
+    .trim_start();
+    (!value.is_empty()).then_some(line.len() - value.len())
+}
+
+/// Mask explicit credential fields and Git transport URLs while retaining other diagnostics.
 pub fn redact(text: &str) -> String {
-    if !text.contains("://") {
-        return text.to_owned();
-    }
     let mut result = String::with_capacity(text.len());
+    for part in text.split_inclusive(['\r', '\n']) {
+        let line = part.trim_end_matches(['\r', '\n']);
+        if let Some(start) = secret_value_start(line) {
+            redact_urls(&line[..start], &mut result);
+            result.push_str("[redacted]");
+            result.push_str(&part[line.len()..]);
+        } else {
+            redact_urls(part, &mut result);
+        }
+    }
+    result
+}
+
+fn redact_urls(text: &str, result: &mut String) {
+    if !text.contains("://") {
+        result.push_str(text);
+        return;
+    }
     for part in text.split_inclusive(char::is_whitespace) {
         let word = part.trim_end_matches(char::is_whitespace);
         let mut schemes = word
             .match_indices("://")
             .filter_map(|(colon, _)| {
-                ["https", "http"].iter().find_map(|scheme| {
-                    let start = colon.checked_sub(scheme.len())?;
-                    word.get(start..colon)?
-                        .eq_ignore_ascii_case(scheme)
-                        .then_some((start, colon + 3))
-                })
+                ["https", "http", "git+ssh", "ssh+git", "ssh", "git", "ftps", "ftp"]
+                    .iter()
+                    .find_map(|scheme| {
+                        let start = colon.checked_sub(scheme.len())?;
+                        if start > 0 {
+                            let previous = word.as_bytes()[start - 1];
+                            if previous.is_ascii_alphanumeric()
+                                || matches!(previous, b'+' | b'.' | b'-')
+                            {
+                                return None;
+                            }
+                        }
+                        let address = colon + 3;
+                        let hide_user = matches!(*scheme, "http" | "https" | "ftp" | "ftps");
+                        word.get(start..colon)?
+                            .eq_ignore_ascii_case(scheme)
+                            .then_some((start, address, hide_user))
+                    })
             })
             .peekable();
         let mut cursor = 0;
-        while let Some((_, authority)) = schemes.next() {
+        while let Some((_, authority, hide_user)) = schemes.next() {
             result.push_str(&word[cursor..authority]);
-            let end = schemes.peek().map_or(word.len(), |&(next, _)| next);
+            let end = schemes.peek().map_or(word.len(), |&(next, _, _)| next);
             let url = &word[authority..end];
             let auth_end = url.find(['/', '?', '#']).unwrap_or(url.len());
-            let tail = if let Some(at) = url[..auth_end].rfind('@') {
+            let tail = if let Some(at) = url[..auth_end]
+                .rfind('@')
+                .filter(|&at| hide_user || url[..at].contains(':'))
+            {
                 result.push_str("[redacted]@");
                 &url[at + 1..]
             } else {
@@ -123,7 +185,6 @@ pub fn redact(text: &str) -> String {
         }
         result.push_str(&part[cursor..]);
     }
-    result
 }
 
 // Truncation, timeout or cancellation can split a URL before its @ or query.
@@ -890,6 +951,44 @@ mod tests {
         assert!(overlap(&["Build/".into()], &["build/a".into()]));
         assert!(overlap(&["build/a".into()], &["Build".into()]));
         assert!(!overlap(&["builder/a".into()], &["Build".into()]));
+    }
+
+    #[test]
+    fn explicit_credentials_and_transport_headers_keep_their_diagnostic_context() {
+        let input = concat!(
+            "http.c:957 => Send header: aUtHoRiZaTiOn: Bearer fixture-access\r\n",
+            "http.c:969 <= Recv header: Set-Cookie: session=fixture-cookie\n",
+            "Proxy-Authorization: Basic fixture-proxy\n",
+            "\tCookie: fixture-request-cookie\n",
+            "http.extraHeader=Authorization: Bearer fixture-config\n",
+            "password=fixture-password\n",
+            "credential=fixture-credential\n",
+            "oauth_refresh_token=fixture-refresh\n",
+            "fatal: SSH failed for git+ssh://user:fixture-ssh@example.invalid/test\n",
+            "remote: Authorization: server requires credentials\n",
+            "X-Authorization-Info: normal diagnostic\n",
+            "server URL: examplehttps://unrelated/untouched?reason=test\n",
+            "fatal: git@example.invalid:path FETCH_HEAD was not updated\n",
+            "fallback ssh://git@example.invalid/path\n",
+        );
+        let expected = concat!(
+            "http.c:957 => Send header: aUtHoRiZaTiOn: [redacted]\r\n",
+            "http.c:969 <= Recv header: Set-Cookie: [redacted]\n",
+            "Proxy-Authorization: [redacted]\n",
+            "\tCookie: [redacted]\n",
+            "http.extraHeader=Authorization: [redacted]\n",
+            "password=[redacted]\n",
+            "credential=[redacted]\n",
+            "oauth_refresh_token=[redacted]\n",
+            "fatal: SSH failed for git+ssh://[redacted]@example.invalid/test\n",
+            "remote: Authorization: server requires credentials\n",
+            "X-Authorization-Info: normal diagnostic\n",
+            "server URL: examplehttps://unrelated/untouched?reason=test\n",
+            "fatal: git@example.invalid:path FETCH_HEAD was not updated\n",
+            "fallback ssh://git@example.invalid/path\n",
+        );
+        assert_eq!(redact(input), expected);
+        assert_eq!(redact(expected), expected);
     }
 
     #[test]
