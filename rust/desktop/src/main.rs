@@ -94,6 +94,7 @@ enum Event {
 struct Tab {
     id: u64,
     path: PathBuf,
+    qualified_name: Option<String>,
     local_changes: bool,
     history: Option<History>,
     owner_snapshot: Option<shovel_core::git::Snapshot>,
@@ -275,6 +276,7 @@ impl Workspace {
         {
             let owner = self.retained_tabs.remove(index);
             self.tabs.push(owner);
+            self.update_tab_names();
             return self.tabs.len() - 1;
         }
         let id = self.next_id;
@@ -282,6 +284,7 @@ impl Workspace {
         self.tabs.push(Tab {
             id,
             path,
+            qualified_name: None,
             local_changes: false,
             history: None,
             owner_snapshot: None,
@@ -300,6 +303,7 @@ impl Workspace {
             error: None,
             comparison: None,
         });
+        self.update_tab_names();
         self.tabs.len() - 1
     }
     fn refresh(&mut self, ctx: &egui::Context) {
@@ -652,6 +656,7 @@ impl Workspace {
                         let id = self.next_id;
                         self.next_id += 1;
                         self.tabs.push(Tab {
+                            qualified_name: None,
                             id,
                             path,
                             local_changes: false,
@@ -673,11 +678,16 @@ impl Workspace {
                             comparison: None,
                         });
                     }
+                    self.update_tab_names();
                     self.selected = self
                         .settings
                         .get("SelectedRepositoryPath")
                         .and_then(serde_json::Value::as_str)
-                        .and_then(|p| self.tabs.iter().position(|t| t.path == *p))
+                        .and_then(|p| {
+                            self.tabs
+                                .iter()
+                                .position(|t| Self::same_path(&t.path, std::path::Path::new(p)))
+                        })
                         .unwrap_or(0);
                     self.refresh(ctx);
                     self.restore_startup_preview(ctx);
@@ -2026,16 +2036,8 @@ impl eframe::App for Workspace {
                                 ui.vertical_centered(|ui| {
                                     if let Some(tab) = self.tabs.get(self.selected) {
                                         ui.add(
-                                            egui::Label::new(
-                                                RichText::new(
-                                                    tab.path
-                                                        .file_name()
-                                                        .unwrap_or_default()
-                                                        .to_string_lossy(),
-                                                )
-                                                .strong(),
-                                            )
-                                            .truncate(),
+                                            egui::Label::new(RichText::new(tab.name()).strong())
+                                                .truncate(),
                                         )
                                         .on_hover_text(tab.path.to_string_lossy());
                                         if let Some(snapshot) =
@@ -2303,13 +2305,16 @@ impl eframe::App for Workspace {
                         / count as f32
                 };
                 let mut selected = None;
-                let mut target = None;
+                let pointer = ctx.input(|i| {
+                    i.pointer
+                        .interact_pos()
+                        .filter(|_| i.pointer.primary_down() || self.tab_drag.is_some())
+                });
+                let mut nearest: Option<(f32, usize, egui::Rect)> = None;
                 let mut action = None;
                 ui.horizontal(|ui| {
                     for (index, tab) in self.tabs.iter().enumerate() {
-                        let label =
-                            RichText::new(tab.path.file_name().unwrap_or_default().to_string_lossy())
-                                .color(palette.text);
+                        let label = RichText::new(tab.name()).color(palette.text);
                         let marker = tab_markers::color(&self.settings, &tab.path);
                         let status = if self.git.is_some() {
                             self.tab_markers.status(tab)
@@ -2339,14 +2344,18 @@ impl eframe::App for Workspace {
                                     se: 0,
                                 }),
                         );
+                        ctx.accesskit_node_builder(response.id, |node| {
+                            node.set_description(tab.path.to_string_lossy().into_owned());
+                        });
                         if response.drag_started() {
                             self.tab_drag =
                                 Some((tab.id, self.tabs.iter().map(|t| t.id).collect()));
                         }
-                        if ctx.input(|i| i.pointer.interact_pos()).is_some_and(|pos| {
-                            pos.x >= response.rect.left() && pos.x <= response.rect.right()
-                        }) {
-                            target = Some(index);
+                        if let Some(pointer) = pointer {
+                            let distance = (response.rect.center().x - pointer.x).abs();
+                            if nearest.is_none_or(|(previous, _, _)| distance < previous) {
+                                nearest = Some((distance, index, response.rect));
+                            }
                         }
                         if response.clicked() {
                             selected = Some(index);
@@ -2398,6 +2407,7 @@ impl eframe::App for Workspace {
                         });
                         self.tab_drag = None;
                     } else {
+                        let target = nearest.map(|(_, index, _)| index);
                         if let (Some(target), Some(from)) =
                             (target, self.tabs.iter().position(|t| t.id == *drag))
                             && target != from
@@ -2405,7 +2415,19 @@ impl eframe::App for Workspace {
                             let moved = self.tabs.remove(from);
                             self.tabs.insert(target, moved);
                         }
-                        if !ctx.input(|i| i.pointer.primary_down()) {
+                        if ctx.input(|i| i.pointer.primary_down()) {
+                            if let (Some((_, _, slot)), Some(pointer), Some(tab)) =
+                                (nearest, pointer, self.tabs.iter().find(|t| t.id == *drag))
+                            {
+                                workspace_tabs::paint_drag(
+                                    &ctx,
+                                    slot,
+                                    pointer,
+                                    &tab.name(),
+                                    palette,
+                                );
+                            }
+                        } else {
                             self.tab_drag = None;
                             self.settings.set(
                                 "RepositoryPaths",
@@ -3343,6 +3365,7 @@ mod tests {
             git_selection: Default::default(),
             repository_picker: None,
             tabs: vec![Tab {
+                qualified_name: None,
                 id: 1,
                 path: path.clone(),
                 local_changes: false,

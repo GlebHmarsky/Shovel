@@ -7,6 +7,7 @@ pub(super) fn workspace() -> Workspace {
         .into_iter()
         .enumerate()
         .map(|(i, name)| Tab {
+            qualified_name: None,
             id: i as u64 + 1,
             path: PathBuf::from(name),
             local_changes: false,
@@ -124,15 +125,26 @@ fn tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop() {
     let send =
         |app: &mut Workspace, events| frame(&ctx, app, events).drop_without_applying_deltas();
     for cancel in [true, false] {
+        let below = egui::pos2(c.x, 400.);
         for events in [
             vec![egui::Event::PointerMoved(a)],
             vec![button(a, true)],
             vec![egui::Event::PointerMoved(a + egui::vec2(10., 0.))],
             vec![egui::Event::PointerMoved(b)],
-            vec![egui::Event::PointerMoved(c)],
+            vec![egui::Event::PointerMoved(below)],
         ] {
             send(&mut app, events);
         }
+        let preview = frame(&ctx, &mut app, vec![]);
+        let floating_label = |output: &egui::FullOutput| {
+            output.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == "Alpha" && t.pos.y > below.y))
+        };
+        assert!(
+            floating_label(&preview),
+            "the drag label follows the pointer below the strip"
+        );
+        assert!(preview.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.rect.contains(c) && r.rect.width() > (c.x - b.x) * 0.9 && r.stroke.width == 2.)));
+        preview.drop_without_applying_deltas();
         assert_eq!(app.tabs.iter().map(|t| t.id).collect::<Vec<_>>(), [2, 3, 1]);
         assert_eq!(app.tabs[app.selected].id, 2);
         if cancel {
@@ -147,7 +159,9 @@ fn tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop() {
                 }],
             );
         }
-        send(&mut app, vec![button(c, false)]);
+        let finished = frame(&ctx, &mut app, vec![button(below, false)]);
+        assert!(!floating_label(&finished));
+        finished.drop_without_applying_deltas();
         if cancel {
             assert_eq!(app.tabs.iter().map(|t| t.id).collect::<Vec<_>>(), [1, 2, 3]);
         } else {
@@ -157,6 +171,46 @@ fn tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop() {
             );
         }
     }
+}
+
+#[test]
+fn duplicate_tab_names_use_the_shortest_distinct_path_and_keep_equal_slots() {
+    let mut app = workspace();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    app.tabs.clear();
+    let paths = [
+        r"C:\projects\client\tools\Shovel",
+        r"D:\projects\server\tools\shovel",
+        r"C:\games\Aurora",
+        r"Z:\",
+    ];
+    for path in paths {
+        app.ensure_tab(PathBuf::from(path));
+    }
+    let names = [
+        r"client\tools\Shovel",
+        r"server\tools\shovel",
+        "Aurora",
+        r"Z:\",
+    ];
+    assert_eq!(app.tabs.iter().map(Tab::name).collect::<Vec<_>>(), names);
+    let out = frame(&ctx, &mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    let mut widths = Vec::new();
+    for (name, path) in names.into_iter().zip(paths) {
+        let node = nodes
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.label() == Some(name) && node.description() == Some(path))
+            .unwrap();
+        let rect = node.bounds().unwrap();
+        widths.push(rect.x1 - rect.x0);
+    }
+    assert!(widths.iter().all(|w| (*w - widths[0]).abs() < 1.1));
+    out.drop_without_applying_deltas();
+    app.close_tab(app.tabs[1].id, &ctx);
+    assert_eq!(app.tabs[0].name(), "Shovel");
 }
 
 #[test]

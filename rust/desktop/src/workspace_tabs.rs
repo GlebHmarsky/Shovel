@@ -1,6 +1,52 @@
 //! Repository owners outlive their visible tabs. Closing only releases display reads.
 use super::*;
 
+pub(super) fn paint_drag(
+    ctx: &egui::Context,
+    slot: egui::Rect,
+    pointer: egui::Pos2,
+    label: &str,
+    palette: workspace_style::Palette,
+) {
+    let screen = ctx.content_rect();
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Tooltip,
+        egui::Id::unique("repository-tab-drag"),
+    ));
+    let tint = if palette.high_contrast {
+        palette.active_selection
+    } else {
+        palette.active_selection.gamma_multiply(0.55)
+    };
+    painter.rect_filled(slot, 4., tint);
+    painter.rect_stroke(
+        slot,
+        4.,
+        egui::Stroke::new(2., palette.focus),
+        egui::StrokeKind::Inside,
+    );
+    let text = painter.layout_no_wrap(
+        label.to_owned(),
+        egui::FontId::proportional(13.),
+        palette.text,
+    );
+    let size = (text.size() + egui::vec2(18., 10.)).min(screen.size());
+    let position = (pointer + egui::vec2(12., 14.))
+        .min(screen.max - size)
+        .max(screen.min);
+    let card = egui::Rect::from_min_size(position, size);
+    painter.rect_filled(card, 4., palette.raised);
+    painter.rect_stroke(
+        card,
+        4.,
+        egui::Stroke::new(1., palette.border),
+        egui::StrokeKind::Inside,
+    );
+    painter
+        .with_clip_rect(card)
+        .galley(card.min + egui::vec2(9., 5.), text, palette.text);
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum TabAction {
     Refresh(u64),
@@ -11,6 +57,17 @@ pub(super) enum TabAction {
 }
 
 impl Tab {
+    pub(super) fn name(&self) -> std::borrow::Cow<'_, str> {
+        self.qualified_name
+            .as_deref()
+            .map(std::borrow::Cow::Borrowed)
+            .unwrap_or_else(|| {
+                self.path
+                    .file_name()
+                    .unwrap_or(self.path.as_os_str())
+                    .to_string_lossy()
+            })
+    }
     pub(super) fn owns_editor(&self, editor: &commit::Editor) -> bool {
         self.matches_path(&editor.path)
             && editor.matches_owner(
@@ -27,6 +84,44 @@ impl Tab {
 }
 
 impl Workspace {
+    /// Adjacent paths in reversed-component order share the longest suffix.
+    /// Rebuild on membership changes so ordinary frames only read the label.
+    pub(super) fn update_tab_names(&mut self) {
+        let mut paths: Vec<_> = self
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(i, tab)| {
+                let components: Vec<_> = tab
+                    .path
+                    .components()
+                    .rev()
+                    .map(|c| shovel_core::case::path_key(c.as_ref()))
+                    .collect();
+                (components, i)
+            })
+            .collect();
+        paths.sort_unstable();
+        for (position, (parts, id)) in paths.iter().enumerate() {
+            let shared = [position.checked_sub(1), Some(position + 1)]
+                .into_iter()
+                .flatten()
+                .filter_map(|other| paths.get(other))
+                .map(|(other, _)| parts.iter().zip(other).take_while(|(a, b)| a == b).count())
+                .max()
+                .unwrap_or(0);
+            let tab = &mut self.tabs[*id];
+            tab.qualified_name = (shared > 0).then(|| {
+                let parts: Vec<_> = tab.path.components().rev().take(shared + 1).collect();
+                parts
+                    .into_iter()
+                    .rev()
+                    .collect::<PathBuf>()
+                    .to_string_lossy()
+                    .into_owned()
+            });
+        }
+    }
     pub(super) fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
         a == b || shovel_core::case::path_key(a) == shovel_core::case::path_key(b)
     }
@@ -65,6 +160,7 @@ impl Workspace {
         };
         let selected = self.tabs.get(self.selected).map(|t| t.id);
         let mut owner = self.tabs.remove(index);
+        self.update_tab_names();
         self.tab_markers.forget(id);
         if let Some(snapshot) = owner.observed_snapshot() {
             self.auto_fetch.forget(&snapshot.worktree);
