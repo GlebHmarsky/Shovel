@@ -483,11 +483,16 @@ impl Git {
         auth: Option<&authentication::Session>,
         cancel: &Cancellation,
     ) -> Result<BTreeMap<OsString, Option<OsString>>, Error> {
+        let mut environment = auth.map(|a| a.environment.clone()).unwrap_or_default();
+        environment.insert("GIT_MERGE_AUTOEDIT".into(), Some("no".into()));
+        environment.insert("GIT_EDITOR".into(), Some("false".into()));
         if self
             .network_config(root, "core.sshCommand", cancel)?
             .is_some()
         {
-            return Err(Error::Code("ActionCustomSsh"));
+            // Git owns the configured SSH command and its variant. Its normal
+            // transport selection also leaves local and HTTPS remotes usable.
+            return Ok(environment);
         }
         let mut install = self
             .executable
@@ -505,7 +510,6 @@ impl Git {
         if !ssh.is_file() {
             return Err(Error::Code("ActionSshMissing"));
         }
-        let mut environment = auth.map(|a| a.environment.clone()).unwrap_or_default();
         let path = ssh
             .to_string_lossy()
             .replace('\\', "/")
@@ -520,8 +524,6 @@ impl Git {
             Some(format!("'{path}' {options}").into()),
         );
         environment.insert("GIT_SSH_VARIANT".into(), Some("ssh".into()));
-        environment.insert("GIT_MERGE_AUTOEDIT".into(), Some("no".into()));
-        environment.insert("GIT_EDITOR".into(), Some("false".into()));
         Ok(environment)
     }
     pub fn push_created_commit(

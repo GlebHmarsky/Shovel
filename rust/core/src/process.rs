@@ -363,10 +363,29 @@ fn drain(
     })
 }
 
+fn cancelled_before_launch(start: Instant) -> Result {
+    Result {
+        outcome: Outcome::Cancelled,
+        exit_code: 0,
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+        elapsed: start.elapsed(),
+    }
+}
+
 pub fn run(
     request: &Request,
     cancel: &Cancellation,
     callback: Option<OutputCallback>,
+) -> std::io::Result<Result> {
+    run_before_launch(request, cancel, callback, || {})
+}
+
+fn run_before_launch(
+    request: &Request,
+    cancel: &Cancellation,
+    callback: Option<OutputCallback>,
+    before_launch: impl FnOnce(),
 ) -> std::io::Result<Result> {
     let start = Instant::now();
     if !request.executable.is_absolute()
@@ -377,17 +396,10 @@ pub fn run(
     {
         return Err(invalid());
     }
-    let permit = admit(request.lifetime, cancel);
-    if permit.is_none() {
-        return Ok(Result {
-            outcome: Outcome::Cancelled,
-            exit_code: 0,
-            stdout: vec![],
-            stderr: vec![],
-            elapsed: start.elapsed(),
-        });
-    }
-    let _permit = permit;
+    let Some(_permit) = admit(request.lifetime, cancel) else {
+        return Ok(cancelled_before_launch(start));
+    };
+    let cancellable = request.lifetime != Lifetime::AcceptedCommand;
     // Match the native baseline: admission waiting contributes to displayed
     // elapsed time, but does not consume the process execution deadline.
     let admitted_at = Instant::now();
@@ -418,6 +430,9 @@ pub fn run(
         return Err(std::io::Error::last_os_error());
     }
     let creation = PROCESS_CREATION.lock().unwrap_or_else(|e| e.into_inner());
+    if cancellable && cancel.is_cancelled() {
+        return Ok(cancelled_before_launch(start));
+    }
     let (stdout_read, stdout_write) = pipe(true)?;
     let (stderr_read, stderr_write) = pipe(true)?;
     let (stdin_read, stdin_write) = pipe(false)?;
@@ -459,44 +474,46 @@ pub fn run(
         Some(thread::Builder::new().spawn(move || File::from(stdin_write).write_all(&input))?)
     };
     let mut process: PROCESS_INFORMATION = unsafe { zeroed() };
+    before_launch();
+    let cancelled = cancellable && cancel.is_cancelled();
     // Atomic job assignment means no child may run outside owned containment.
-    let started = unsafe {
-        CreateProcessW(
-            executable.as_ptr(),
-            command.as_mut_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            1,
-            CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
-            block.as_ptr().cast(),
-            directory.as_ptr(),
-            &startup.StartupInfo,
-            &mut process,
-        )
+    let started = if cancelled {
+        0
+    } else {
+        unsafe {
+            CreateProcessW(
+                executable.as_ptr(),
+                command.as_mut_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+                CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
+                block.as_ptr().cast(),
+                directory.as_ptr(),
+                &startup.StartupInfo,
+                &mut process,
+            )
+        }
     };
-    let start_error = (started == 0).then(std::io::Error::last_os_error);
+    let start_error = (started == 0 && !cancelled).then(std::io::Error::last_os_error);
     drop(attributes);
     drop(stdin_read);
     drop(stdout_write);
     drop(stderr_write);
     drop(creation);
-    if let Some(error) = start_error {
+    if started == 0 {
         // Closing the unused child handles wakes every pipe worker.
         let _ = stdout.join();
         let _ = stderr.join();
         if let Some(writer) = writer {
             let _ = writer.join();
         }
-        return Err(error);
+        return start_error.map_or_else(|| Ok(cancelled_before_launch(start)), Err);
     }
     let process_handle = owned(process.hProcess)?;
     drop(owned(process.hThread)?);
     let mut outcome = Outcome::Exited;
-    let wait_ms = if request.lifetime == Lifetime::AcceptedCommand {
-        INFINITE
-    } else {
-        20
-    };
+    let wait_ms = if cancellable { 20 } else { INFINITE };
     loop {
         let wait = unsafe { WaitForSingleObject(process_handle.as_raw_handle(), wait_ms) };
         if wait == WAIT_OBJECT_0 {
@@ -505,7 +522,7 @@ pub fn run(
         if wait == WAIT_FAILED {
             return Err(std::io::Error::last_os_error());
         }
-        if request.lifetime != Lifetime::AcceptedCommand {
+        if cancellable {
             outcome = if cancel.is_cancelled() {
                 Outcome::Cancelled
             } else if overflow.load(Ordering::Acquire) {
@@ -1022,6 +1039,35 @@ mod tests {
         assert!(result.elapsed >= Duration::from_millis(1100));
         assert!(temp.path().join("finished").exists());
     }
+    #[test]
+    fn cancelling_before_native_launch_only_skips_background_work() {
+        let temp = tempfile::tempdir().unwrap();
+        // An attempted CreateProcessW on this path always fails. It cannot be
+        // mistaken for a cancelled child that the OS started and then killed.
+        for lifetime in [Lifetime::Read, Lifetime::AutomaticFetch] {
+            let mut request = request(temp.path(), "read-stdin");
+            request.executable = temp.path().join("missing.exe");
+            request.input = vec![0x5a; 192 * 1024];
+            request.lifetime = lifetime;
+            let cancel = Cancellation::default();
+            let result = run_before_launch(&request, &cancel, None, || cancel.cancel()).unwrap();
+            assert_eq!(result.outcome, Outcome::Cancelled, "{lifetime:?}");
+            assert!(result.stdout.is_empty() && result.stderr.is_empty());
+            assert!(!temp.path().join("received-stdin").exists());
+        }
+
+        let mut accepted = request(temp.path(), "read-stdin");
+        accepted.lifetime = Lifetime::AcceptedCommand;
+        accepted.input = vec![0x5a; 192 * 1024];
+        let cancel = Cancellation::default();
+        let result = run_before_launch(&accepted, &cancel, None, || cancel.cancel()).unwrap();
+        assert!(result.success(), "{result:?}");
+        assert_eq!(
+            std::fs::read(temp.path().join("received-stdin")).unwrap(),
+            accepted.input,
+        );
+    }
+
     #[test]
     fn saturated_lanes_remain_independent_and_cancelled_waiters_never_start() {
         let _fixture = SATURATION_FIXTURE.lock().unwrap_or_else(|e| e.into_inner());

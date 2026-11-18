@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Honor configured SSH and check cancellation before launch
+
+The network path used to reject even a local Fetch when `core.sshCommand` was set. It now lets native Git select that command, its SSH variant and whether the remote requires SSH. The fixture fetched from a local bare repository without invoking the configured SSH program. Manual and automatic Fetch then used a disposable upload-pack wrapper with the exact configured SSH arguments and left HEAD, the index and Git configuration bytes intact. [Git SSH configuration](https://git-scm.com/docs/git-config.html#Documentation/git-config.txt-coresshCommand)
+
+Windows checks cancellation after the process creation lock and again before calling `CreateProcessW` for a read or automatic Fetch. The fixture previously got the native missing-executable error after cancellation. The corrected path returns Cancelled and drains the prepared pipes. An accepted request in the same fixture still starts and receives all 192 KiB of input. [Windows process creation](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw)
+
+The Windows process, network, Clone, submodule and AskPass groups passed 40 focused test runs. All-target Clippy and diff checks passed. All 18 smoke checks took 33.75 seconds on source fingerprint `77305C634A94A191FD41CDEB26B198D7A720AB7926AE512C124810EE3650EB99`. Live SSH and browser credential-provider acceptance remain under R10.
+
 ## Windows Rust Beta 0.50.23 release checks
 
 This build includes Local Changes draft recovery, queued checkout review retry, and recovery when the update restart checks are interrupted. The versioned source passed 23 updater tests, three draft retry tests and the queued checkout regression. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 60.23 seconds on source fingerprint `640F8B9470FBCB0ADD44C861FE67669506A35AF2D9CB3484137B7530E743704D`. The public bundle verifier and headless native updater probe were built from this source.

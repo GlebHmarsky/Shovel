@@ -438,6 +438,79 @@ fn merge_choice_overrides_branch_merge_options_and_autostash_conflicts_are_not_s
 }
 
 #[test]
+fn fetch_honors_configured_ssh_and_keeps_local_transport_usable() {
+    let f = Fixture::new();
+    let cancel = Cancellation::default();
+    let incoming = f.incoming("fetch.txt", "incoming\n");
+    let head = command(&f.git, &f.root, &["rev-parse", "HEAD"]);
+    let index_path = f.root.join(".git/index");
+    let index = fs::read(&index_path).unwrap();
+    let tracking = || command(&f.git, &f.root, &["rev-parse", "refs/remotes/origin/main"]);
+    let fetch = || Action::Fetch {
+        remote: Some("origin".into()),
+        all: false,
+    };
+    command(
+        &f.git,
+        &f.root,
+        &["config", "core.sshCommand", "sh -c 'echo invoked > ssh-marker; exit 9'"],
+    );
+    let local = f.run(fetch());
+    assert!(local.succeeded(), "{}", local.output);
+    assert_eq!(tracking(), incoming);
+    assert!(!f.root.join("ssh-marker").exists());
+
+    let shell_path = |path: &Path| {
+        format!(
+            "'{}'",
+            path.to_str().unwrap().replace('\\', "/").replace('\'', "'\\''")
+        )
+    };
+    let shim = f._temp.path().join("configured ssh.sh");
+    let marker = f._temp.path().join("ssh-arguments");
+    // No SSH server is needed. Verify the exact Git invocation and then speak
+    // the ordinary Git transport protocol to the disposable bare repository.
+    fs::write(
+        &shim,
+        format!(
+            "printf '%s\\n' \"$@\" > {}\nexec git upload-pack {}\n",
+            shell_path(&marker),
+            shell_path(&f.remote),
+        ),
+    )
+    .unwrap();
+    let ssh = format!("sh {}", shell_path(&shim));
+    command(&f.git, &f.root, &["config", "core.sshCommand", &ssh]);
+    command(&f.git, &f.root, &["config", "ssh.variant", "simple"]);
+    command(
+        &f.git,
+        &f.root,
+        &["remote", "set-url", "origin", "fixture@host.invalid:fixture.git"],
+    );
+    let config_path = f.root.join(".git/config");
+    let config = fs::read(&config_path).unwrap();
+    for automatic in [false, true] {
+        command(&f.git, &f.root, &["update-ref", "-d", "refs/remotes/origin/main"]);
+        let review = f.git.prepare_network(&f.root, &cancel).unwrap();
+        let fetched = if automatic {
+            f.git.automatic_fetch(&review, &cancel)
+        } else {
+            f.git.execute_network(&review, &fetch(), None, None)
+        }
+        .unwrap();
+        assert!(fetched.succeeded(), "{}", fetched.output);
+        assert_eq!(tracking(), incoming);
+        assert_eq!(
+            fs::read_to_string(&marker).unwrap().lines().collect::<Vec<_>>(),
+            ["fixture@host.invalid", "git-upload-pack 'fixture.git'"],
+        );
+    }
+    assert_eq!(command(&f.git, &f.root, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(config_path).unwrap(), config);
+    assert_eq!(fs::read(index_path).unwrap(), index);
+}
+
+#[test]
 fn automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation() {
     let temp = tempfile::tempdir().unwrap();
     let git = isolated_git(temp.path());
