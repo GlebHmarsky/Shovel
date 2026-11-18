@@ -433,7 +433,7 @@
   "DiffLineContext": "Unchanged",
   "DiffLineAdded": "Added",
   "DiffLineRemoved": "Removed",
-  "DiffSummaryText": "{2:N0} added · {3:N0} removed · {0} B → {1} B",
+  "DiffSummaryText": "{2:N0} added · {3:N0} removed · {0:N0} B → {1:N0} B",
   "DiffSummaryBinary": "Binary file · {0} B → {1} B. Text diff is unavailable.",
   "DiffSummarySubmodule": "Submodule pointer change; nested worktree files are not compared.",
   "DiffSummaryDirectory": "Directory or nested repository; select an individual file for a text diff.",

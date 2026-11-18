@@ -2,6 +2,10 @@
 
 ## Overnight Rust Beta work (2026-11-18)
 
+**Regional numbers after the 0.50.16 release cut (R12).** History and blame ranges, diff line totals and byte counts honor the grouping expressed in their resources. Decimal formats follow Windows regional settings. The formatter passes the exact decimal string to Windows, so large byte counts retain every digit. Escaped braces work in resource templates, including next to Git text containing literal braces.
+
+Native US, German and Indian fixtures covered grouping, decimal separators, rounding, negative values and the unsigned 64-bit maximum. Resource formatting, diff and file-history checks, all-target Clippy, diff checks and 18 smoke checks passed. Smoke took 18.89 seconds on `AE3DF150BD335033DB70A1E052298AD5941AB1695E69DADF3B2034DA2F3DC563`. [Windows number formatting](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-getnumberformatex)
+
 **Selected tab at the 20-folder restore limit (R15/R17/R19).** A selected repository beyond the first 20 used to disappear on restart. The profile now keeps the first 19 unique folders and the selected one in their original order when necessary. The existing 20-folder cap and saved path spellings are preserved. A fixture saved 24 distinct folders, a path alias and a relative entry to disk. Restarted settings selected the actual last repository and initialized its history alone. Four core settings tests, all-target Clippy, diff checks and 18 smoke checks passed. Smoke took 21.87 seconds on `C4B193D76DC43AD6AF84A63FD0F5C7D5E67859FDA6A56483BE320AFBE7897F1D`.
 
 **Repository tabs after the 0.50.16 release cut (R12/R15).** Folders with matching names show the shortest path that distinguishes them, both on their tabs and in the selected repository header. Names update when membership changes. Each tab also exposes its full path to accessibility. A drag paints a full-slot destination outline and a label beside the pointer throughout the main window. Dropping changes order, and Escape restores it. Opening and restoring use Windows path comparison.

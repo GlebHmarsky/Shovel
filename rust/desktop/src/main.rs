@@ -17,6 +17,7 @@ mod git_selection;
 mod history_cache;
 mod history_row;
 mod history_view;
+mod numbers;
 mod operations;
 mod read_workers;
 mod remotes;
