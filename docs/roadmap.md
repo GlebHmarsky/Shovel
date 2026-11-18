@@ -25,6 +25,8 @@ The one-page history cache now retains the current page and comparison for every
 
 Four disposable repositories exercised return to page two after other tabs opened, close and warm reopen with identical rows and selection, comparison tab retention, batch closure, and closing owners with accepted work under a simulated cache budget. Eleven cache checks and 22 workspace checks passed. The focused retention regression and Clippy passed again on the final source. All 18 smoke checks passed in 38.53 seconds on source fingerprint `995C81CA7A548159E8A93D045CF45B07621A5AD8FADB4228157C2B3AF4C93FD4`. Native navigation and dialog acceptance remain open.
 
+The optimized Windows x64 payload from `e1a73d062a6eed8e9678c2497b74f1c8bdcbc795` matched all 19 SHA-256 file entries in `Build/navigation-e1a73d0-win-x64/VERIFICATION.json`. The same command-line launch probe reached the selected-commit details read in 2,709 ms on the small repository and 3,095 ms on the merge-heavy repository. Both traces confirmed two ref enumerations before layout instead of the previous three. These single native startup samples include process and renderer initialization, so they are separate from the in-app 400 ms target. The two isolated processes closed after recording their traces.
+
 ## Windows Rust 0.51.0 local build checks
 
 The 0.51.0 source includes fresh checks when opening Updates, a **Later** action that keeps verified downloads, native SSH and credential-manager preferences, and cancellation checks before Windows starts obsolete background Git work.
