@@ -255,6 +255,9 @@ impl View {
                 _ => {}
             }
         }
+        if self.pending.is_empty() {
+            return;
+        }
         let records = scheduler.records();
         self.pending.retain(|(id, submitted)| {
             if let Some(outcome) = records.iter().find(|r| r.id == *id).and_then(|r| r.outcome) {

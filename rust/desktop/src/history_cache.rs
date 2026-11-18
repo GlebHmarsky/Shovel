@@ -219,7 +219,7 @@ impl Workspace {
     }
     pub(super) fn evict_history_caches(&mut self) {
         let selected = self.tabs.get(self.selected).map(|t| t.id);
-        let records = self.scheduler.records();
+        let records = self.scheduler.active_records();
         loop {
             let cached = self
                 .tabs
@@ -244,9 +244,7 @@ impl Workspace {
                         && t.locating.is_none()
                         && !self.operations.has_pending(&t.path)
                         && !t.observed_snapshot().is_some_and(|s| {
-                            records.iter().any(|r| {
-                                r.outcome.is_none() && r.repository == s.identity.fingerprint
-                            })
+                            records.iter().any(|r| r.repository == s.identity.fingerprint)
                         })
                         && !self
                             .editors

@@ -1397,14 +1397,14 @@ impl Controller {
             !run.done && !run.dialog_open && crate::Workspace::same_path(&run.path, path)
         });
         runs.clone().next()?;
-        let records = scheduler.records();
+        let records = scheduler.active_records();
         let mut running = None;
         let mut waiting = None;
         let mut queued = 0;
         for run in runs {
             if let Some(record) = records
                 .iter()
-                .find(|record| record.id == run.request && record.outcome.is_none())
+                .find(|record| record.id == run.request)
             {
                 if record.running {
                     running.get_or_insert(run);
@@ -1435,7 +1435,7 @@ impl Controller {
         scheduler: &Scheduler,
     ) -> Option<PathBuf> {
         let mut reopen = None;
-        let records = scheduler.records();
+        let records = scheduler.active_records();
         for run in self
             .runs
             .iter()
@@ -1452,7 +1452,7 @@ impl Controller {
                 if !run.done
                     && records
                         .iter()
-                        .any(|r| r.id == run.request && !r.running && r.outcome.is_none())
+                        .any(|r| r.id == run.request && !r.running)
                     && ui.button(text("CancelWaitingRequest")).clicked()
                 {
                     scheduler.remove_waiting(run.request);

@@ -298,7 +298,7 @@ fn preview_publishes_before_held_native_initialization_and_actions_wait_for_live
     ctx.enable_accesskit();
     let mut original = fixture.app(&ctx);
     profile(&mut original, fixture._temp.path());
-    position(&mut original, &ctx, 12, egui::vec2(0., 230.));
+    let (selected, offset) = position(&mut original, &ctx, 12, egui::vec2(0., 230.));
     original.close(&ctx);
     settle_save(&mut original, &ctx);
     let directory = original.startup_store().unwrap().directory;
@@ -338,7 +338,8 @@ fn preview_publishes_before_held_native_initialization_and_actions_wait_for_live
     wait(&mut app, &ctx);
     assert!(app.tabs[0].view.preview.is_none());
     assert!(app.tabs[0].history.is_some());
-    assert_eq!(app.tabs[0].view.offset, egui::Vec2::ZERO);
+    assert_eq!(app.tabs[0].selected.as_ref(), Some(&selected));
+    assert_eq!(app.tabs[0].view.offset, offset);
     assert_eq!(app.tabs[0].page.as_ref().unwrap().entries.len(), 200);
     settle_save(&mut app, &ctx);
 }

@@ -1001,10 +1001,7 @@ impl Workspace {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(60)
                     .clamp(10, 3600),
-                self.tabs
-                    .iter()
-                    .filter_map(|t| t.observed_snapshot().cloned())
-                    .collect(),
+                self.tabs.iter().filter_map(Tab::observed_snapshot),
                 self.git.clone(),
                 &self.scheduler,
             ),
@@ -1259,10 +1256,10 @@ impl Workspace {
             self.notice = Some(strings::text("SettingsIdentityWorking"));
             return false;
         }
-        let work = self.scheduler.records();
+        let work = self.scheduler.active_records();
         if work
             .iter()
-            .any(|record| record.outcome.is_none() && !record.key.starts_with("automatic-fetch:"))
+            .any(|record| !record.key.starts_with("automatic-fetch:"))
         {
             self.pending_exit = false;
             self.discard_settings_on_exit = false;
@@ -1270,7 +1267,7 @@ impl Workspace {
             self.updater.restart_requested = false;
             return false;
         }
-        if !self.auto_fetch.drained() || work.iter().any(|record| record.outcome.is_none()) {
+        if !self.auto_fetch.drained() || !work.is_empty() {
             self.pending_exit = true;
             self.notice = Some(strings::text("RustShutdownBackground"));
             ctx.request_repaint_after(std::time::Duration::from_millis(25));

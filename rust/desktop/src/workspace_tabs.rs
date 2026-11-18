@@ -12,7 +12,7 @@ pub(super) enum TabAction {
 
 impl Workspace {
     pub(super) fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
-        shovel_core::case::path_key(a) == shovel_core::case::path_key(b)
+        a == b || shovel_core::case::path_key(a) == shovel_core::case::path_key(b)
     }
 
     pub(super) fn remember_tabs(&mut self) {
@@ -50,6 +50,11 @@ impl Workspace {
         let selected = self.tabs.get(self.selected).map(|t| t.id);
         let mut owner = self.tabs.remove(index);
         self.tab_markers.forget(id);
+        if let Some(snapshot) = owner.observed_snapshot() {
+            self.auto_fetch.forget(&snapshot.worktree);
+        } else {
+            self.auto_fetch.forget(&owner.path);
+        }
         owner.locate_cancel.cancel();
         owner.locating = None;
         if let Some(pane) = &mut owner.comparison {
@@ -112,7 +117,10 @@ impl Workspace {
     }
 
     pub(super) fn prune_retained_tabs(&mut self) {
-        let records = self.scheduler.records();
+        if self.retained_tabs.len() <= 3 {
+            return;
+        }
+        let records = self.scheduler.active_records();
         // Keep the three most recently closed idle owners. Active owners never
         // compete for that allowance, and initialization always receives its result.
         let mut idle = 0;
@@ -121,9 +129,7 @@ impl Workspace {
             let active = owner.loading
                 || self.operations.has_pending(&owner.path)
                 || owner.observed_snapshot().is_some_and(|snapshot| {
-                    records.iter().any(|r| {
-                        r.outcome.is_none() && r.repository == snapshot.identity.fingerprint
-                    })
+                    records.iter().any(|r| r.repository == snapshot.identity.fingerprint)
                 })
                 || self
                     .editors

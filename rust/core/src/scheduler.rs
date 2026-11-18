@@ -51,6 +51,11 @@ struct State {
     completed: VecDeque<Record>,
 }
 impl State {
+    fn active(&self) -> impl Iterator<Item = &Record> {
+        self.running
+            .values()
+            .chain(self.waiting.iter().map(|w| &w.record))
+    }
     fn retain_completed(&mut self, record: Record) {
         self.completed.push_back(record);
         while self.completed.len() > 128 {
@@ -123,9 +128,7 @@ impl Scheduler {
         {
             let mut state = self.state.lock().unwrap();
             if let Some(record) = state
-                .running
-                .values()
-                .chain(state.waiting.iter().map(|w| &w.record))
+                .active()
                 .find(|r| r.repository == repository && r.key == key)
             {
                 return (record.id, false);
@@ -218,10 +221,12 @@ impl Scheduler {
         state
             .completed
             .iter()
-            .chain(state.running.values())
-            .chain(state.waiting.iter().map(|w| &w.record))
+            .chain(state.active())
             .cloned()
             .collect()
+    }
+    pub fn active_records(&self) -> Vec<Record> {
+        self.state.lock().unwrap().active().cloned().collect()
     }
     pub fn has_accepted_work(&self) -> bool {
         let state = self.state.lock().unwrap();

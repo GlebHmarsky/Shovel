@@ -1325,6 +1325,34 @@ fn shutdown_drains_real_automatic_fetch_then_preserves_save_or_discard_intent() 
         app.auto_fetch.due_now(fixture.root.clone());
         until(&mut app, &ctx, |_| marker.exists());
         assert!(!app.auto_fetch.drained());
+        if !discard {
+            use shovel_core::{
+                scheduler::{Lane, Outcome},
+                working::Action,
+            };
+            std::fs::write(fixture.root.join("during-fetch"), b"staged while fetching\n").unwrap();
+            let review = fixture.git.working_copy(&fixture.root, &Cancellation::default()).unwrap();
+            let entry = review.entries.iter().find(|e| e.path == "during-fetch").unwrap().clone();
+            let git = fixture.git.clone();
+            let (sent, staged) = mpsc::channel();
+            app.scheduler.submit(
+                review.repository.identity.fingerprint.clone(),
+                shovel_core::case::path_key(&review.repository.common_directory),
+                "fixture stage during automatic fetch".into(),
+                Lane::WorkingCopy,
+                move || {
+                    let completed = git
+                        .execute_working(&review, &Action::Stage(vec![entry]), None)
+                        .unwrap();
+                    sent.send(completed.succeeded()).unwrap();
+                    Outcome::Succeeded
+                },
+                |_| panic!("stage was removed"),
+            );
+            assert!(staged.recv_timeout(std::time::Duration::from_secs(10)).unwrap());
+            assert_eq!(fixture.command(&["show", ":during-fetch"]), b"staged while fetching\n");
+            assert!(app.scheduler.active_records().iter().any(|r| r.running && r.lane == Lane::Fetch));
+        }
         let original_head = fixture.command(&["rev-parse", "HEAD"]);
         let original_index = fixture.command(&["ls-files", "--stage", "-z"]);
         let foreign = b"other writer; exit without saving must preserve this";
