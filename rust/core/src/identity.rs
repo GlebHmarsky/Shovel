@@ -15,12 +15,24 @@ use std::{
 };
 use windows_sys::Win32::{Foundation::INVALID_HANDLE_VALUE, Storage::FileSystem::*};
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Identity {
     pub root: PathBuf,
     pub git: PathBuf,
     pub common: PathBuf,
     pub fingerprint: String,
+}
+impl PartialEq for Identity {
+    fn eq(&self, other: &Self) -> bool {
+        // Git reports the on-disk capitalization, even when the user selected
+        // another spelling. The fingerprint also checks file IDs and pointers.
+        let same_path =
+            |a: &Path, b: &Path| a == b || crate::case::path_key(a) == crate::case::path_key(b);
+        self.fingerprint == other.fingerprint
+            && same_path(&self.root, &other.root)
+            && same_path(&self.git, &other.git)
+            && same_path(&self.common, &other.common)
+    }
 }
 fn unavailable() -> std::io::Error {
     std::io::Error::other("repository identity unavailable")

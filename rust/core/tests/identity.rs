@@ -255,6 +255,36 @@ fn copy_tree(source: &std::path::Path, target: &std::path::Path) {
 }
 
 #[test]
+fn differently_cased_worktree_opens_stages_and_still_rejects_replacement() {
+    use shovel_core::working::{Action, Group};
+    let fixture = Fixture::new();
+    let alias = fixture.root.with_file_name("RePo");
+    let reviewed = fixture.review(&alias);
+    let normal = fixture.review(&fixture.root);
+    assert_eq!(reviewed.repository.identity, normal.repository.identity);
+    assert_eq!(reviewed.config_stamp, normal.config_stamp);
+    let selected = reviewed.entries.iter().find(|e| e.path == "file").unwrap();
+    fixture
+        .git
+        .execute_working(&reviewed, &Action::Stage(vec![selected.clone()]), None)
+        .unwrap();
+    let staged = fixture.review(&fixture.root);
+    assert!(
+        staged
+            .entries
+            .iter()
+            .any(|e| e.path == "file" && e.group == Group::Staged)
+    );
+
+    fs::write(fixture.root.join("file"), b"later edit\n").unwrap();
+    let before = fixture.review(&alias);
+    let moved = fixture._temp.path().join("previous-root");
+    fs::rename(&fixture.root, &moved).unwrap();
+    copy_tree(&moved, &fixture.root);
+    fixture.reject_identical_replacement(&before);
+}
+
+#[test]
 fn replaced_root_and_git_directory_reject_stage_despite_identical_git_state() {
     let f = Fixture::new();
     let before = f.review(&f.root);
