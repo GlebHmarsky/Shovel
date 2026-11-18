@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Recover when Windows cannot start a queued worker
+
+The scheduler used Rust's panicking thread launcher after reserving the request's lane. A thread creation failure could leave that request marked running without an Activity outcome. The scheduler now retains the request until thread creation succeeds and routes a refusal through the existing worker-failure path. It records the outcome, stops later requests for the same owner and lets linked worktrees continue. Result callbacks that unwind leave the scheduler able to dispatch. [Rust thread creation behavior](https://doc.rust-lang.org/std/thread/fn.spawn.html#panics)
+
+A controlled rejection exercised the failed request, an observer that unwinds after reporting its stopped request, and a linked worktree completing in the released lane. Nine scheduler checks, 19 Commit queue checks, 14 operation queue checks, three automatic-Fetch checks, all-target Clippy and diff checks passed. The 18 bounded smoke checks took 52.17 seconds on `B929CFDCF4ADFFB8D889C22AF014C15E779A2404C324F57D15218B8393016D03`.
+
 ## Windows Rust Beta 0.50.20 release checks
 
 The 0.50.20 Cargo and changelog cut includes restart input and process protections, Git pipe isolation during configured tool launches, and Activity credential masking. The native process, network, updater restart, tool handoff and Activity suites passed their focused checks. Release-policy fixtures, all-target Clippy and diff checks passed. All 18 bounded smoke checks passed in 29.36 seconds on local source fingerprint `DE29FAE1C3CF2541FD5939092C4BE9CCC6F9EA64988ABC23FCFA87DCFD0672E0`. The native bundle verifier built from 0.50.20 source.
@@ -8,7 +14,7 @@ The archived 0.50.17 installer also passed a fresh anonymous download. Its 21,69
 
 ## Keep Git pipes out of configured tools
 
-Git uses a Windows handle allowlist, but the Rust standard launcher used for configured tools can inherit any eligible handle in the parent. Launching an editor or Git Bash while a Git child was being prepared could let the tool retain a pipe and keep the Git command waiting. The two launch paths now coordinate until Git closes its inheritable ends in the parent. The guard releases before either process is awaited. Configured paths, arguments and detached tool lifetime use their existing launcher. [Windows handle inheritance](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw#remarks) · [Pinned Rust Windows launcher](https://github.com/rust-lang/rust/blob/58cf8f9c35b355199727627d07ae34a4e2846d67/library/std/src/sys/process/windows.rs)
+Git's Windows launcher allows only the three standard pipe handles into its child. The Rust standard launcher used for configured tools can inherit any eligible handle in the parent. Launching an editor or Git Bash while a Git child was being prepared could let the tool retain a pipe and keep the Git command waiting. The two launch paths now coordinate until Git closes its inheritable ends in the parent. The guard releases before either process is awaited. Configured paths, arguments and detached tool lifetime use their existing launcher. [Windows handle inheritance](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw#remarks) · [Pinned Rust Windows launcher](https://github.com/rust-lang/rust/blob/58cf8f9c35b355199727627d07ae34a4e2846d67/library/std/src/sys/process/windows.rs)
 
 The hidden native fixture reproduced an unrelated child signaling a handle inherited during preparation. With the guard, the child launched after inheritance was disabled and the event stayed unset. All 17 process tests, two headless handoff checks, all-target Clippy and diff checks passed. The 18 bounded smoke checks took 31.23 seconds on `CC459D8D44F65145242BB6E73AE29EE52B7196E7635A280157F1E2E41F484D3E`. The fixture covered the configured-command path. Real desktop tool launches still require acceptance.
 

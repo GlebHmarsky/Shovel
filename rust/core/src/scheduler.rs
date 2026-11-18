@@ -52,6 +52,15 @@ struct Work {
     run: Option<Box<dyn FnOnce() -> Outcome + Send>>,
     discard: Box<dyn FnOnce(Outcome) + Send>,
 }
+impl Work {
+    fn report_discarded(self, outcome: Outcome) {
+        // A result observer must not prevent the scheduler from releasing or dispatching work.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (self.discard)(outcome)));
+    }
+}
+
+type Worker = Box<dyn FnOnce() + Send>;
+
 struct State {
     next: u64,
     waiting: VecDeque<Work>,
@@ -201,7 +210,7 @@ impl Scheduler {
             duplicates
         };
         for duplicate in duplicates {
-            (duplicate.discard)(Outcome::Coalesced);
+            duplicate.report_discarded(Outcome::Coalesced);
         }
         self.dispatch();
     }
@@ -252,7 +261,8 @@ impl Scheduler {
             discarded
         };
         for work in discarded {
-            (work.discard)(work.record.outcome.unwrap());
+            let outcome = work.record.outcome.unwrap();
+            work.report_discarded(outcome);
         }
         self.dispatch();
         true
@@ -292,7 +302,7 @@ impl Scheduler {
             state.retain_completed(work.record.clone());
             work
         };
-        (work.discard)(Outcome::Removed);
+        work.report_discarded(Outcome::Removed);
         self.dispatch();
         true
     }
@@ -329,53 +339,78 @@ impl Scheduler {
     }
 
     fn dispatch(&self) {
-        let ready = {
-            let mut state = self.state.lock().unwrap();
-            let mut ready = Vec::new();
-            let mut index = 0;
-            while index < state.waiting.len() {
-                let candidate = &state.waiting[index].record;
-                let blocked = state.waiting[index].run.is_none()
-                    || state
-                        .running
-                        .values()
-                        .any(|r| r.common == candidate.common && conflicts(r.lane, candidate.lane))
-                    || state.waiting.iter().take(index).any(|w| {
-                        w.record.common == candidate.common
-                            && conflicts(w.record.lane, candidate.lane)
-                    });
-                if blocked {
-                    index += 1;
-                } else {
-                    let mut work = state.waiting.remove(index).unwrap();
-                    work.record.running = true;
-                    state.running.insert(work.record.id, work.record.clone());
-                    ready.push(work);
-                }
+        self.dispatch_using(|worker| thread::Builder::new().spawn(worker).map(drop));
+    }
+
+    fn dispatch_using(&self, mut start: impl FnMut(Worker) -> std::io::Result<()>) {
+        loop {
+            let mut rejected = false;
+            for work in self.take_ready() {
+                rejected |= !self.start_worker(work, &mut start);
             }
-            ready
-        };
-        for mut work in ready {
-            let scheduler = self.clone();
-            thread::spawn(move || {
-                let outcome = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                    work.run.take().expect("ready request"),
-                )) {
-                    Ok(outcome) => outcome,
-                    Err(_) => {
-                        // The worker could not send its normal terminal event.
-                        // Notify the controller even if the failure was after a
-                        // native mutation. An observer error must not strand the lane.
-                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            (work.discard)(Outcome::WorkerFailed)
-                        }));
-                        Outcome::WorkerFailed
-                    }
-                };
-                scheduler.finish(work.record.id, outcome);
-            });
+            if !rejected {
+                return;
+            }
         }
     }
+
+    fn take_ready(&self) -> Vec<Work> {
+        let mut state = self.state.lock().unwrap();
+        let mut ready = Vec::new();
+        let mut index = 0;
+        while index < state.waiting.len() {
+            let candidate = &state.waiting[index].record;
+            let blocked = state.waiting[index].run.is_none()
+                || state
+                    .running
+                    .values()
+                    .any(|r| r.common == candidate.common && conflicts(r.lane, candidate.lane))
+                || state.waiting.iter().take(index).any(|w| {
+                    w.record.common == candidate.common && conflicts(w.record.lane, candidate.lane)
+                });
+            if blocked {
+                index += 1;
+            } else {
+                let mut work = state.waiting.remove(index).unwrap();
+                work.record.running = true;
+                state.running.insert(work.record.id, work.record.clone());
+                ready.push(work);
+            }
+        }
+        ready
+    }
+
+    fn start_worker(&self, work: Work, start: impl FnOnce(Worker) -> std::io::Result<()>) -> bool {
+        // A rejected thread launch drops its closure. Keep the request available to report
+        // a terminal result even when the OS could not start the worker.
+        let pending = Arc::new(Mutex::new(Some(work)));
+        let worker_request = pending.clone();
+        let scheduler = self.clone();
+        if start(Box::new(move || {
+            let mut work = worker_request.lock().unwrap().take().expect("ready request");
+            let id = work.record.id;
+            let action = work.run.take().expect("ready action");
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(action)) {
+                Ok(outcome) => scheduler.finish(id, outcome),
+                Err(_) => scheduler.worker_failed(work),
+            }
+            scheduler.dispatch();
+        }))
+        .is_ok()
+        {
+            return true;
+        }
+        let work = pending.lock().unwrap().take().expect("rejected request");
+        self.worker_failed(work);
+        false
+    }
+
+    fn worker_failed(&self, work: Work) {
+        let id = work.record.id;
+        work.report_discarded(Outcome::WorkerFailed);
+        self.finish(id, Outcome::WorkerFailed);
+    }
+
     fn finish(&self, id: u64, outcome: Outcome) {
         let stopped = {
             let mut state = self.state.lock().unwrap();
@@ -404,9 +439,8 @@ impl Scheduler {
             stopped
         };
         for work in stopped {
-            (work.discard)(Outcome::StoppedAfterFailure);
+            work.report_discarded(Outcome::StoppedAfterFailure);
         }
-        self.dispatch();
     }
 }
 
@@ -791,6 +825,75 @@ mod tests {
         assert!(scheduler.records().iter().any(|record| {
             record.id == request && record.outcome == Some(Outcome::WorkerFailed)
         }));
+    }
+
+    #[test]
+    fn rejected_worker_launch_reports_failure_and_releases_the_linked_worktree_lane() {
+        let scheduler = Scheduler::default();
+        let (events, received) = mpsc::channel();
+        let failed = events.clone();
+        let (request, _) = scheduler.reserve(
+            "original".into(),
+            "common".into(),
+            "first command".into(),
+            Lane::Exclusive,
+            move |outcome| failed.send(outcome).unwrap(),
+        );
+        let (stopped, _) = scheduler.submit(
+            "original".into(),
+            "common".into(),
+            "follow-up command".into(),
+            Lane::WorkingCopy,
+            || unreachable!("a command for the failed owner must stop"),
+            move |outcome| {
+                events.send(outcome).unwrap();
+                panic!("fixture result observer unwind");
+            },
+        );
+        let (linked, _) = scheduler.submit(
+            "linked".into(),
+            "common".into(),
+            "linked worktree command".into(),
+            Lane::WorkingCopy,
+            || Outcome::Succeeded,
+            |_| unreachable!(),
+        );
+        let mut state = scheduler.state.lock().unwrap();
+        let work = state.waiting.front_mut().unwrap();
+        assert_eq!(work.record.id, request);
+        work.run = Some(Box::new(|| unreachable!("the rejected worker never ran")));
+        drop(state);
+
+        let mut attempts = 0;
+        scheduler.dispatch_using(|worker| {
+            attempts += 1;
+            if attempts == 1 {
+                return Err(std::io::Error::other("fixture rejected thread launch"));
+            }
+            worker();
+            Ok(())
+        });
+
+        assert_eq!(attempts, 2);
+        assert!(!scheduler.has_accepted_work());
+        assert_eq!(
+            received.try_iter().collect::<Vec<_>>(),
+            [Outcome::WorkerFailed, Outcome::StoppedAfterFailure]
+        );
+        let mut outcomes = scheduler
+            .records()
+            .into_iter()
+            .map(|record| (record.id, record.outcome.unwrap()))
+            .collect::<Vec<_>>();
+        outcomes.sort_unstable_by_key(|(id, _)| *id);
+        assert_eq!(
+            outcomes,
+            [
+                (request, Outcome::WorkerFailed),
+                (stopped, Outcome::StoppedAfterFailure),
+                (linked, Outcome::Succeeded),
+            ]
+        );
     }
 
     #[test]
