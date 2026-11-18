@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.21 published
+
+Run `44328870837` published master `e98c16c07723c1508747b7d48a64be69391ed902`. The independent verifier downloaded all seven immutable assets and matched the live feed and signature byte for byte. The 21,706,885-byte installer reports 0.50.21 and Windows reports `NotSigned` for Authenticode. The native updater discovered, verified and downloaded the exact package. GitHub Latest, C# Beta and Rust Stable retained the same release and asset IDs, digests and update timestamps. Installed apply remains open. [Release](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.21-win-rust-beta) · [Publication receipt](evidence/rust-beta-0.50.21-publication.json)
+
+The job log confirmed restoration of the 0.50.20 compiler cache, ID `10728368506`. Hosted lint took 17 seconds and smoke with compilation took 65 seconds, compared with 205 and 408 seconds on the preceding run. The optimized build completed in its own 856-second step. GitHub saved the 1,246,650,750-byte cache before the 24-second signing and packaging step. The optimized local build verified 19 files, static CRT, exact source and the local smoke stamp. Reuse of optimized dependencies will be measured on the next version. [Hosted checks](https://github.com/GlebHmarsky/Shovel/actions/runs/44328870837)
+
 ## Verify native Git identity locking and Cancel
 
 A headless Workspace used the selected Git and an isolated global config. It invoked Load and Apply through the actual Settings controls. An existing native lock produced the save failure, kept the typed fields and left the config and lock untouched. After Load and a successful Apply, Cancel discarded a pending diff-font preference and the verified global Git identity remained saved. A separate native fixture introduced the lock between the name and email writes. The completed name, original email, unrelated config and competing lock all survived, and Shovel reported partial failure.
