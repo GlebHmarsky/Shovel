@@ -1,5 +1,14 @@
 # Changelog
 
+## Rust 0.51.1 - 2026-11-18
+
+- Start reading and selecting commits while Shovel checks the current refs. Paging and repository actions become available after verification.
+- Keep history selection, scroll position, and comparisons when moving between repositories or reopening recently closed tabs.
+- Keep Local Changes rows, selected files, diffs, and drafts during tab switches. Windows file notifications refresh the affected repository in the background.
+- Switch and close tabs while repository-owned dialogs are open. Accepted Git commands continue on their original repository, and Shovel waits for them before exiting.
+- Give visible history and Commit reads priority. Reuse unchanged history and avoid extra Git reads for Local Changes and Remotes.
+- Check for updates when opening Updates and keep verified downloads when selecting **Later**. Respect configured SSH and foreground credential manager settings.
+
 ## Rust 0.51.0 - 2026-11-18
 
 - Check the signed update feed when opening Updates from the toolbar or Help. Use **Later** to close the dialog and keep a verified download ready.

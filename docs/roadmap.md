@@ -165,6 +165,10 @@ Release policy, 68 focused Windows and Git test runs, all-target Clippy and diff
 
 The local portable build in `Build/rust-0.51.0-local-win-x64` was built from clean commit `005757ca844fbfed98cbe8db6685e3c44bb571d7`. Both executables report version 0.51.0 and use the static CRT on Windows x64. All 19 app files and the update verifier matched the SHA-256 hashes in `VERIFICATION.json`. The included `SMOKE.json` matches the source fingerprint. `Run-Test.cmd` points to a separate profile seeded with an empty repository list and automatic fetching and update checks disabled. The checkpoint ends at local artifact verification, with desktop and installer acceptance pending.
 
+## Windows Rust Beta 0.51.1 release checks
+
+The release includes retained history and Local Changes views, initial readable history during ref checks, priority for visible Git reads, and repository-owned operations and dialogs. The versioned source passed release policy, automatic Fetch, all-target Clippy, and `git diff --check`. All 18 bounded smoke checks passed in 43.46 seconds on local source fingerprint `4BAA27F3975B0BBF1B27C3644D60FAD766DF41389E8EA90EE4E7E086A0F68F95`. The public bundle verifier was built from this source. The 400 ms cold-open target remains active in the navigation checklist.
+
 ## Preserve native SSH and credential manager preferences
 
 Git receives `GIT_SSH`, `GIT_SSH_COMMAND` and `GIT_SSH_VARIANT` when explicitly configured. Its own command and variant take precedence over Shovel’s bundled OpenSSH defaults. A Windows child process verified that Git received the inherited SSH settings and that Shovel still stripped an inherited repository-directory override. Native Fetch selected the configured wrapper and transferred a real pack from a disposable bare repository. [Git SSH environment](https://git-scm.com/docs/git#Documentation/git.txt-codeGITSSHCOMMANDcode)
