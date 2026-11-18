@@ -1224,8 +1224,8 @@ impl Workspace {
             }
         }
         self.prune_retained_tabs();
-        self.evict_history_caches();
-        for tab in &mut self.tabs {
+        self.evict_closed_history();
+        for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
             if let Some(pane) = &mut tab.comparison {
                 pane.poll(ctx);
             }
@@ -1586,7 +1586,7 @@ impl Workspace {
             ctx,
             self.settings.get("Appearance").and_then(|v| v.as_u64()) == Some(1),
         );
-        for tab in &mut self.tabs {
+        for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
             if let Some(pane) = &mut tab.comparison {
                 pane.view.side_by_side = self
                     .settings
@@ -2595,7 +2595,7 @@ impl eframe::App for Workspace {
                 if let Some(tab) = self.tabs.get_mut(self.selected)
                     && let Some(history) = &tab.history
                 {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
+                    egui::ScrollArea::vertical().id_salt(("repository-sidebar", tab.id)).show(ui, |ui| {
                         for (key, prefix) in [
                             ("Branches", "refs/heads/"),
                             ("Remotes", "refs/remotes/"),
@@ -3010,7 +3010,7 @@ impl eframe::App for Workspace {
                         let old_width = pane.files_width;
                         let h = ui.available_height();
                         egui::ScrollArea::vertical()
-                            .id_salt("details-viewport")
+                            .id_salt(("details-viewport", tab.id))
                             .max_height(h)
                             .auto_shrink([false, false])
                             .show(ui, |ui| {

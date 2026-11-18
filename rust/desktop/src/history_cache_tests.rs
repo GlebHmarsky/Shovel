@@ -154,7 +154,7 @@ fn late_preview_wrong_generation_and_changed_identity_never_replace_live_state()
     assert!(app.tabs[0].page.is_none());
 }
 #[test]
-fn three_tab_cache_evicts_idle_pages_but_retains_active_owner_and_observed_fetch_metadata() {
+fn open_tabs_keep_their_pages_and_only_closed_idle_pages_compete_for_cache() {
     use shovel_core::scheduler::{Lane, Outcome};
     let fixtures = (0..4).map(|_| Fixture::new()).collect::<Vec<_>>();
     let ctx = egui::Context::default();
@@ -190,30 +190,49 @@ fn three_tab_cache_evicts_idle_pages_but_retains_active_owner_and_observed_fetch
             page(&mut app, &ctx, true);
         }
     }
-    assert!(app.tabs[0].page.is_some(), "accepted owner was evicted");
-    assert!(
-        app.tabs[1].page.is_none(),
-        "oldest idle page was not evicted"
-    );
-    let snapshot = app.tabs[1].observed_snapshot().unwrap();
-    assert!(snapshot.references.is_empty());
-    assert_eq!(snapshot.references.capacity(), 0);
-    assert_eq!(snapshot.remotes, ["origin"]);
-    assert_eq!(app.tabs.iter().filter(|t| t.page.is_some()).count(), 3);
+    assert!(app.tabs.iter().all(|tab| tab.page.is_some()));
+    let allocation = app.tabs[1].page.as_ref().unwrap().entries.as_ptr();
+    let selection = app.tabs[1].selected.clone();
     app.git = Some(Arc::new(fixtures[1].git.clone()));
     app.select_tab(1, &ctx);
     wait(&mut app, &ctx);
-    assert_eq!(app.tabs[1].page.as_ref().unwrap().cursor.offset, 0);
-    assert_eq!(app.tabs[1].page.as_ref().unwrap().entries.len(), 200);
+    assert_eq!(app.tabs[1].page.as_ref().unwrap().cursor.offset, 200);
+    assert_eq!(app.tabs[1].page.as_ref().unwrap().entries.as_ptr(), allocation);
+    assert_eq!(app.tabs[1].selected, selection);
+
+    frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+    app.tabs[1].comparison.as_mut().unwrap().details_index = 1;
+    app.close_tab(app.tabs[1].id, &ctx);
+    app.open(fixtures[1].root.clone(), &ctx);
+    let reopened = &app.tabs[app.selected];
+    assert_eq!(reopened.page.as_ref().unwrap().entries.as_ptr(), allocation);
+    assert_eq!(reopened.selected, selection);
+    assert_eq!(reopened.comparison.as_ref().unwrap().details_index, 1);
+    wait(&mut app, &ctx);
+
     // Exercise the conservative budget independently of native Git's page output cap.
     for tab in &mut app.tabs {
-        if tab.page.is_some() {
-            tab.view.bytes = 20 * 1024 * 1024;
-        }
+        tab.view.bytes = 20 * 1024 * 1024;
     }
-    app.evict_history_caches();
-    assert_eq!(app.tabs.iter().filter(|t| t.page.is_some()).count(), 2);
-    assert!(app.tabs[0].page.is_some() && app.tabs[1].page.is_some());
+    app.evict_closed_history();
+    assert!(app.tabs.iter().all(|tab| tab.page.is_some()));
+    let active_id = app.tabs[0].id;
+    let idle_id = app.tabs[1].id;
+    let survivor = app.tabs[app.selected].id;
+    let survivor_generation = app.tabs[app.selected].view.generation;
+    app.tab_action(workspace_tabs::TabAction::CloseOthers(survivor), &ctx);
+    app.evict_closed_history();
+    assert_eq!(app.tabs.len(), 1);
+    assert_eq!(app.tabs[0].view.generation, survivor_generation);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().entries.as_ptr(), allocation);
+    let active = app.retained_tabs.iter().find(|tab| tab.id == active_id).unwrap();
+    assert!(active.page.is_some(), "accepted owner was evicted");
+    let idle = app.retained_tabs.iter().find(|tab| tab.id == idle_id).unwrap();
+    assert!(idle.page.is_none());
+    let snapshot = idle.observed_snapshot().unwrap();
+    assert!(snapshot.references.is_empty());
+    assert_eq!(snapshot.references.capacity(), 0);
+    assert_eq!(snapshot.remotes, ["origin"]);
     release.send(()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     while app.scheduler.has_accepted_work() {
@@ -221,8 +240,7 @@ fn three_tab_cache_evicts_idle_pages_but_retains_active_owner_and_observed_fetch
         thread::sleep(Duration::from_millis(5));
     }
     app.receive(&ctx);
-    assert!(app.tabs[0].page.is_none());
-    assert_eq!(app.tabs[1].page.as_ref().unwrap().entries.len(), 200);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().entries.as_ptr(), allocation);
 }
 #[test]
 fn evicted_repository_replacement_still_requires_explicit_reopen() {

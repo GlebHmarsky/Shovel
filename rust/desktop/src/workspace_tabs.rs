@@ -162,40 +162,47 @@ impl Workspace {
     }
 
     pub(super) fn close_tab(&mut self, id: u64, ctx: &egui::Context) {
-        let Some(index) = self.tabs.iter().position(|t| t.id == id) else {
-            return;
-        };
+        self.close_tabs(|tab| tab == id, ctx);
+    }
+
+    fn close_tabs(&mut self, close: impl Fn(u64) -> bool, ctx: &egui::Context) {
         let selected = self.tabs.get(self.selected).map(|t| t.id);
-        let mut owner = self.tabs.remove(index);
-        owner.view.reopen_commit_owner = None;
-        self.update_tab_names();
-        self.tab_markers.forget(id);
-        if let Some(snapshot) = owner.observed_snapshot() {
-            self.auto_fetch.forget(&snapshot.worktree);
-        } else {
-            self.auto_fetch.forget(&owner.path);
-        }
-        owner.locate_cancel.cancel();
-        owner.locating = None;
-        if let Some(pane) = &mut owner.comparison {
-            pane.cancel();
-        }
-        owner.comparison = None;
-        self.retained_tabs.push(owner);
-        self.tab_drag = None;
-        self.history_menu = None;
-        self.reference_menu = None;
-        self.selected = self
-            .tabs
+        let next = self.tabs[..self.selected.min(self.tabs.len())]
             .iter()
-            .position(|t| Some(t.id) == selected)
-            .unwrap_or_else(|| index.min(self.tabs.len().saturating_sub(1)));
-        if !self.tabs.is_empty() {
-            self.select_tab(self.selected, ctx);
-        } else {
-            self.sync_inline_editor(ctx);
+            .filter(|tab| !close(tab.id))
+            .count();
+        let closing: Vec<_> = self.tabs.extract_if(.., |tab| close(tab.id)).collect();
+        if closing.is_empty() {
+            return;
         }
-        self.remember_tabs();
+        self.update_tab_names();
+        for mut owner in closing {
+            owner.view.reopen_commit_owner = None;
+            self.tab_markers.forget(owner.id);
+            if let Some(snapshot) = owner.observed_snapshot() {
+                self.auto_fetch.forget(&snapshot.worktree);
+            } else {
+                self.auto_fetch.forget(&owner.path);
+            }
+            owner.locate_cancel.cancel();
+            owner.locating = None;
+            self.retained_tabs.push(owner);
+        }
+        self.tab_drag = None;
+        if let Some(index) = self.tabs.iter().position(|t| Some(t.id) == selected) {
+            self.selected = index;
+            self.remember_tabs();
+        } else {
+            self.selected = next.min(self.tabs.len().saturating_sub(1));
+            if self.tabs.is_empty() {
+                self.history_menu = None;
+                self.reference_menu = None;
+                self.sync_inline_editor(ctx);
+                self.remember_tabs();
+            } else {
+                self.select_tab(self.selected, ctx);
+            }
+        }
         self.prune_retained_tabs();
     }
 
@@ -211,14 +218,8 @@ impl Workspace {
             }
             TabAction::Close(id) => self.close_tab(id, ctx),
             TabAction::CloseOthers(id) => {
-                let ids = self
-                    .tabs
-                    .iter()
-                    .filter(|t| t.id != id)
-                    .map(|t| t.id)
-                    .collect::<Vec<_>>();
-                for other in ids {
-                    self.close_tab(other, ctx);
+                if self.tabs.iter().any(|t| t.id == id) {
+                    self.close_tabs(|tab| tab != id, ctx);
                 }
             }
             TabAction::Move(id, delta) => {

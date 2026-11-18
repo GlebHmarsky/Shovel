@@ -19,6 +19,12 @@ Command-line launches of the original optimized 0.51.0 executable opened a nativ
 
 Nine focused desktop history checks and three native core history checks passed, including stale results, older-page selection and scroll retention, pinned traversal parity, stash ordering, and rejection of a ref change after inspection. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 43 seconds on source fingerprint `8E753F9924527E08F6F81F12E8478D92DD7F53231C4668BA4307B057007EB2F5`.
 
+### Retain open repository views
+
+The one-page history cache now retains the current page and comparison for every open tab. History and sidebar scroll areas use each tab's identity. A warm reopen can reuse the comparison pane along with the history page. The closed-tab history budget still releases idle cached data under pressure and preserves active repository ownership. Closing other tabs removes them in one operation and selects the survivor once. Closing an inactive tab leaves the selected tab's read generation alone.
+
+Four disposable repositories exercised return to page two after other tabs opened, close and warm reopen with identical rows and selection, comparison tab retention, batch closure, and closing owners with accepted work under a simulated cache budget. Eleven cache checks and 22 workspace checks passed. The focused retention regression and Clippy passed again on the final source. All 18 smoke checks passed in 38.53 seconds on source fingerprint `995C81CA7A548159E8A93D045CF45B07621A5AD8FADB4228157C2B3AF4C93FD4`. Native navigation and dialog acceptance remain open.
+
 ## Windows Rust 0.51.0 local build checks
 
 The 0.51.0 source includes fresh checks when opening Updates, a **Later** action that keeps verified downloads, native SSH and credential-manager preferences, and cancellation checks before Windows starts obsolete background Git work.

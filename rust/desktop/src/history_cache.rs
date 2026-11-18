@@ -7,7 +7,6 @@ use shovel_core::{
 };
 use std::time::{Duration, Instant};
 
-const TABS: usize = 3;
 const BYTES: usize = 32 * 1024 * 1024;
 
 pub(super) fn metadata(snapshot: &Snapshot) -> Snapshot {
@@ -58,9 +57,6 @@ impl Tab {
         self.page = None;
         self.selected = None;
         self.previous.clear();
-        if let Some(pane) = &mut self.comparison {
-            pane.cancel();
-        }
         self.comparison = None;
         self.locate_cancel.cancel();
         self.locating = None;
@@ -217,28 +213,26 @@ impl Workspace {
             saved_at: chrono::Utc::now() - chrono::Duration::from_std(validated.elapsed()).ok()?,
         })
     }
-    pub(super) fn evict_history_caches(&mut self) {
-        let selected = self.tabs.get(self.selected).map(|t| t.id);
-        let records = self.scheduler.active_records();
+    pub(super) fn evict_closed_history(&mut self) {
+        // Every open tab keeps its presented page. The memory budget applies
+        // to the optional warm cache of closed tabs, not to visible workspaces.
         loop {
             let cached = self
-                .tabs
+                .retained_tabs
                 .iter()
-                .chain(self.retained_tabs.iter())
                 .filter(|t| t.page.is_some());
             let (count, bytes) = cached.fold((0, 0usize), |(count, bytes), t| {
                 (count + 1, bytes.saturating_add(t.view.bytes))
             });
-            if count <= TABS && (count <= 1 || bytes <= BYTES) {
+            if count <= 1 || bytes <= BYTES {
                 break;
             }
+            let records = self.scheduler.active_records();
             let oldest = self
-                .tabs
-                .iter()
-                .chain(self.retained_tabs.iter())
+                .retained_tabs
+                .iter_mut()
                 .filter(|t| {
                     t.page.is_some()
-                        && Some(t.id) != selected
                         && !t.loading
                         && !t.view.checking_identity
                         && t.locating.is_none()
@@ -255,15 +249,9 @@ impl Workspace {
                             .iter()
                             .any(|v| Self::same_path(&v.path, &t.path) && !v.can_retire())
                 })
-                .min_by_key(|t| t.view.last_use)
-                .map(|t| t.id);
-            let Some(id) = oldest else { break };
-            self.tabs
-                .iter_mut()
-                .chain(self.retained_tabs.iter_mut())
-                .find(|t| t.id == id)
-                .unwrap()
-                .evict_history();
+                .min_by_key(|t| t.view.last_use);
+            let Some(tab) = oldest else { break };
+            tab.evict_history();
         }
     }
 }

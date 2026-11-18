@@ -42,7 +42,7 @@ Repository > Git executable opens the native executable picker, then checks the 
 
 On orderly exit, Rust saves the selected verified history page. The next launch can show that page, selection and scroll position immediately with an explicit last-known timestamp while current data loads. Cached rows do not authorize Git actions or comparison reads. If live reading fails or Git is unavailable, the retained preview remains labelled and Refresh retries normally.
 
-Three visited history pages are retained subject to a memory estimate; active work and the selected page are exempt. Returning to an evicted tab reloads its first page. Automatic fetch can update an inactive repository without loading its history. [Mechanism and bounds](architecture.md#rust-history-cache-2026-11-10); [acceptance](rust-rewrite.md#startup-preview-and-session-cache-2026-11-10).
+Each open repository retains its current history page, selection, scroll position and comparison pane. Recently closed tabs can also reuse their page and comparison when reopened. The closed-tab cache is bounded, and active work remains attached to its original repository. Automatic fetch can update an inactive repository without loading its history. [Mechanism and bounds](architecture.md#rust-history-cache-2026-11-10).
 
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
