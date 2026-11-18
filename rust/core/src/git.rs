@@ -850,19 +850,15 @@ impl Git {
         args.extend(["--branches", "--remotes", "--tags"].map(str::to_owned));
         args.extend(history.snapshot.head.iter().cloned());
         args.extend(history.stashes.iter().map(|c| c.parents[0].clone()));
-        args.extend(
-            history
-                .snapshot
-                .references
-                .iter()
-                .filter(|r| {
-                    r.name.starts_with("stash@{")
-                        && !history.stashes.iter().any(|c| c.hash == r.hash)
-                })
-                .map(|r| r.hash.clone()),
-        );
         args.push("--".into());
-        let raw = if history.snapshot.references.is_empty() {
+        let have_roots = history.snapshot.head.is_some()
+            || !history.stashes.is_empty()
+            || history.snapshot.references.iter().any(|reference| {
+                ["refs/heads/", "refs/remotes/", "refs/tags/"]
+                    .iter()
+                    .any(|prefix| reference.name.starts_with(prefix))
+            });
+        let raw = if !have_roots {
             Vec::new()
         } else {
             parse_commits(

@@ -114,6 +114,14 @@ impl View {
         self.open = true;
         self.refresh_needed = true;
     }
+    pub fn focus(&mut self, hash: String) {
+        if self.selected.as_ref() != Some(&hash) {
+            self.selected = Some(hash);
+            self.inspection_cancel.cancel();
+            self.inspection = None;
+            self.pane = None;
+        }
+    }
     pub fn release_cache(&mut self) {
         if !self.open {
             self.list = None;

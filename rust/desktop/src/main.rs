@@ -1350,7 +1350,7 @@ impl Workspace {
             }
         }
     }
-    fn open_stashes(&mut self) {
+    fn open_stashes(&mut self, selected: Option<String>) {
         let Some(git) = self.git.clone() else {
             return;
         };
@@ -1362,7 +1362,7 @@ impl Workspace {
             return;
         };
         let snapshot = history.snapshot.clone();
-        let view = if let Some(index) = self
+        let mut view = if let Some(index) = self
             .stash_views
             .iter()
             .position(|v| v.path == snapshot.worktree)
@@ -1373,6 +1373,9 @@ impl Workspace {
         } else {
             stashes::View::new(snapshot, git).with_read_workers(self.read_workers.clone())
         };
+        if let Some(hash) = selected {
+            view.focus(hash);
+        }
         self.stash_views.push(view);
         for view in self.stash_views.iter_mut().rev().skip(3) {
             view.release_cache();
@@ -1797,6 +1800,8 @@ impl eframe::App for Workspace {
         self.receive(ctx);
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let activity_was_open = self.activity_open;
+        let mut activity_anchor = None;
         let ctx = ui.ctx().clone();
         let popup_was_open = egui::Popup::is_any_open(&ctx);
         self.branches.read_workers = self.read_workers.clone();
@@ -2168,7 +2173,7 @@ impl eframe::App for Workspace {
                             )
                             .clicked()
                         {
-                            self.open_stashes();
+                            self.open_stashes(None);
                             ui.close();
                         }
                     });
@@ -2239,15 +2244,35 @@ impl eframe::App for Workspace {
                                 self.open_commit();
                             }
                         }
+                        let left = ui.next_widget_position().x;
+                        let right = ui.max_rect().right() - 215.;
+                        let update_slot = updater::UPDATE_CARD_WIDTH + 6.;
+                        let context_width = (right - left - update_slot).clamp(105., 246.);
+                        let centered = ui.max_rect().center().x - context_width / 2.;
+                        let context_left =
+                            centered.min(right - context_width).max(left + update_slot);
+                        ui.add_space((context_left - update_slot - left).max(0.));
                         let offer = self.updater.available_version(self.settings.channel());
-                        let reserved = 180. + offer.map_or(0., |_| updater::UPDATE_CARD_WIDTH + 2.);
-                        let context_width = (ui.available_width() - reserved).clamp(90., 530.);
-                        let margin =
-                            ((ui.available_width() - reserved - context_width) / 2.).max(0.);
-                        ui.add_space(margin);
-                        if updater::offer_card(ui, offer) {
-                            self.updater.open_window(&ctx);
+                        let (update_rect, _) = ui.allocate_exact_size(
+                            egui::vec2(updater::UPDATE_CARD_WIDTH, 44.),
+                            egui::Sense::hover(),
+                        );
+                        if offer.is_some() {
+                            let mut slot = ui.new_child(
+                                egui::UiBuilder::new()
+                                    .max_rect(update_rect)
+                                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                            );
+                            if slot
+                                .add_enabled_ui(self.updater.can_update(), |ui| {
+                                    updater::offer_card(ui, offer)
+                                })
+                                .inner
+                            {
+                                self.updater.start_update(&ctx);
+                            }
                         }
+                        ui.add_space(2.);
                         let context_response = egui::Frame::new()
                             .fill(palette.raised)
                             .stroke(egui::Stroke::new(1., palette.border))
@@ -2360,13 +2385,19 @@ impl eframe::App for Workspace {
                                     }
                                 });
                             });
-                        if context_response
-                            .response
-                            .interact(egui::Sense::click())
-                            .on_hover_text(strings::text("ActivityTitle"))
-                            .clicked()
-                        {
-                            self.activity_open = true;
+                        let rect = context_response.response.rect;
+                        activity_anchor = Some(rect.center_bottom() + egui::vec2(0., 4.));
+                        let activity = context_response.response.interact(egui::Sense::click());
+                        let activity_title = strings::text("ActivityTitle");
+                        activity.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::Role::Button,
+                                ui.is_enabled(),
+                                &activity_title,
+                            )
+                        });
+                        if activity.on_hover_text(activity_title).clicked() {
+                            self.activity_open = !self.activity_open;
                         }
                         if self.branches.toolbar(
                             ui,
@@ -2462,12 +2493,31 @@ impl eframe::App for Workspace {
             });
         if self.activity_open {
             let mut open = true;
-            let mut reopen = None;
             let selected_path = self.tabs.get(self.selected).map(|t| t.path.clone());
-            egui::Window::new(strings::text("ActivityTitle"))
+            let available = ctx.content_rect();
+            let min_size = egui::vec2(360., 180.);
+            let size = egui::vec2(760., 415.)
+                .min(available.size() - egui::vec2(16., 80.))
+                .max(min_size);
+            let mut window = egui::Window::new(strings::text("ActivityTitle"))
+                .id(egui::Id::unique("workspace-activity"))
                 .open(&mut open)
                 .enabled(!modal_open && !self.closing)
-                .default_width(580.)
+                .default_size(size)
+                .min_size(min_size)
+                .resizable(true)
+                .collapsible(false);
+            if let Some(anchor) = activity_anchor {
+                let x = (anchor.x - size.x / 2.)
+                    .min(available.right() - size.x)
+                    .max(available.left());
+                let pos = egui::pos2(x, anchor.y);
+                window = window.default_pos(pos);
+                if !activity_was_open {
+                    window = window.current_pos(pos);
+                }
+            }
+            let reopen = window
                 .show(&ctx, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         for (filter, key) in [
@@ -2480,53 +2530,12 @@ impl eframe::App for Workspace {
                         ui.separator();
                         ui.checkbox(&mut self.activity_all, strings::text("ActivityAllRepositories"));
                     });
-                    egui::ScrollArea::vertical()
-                        .max_height(420.)
-                        .show(ui, |ui| {
-                            let scope = selected_path.as_ref().filter(|_| !self.activity_all);
-                            reopen = self.operations.status(ui, scope, &self.scheduler);
-                            if self.operations.filter == operations::ActivityFilter::Background {
-                                return;
-                            }
-                            for editor in self.editors.iter_mut().filter(|editor| {
-                                scope.is_none_or(|path| Self::same_path(path, &editor.path))
-                                    && !editor.failed_commit
-                                    && (editor.status.is_some() || !editor.output.is_empty())
-                            }) {
-                                ui.label(
-                                    editor
-                                        .path
-                                        .file_name()
-                                        .unwrap_or_default()
-                                        .to_string_lossy(),
-                                );
-                                ui.horizontal(|ui| {
-                                    if let Some(status) = &editor.status {
-                                        ui.label(status);
-                                    }
-                                    if !editor.output.is_empty() {
-                                        egui::CollapsingHeader::new(strings::text(
-                                            "OperationAttentionLogs",
-                                        ))
-                                        .show(ui, |ui| {
-                                            egui::ScrollArea::both().max_height(170.).show(
-                                                ui,
-                                                |ui| {
-                                                    ui.add(
-                                                        egui::Label::new(
-                                                            RichText::new(&editor.output)
-                                                                .monospace(),
-                                                        )
-                                                        .selectable(true),
-                                                    );
-                                                },
-                                            );
-                                        });
-                                    }
-                                });
-                            }
-                        });
-                });
+                    ui.separator();
+                    let scope = selected_path.as_ref().filter(|_| !self.activity_all);
+                    self.operations.activity(ui, scope, &self.scheduler)
+                })
+                .and_then(|response| response.inner)
+                .flatten();
             self.activity_open = open;
             if let Some((path, owner)) = reopen {
                 self.reopen_failed_commit(path, owner, &ctx);
@@ -2697,6 +2706,7 @@ impl eframe::App for Workspace {
         use workspace_split::Divider;
         let width = ui.available_width();
         let mut locate_request = None;
+        let mut stash_request = None;
         let mut submodule_open = None;
         let sidebar = egui::Panel::left("sidebar")
             .frame(workspace_style::pane(palette.sidebar, 8, 4))
@@ -2708,7 +2718,13 @@ impl eframe::App for Workspace {
                 }
                 if sidebar_commit && self.tabs.get(self.selected).is_some() {
                     let local = self.inline_editor().is_some();
-                    if ui.selectable_label(!local, strings::text("FileHistoryTab")).clicked() {
+                    let row_size = egui::vec2(ui.available_width(), 24.);
+                    let navigation = |selected, label| {
+                        egui::Button::selectable(selected, (label, egui::Atom::grow()))
+                            .min_size(row_size)
+                            .truncate()
+                    };
+                    if ui.add(navigation(!local, strings::text("FileHistoryTab"))).clicked() {
                         self.show_history(&ctx);
                     }
                     let tab = &self.tabs[self.selected];
@@ -2718,7 +2734,7 @@ impl eframe::App for Workspace {
                     );
                     if ui.add_enabled(
                         self.git.is_some() && self.draft_store.is_some(),
-                        egui::Button::selectable(local, label),
+                        navigation(local, label),
                     ).clicked() {
                         self.open_commit();
                     }
@@ -2978,7 +2994,13 @@ impl eframe::App for Workspace {
                                                         Some(strings::text("ActionSequence"));
                                                 }
                                             } else if response.clicked() || activated {
-                                                locate_request = Some(reference.hash.clone());
+                                                if reference.name.starts_with("stash@{")
+                                                    && !history.stashes.iter().any(|commit| commit.hash == reference.hash)
+                                                {
+                                                    stash_request = Some(reference.hash.clone());
+                                                } else {
+                                                    locate_request = Some(reference.hash.clone());
+                                                }
                                             }
                                             if reference.name.starts_with("refs/heads/")
                                                 || reference.name.starts_with("stash@{")
@@ -3077,6 +3099,9 @@ impl eframe::App for Workspace {
         }
         if let Some(hash) = locate_request {
             self.locate(hash, &ctx);
+        }
+        if let Some(hash) = stash_request {
+            self.open_stashes(Some(hash));
         }
         let height = ui.available_height();
         self.preferences_dirty |=
@@ -3427,10 +3452,12 @@ impl eframe::App for Workspace {
             }
         }
         if let Some((path, hash)) = stash_navigation
-            && self
-                .tabs
-                .get(self.selected)
-                .is_some_and(|tab| tab.path == path)
+            && self.tabs.get(self.selected).is_some_and(|tab| {
+                tab.path == path
+                    && tab.history.as_ref().is_some_and(|history| {
+                        history.stashes.iter().any(|commit| commit.hash == hash)
+                    })
+            })
         {
             self.locate(hash, &ctx);
         }

@@ -75,6 +75,17 @@ fn orderly_close_reloads_selected_preview_without_commands_and_live_history_repl
     assert!(reopened.capture_startup_preview().is_none());
     assert_eq!(tab.page.as_ref().unwrap().cursor.offset, 200);
     assert_eq!(tab.selected.as_deref(), Some(expected.0.as_str()));
+    let subject = tab
+        .page
+        .as_ref()
+        .unwrap()
+        .entries
+        .iter()
+        .find(|entry| entry.commit.hash == expected.0)
+        .unwrap()
+        .commit
+        .subject()
+        .to_owned();
     let output = frame(&ctx, &mut reopened, vec![]);
     let labels = output
         .platform_output
@@ -91,7 +102,8 @@ fn orderly_close_reloads_selected_preview_without_commands_and_live_history_repl
             .iter()
             .any(|v| v.starts_with("Last-known view from "))
     );
-    assert!(labels.iter().any(|v| v == &expected.0));
+    assert!(labels.contains(&subject));
+    assert!(labels.iter().any(|label| label == "Full retained metadata"));
     assert!(reopened.tabs[0].comparison.is_none());
     assert!(reopened.scheduler.records().is_empty());
     reopened.git = Some(Arc::new(fixture.git.clone()));

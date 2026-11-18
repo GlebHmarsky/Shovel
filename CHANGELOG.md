@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.51.4 - 2026-11-19
+
+- Label Open In and Console, make the History and Local Changes rows clickable across the sidebar, and keep the compact repository header in place when Update Shovel appears.
+- Open Activity below the repository header in a movable, resizable window with a run list and full output.
+- Click Update once to download, verify, and restart when current work allows it.
+- Show saved stashes with full-size gray commit markers. Keep unusual stash entries accessible from the Stashes sidebar.
+
 ## Rust 0.51.3 - 2026-11-19
 
 - Ask short confirmation questions with the affected targets and direct action buttons.

@@ -18,16 +18,28 @@ pub fn toolbar(ui: &mut egui::Ui, enabled: bool) -> Option<&'static str> {
     let mut target = None;
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_enabled_ui(enabled, |ui| {
-            let button = || {
+            let button = |key| {
+                let width = ui
+                    .painter()
+                    .layout_no_wrap(
+                        text(key),
+                        egui::FontId::proportional(12.),
+                        egui::Color32::WHITE,
+                    )
+                    .size()
+                    .x;
                 egui::Button::new("")
-                    .min_size(egui::vec2(34., 40.))
+                    .min_size(egui::vec2(width + 12., 44.))
                     .frame_when_inactive(false)
             };
-            let console = ui.add(button());
+            let console_button = button("ConsoleCaption");
+            let open_button = button("WorkspaceOpenIn");
+            let console = ui.add(console_button);
             icon(
                 ui,
                 &console,
                 "WorkspaceConsole",
+                "ConsoleCaption",
                 &[
                     &[(0., 3.), (20., 3.), (20., 17.), (0., 17.), (0., 3.)],
                     &[(4., 7.), (7., 10.), (4., 13.)],
@@ -38,7 +50,7 @@ pub fn toolbar(ui: &mut egui::Ui, enabled: bool) -> Option<&'static str> {
                 target = Some("Bash");
             }
             let (open, _) =
-                egui::containers::menu::MenuButton::from_button(button()).ui(ui, |ui| {
+                egui::containers::menu::MenuButton::from_button(open_button).ui(ui, |ui| {
                     for &(kind, label) in TOOLS {
                         if ui.button(text(label)).clicked() {
                             target = Some(kind);
@@ -49,6 +61,7 @@ pub fn toolbar(ui: &mut egui::Ui, enabled: bool) -> Option<&'static str> {
             icon(
                 ui,
                 &open,
+                "WorkspaceOpenIn",
                 "WorkspaceOpenIn",
                 &[
                     &[(2., 9.), (2., 18.), (17., 18.), (17., 11.)],
@@ -62,7 +75,13 @@ pub fn toolbar(ui: &mut egui::Ui, enabled: bool) -> Option<&'static str> {
     target
 }
 
-fn icon(ui: &egui::Ui, response: &egui::Response, label: &str, paths: &[&[(f32, f32)]]) {
+fn icon(
+    ui: &egui::Ui,
+    response: &egui::Response,
+    label: &str,
+    caption: &str,
+    paths: &[&[(f32, f32)]],
+) {
     let label = text(label);
     let enabled = ui.is_enabled();
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &label));
@@ -72,7 +91,7 @@ fn icon(ui: &egui::Ui, response: &egui::Response, label: &str, paths: &[&[(f32, 
     } else {
         Palette::current(ui).disabled
     };
-    let origin = response.rect.center() - egui::vec2(10., 10.);
+    let origin = egui::pos2(response.rect.center().x - 10., response.rect.top() + 3.);
     for path in paths {
         let points = path
             .iter()
@@ -81,6 +100,13 @@ fn icon(ui: &egui::Ui, response: &egui::Response, label: &str, paths: &[&[(f32, 
         ui.painter()
             .add(egui::Shape::line(points, egui::Stroke::new(1.65, color)));
     }
+    ui.painter().text(
+        egui::pos2(response.rect.center().x, response.rect.bottom() - 3.),
+        egui::Align2::CENTER_BOTTOM,
+        text(caption),
+        egui::FontId::proportional(12.),
+        color,
+    );
 }
 
 pub fn launch(kind: &str, root: &Path, settings: &Settings) -> Result<(), String> {

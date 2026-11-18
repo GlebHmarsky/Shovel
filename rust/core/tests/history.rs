@@ -85,6 +85,56 @@ fn initial_history_does_not_pass_validation_after_refs_change() {
 }
 
 #[test]
+fn unusual_stash_stays_available_without_adding_a_history_root() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    let tree = command(&git, root, &["mktree"], b"");
+    let unusual = command(
+        &git,
+        root,
+        &["commit-tree", tree.trim(), "-m", "Unusual stash entry"],
+        b"",
+    );
+    let unusual = unusual.trim();
+    command(
+        &git,
+        root,
+        &[
+            "update-ref",
+            "--create-reflog",
+            "-m",
+            "Fixture",
+            "refs/stash",
+            unusual,
+        ],
+        b"",
+    );
+
+    let cancel = Cancellation::default();
+    let identity = shovel_core::identity::read(root).unwrap();
+    let git::HistoryRead::Page(history, page) = git
+        .read_history(root, &identity, None, None, &cancel)
+        .unwrap()
+    else {
+        panic!("expected an empty history page");
+    };
+    assert!(page.entries.is_empty());
+    let list = git.stashes(&history.snapshot, &cancel).unwrap();
+    assert_eq!(list.entries[0].hash, unusual);
+
+    command(&git, root, &["tag", "recovered", unusual], b"");
+    let git::HistoryRead::Page(_, recovered) = git
+        .read_history(root, &identity, None, None, &cancel)
+        .unwrap()
+    else {
+        panic!("expected the recovered history page");
+    };
+    assert_eq!(recovered.entries.len(), 1);
+    assert_eq!(recovered.entries[0].commit.hash, unusual);
+    assert!(!recovered.entries[0].graph.is_stash());
+}
+
+#[test]
 fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     let (temp, git) = fixture();
     let root = temp.path();

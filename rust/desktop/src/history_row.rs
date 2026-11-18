@@ -134,12 +134,7 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
     }
     let color = lane_color(entry.graph.color);
     if entry.graph.is_stash() {
-        painter.rect_stroke(
-            Rect::from_center_size(stash_point(0.5), egui::vec2(6., 6.)),
-            1.,
-            stash_stroke,
-            egui::StrokeKind::Inside,
-        );
+        painter.circle_filled(stash_point(0.5), 3.3, stash_color);
     } else if entry.graph.is_merge {
         painter.circle_stroke(center, 4., Stroke::new(1.5, color));
         painter.circle_filled(center, 1.3, color);
@@ -429,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn stash_square_and_connector_use_the_same_gray_in_both_themes() {
+    fn stash_uses_a_full_size_gray_commit_marker_in_both_themes() {
         let ctx = egui::Context::default();
         let rect = Rect::from_min_size(egui::pos2(16., 16.), egui::vec2(48., HEIGHT));
         let mut stash = entry();
@@ -446,8 +441,8 @@ mod tests {
             let color = Color32::from_gray(expected);
             let center = egui::pos2(rect.left() + 33., rect.center().y);
             assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
-                egui::Shape::Rect(marker) if marker.rect.center() == center
-                    && marker.rect.size() == egui::vec2(6., 6.) && marker.stroke.color == color
+                egui::Shape::Circle(marker) if marker.center == center
+                    && (marker.radius - 3.3).abs() < 0.01 && marker.fill == color
             )));
             assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
                 egui::Shape::LineSegment { points, stroke } if points[0].x == center.x - 5.

@@ -828,12 +828,13 @@ fn commit_layout_setting_switches_sidebar_view_and_preserves_the_commit_editor()
     );
     assert!(find(&mut app, &toolbar_commit).is_none());
 
-    sidebar_click(
-        &ctx,
-        &mut app,
-        "Local Changes",
-        egui::PointerButton::Primary,
-    );
+    let local_changes = |node: &egui::accesskit::Node| {
+        node.label()
+            .is_some_and(|label| label.starts_with("Local Changes"))
+    };
+    let right_side = egui::vec2(65., 0.);
+    let point = find(&mut app, &local_changes).unwrap();
+    click_at(&mut app, point + right_side);
     assert!(app.inline_editor().is_some());
     until(&mut app, &ctx, |app| {
         !app.editors[0].blocks_exit() && app.editors[0].context.is_some()
@@ -848,15 +849,12 @@ fn commit_layout_setting_switches_sidebar_view_and_preserves_the_commit_editor()
     )
     .drop_without_applying_deltas();
 
-    sidebar_click(&ctx, &mut app, "History", egui::PointerButton::Primary);
+    let history = find(&mut app, &|node| node.label() == Some("History")).unwrap();
+    click_at(&mut app, history + right_side);
     assert!(app.inline_editor().is_none());
     assert!(sidebar_point(&ctx, &mut app, "Commit subject").is_none());
-    sidebar_click(
-        &ctx,
-        &mut app,
-        "Local Changes",
-        egui::PointerButton::Primary,
-    );
+    let point = find(&mut app, &local_changes).unwrap();
+    click_at(&mut app, point + right_side);
     app.open(other.root.clone(), &ctx);
     assert!(app.inline_editor().is_none());
     app.select_tab(0, &ctx);

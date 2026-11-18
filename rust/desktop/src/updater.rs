@@ -36,7 +36,7 @@ pub(super) fn offer_card(ui: &mut egui::Ui, version: Option<&semver::Version>) -
         )
         .fill(palette.active_selection),
     )
-    .on_hover_text(format("UpdateOffered", &[&version.to_string()]))
+    .on_hover_text(format("RustUpdateActionHelp", &[&version.to_string()]))
     .clicked()
 }
 #[derive(Clone)]
@@ -536,6 +536,7 @@ enum Phase {
 pub struct Controller {
     pub open: bool,
     pub restart_requested: bool,
+    apply_when_ready: bool,
     pub ready: bool,
     applying_package: Option<File>,
     generation: u64,
@@ -556,6 +557,7 @@ impl Default for Controller {
         Self {
             open: false,
             restart_requested: false,
+            apply_when_ready: false,
             ready: false,
             applying_package: None,
             generation: 0,
@@ -595,6 +597,7 @@ impl Controller {
     }
     pub fn profile_save_failed(&mut self) {
         self.restart_requested = false;
+        self.apply_when_ready = false;
         self.open = true;
         self.status = text("RustUpdateSaveBlocked");
     }
@@ -626,6 +629,7 @@ impl Controller {
             self.generation += 1;
             self.phase = Phase::Idle;
             self.restart_requested = false;
+            self.apply_when_ready = false;
             self.channel = channel;
             self.offer = None;
             self.tools_confirmed = false;
@@ -710,14 +714,22 @@ impl Controller {
                             self.ready = true;
                             self.status = text("UpdateReadyShort");
                         }
-                        Err(e) => self.status = e,
-                        _ => {}
+                        Err(error) => {
+                            self.apply_when_ready = false;
+                            self.status = error;
+                        }
+                        _ => self.apply_when_ready = false,
                     }
                 }
                 _ => {}
             }
         }
-        if self.busy() || self.restart_requested || self.exit_ready() || self.workers.stopping() {
+        if self.busy()
+            || self.apply_when_ready
+            || self.restart_requested
+            || self.exit_ready()
+            || self.workers.stopping()
+        {
             return;
         }
         match self.last {
@@ -753,6 +765,7 @@ impl Controller {
         run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError> + Send + 'static,
     ) {
         if self.busy()
+            || self.apply_when_ready
             || self.restart_requested
             || self.exit_ready()
             || self.workers.stopping()
@@ -790,7 +803,132 @@ impl Controller {
             ctx.request_repaint();
         }
     }
+    pub fn can_update(&self) -> bool {
+        self.offer.is_some()
+            && !self.busy()
+            && !self.apply_when_ready
+            && !self.restart_requested
+            && !self.exit_ready()
+            && !self.workers.stopping()
+    }
+
+    pub fn start_update(&mut self, ctx: &egui::Context) {
+        if !self.can_update() {
+            return;
+        }
+        let Some(offer) = self.offer.clone() else {
+            return;
+        };
+        self.open = true;
+        self.tools_confirmed = true;
+        self.apply_when_ready = true;
+        if self.ready {
+            self.status = text("UpdateReadyShort");
+        } else {
+            self.download(ctx, offer);
+        }
+        ctx.request_repaint();
+    }
+
+    fn download(&mut self, ctx: &egui::Context, offer: Offer) {
+        self.generation += 1;
+        let generation = self.generation;
+        self.phase = Phase::Downloading(0);
+        self.status = format("RustUpdateProgress", &["0"]);
+        self.cancel = Cancellation::default();
+        let cancel = self.cancel.clone();
+        let tx = self.tx.clone();
+        let worker_ctx = ctx.clone();
+        let lease = self.workers.start(cancel.clone());
+        let worker = std::thread::Builder::new().spawn(move || {
+            let result = background_result(|| {
+                recheck_offer(&offer, &cancel)?;
+                let manager = manager(&offer, cancel.clone())?;
+                let locator = installed_locator()?;
+                let directory = locator.get_packages_dir();
+                {
+                    let _lock = locator
+                        .try_get_exclusive_lock()
+                        .map_err(|_| text("RustUpdateCacheUnavailable"))?;
+                    if offer
+                        .release
+                        .prepare_cached_download(&directory, || cancel.is_cancelled())
+                        .map_err(|_| text("RustUpdateCacheUnavailable"))?
+                    {
+                        return Ok(offer);
+                    }
+                }
+                let pt = tx.clone();
+                let pc = worker_ctx.clone();
+                with_progress(
+                    |progress| {
+                        manager
+                            .download_updates(
+                                &UpdateInfo {
+                                    TargetFullRelease: offer.asset.clone(),
+                                    ..Default::default()
+                                },
+                                Some(progress),
+                            )
+                            .map_err(download_error)
+                    },
+                    move |p| {
+                        let _ = pt.send(Event::Progress(generation, p));
+                        pc.request_repaint();
+                    },
+                )?;
+                offer
+                    .release
+                    .verify_package_cancellable(
+                        File::open(directory.join(offer.release.file_name())).map_err(failure)?,
+                        || cancel.is_cancelled(),
+                    )
+                    .map_err(|_| text("RustUpdateInvalid"))?;
+                Ok(offer)
+            });
+            drop(lease);
+            let result = if cancel.is_cancelled() {
+                Err(text("ActionResultCancelled"))
+            } else {
+                result
+            };
+            let _ = tx.send(Event::Downloaded(generation, result));
+            worker_ctx.request_repaint();
+        });
+        if worker.is_err() {
+            let _ = self.tx.send(Event::Downloaded(
+                generation,
+                Err(text("RustUpdateWorkerFailed")),
+            ));
+            ctx.request_repaint();
+        }
+    }
+
+    fn cancel_update(&mut self) {
+        self.apply_when_ready = false;
+        if self.busy() {
+            self.cancel();
+        } else {
+            self.status = text("ActionResultCancelled");
+        }
+    }
+
+    fn request_approved_restart(&mut self, blocked: bool, tools_opened: bool) {
+        if !self.apply_when_ready || !self.ready || self.busy() || self.workers.stopping() {
+            return;
+        }
+        if self.needs_tool_confirmation(tools_opened) {
+            self.apply_when_ready = false;
+            self.status = text("RustUpdateToolsChanged");
+            self.open = true;
+        } else if !blocked {
+            self.apply_when_ready = false;
+            self.restart_requested = true;
+        }
+    }
+
     pub fn show(&mut self, ctx: &egui::Context, blocked: bool, tools_opened: bool) {
+        self.request_approved_restart(blocked, tools_opened);
         if !self.open {
             return;
         }
@@ -811,6 +949,8 @@ impl Controller {
                     && matches!(self.phase, Phase::Checking | Phase::Downloading(_));
                 let status = if cancelling {
                     text("RustUpdateCancelling")
+                } else if self.apply_when_ready && self.ready && blocked {
+                    text("RustUpdateWaiting")
                 } else {
                     self.status.clone()
                 };
@@ -831,117 +971,38 @@ impl Controller {
                 if let Some(offer) = &self.offer {
                     release_notes(ui, offer.release.notes());
                 }
-                if self.ready && tools_opened {
-                    ui.checkbox(&mut self.tools_confirmed, text("UpdateToolsQuestion"));
-                }
-                let blocked = blocked || self.needs_tool_confirmation(tools_opened);
                 ui.horizontal_wrapped(|ui| {
                     if ui
-                        .add_enabled(!self.busy(), egui::Button::new(text("UpdateRetry")))
+                        .add_enabled(
+                            !self.busy() && !self.apply_when_ready,
+                            egui::Button::new(text("UpdateRetry")),
+                        )
                         .clicked()
                     {
                         self.begin_check(ctx, Instant::now(), discover);
                     }
-                    if matches!(self.phase, Phase::Checking | Phase::Downloading(_))
+                    if (self.apply_when_ready
+                        || matches!(self.phase, Phase::Checking | Phase::Downloading(_)))
                         && ui
                             .add_enabled(!cancelling, egui::Button::new(text("Cancel")))
                             .clicked()
                     {
-                        self.cancel();
+                        self.cancel_update();
                     }
-                    if self.ready {
-                        if ui
+                    if self.offer.is_some()
+                        && ui
                             .add_enabled(
-                                !blocked && !self.busy(),
+                                self.can_update(),
                                 egui::Button::new(text("RustUpdateRestart")),
                             )
-                            .on_disabled_hover_text(text("RustUpdateBlocked"))
                             .clicked()
-                        {
-                            self.restart_requested = true;
-                        }
-                    } else if self.offer.is_some()
-                        && !self.busy()
-                        && ui.button(text("RustUpdateDownload")).clicked()
                     {
-                        self.generation += 1;
-                        let generation = self.generation;
-                        self.phase = Phase::Downloading(0);
-                        self.status = format("RustUpdateProgress", &["0"]);
-                        self.cancel = Cancellation::default();
-                        let offer = self.offer.clone().unwrap();
-                        let cancel = self.cancel.clone();
-                        let tx = self.tx.clone();
-                        let worker_ctx = ctx.clone();
-                        let lease = self.workers.start(cancel.clone());
-                        let worker = std::thread::Builder::new().spawn(move || {
-                            let result = background_result(|| {
-                                recheck_offer(&offer, &cancel)?;
-                                let manager = manager(&offer, cancel.clone())?;
-                                let locator = installed_locator()?;
-                                let directory = locator.get_packages_dir();
-                                {
-                                    let _lock = locator
-                                        .try_get_exclusive_lock()
-                                        .map_err(|_| text("RustUpdateCacheUnavailable"))?;
-                                    if offer
-                                        .release
-                                        .prepare_cached_download(&directory, || {
-                                            cancel.is_cancelled()
-                                        })
-                                        .map_err(|_| text("RustUpdateCacheUnavailable"))?
-                                    {
-                                        return Ok(offer);
-                                    }
-                                }
-                                let pt = tx.clone();
-                                let pc = worker_ctx.clone();
-                                with_progress(
-                                    |progress| {
-                                        manager
-                                            .download_updates(
-                                                &UpdateInfo {
-                                                    TargetFullRelease: offer.asset.clone(),
-                                                    ..Default::default()
-                                                },
-                                                Some(progress),
-                                            )
-                                            .map_err(download_error)
-                                    },
-                                    move |p| {
-                                        let _ = pt.send(Event::Progress(generation, p));
-                                        pc.request_repaint();
-                                    },
-                                )?;
-                                offer
-                                    .release
-                                    .verify_package_cancellable(
-                                        File::open(directory.join(offer.release.file_name()))
-                                            .map_err(failure)?,
-                                        || cancel.is_cancelled(),
-                                    )
-                                    .map_err(|_| text("RustUpdateInvalid"))?;
-                                Ok(offer)
-                            });
-                            drop(lease);
-                            let result = if cancel.is_cancelled() {
-                                Err(text("ActionResultCancelled"))
-                            } else {
-                                result
-                            };
-                            let _ = tx.send(Event::Downloaded(generation, result));
-                            worker_ctx.request_repaint();
-                        });
-                        if worker.is_err() {
-                            let _ = self.tx.send(Event::Downloaded(
-                                generation,
-                                Err(text("RustUpdateWorkerFailed")),
-                            ));
-                            ctx.request_repaint();
-                        }
+                        self.start_update(ctx);
                     }
                     dismiss = ui
-                        .button(text(if self.offer.is_some() {
+                        .button(text(if self.apply_when_ready {
+                            "RustUpdateHide"
+                        } else if self.offer.is_some() {
                             "RustUpdateLater"
                         } else {
                             "UpdateClose"
@@ -950,6 +1011,7 @@ impl Controller {
                 });
             });
         self.open = open && !dismiss;
+        self.request_approved_restart(blocked, tools_opened);
     }
     pub fn apply(
         &mut self,
@@ -2024,6 +2086,77 @@ mod tests {
             Channel::Stable
         );
         assert!(!controller.open);
+    }
+
+    #[test]
+    fn approved_download_automatically_requests_restart_when_work_finishes() {
+        let ctx = egui::Context::default();
+        let offer = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        );
+        let mut controller = Controller {
+            offer: Some(offer.clone()),
+            phase: Phase::Downloading(0),
+            apply_when_ready: true,
+            tools_confirmed: true,
+            ..Default::default()
+        };
+        controller
+            .tx
+            .send(Event::Downloaded(0, Ok(offer.clone())))
+            .unwrap();
+        controller.tick(&ctx, Channel::Beta, false);
+        controller.request_approved_restart(true, true);
+        assert!(controller.ready && controller.apply_when_ready && !controller.restart_requested);
+        controller.request_approved_restart(false, true);
+        assert!(controller.restart_requested && !controller.apply_when_ready);
+
+        let mut cancelled = Controller {
+            offer: Some(offer.clone()),
+            phase: Phase::Downloading(0),
+            apply_when_ready: true,
+            ..Default::default()
+        };
+        cancelled.cancel_update();
+        cancelled.tx.send(Event::Downloaded(0, Ok(offer))).unwrap();
+        cancelled.tick(&ctx, Channel::Beta, false);
+        cancelled.request_approved_restart(false, false);
+        assert!(!cancelled.restart_requested);
+    }
+
+    #[test]
+    fn update_offer_keeps_the_repository_header_in_place() {
+        use crate::workspace_interaction_tests::{frame, workspace};
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut app = workspace();
+        let bounds = |app: &mut crate::Workspace| {
+            let output = frame(&ctx, app, vec![]);
+            let access = output.platform_output.accesskit_update.as_ref().unwrap();
+            let find = |label| {
+                access.nodes.iter().find_map(|(_, node)| {
+                    (node.label() == Some(label))
+                        .then(|| node.bounds())
+                        .flatten()
+                })
+            };
+            let result = (
+                find(&text("ActivityTitle")).unwrap(),
+                find(&text("UpdateShovel")),
+            );
+            output.drop_without_applying_deltas();
+            result
+        };
+        let (before, none) = bounds(&mut app);
+        assert!(none.is_none());
+        app.updater.offer = Some(published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        ));
+        let (after, update) = bounds(&mut app);
+        assert_eq!(before, after);
+        assert!(update.unwrap().x1 <= after.x0);
     }
 
     #[test]

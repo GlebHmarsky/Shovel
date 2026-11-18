@@ -1548,6 +1548,118 @@ impl Controller {
         }
         Some(message)
     }
+    fn activity_runs<'a>(&'a self, path: Option<&'a PathBuf>) -> impl Iterator<Item = &'a Run> {
+        self.runs.iter().rev().filter(move |run| {
+            path.is_none_or(|path| crate::Workspace::same_path(&run.path, path))
+                && match self.filter {
+                    ActivityFilter::All => true,
+                    ActivityFilter::User => !run.background,
+                    ActivityFilter::Background => run.background,
+                }
+        })
+    }
+
+    pub fn activity(
+        &self,
+        ui: &mut egui::Ui,
+        path: Option<&PathBuf>,
+        scheduler: &Scheduler,
+    ) -> Option<(PathBuf, String)> {
+        let key = ui.scope_id().with("selected-run");
+        let runs: Vec<_> = self.activity_runs(path).collect();
+        let remembered = ui.ctx().data(|data| data.get_temp::<u64>(key));
+        let Some(mut selected) = runs
+            .iter()
+            .copied()
+            .find(|run| Some(run.sequence) == remembered)
+            .or_else(|| runs.first().copied())
+        else {
+            ui.label(text("ActivityEmpty"));
+            return None;
+        };
+        let mut reopen = None;
+        let width = ui.available_width();
+        egui::Panel::left("activity-list")
+            .exact_size((width * 0.38).clamp(140., 360.))
+            .resizable(false)
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        for run in &runs {
+                            let root = run.path.to_string_lossy();
+                            let root = PathText::new(ui.ctx(), &root);
+                            let name = run
+                                .path
+                                .file_name()
+                                .unwrap_or(run.path.as_os_str())
+                                .to_string_lossy();
+                            let name = PathText::new(ui.ctx(), &name);
+                            let label = text(run.label);
+                            let summary = |target| {
+                                strings::format("ActivityRunSummary", &[target, &label, &run.status])
+                            };
+                            let visual = summary(name.visual());
+                            let response = ui.add_sized(
+                                [ui.available_width(), 24.],
+                                egui::Button::selectable(
+                                    run.sequence == selected.sequence,
+                                    (&visual, egui::Atom::grow()),
+                                )
+                                .truncate(),
+                            );
+                            ui.ctx().accesskit_node_builder(response.id, |node| {
+                                node.set_value(summary(root.spoken()))
+                            });
+                            if response
+                                .on_hover_text(format!("{visual}\n{}", root.visual()))
+                                .clicked()
+                            {
+                                selected = run;
+                                ui.ctx()
+                                    .data_mut(|data| data.insert_temp(key, run.sequence));
+                            }
+                        }
+                    });
+            });
+        egui::CentralPanel::default().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.strong(text(selected.label));
+                if !selected.done
+                    && scheduler
+                        .active_records()
+                        .iter()
+                        .any(|record| record.id == selected.request && !record.running)
+                    && ui.button(text("CancelWaitingRequest")).clicked()
+                {
+                    scheduler.remove_waiting(selected.request);
+                }
+                if let Some(failed) = &selected.reopen_commit {
+                    if ui.button(text("ReopenCommit")).clicked() {
+                        reopen = Some((selected.path.clone(), failed.owner.clone()));
+                    }
+                    if ui.button(text("CopySubmittedMessage")).clicked() {
+                        ui.ctx().copy_text(failed.message.clone());
+                    }
+                }
+            });
+            ui.separator();
+            egui::ScrollArea::both()
+                .id_salt(selected.sequence)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.label(&selected.status);
+                    if !selected.output.is_empty() {
+                        ui.add(
+                            egui::Label::new(RichText::new(&selected.output).monospace())
+                                .selectable(true),
+                        );
+                    }
+                });
+        });
+        reopen
+    }
+
     pub fn status(
         &self,
         ui: &mut egui::Ui,
@@ -1556,19 +1668,7 @@ impl Controller {
     ) -> Option<(PathBuf, String)> {
         let mut reopen = None;
         let records = scheduler.active_records();
-        for run in self
-            .runs
-            .iter()
-            .filter(|r| {
-                path.is_none_or(|p| crate::Workspace::same_path(&r.path, p))
-                    && match self.filter {
-                        ActivityFilter::All => true,
-                        ActivityFilter::User => !r.background,
-                        ActivityFilter::Background => r.background,
-                    }
-            })
-            .rev()
-        {
+        for run in self.activity_runs(path) {
             ui.horizontal(|ui| {
                 let path = run.path.to_string_lossy();
                 let name = run
@@ -2545,6 +2645,76 @@ mod activity_layout_test {
         }
         assert_eq!(app.operations.runs.len(), 128);
         assert_eq!(app.operations.background_count(), 128);
+    }
+
+    #[test]
+    fn activity_opens_below_header_then_moves_resizes_and_closes() {
+        use crate::workspace_interaction_tests::{frame, sidebar_click, sidebar_point, workspace};
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut app = workspace();
+        app.operations.record_local(
+            "Bravo".into(),
+            "Warning from the selected run".into(),
+            "Full warning output".into(),
+            None,
+        );
+        let render = |app: &mut crate::Workspace, events| {
+            frame(&ctx, app, events).drop_without_applying_deltas();
+        };
+        render(&mut app, vec![]);
+        let (header, _) = sidebar_point(&ctx, &mut app, &text("ActivityTitle")).unwrap();
+        sidebar_click(
+            &ctx,
+            &mut app,
+            &text("ActivityTitle"),
+            egui::PointerButton::Primary,
+        );
+        render(&mut app, vec![]);
+        let area = || {
+            ctx.memory(|memory| memory.area_rect(egui::Id::unique("workspace-activity")))
+                .unwrap()
+        };
+        let original = area();
+        assert!(original.top() > header.y && original.x_range().contains(header.x));
+        let frame_with_output = frame(&ctx, &mut app, vec![]);
+        assert!(
+            frame_with_output
+                .shapes
+                .iter()
+                .any(|shape| matches!(&shape.shape,
+            egui::Shape::Text(label) if label.galley.text().contains("Full warning output")))
+        );
+        frame_with_output.drop_without_applying_deltas();
+        let drag = |app: &mut crate::Workspace, from: egui::Pos2, to: egui::Pos2| {
+            let pointer = |pos, pressed| egui::Event::PointerButton {
+                pos,
+                pressed,
+                button: egui::PointerButton::Primary,
+                modifiers: egui::Modifiers::NONE,
+            };
+            render(app, vec![egui::Event::PointerMoved(from)]);
+            render(app, vec![pointer(from, true)]);
+            render(app, vec![egui::Event::PointerMoved(to)]);
+            render(app, vec![pointer(to, false)]);
+            render(app, vec![]);
+        };
+        let title = original.center_top() + egui::vec2(0., 14.);
+        drag(&mut app, title, title + egui::vec2(18., 28.));
+        let moved = area();
+        assert!(
+            moved.top() > original.top() + 15.,
+            "{original:?} -> {moved:?}"
+        );
+        let grip = moved.right_bottom() - egui::vec2(2., 2.);
+        drag(&mut app, grip, grip + egui::vec2(30., 45.));
+        let resized = area();
+        assert!(
+            resized.height() > moved.height() + 16.,
+            "{moved:?} -> {resized:?}"
+        );
+        sidebar_click(&ctx, &mut app, "Close window", egui::PointerButton::Primary);
+        assert!(!app.activity_open);
     }
 
     #[test]

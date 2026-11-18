@@ -13,7 +13,7 @@ use std::{
 
 pub const MAX_BYTES: usize = 4 * 1024 * 1024;
 // Invalidate cached graphs that used commit lanes to draw stashes.
-pub const PREVIEW_SCHEMA: u32 = 4;
+pub const PREVIEW_SCHEMA: u32 = 5;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Preview {
     pub schema: u32,

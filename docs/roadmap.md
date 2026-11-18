@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Toolbar, Activity and updates in Rust 0.51.4
+
+Activity opens under the repository header and displays selected run output beside the run list. The offscreen Windows checks moved, enlarged, and closed the window, opened warning output, exercised right-edge sidebar clicks, and compared exact header bounds with and without an update offer. Update approval remains bound to the offered package and requests guarded restart after download or when an already verified package is ready. Stashes use standard-size gray markers. A real Git fixture kept a nonstandard stash in the sidebar data and included it in the history only after a regular tag referenced it.
+
+Fifty-one focused checks passed, including the isolated loopback updater and six Git history fixtures. All-target Clippy and `git diff --check` passed. The 18-check smoke suite passed in 50.47 seconds on fingerprint `B0069F3AB44A728FE4C166557931E1BBE155BBBBF180A1A32EAC942D95877F43`. Live desktop appearance and an installed update/restart remain unverified.
+
 ## Workspace and confirmations in Rust 0.51.3
 
 The repository header keeps a two-line layout during Git work. Local Changes counts distinct paths before the editor opens. The history inspector keeps a fixed height, with a full-width Commit summary and a separate Changed Files list and diff. The file-list divider saves its width and restores it in a fresh profile session. Common confirmations ask one question and show the affected targets.

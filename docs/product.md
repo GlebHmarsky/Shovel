@@ -16,13 +16,15 @@ The arrows beside Fetch, Pull and Push accept requests as soon as a repository t
 
 Right-click a tab to pick a colored circle or clear it with the crossed circle. The choice is saved per repository folder. A hollow circle means the working tree is clean. A filled circle means there are staged, unstaged, untracked, or conflicted files. A dash in the circle indicates that status is pending or unavailable. Only marked inactive tabs receive the optional local status checks, one at a time in the background.
 
-## Update discovery (0.50.9)
+## Toolbar and activity (0.51.4)
 
-Shovel checks the selected Rust Beta or Rust Stable channel at startup and every hour while running. **File → Settings → Updates** controls the hourly check. A verified newer release adds an **Update Shovel** button to the left of the central repository status. The button opens the updater, where download and restart each require approval. Discovery runs in the background.
+**Open In** and **Console** show captions on the toolbar. **History** and **Local Changes** respond across the full sidebar row. Click the compact repository header to show or hide Activity. The window opens below the header. Drag its title or edges to move or resize it, and select a run to see its complete output.
 
-Both **Update Shovel** and **Help → Shovel updates** start a fresh check when they open the dialog. **Later** closes the dialog and keeps a verified download ready.
+## Update discovery (0.51.4)
 
-Before restarting, Shovel checks the selected channel again, verifies the downloaded package and checks each open worktree. An unfinished Git operation or unresolved index conflict keeps the affected repository open. A newly offered version requires fresh approval.
+Shovel checks the selected Rust Beta or Rust Stable channel at startup and every hour while running. **File → Settings → Updates** controls the hourly check. When a verified release is available, **Update Shovel** appears beside the header without moving it. Click it to approve download, verification, and restart for that release. **Help → Shovel updates** checks for an offer and provides the same **Update** action.
+
+Shovel waits for accepted work to finish. Before restarting it rechecks the selected channel, the verified package, and each worktree. Repository conflicts or unfinished operations can block restart, and an offer change requires approval of the new release.
 
 ## Operation progress (0.50.8)
 
@@ -56,7 +58,7 @@ Returning to inline Local Changes keeps the last file list, selection, diff and 
 
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
-**Rust 0.51.2.** Stashes appear as small gray squares immediately above and to the side of their first parent. Each stash is a leaf. Stashes on the same commit share a short gray connector that ends at that commit. Regular commits keep their Git topological order and branch lanes. Details retain the real stash parents and contents.
+**Rust 0.51.4.** Saved stashes use full-size gray commit markers immediately above and to the side of their first parent. Stashes on the same commit share a gray connector that ends at that commit. Regular commits keep their Git topological order and branch lanes. Unusual entries without the expected stash parent shape can be selected in the Stashes sidebar. A commit independently reachable from regular history still appears there.
 
 Checkout opens a confirmation immediately and checks local changes after display. Clean trees show the target and confirmation only. Dirty trees offer **Don’t change**, **Stash and reapply**, or **Discard tracked changes**. Keep uses native Git overwrite protection. Stash and reapply includes untracked files and attempts to restore staged state; failure/conflicts retain the saved stash for recovery. Discard removes tracked edits while keeping untracked/ignored files and submodule worktrees. Native checkout hooks and filters remain enabled. Approval waits for the local scan; no mutation runs on opening the confirmation.
 
@@ -89,7 +91,7 @@ Started user commands, including manual Fetch and configured hooks/tools, cannot
 | Git | Automatic fetch enablement and 10–3600-second interval; enabled every 60 seconds remains the default. |
 | Git identity | Explicitly load and apply global name/email using the selected Git installation. Repository-specific identity overrides remain in effect. |
 | Tools | The Open in table pairs Rider, Visual Studio Code, Git Bash and Visual Studio with their executable paths. An empty path enables discovery when you use the application. The external merge tool has separate controls for Git configuration, a named tool or a custom command. |
-| Updates | Stable/Beta channel and periodic checks. Launch/manual discovery and approval before download/restart retain their existing behavior. |
+| Updates | Stable/Beta channel and periodic checks. One Update click approves the offered release and restart. |
 
 **Apply global identity** is a separate, immediate Git action; the form states that Cancel cannot undo it. Load reads only the two identity keys. Apply rejects a changed reviewed identity and respects native Git locks. If a write only partly succeeds, the message requires loading the actual values before retrying; it does not roll back unrelated configuration.
 
@@ -259,7 +261,7 @@ The main footer and permanent history page-control bar are removed in 0.27.0. In
 
 File/View/Repository/Window/Help share the main window's draggable caption strip with its title and Minimize, Maximize/Restore and Close controls. Empty caption space retains standard move/double-click/system-menu behavior through WPF WindowChrome; Close follows existing shutdown handling. Other dialogs retain their native captions. The left toolbar is Open, **Fetch, Pull, Push, Commit**.
 
-Each saved stash is one history entry connected to its base, rather than a merge plus separate index/untracked commits. Its real parents/message remain in details; the existing Stashes inspector still exposes staged/untracked content and Apply/Pop/Drop. Objects independently reachable through normal branches/tags/HEAD or a stash base remain visible. Unusual stored commits keep their ordinary history shape. All Commits retains normal history scope and 200 visible rows per page; sidebar jumps use the same folded ordering.
+Each standard saved stash is one gray history entry connected to its base. Details retain its real parents and message. The Stashes inspector exposes staged and untracked content and Apply/Pop/Drop. Objects independently reachable through normal branches, tags, HEAD, or a stash base remain visible. Unusual stash entries remain available in the sidebar. All Commits retains 200 visible rows per page.
 
 Branch tracks keep their lane and color until the actual shared ancestor, including consecutive merges with the same base. Wider rounded turns replace short zigzags. Independent roots, octopus and criss-cross merges and page boundaries use the same bounded graph rules. Layout remains capped at 64 occupied/reserved columns; unusually wide history reports the existing limit instead of drawing false connections.
 
@@ -289,7 +291,7 @@ Expandable **Branches**, **Remotes**, **Tags**, **Stashes** and **Submodules** u
 - **Branches:** current checkmark and local upstream counts (↑ ahead / ↓ behind). Single click locates its commit; double click or Enter switches. Right-click offers Switch, Show in history, Delete, Set upstream and Unset upstream. Existing clean-state/worktree/deletion protections apply. Counts reflect fetched local refs, not live server state; no upstream has no count, pending shows an ellipsis and removed upstream is identified.
 - **Remotes:** configured remotes and their fetched remote-tracking branches. Click a branch to locate it; remote context menu Fetch performs the explicit fetch. Repository → Add remote (also the Remotes group menu) saves a name and URL/local path without contacting it. Choose Fetch explicitly, then Repository → Set upstream to select an existing fetched branch; Unset upstream is there too. Edit/delete remain deferred.
 - **Tags:** click to locate the tagged commit, including older pages; no checkout or filtering. Tags pointing to non-commit objects have no history row and are omitted.
-- **Stashes:** inline saved messages/selectors; click selects the stash commit with its label in history. A hollow square distinguishes its one base connection. Independently reachable index/untracked commits and real stash-only base ancestry remain visible; they do not turn the stash into a merge. Right-click Apply/Pop/Drop uses real existing actions; Drop confirms the actual saved target. These quick actions restore worktree content without restoring staged state. Repository → Stashes retains detailed inspection/Create and the Restore staged state option.
+- **Stashes:** inline saved messages and selectors. Click a standard stash to select its gray commit marker in history. Click an unusual entry to select it in the Stashes inspector. Right-click opens Apply, Pop, or Drop. Repository → Stashes offers inspection, Create, and Restore staged state.
 - **Submodules:** indexed gitlinks, including uninitialized ones. Click opens an initialized child as another repository tab. Right-click **Initialize / Update** checks out its recorded commit (may download); **Sync URL** copies configured URL changes. No force, recursive update, implicit stage or commit. Missing/uninitialized paths explain how to initialize; dirty collisions/active child operations fail with retained output. Add/remove/deinit/recursive/remote-latest management is deferred.
 
 Navigation retains useful history while locating an uncached commit asynchronously, selects it and scrolls into view. All Commits returns to the first page after a jump. Read/time limits report failure rather than silently omit data; [architecture](architecture.md#repository-sidebar-0230) owns limits, including the current 256-saved-stash bound. A jump starts a fresh graph lane layout for that page; normal Older paging carries it forward.
