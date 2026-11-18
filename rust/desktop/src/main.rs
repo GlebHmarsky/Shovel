@@ -100,6 +100,7 @@ enum Event {
     ),
     SubmoduleOpened(u64, PathBuf, Result<PathBuf, String>),
     Preview(u64, u64, Option<Box<shovel_core::history_cache::Preview>>),
+    InitialHistory(u64, u64, Box<Page>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
     Loaded(u64, u64, history_view::Read, bool),
     Page(u64, u64, Box<Page>, bool),
@@ -435,6 +436,8 @@ impl Workspace {
             None
         };
         let cancel = Cancellation::default();
+        let initial = (foreground && tab.page.is_none() && tab.observed_snapshot().is_none())
+            .then(|| (self.sender.clone(), ctx.clone()));
         self.spawn_history_read(
             ctx,
             cancel.clone(),
@@ -446,6 +449,15 @@ impl Workspace {
                 #[cfg(test)]
                 history_cache::tests::wait_for_read(&path);
                 let git = git.as_ref().clone().with_foreground_reads(foreground);
+                let publish = |page: &Page| {
+                    if let Some((sender, ctx)) = &initial
+                        && sender
+                            .send(Event::InitialHistory(id, generation, Box::new(page.clone())))
+                            .is_ok()
+                    {
+                        ctx.request_repaint();
+                    }
+                };
                 let result = history_view::read_expected(
                     &git,
                     &path,
@@ -454,6 +466,7 @@ impl Workspace {
                         .map(|(identity, fingerprint)| (identity, fingerprint.as_str())),
                     first,
                     known_identity.as_deref(),
+                    initial.as_ref().map(|_| &publish as &dyn Fn(&Page)),
                     &cancel,
                 );
                 match result {
@@ -661,7 +674,8 @@ impl Workspace {
                 Event::Loaded(id, ..)
                 | Event::Page(id, ..)
                 | Event::Located(id, ..)
-                | Event::Preview(id, ..) => Some(*id),
+                | Event::Preview(id, ..)
+                | Event::InitialHistory(id, ..) => Some(*id),
                 Event::Failed(id, _, failure) if !failure.identity => Some(*id),
                 _ => None,
             };
@@ -779,6 +793,20 @@ impl Workspace {
                         && !tab.view.identity_blocked
                     {
                         tab.apply_preview(*preview);
+                    }
+                }
+                Event::InitialHistory(id, generation, page) => {
+                    if !self.closing
+                        && !self.pending_exit
+                        && let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == id)
+                        && tab.view.generation == generation
+                        && tab.loading
+                        && tab.page.is_none()
+                        && tab.observed_snapshot().is_none()
+                        && !tab.view.external_history_change
+                        && !tab.view.identity_blocked
+                    {
+                        tab.show_initial_history(*page);
                     }
                 }
                 Event::SubmoduleOpened(owner, parent, result) => {
@@ -992,6 +1020,7 @@ impl Workspace {
                     {
                         tab.loading = false;
                         tab.view.checking_identity = false;
+                        tab.discard_initial_history();
                         if tab.view.reopen_commit_owner.take().is_some() {
                             self.notice = Some(if failure.identity {
                                 strings::text("FailedCommitOwnerUnavailable")
@@ -3039,7 +3068,7 @@ impl eframe::App for Workspace {
                         })
                         .map(|e| e.commit.clone())
                 {
-                    if tab.view.preview.is_some() {
+                    if tab.view.preview.is_some() || tab.view.initial_history {
                         comparison::metadata(ui, &commit, &tab.path);
                         return;
                     }
@@ -3131,7 +3160,7 @@ impl eframe::App for Workspace {
                     });
                     return;
                 };
-                if tab.view.preview.is_some() {
+                if tab.view.preview.is_some() || tab.view.initial_history {
                     ui.label(tab.history_notice(&ctx));
                 }
                 if let Some(error) = &tab.error {

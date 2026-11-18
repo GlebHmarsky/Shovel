@@ -55,8 +55,31 @@ fn history_waits_for_git_to_confirm_the_captured_worktree() {
         "first"
     );
     assert!(matches!(
-        git.read_history(root, &identity, None, &cancel),
+        git.read_history(
+            root,
+            &identity,
+            None,
+            Some(&|_| panic!("the worktree must be confirmed before displaying history")),
+            &cancel,
+        ),
         Err(git::Error::NotWorktree)
+    ));
+}
+
+#[test]
+fn initial_history_does_not_pass_validation_after_refs_change() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    command(&git, root, &["commit", "--allow-empty", "-m", "first"], b"");
+    let identity = shovel_core::identity::read(root).unwrap();
+    let publish = |page: &git::Page| {
+        assert_eq!(page.entries.len(), 1);
+        assert_eq!(page.entries[0].commit.subject(), "first");
+        command(&git, root, &["commit", "--allow-empty", "-m", "second"], b"");
+    };
+    assert!(matches!(
+        git.read_history(root, &identity, None, Some(&publish), &Cancellation::default()),
+        Err(git::Error::Changed)
     ));
 }
 
@@ -108,7 +131,8 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     let snapshot = git.inspect(root, &cancel).unwrap();
     assert_eq!(snapshot.branch.as_deref(), Some("main"));
     let git::HistoryRead::Page(history, first) =
-        git.read_history(root, &snapshot.identity, None, &cancel).unwrap()
+        git.read_history(root, &snapshot.identity, None, None, &cancel)
+            .unwrap()
     else {
         panic!("a cold read should return the first page");
     };

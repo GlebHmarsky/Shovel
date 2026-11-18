@@ -14,6 +14,7 @@ struct SavedView {
 pub(super) struct State {
     pub generation: u64,
     pub preview: Option<(shovel_core::git::Snapshot, chrono::DateTime<chrono::Utc>)>,
+    pub initial_history: bool,
     pub last_use: Option<Instant>,
     pub bytes: usize,
     pub locate_generation: u64,
@@ -120,6 +121,7 @@ pub(super) fn read_expected(
     previous: Option<(&Identity, &str)>,
     first: bool,
     expected_identity: Option<&str>,
+    initial_history: Option<&dyn Fn(&Page)>,
     cancel: &Cancellation,
 ) -> Result<Read, Failure> {
     let identity = shovel_core::identity::read(path).map_err(|_| identity_failure(false))?;
@@ -131,7 +133,7 @@ pub(super) fn read_expected(
     let previous_fingerprint = previous
         .filter(|_| !first)
         .map(|(_, fingerprint)| fingerprint);
-    let result = git.read_history(path, &identity, previous_fingerprint, cancel);
+    let result = git.read_history(path, &identity, previous_fingerprint, initial_history, cancel);
     if shovel_core::identity::read(path).ok().as_ref() != Some(&identity) {
         return Err(identity_failure(true));
     }
@@ -150,6 +152,7 @@ fn read(
         previous.map(|h| (&h.snapshot.identity, h.snapshot.fingerprint.as_str())),
         first,
         previous.map(|h| h.snapshot.identity.fingerprint.as_str()),
+        None,
         &Cancellation::default(),
     )
 }
@@ -229,6 +232,24 @@ impl Workspace {
     }
 }
 impl Tab {
+    pub(super) fn show_initial_history(&mut self, mut page: Page) {
+        self.selected = page.entries.first().map(|entry| entry.commit.hash.clone());
+        page.next = None;
+        self.page = Some(page);
+        self.view.initial_history = true;
+        self.estimate_cache();
+    }
+
+    pub(super) fn discard_initial_history(&mut self) {
+        if std::mem::take(&mut self.view.initial_history) {
+            self.page = None;
+            self.selected = None;
+            self.scroll_selected = false;
+            self.view.clear_views();
+            self.estimate_cache();
+        }
+    }
+
     pub(super) fn publish_history(&mut self, read: Read, first: bool) {
         self.owner_snapshot = Some(history_cache::metadata(read.snapshot()));
         match read {
@@ -236,6 +257,7 @@ impl Tab {
             Read::Page(history, page) => self.replace_history_page(*history, *page, first),
         }
         self.view.preview = None;
+        self.view.initial_history = false;
         self.estimate_cache();
         self.loading = false;
         self.view.published();
@@ -290,6 +312,9 @@ impl Tab {
         self.view.published();
     }
     pub(super) fn history_notice(&self, ctx: &egui::Context) -> String {
+        if self.view.initial_history {
+            return strings::text("HistoryCheckingRefs");
+        }
         if let Some((_, saved_at)) = &self.view.preview {
             return strings::format(
                 if self.loading {

@@ -66,6 +66,7 @@ impl Tab {
         self.sidebar = Default::default();
         self.view.clear_views();
         self.view.preview = None;
+        self.view.initial_history = false;
         self.view.stale = true;
         self.view.validated = None;
         self.view.bytes = 0;

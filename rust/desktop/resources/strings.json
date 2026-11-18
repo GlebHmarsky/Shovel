@@ -176,6 +176,7 @@
   "IdentitySaveFailed": "History is available, but its repository identity could not be saved. Check settings access before exiting.",
   "HistoryCheckingCached": "Showing cached history while checking repository identity…",
   "HistoryRefreshing": "Refreshing asynchronously; the previous page remains visible and may be stale.",
+  "HistoryCheckingRefs": "Checking history against current refs…",
   "HistoryRefreshFailed": "Refresh failed. The previous page remains visible and may be stale. See Repository → Diagnostics; retry with Refresh.",
   "HistoryRefreshCancelled": "Read cancelled. The previous page remains visible and may be stale.",
   "HistoryCached": "Cached history shown. Refresh checks external changes.",

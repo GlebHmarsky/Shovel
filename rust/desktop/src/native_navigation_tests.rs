@@ -52,6 +52,23 @@ impl Scenario {
         })
     }
 
+    fn record_first_history_rows(&mut self) {
+        let event = match self.step {
+            Step::OpenSmall => "cold_small_first_rows",
+            Step::OpenMergeHeavy => "cold_merge_first_rows",
+            _ => return,
+        };
+        let tab = &self.app.tabs[self.app.selected];
+        if !self.layout_recorded && let Some(page) = &tab.page {
+            if tab.view.initial_history {
+                assert!(tab.loading && tab.history.is_none() && tab.observed_snapshot().is_none());
+                assert!(page.next.is_none());
+            }
+            self.record(event);
+            self.layout_recorded = true;
+        }
+    }
+
     fn verify_position(&self) {
         let tab = &self.app.tabs[self.app.selected];
         assert_eq!(tab.id, self.owner_id);
@@ -76,6 +93,7 @@ impl Scenario {
             "native navigation stalled at {:?}",
             self.step
         );
+        self.record_first_history_rows();
         match self.step {
             Step::Start if self.app.initialized => {
                 assert!(self.app.git.is_some() && self.app.tabs.is_empty());

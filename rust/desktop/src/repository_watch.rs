@@ -181,6 +181,7 @@ impl super::Workspace {
                 }
             }
             if changes.history() || fallback {
+                tab.discard_initial_history();
                 tab.view.stale = true;
                 tab.view.external_history_change = true;
                 tab.refresh_again = true;

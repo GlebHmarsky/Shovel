@@ -530,6 +530,61 @@ fn replaced_identity_clears_presentation_and_requires_explicit_reopen() {
 }
 
 #[test]
+fn initial_history_preserves_selection_on_validation_and_clears_on_failure() {
+    let fixture = Fixture::new();
+    let Read::Page(history, page) = read(&fixture.git, &fixture.root, None, false).unwrap() else {
+        panic!("expected a first history page");
+    };
+    let ctx = egui::Context::default();
+    let mut app = workspace();
+    app.tabs.clear();
+    app.selected = app.ensure_tab(fixture.root.clone());
+    let tab = &mut app.tabs[0];
+    tab.loading = true;
+    let id = tab.id;
+    let generation = tab.view.begin();
+    app.sender
+        .send(Event::InitialHistory(id, generation - 1, page.clone()))
+        .unwrap();
+    app.receive(&ctx);
+    assert!(app.tabs[0].page.is_none());
+    app.sender
+        .send(Event::InitialHistory(id, generation, page.clone()))
+        .unwrap();
+    app.receive(&ctx);
+    let tab = &app.tabs[0];
+    assert!(tab.view.initial_history && tab.loading && tab.view.stale);
+    assert!(tab.history.is_none() && tab.observed_snapshot().is_none());
+    assert!(tab.page.as_ref().unwrap().next.is_none());
+    app.sender
+        .send(Event::Failed(id, generation, Failure::interrupted()))
+        .unwrap();
+    app.receive(&ctx);
+    let tab = &mut app.tabs[0];
+    assert!(tab.page.is_none() && tab.selected.is_none() && !tab.view.initial_history);
+    tab.error = None;
+    tab.loading = true;
+    let generation = tab.view.begin();
+    app.sender
+        .send(Event::InitialHistory(id, generation, page.clone()))
+        .unwrap();
+    app.receive(&ctx);
+    let selected = page.entries[50].commit.hash.clone();
+    app.locate(selected.clone(), &ctx);
+    let offset = egui::vec2(0., history_row::HEIGHT * 48.);
+    app.tabs[0].view.offset = offset;
+    app.sender
+        .send(Event::Loaded(id, generation, Read::Page(history, page), false))
+        .unwrap();
+    app.receive(&ctx);
+    let tab = &app.tabs[0];
+    assert_eq!(tab.selected.as_deref(), Some(selected.as_str()));
+    assert_eq!(tab.view.offset, offset);
+    assert!(!tab.loading && !tab.view.initial_history && !tab.view.stale);
+    assert!(tab.observed_snapshot().is_some() && tab.page.as_ref().unwrap().next.is_some());
+}
+
+#[test]
 fn obsolete_results_cannot_publish_or_invalidate_newer_history() {
     let fixture = Fixture::new();
     let ctx = egui::Context::default();

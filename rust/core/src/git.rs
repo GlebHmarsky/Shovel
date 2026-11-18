@@ -423,14 +423,15 @@ impl Git {
         Ok(snapshot)
     }
 
-    /// Load a history view while Git independently confirms the filesystem
-    /// identity's directories and remote configuration. Only the combined
-    /// result can be published or used as a repository snapshot.
+    /// Confirm the worktree and expose an optional first page for reading while
+    /// the refs and remotes are still being checked. Only the returned history
+    /// includes a validated snapshot for repository actions.
     pub fn read_history(
         &self,
         root: &Path,
         identity: &crate::identity::Identity,
         previous_fingerprint: Option<&str>,
+        initial_page: Option<&dyn Fn(&Page)>,
         cancel: &Cancellation,
     ) -> Result<HistoryRead, Error> {
         let mut snapshot = Snapshot::with_directories(
@@ -440,10 +441,15 @@ impl Git {
             identity.common.clone(),
         );
         std::thread::scope(|scope| {
-            let directories = std::thread::Builder::new().spawn_scoped(scope, || {
+            let (confirmed, directory_ready) = std::sync::mpsc::channel();
+            let show_initial = initial_page.is_some();
+            let directories = std::thread::Builder::new().spawn_scoped(scope, move || {
                 let native = self.inspect_directories(root, cancel)?;
                 if native.identity != *identity {
                     return Err(Error::Changed);
+                }
+                if show_initial {
+                    let _ = confirmed.send(());
                 }
                 self.inspect_remotes(root, native, cancel)
             })?;
@@ -452,7 +458,24 @@ impl Git {
                 if previous_fingerprint == Some(snapshot.fingerprint.as_str()) {
                     return Ok(HistoryRead::Unchanged(Box::new(snapshot)));
                 }
-                let (history, page) = self.history_and_first_page(snapshot, cancel)?;
+                let history = self.history(snapshot, cancel)?;
+                let verify_worktree = |page: &Page| {
+                    if let Some(publish) = initial_page
+                        && !page.entries.is_empty()
+                        && directory_ready.recv().is_ok()
+                        && !cancel.is_cancelled()
+                        && crate::identity::read(root).ok().as_ref() == Some(identity)
+                    {
+                        publish(page);
+                    }
+                };
+                let page = self.page_from_observed_refs(
+                    &history,
+                    &Cursor::default(),
+                    history.snapshot.clone(),
+                    Some(&verify_worktree),
+                    cancel,
+                )?;
                 Ok::<_, Error>(HistoryRead::Page(Box::new(history), Box::new(page)))
             })();
             let native = directories
@@ -793,7 +816,7 @@ impl Git {
         if current.fingerprint != history.snapshot.fingerprint {
             return Err(Error::Changed);
         }
-        self.page_from_observed_refs(history, cursor, current, cancel)
+        self.page_from_observed_refs(history, cursor, current, None, cancel)
     }
 
     /// Start the projection from a freshly inspected snapshot. The page read
@@ -805,7 +828,7 @@ impl Git {
     ) -> Result<(History, Page), Error> {
         let history = self.history(snapshot, cancel)?;
         let current = history.snapshot.clone();
-        let page = self.page_from_observed_refs(&history, &Cursor::default(), current, cancel)?;
+        let page = self.page_from_observed_refs(&history, &Cursor::default(), current, None, cancel)?;
         Ok((history, page))
     }
 
@@ -814,6 +837,7 @@ impl Git {
         history: &History,
         cursor: &Cursor,
         mut current: Snapshot,
+        initial_page: Option<&dyn Fn(&Page)>,
         cancel: &Cancellation,
     ) -> Result<Page, Error> {
         let mut args = vec!["log".into(), "--topo-order".into()];
@@ -848,10 +872,18 @@ impl Git {
                 PAGE_SIZE + 1 + history.hidden.len(),
             )?
         };
+        let page = Self::project_page(history, cursor, &raw)?;
+        if let Some(publish) = initial_page {
+            publish(&page);
+        }
         self.refresh_refs(&mut current, cancel)?;
         if current.fingerprint != history.snapshot.fingerprint {
             return Err(Error::Changed);
         }
+        Ok(page)
+    }
+
+    fn project_page(history: &History, cursor: &Cursor, raw: &[Commit]) -> Result<Page, Error> {
         let mut projected = Vec::new();
         for (raw_index, commit) in raw.iter().enumerate() {
             if history.hidden.contains(&commit.hash) {

@@ -108,6 +108,28 @@ The merge-heavy fixture improved in all seven pairs. The fresh Commit status and
 
 All 19 process checks, four core history checks, nine desktop history checks and four Commit checks passed. The process checks cover priority under contention, cancellation, and independent command capacity. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 35.54 seconds on source fingerprint `332C93E2ED356ED8D6EF4DF6F2552B3FD71FAD186DE478A36E7B27A85A3F4472`.
 
+### Show cold history during final verification
+
+A new tab can display the first history page once native Git confirms the worktree and reads the rows. Shovel labels the page while checking current refs. Selection, scroll and commit metadata are available during that check. Paging, comparison reads, repository ownership and persistence require the fully validated history. Ref changes and verification failures discard the pending page, and the tab's generation rejects results from older requests. Validation keeps the selected commit and scroll position when the rows still contain their anchors.
+
+Five interleaved pairs compared baseline `c65bb48` and the changed native Windows test executable. Both used the release profile, Windows x64 target and static CRT. The app was initialized at the start of each timer. Each launch used an isolated profile and the same disposable small and merge-heavy repositories. The test used command-line-driven workspace actions to check row layout, retained history position and Commit window ownership.
+
+| Native scenario | Baseline median (range) | Changed median (range) |
+| --- | ---: | ---: |
+| Small cold open to readable rows | 618 ms (549–745) | 507 ms (391–734) |
+| Small cold open to fully verified history | 618 ms (549–745) | 672 ms (556–1,131) |
+| Merge-heavy cold open to readable rows | 1,309 ms (960–1,599) | 717 ms (607–1,042) |
+| Merge-heavy cold open to fully verified history | 1,309 ms (960–1,599) | 1,034 ms (1,000–1,566) |
+| Retained tab to first layout | 7 ms (6–12) | 8 ms (7–9) |
+| Warm reopen to first layout | 8 ms (8–10) | 8 ms (8–10) |
+| Commit window to first layout | 124 ms (105–310) | 131 ms (111–273) |
+| Commit window to fresh status | 1,857 ms (1,541–2,199) | 1,733 ms (1,590–2,576) |
+| Explicit refresh to validated layout | 550 ms (377–950) | 490 ms (466–767) |
+
+The changed build showed rows ahead of validation in every run. Against the baseline, first rows appeared sooner in four of five small-repository pairs and all five merge-heavy pairs. The small-repository median for full verification rose by 54 ms. The 400 ms target remains open. Raw runs and hashes are in `Build/navigation-optimized-paired-{before,after}.log` and `Build/navigation-optimized-{baseline,initial}.sha256`.
+
+Five core history checks, ten desktop history checks, eleven cache checks, three repository watcher checks and the Windows path alias check passed. Fixtures advanced a ref between first display and verification, tested an overridden worktree, and exercised selection and scroll retention. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 38.19 seconds on source fingerprint `4693714E1556C066F2A410ACB325F4D3401F53E7B91854973AC8022B858EFB23`.
+
 
 ## Windows Rust 0.51.0 local build checks
 
