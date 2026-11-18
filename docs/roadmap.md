@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Repository menu and restored tabs in Rust 0.51.6
+
+Restored tabs warm after the selected repository has a live page and foreground reads settle. The held-read fixture verified that the second tab stayed in the background, then retained its history allocation and initial comparison during selection. One offscreen selection reached its first layout in 86.5 ms on the disposable 610-commit fixture. Cold opening and live timings on the owner's repositories remain unmeasured.
+
+The tag shortcut kept its original worktree after switching tabs. Native Git exercised tags, linked worktrees, patch application, Git Flow feature creation and merge, bisect, local Git LFS configuration and tracking changes. Live LFS transfers and desktop appearance remain unverified. Seventeen focused checks, all-target Clippy, and `git diff --check` passed. All 18 bounded smoke checks passed in 39.29 seconds on fingerprint `727005E9AF90290538B1E7CCDDEF2EE3D16DB0309DB8B52A01A0CBA03695E26B`.
+
 ## Local Changes in Rust 0.51.5
 
 Local Changes consumes the available rows from the selected repository's existing status scan while the editor independently verifies its worktree. The offscreen fixture opened Local Changes with the fresh scan held and confirmed that the cached rows were available before it completed. A second fixture held a new file read and a status refresh and confirmed that the previous diff remained visible at the same vertical position. It also exercised retention after a file became clean. A verified removal cleared the old diff. Shift staging and unstaging changed the actual index for both files. Git LFS pointers reported the expected extensions and logical byte counts on both sides without text controls.

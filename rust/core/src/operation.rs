@@ -52,6 +52,7 @@ fn git_verb(arguments: &[OsString]) -> Option<&'static str> {
         "add",
         "am",
         "apply",
+        "bisect",
         "branch",
         "checkout",
         "cherry-pick",
@@ -60,7 +61,9 @@ fn git_verb(arguments: &[OsString]) -> Option<&'static str> {
         "commit",
         "config",
         "fetch",
+        "flow",
         "init",
+        "lfs",
         "merge",
         "mv",
         "pull",
@@ -114,7 +117,8 @@ impl Completed {
             && self
                 .updated
                 .as_ref()
-                .is_ok_and(|s| self.preserves_worktree || s.operations.is_empty())
+                .is_ok_and(|s| self.preserves_worktree || s.operations.is_empty()
+                    || (s.operations == ["bisect"] && self.commands.last().is_some_and(|command| command.verb == Some("bisect"))))
     }
 }
 

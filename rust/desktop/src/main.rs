@@ -25,6 +25,7 @@ mod path_text;
 mod read_workers;
 mod remotes;
 mod repository_init;
+mod repository_menu;
 mod repository_tools;
 mod repository_watch;
 mod settings_ui;
@@ -178,6 +179,7 @@ struct Workspace {
     draft_store: Option<shovel_core::drafts::Store>,
     operations: operations::Controller,
     branches: branches::Dialogs,
+    repository_dialog: Option<repository_menu::Dialog>,
     remotes: remotes::Dialogs,
     initialization: repository_init::Controller,
     stash_views: Vec<stashes::View>,
@@ -259,6 +261,7 @@ impl Workspace {
             draft_store: None,
             operations: Default::default(),
             branches: Default::default(),
+            repository_dialog: None,
             remotes: Default::default(),
             initialization: Default::default(),
             stash_views: vec![],
@@ -417,6 +420,9 @@ impl Workspace {
             return;
         }
         tab.locate_cancel.cancel();
+        if foreground {
+            tab.view.prewarm = false;
+        }
         tab.locating = None;
         tab.loading = true;
         tab.divergence.invalidate();
@@ -763,7 +769,7 @@ impl Workspace {
                             page: None,
                             selected: None,
                             previous: vec![],
-                            view: Default::default(),
+                            view: history_view::State::restored(),
                             loading: false,
                             refresh_again: false,
                             locating: None,
@@ -869,6 +875,9 @@ impl Workspace {
                     };
                     let snapshot = read.snapshot();
                     self.remember_identity(&owner_path, &snapshot.identity.fingerprint);
+                    if self.tabs.get(self.selected).is_some_and(|tab| tab.id == id) {
+                        self.remember_recent_repository(&owner_path);
+                    }
                     let mut reopen_inline = false;
                     let mut reopen_failed = false;
                     for editor in &mut self.editors {
@@ -912,6 +921,7 @@ impl Workspace {
                             !watch.covers(&snapshot.identity.fingerprint)
                         });
                         tab.publish_history(read, first);
+                        let prewarmed = std::mem::take(&mut tab.view.prewarm);
                         if watch_mismatch {
                             tab.view.watch = None;
                             tab.view.stale = true;
@@ -940,6 +950,9 @@ impl Workspace {
                                 ctx,
                                 &self.read_workers,
                             );
+                            if prewarmed {
+                                prime_comparison(tab, git, &self.settings, &self.read_workers, ctx);
+                            }
                         }
                     }
                     if !self.closing
@@ -1330,6 +1343,7 @@ impl Workspace {
             self.refresh_at(index, ctx);
         }
         self.poll_tab_markers(ctx);
+        self.warm_restored_tabs(ctx);
         if self.preferences_dirty && !self.saving {
             self.save_preferences(ctx);
         }
@@ -1526,7 +1540,9 @@ impl Workspace {
             self.notice = Some(strings::text("RustGitSelecting"));
             return false;
         }
-        if self.initialization.picking || self.repository_picker.is_some() {
+        if self.initialization.picking || self.repository_picker.is_some()
+            || self.repository_dialog.as_ref().is_some_and(repository_menu::Dialog::picking)
+        {
             self.notice = Some(strings::text("RustRepositoryChooserOpen"));
             return false;
         }
@@ -1798,6 +1814,21 @@ fn theme(ctx: &egui::Context, light: bool) {
     ui_scale::install(ctx);
     workspace_style::apply(ctx, light);
 }
+fn prime_comparison(tab: &mut Tab, git: &Arc<Git>, settings: &Settings, workers: &read_workers::Workers, ctx: &egui::Context) {
+    if tab.comparison.is_some() {
+        return;
+    }
+    let Some(commit) = tab.page.as_ref().and_then(|page| page.entries.iter()
+        .find(|entry| Some(&entry.commit.hash) == tab.selected.as_ref()))
+    else { return; };
+    let mut pane = comparison::Pane::new(tab.path.clone(), git.clone()).with_read_workers(workers.clone());
+    pane.details_index = settings.get("RustDetailsTab").and_then(|value| value.as_u64()).unwrap_or(0).min(1) as usize;
+    pane.view.side_by_side = settings.get("DiffSideBySide").and_then(|value| value.as_bool()).unwrap_or(false);
+    pane.view.font_size = settings.get("DiffFontSize").and_then(|value| value.as_f64()).unwrap_or(12.) as f32;
+    pane.select(&commit.commit, ctx);
+    tab.comparison = Some(pane);
+}
+
 impl eframe::App for Workspace {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.receive(ctx);
@@ -1826,6 +1857,7 @@ impl eframe::App for Workspace {
             || self.operations.modal_open()
             || self.remotes.is_open()
             || self.branches.is_open()
+            || self.repository_dialog.is_some()
             || self.stash_views.iter().any(|view| view.open);
         let inline_prompt = self
             .inline_editor()
@@ -1856,8 +1888,8 @@ impl eframe::App for Workspace {
         if ctx.input(|i| i.viewport().close_requested()) {
             self.close(&ctx);
         }
-        if !shortcuts_blocked && ctx.input(|i| i.key_pressed(egui::Key::F5)) {
-            self.refresh(&ctx);
+        if !shortcuts_blocked {
+            self.repository_shortcuts(&ctx);
         }
         if !shortcuts_blocked
             && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageDown))
@@ -1972,6 +2004,20 @@ impl eframe::App for Workspace {
                             self.pick_repository(&ctx);
                             ui.close();
                         }
+                        let recent = self.recent_repositories();
+                        ui.add_enabled_ui(!recent.is_empty(), |ui| {
+                            ui.menu_button(strings::text("RecentRepositories"), |ui| {
+                                for path in recent {
+                                    let allowed = self.tabs.len() < 20 || self.tabs.iter().any(|tab| tab.matches_path(&path));
+                                    if ui.add_enabled(allowed, egui::Button::new(path.to_string_lossy()).truncate())
+                                        .on_disabled_hover_text(strings::text("TooManyRepositories")).clicked()
+                                    {
+                                        self.open(path, &ctx);
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        });
                         if ui
                             .add_enabled(
                                 !self.tabs.is_empty(),
@@ -2092,112 +2138,29 @@ impl eframe::App for Workspace {
                             ui.label(tab.history_notice(&ctx));
                         }
                     });
-                    ui.menu_button(strings::text("RepositoryMenu"), |ui| {
-                        if ui
-                            .add_enabled(
-                                self.can_choose_git(),
-                                egui::Button::new(strings::text("ChooseGit")),
-                            )
-                            .on_disabled_hover_text(strings::text("RustGitSelectionBusy"))
-                            .clicked()
-                        {
-                            self.choose_git(&ctx);
+                    ui.menu_button(strings::text("RepositoryMenu"), |ui| self.repository_menu(ui));
+                    ui.menu_button(strings::text("WindowMenu"), |ui| {
+                        if ui.button(strings::text("WindowMinimize")).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                             ui.close();
                         }
-                        ui.separator();
-                        let tab = self.tabs.get(self.selected);
-                        self.remotes.menu(
-                            ui,
-                            tab.and_then(|t| t.history.as_ref()).map(|h| &h.snapshot),
-                            tab.map(|t| &t.remotes),
-                            None,
-                        );
-                        ui.separator();
-                        if ui
-                            .add_enabled(
-                                self.git.is_some()
-                                    && self.tabs.len() < 20
-                                    && !self.initialization.busy,
-                                egui::Button::new(strings::text("NewRepository")),
-                            )
-                            .on_hover_text(strings::text(if self.git.is_none() {
-                                "GitErrorMissingGit"
-                            } else if self.tabs.len() >= 20 {
-                                "TooManyRepositories"
-                            } else if self.initialization.busy {
-                                "RustRepositoryCreationBusy"
-                            } else {
-                                "ActionExplainInit"
-                            }))
-                            .clicked()
-                        {
-                            self.initialization.open();
+                        let maximized = ctx.input(|input| input.viewport().maximized.unwrap_or(false));
+                        if ui.button(strings::text(if maximized { "WindowRestore" } else { "WindowMaximize" })).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
                             ui.close();
                         }
-
-                        if ui
-                            .add_enabled(
-                                self.git.is_some()
-                                    && self.tabs.len() < 20
-                                    && !self.initialization.busy,
-                                egui::Button::new(strings::text("ActionTitleClone")),
-                            )
-                            .on_hover_text(strings::text(if self.git.is_none() {
-                                "GitErrorMissingGit"
-                            } else if self.tabs.len() >= 20 {
-                                "TooManyRepositories"
-                            } else if self.initialization.busy {
-                                "RustRepositoryCreationBusy"
-                            } else {
-                                "CloneReady"
-                            }))
-                            .clicked()
-                        {
-                            self.initialization.open_clone();
+                        if ui.button(strings::text("WindowClose")).clicked() {
+                            self.close(&ctx);
                             ui.close();
                         }
-
-                        if ui
-                            .add_enabled(
-                                !self.tabs.is_empty(),
-                                egui::Button::new(strings::text("RefreshRepository")),
-                            )
-                            .clicked()
-                        {
-                            self.refresh(&ctx);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.tabs
-                                    .get(self.selected)
-                                    .is_some_and(|t| t.history.is_some()),
-                                egui::Button::new(strings::text("Stashes")),
-                            )
-                            .clicked()
-                        {
-                            self.open_stashes(None);
-                            ui.close();
-                        }
-                    });
-                    ui.add_enabled_ui(!self.tabs.is_empty(), |ui| {
-                        ui.menu_button(strings::text("WindowMenu"), |ui| {
-                            for (index, tab) in self.tabs.iter().enumerate() {
-                                if ui
-                                    .selectable_label(
-                                        index == self.selected,
-                                        tab.path.to_string_lossy(),
-                                    )
-                                    .clicked()
-                                {
-                                    ui.close();
-                                    self.select_tab(index, &ctx);
-                                    break;
-                                }
-                            }
-                        });
                     });
                     ui.menu_button(strings::text("HelpMenu"), |ui| {
+                        for key in ["HelpReleaseNotes", "HelpShortcuts"] {
+                            if ui.button(strings::text(key)).clicked() {
+                                repository_menu::open_help(&ctx, key);
+                                ui.close();
+                            }
+                        }
                         if ui.button(strings::text("RustUpdatesTitle")).clicked() {
                             self.updater.open_window(&ctx);
                             ui.close();
@@ -2490,7 +2453,11 @@ impl eframe::App for Workspace {
                             }
                         });
                     } else {
-                        ui.label(strings::text("RecoveryUnavailable"));
+                        ui.label(strings::text(if snapshot.operations == ["bisect"] {
+                            "RepositoryBisectActive"
+                        } else {
+                            "RecoveryUnavailable"
+                        }));
                     }
                 }
             });
@@ -2545,14 +2512,17 @@ impl eframe::App for Workspace {
             }
         }
         egui::Panel::top("repository-tabs")
-            .frame(workspace_style::pane(palette.tab_strip, 4, 0))
+            .frame(workspace_style::pane(
+                if palette.high_contrast { palette.tab_strip } else { egui::Color32::from_gray(16) },
+                0, 0,
+            ))
             .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.x = 0.;
                 let count = self.tabs.len();
                 let width = if count == 0 {
                     0.
                 } else {
-                    (ui.available_width() - ui.spacing().item_spacing.x * (count - 1) as f32)
-                        / count as f32
+                    ui.available_width() / count as f32
                 };
                 let mut selected = None;
                 let pointer = ctx.input(|i| {
@@ -2568,36 +2538,42 @@ impl eframe::App for Workspace {
                         let name = path_text::PathText::new(&ctx, &name);
                         let root = tab.path.to_string_lossy();
                         let root = path_text::PathText::new(&ctx, &root);
-                        let label = RichText::new(name.visual()).color(palette.text);
                         let marker = tab_markers::color(&self.settings, &tab.path);
                         let status = if self.git.is_some() {
                             self.tab_markers.status(tab)
                         } else {
                             tab_markers::Status::Unavailable
                         };
-                        let button = if let Some(color) = marker {
-                            egui::Button::new((tab_markers::marker(color, status), label))
-                        } else {
-                            egui::Button::new(label)
-                        };
-                        let response = ui.add_sized(
-                            [width, 26.],
-                            button
-                                .truncate()
-                                .sense(egui::Sense::click_and_drag())
-                                .selected(index == self.selected)
-                                .fill(if index == self.selected {
-                                    palette.sidebar
-                                } else {
-                                    palette.tab_strip
-                                })
-                                .corner_radius(egui::CornerRadius {
-                                    nw: 5,
-                                    ne: 5,
-                                    sw: 0,
-                                    se: 0,
-                                }),
-                        );
+                        let (rect, response) = ui.allocate_exact_size(egui::vec2(width,26.), egui::Sense::click_and_drag());
+                        let active = index == self.selected;
+                        if active || response.hovered() || response.has_focus() {
+                            ui.painter().rect_filled(rect, 0., if active { palette.selected } else { palette.hover });
+                        }
+                        let mut title_rect = rect.shrink2(egui::vec2(4., 0.));
+                        if marker.is_some() && width > 20. {
+                            title_rect.min.x = rect.left() + 19.;
+                            if width >= 64. { title_rect.max.x = rect.right() - 19.; }
+                        }
+                        let color = if palette.high_contrast && (active || response.hovered() || response.has_focus()) {
+                            palette.selection_text
+                        } else if palette.high_contrast { palette.text } else { egui::Color32::from_gray(225) };
+                        let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+                        let mut job = egui::text::LayoutJob::simple_singleline(name.visual().to_owned(), egui::FontId::proportional(13.), color);
+                        job.wrap.max_width = title_rect.width().max(1.);
+                        job.wrap.max_rows = 1;
+                        let galley = painter.layout_job(job);
+                        painter.galley(title_rect.center() - galley.size()/2., galley, color);
+                        response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active, name.spoken()));
+                        if let Some(color) = marker {
+                            tab_markers::paint_marker(ui.painter(), response.rect.left_center() + egui::vec2(10., 0.), color, status);
+                        }
+                        if index + 1 < count {
+                            ui.painter().vline(
+                                response.rect.right() - 0.5,
+                                (response.rect.top() + 4.)..=(response.rect.bottom() - 4.),
+                                egui::Stroke::new(1., palette.border),
+                            );
+                        }
                         ctx.accesskit_node_builder(response.id, |node| {
                             if name.reordered() {
                                 node.set_label(name.spoken());
@@ -3143,25 +3119,7 @@ impl eframe::App for Workspace {
                     if tab.comparison.is_none()
                         && let Some(git) = &self.git
                     {
-                        let mut pane = comparison::Pane::new(tab.path.clone(), git.clone())
-                            .with_read_workers(self.read_workers.clone());
-                        pane.details_index = self
-                            .settings
-                            .get("RustDetailsTab")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0)
-                            .min(1) as usize;
-                        pane.view.side_by_side = self
-                            .settings
-                            .get("DiffSideBySide")
-                            .and_then(serde_json::Value::as_bool)
-                            .unwrap_or(false);
-                        pane.view.font_size = self
-                            .settings
-                            .get("DiffFontSize")
-                            .and_then(serde_json::Value::as_f64)
-                            .unwrap_or(12.) as f32;
-                        tab.comparison = Some(pane);
+                        prime_comparison(tab, git, &self.settings, &self.read_workers, &ctx);
                     }
                     if let Some(pane) = &mut tab.comparison {
                         pane.view.font_size = self
@@ -3509,6 +3467,8 @@ impl eframe::App for Workspace {
                 .editors
                 .iter()
                 .any(|e| e.blocks_exit() || e.unsaved_conflict() || e.native_picker_open());
+        self.show_repository_dialog(&ctx);
+        repository_menu::show_help(&ctx);
         self.updater
             .show(&ctx, update_blocked, self.external_tools_opened);
         if self.updater.restart_requested && !self.closing {
@@ -3600,6 +3560,7 @@ mod tests {
             draft_store: None,
             operations: Default::default(),
             branches: Default::default(),
+            repository_dialog: None,
             remotes: Default::default(),
             initialization: Default::default(),
             stash_views: vec![],
@@ -3703,6 +3664,7 @@ mod tests {
             }),
             operations: Default::default(),
             branches: Default::default(),
+            repository_dialog: None,
             remotes: Default::default(),
             initialization: Default::default(),
             stash_views: vec![],

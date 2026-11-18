@@ -61,6 +61,7 @@ pub enum Stage {
     UpdatingBranch,
     UpdatingRemote,
     UpdatingSubmodule,
+    RepositoryCommand,
     Resetting,
     Reverting,
     Recovering,

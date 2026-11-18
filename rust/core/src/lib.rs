@@ -49,6 +49,8 @@ pub mod process;
 pub mod recovery;
 #[cfg(windows)]
 pub mod remotes;
+#[cfg(windows)]
+pub mod repository_actions;
 pub mod scheduler;
 #[cfg(windows)]
 pub mod sidebar;

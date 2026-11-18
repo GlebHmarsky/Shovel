@@ -2,6 +2,14 @@
 
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
+## Repository menu and tab warming (0.51.6)
+
+Repository tabs share a dark strip with thin dividers. Markers sit at the left edge of their tabs. File lists recent repositories, Window controls the current window, and Help opens keyboard shortcuts and bundled release notes.
+
+The Repository menu opens Fetch, Pull and Push options, saves a stash, and creates a branch, tag or linked worktree. Apply Patch changes working files through native Git. Bisect starts from reviewed good and bad revisions and can mark, skip or end the session. Git Flow configures production and development branches and starts or merges a named feature. The merged feature branch stays available. Git LFS uses the configured Git installation for local setup, fetch, pull and tracking patterns.
+
+After startup verifies the active repository and its initial reads settle, Shovel warms restored tabs one at a time. The background read prepares the first history page, sidebar data and the initial commit comparison. Click a warmed tab to use its existing page immediately.
+
 ## Repository workspace (0.51.3)
 
 The current branch and operation progress share one line below the repository name. Local Changes counts distinct changed paths, including staged, unstaged, untracked and conflicted files. The count is read off-thread for the selected repository and updates when its worktree or index changes. In the Commit window layout, the toolbar Commit button shows the count when there are changes.

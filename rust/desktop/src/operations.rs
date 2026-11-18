@@ -197,6 +197,7 @@ enum LocalAction {
     Stash(shovel_core::stashes::Action),
     Remote(shovel_core::remotes::Action),
     Submodule(shovel_core::submodules::Action),
+    Repository(shovel_core::repository_actions::Action),
 }
 impl LocalAction {
     fn key(&self) -> String {
@@ -213,6 +214,7 @@ impl LocalAction {
             Self::Recovery(action) => format!("recovery:{action:?}"),
             Self::Stash(action) => format!("stash:{action:?}"),
             Self::Submodule(action) => format!("submodule:{action:?}"),
+            Self::Repository(action) => format!("repository:{:x}", Sha256::digest(format!("{action:?}"))),
             Self::Remote(action) => format!(
                 "remote:{:x}",
                 Sha256::digest(format!("{action:?}").as_bytes())
@@ -1088,6 +1090,12 @@ impl Controller {
             ctx,
         );
     }
+    pub(super) fn submit_repository_action(
+        &mut self, label: &'static str, action: shovel_core::repository_actions::Action,
+        snapshot: &Snapshot, git: Arc<Git>, scheduler: &Scheduler, ctx: &egui::Context,
+    ) {
+        self.submit_local(label, LocalAction::Repository(action), snapshot, git, scheduler, ctx);
+    }
     fn submit_local(
         &mut self,
         label: &'static str,
@@ -1131,6 +1139,23 @@ impl Controller {
                     let _ = progress_sender.send(Event::BranchStage(sequence, stage));
                     progress_ctx.request_repaint();
                 });
+                let start_authentication = || {
+                    let helper = match &helper {
+                        Some(path) => path.clone(),
+                        None => std::env::current_exe()
+                            .map_err(|_| text("ActionAskPassMissing"))?
+                            .with_file_name("ShovelAskPass.exe"),
+                    };
+                    let prompt_sender = sender.clone();
+                    let prompt_ctx = ctx.clone();
+                    authentication::Session::start(
+                        &helper,
+                        Arc::new(move |prompt| {
+                            let _ = prompt_sender.send(Event::Prompt(sequence, prompt));
+                            prompt_ctx.request_repaint();
+                        }),
+                    ).map_err(|_| text("ActionAskPassMissing"))
+                };
                 let result = (|| {
                     progress(shovel_core::branches::Stage::Validating);
                     let result = if let LocalAction::Recovery(action) = &action {
@@ -1143,30 +1168,12 @@ impl Controller {
                         let prepared = git
                             .prepare_local(&captured, true, &Cancellation::default())
                             .map_err(|e| error_log(&e))?;
-                        let auth = if action.operation == shovel_core::submodules::Operation::Update
-                        {
-                            let helper = match &helper {
-                                Some(path) => path.clone(),
-                                None => std::env::current_exe()
-                                    .map_err(|_| text("ActionAskPassMissing"))?
-                                    .with_file_name("ShovelAskPass.exe"),
-                            };
-                            let prompt_sender = sender.clone();
-                            let prompt_ctx = ctx.clone();
-                            Some(
-                                authentication::Session::start(
-                                    &helper,
-                                    Arc::new(move |prompt| {
-                                        let _ = prompt_sender.send(Event::Prompt(sequence, prompt));
-                                        prompt_ctx.request_repaint();
-                                    }),
-                                )
-                                .map_err(|_| text("ActionAskPassMissing"))?,
-                            )
-                        } else {
-                            None
-                        };
+                        let auth = (action.operation == shovel_core::submodules::Operation::Update)
+                            .then(start_authentication).transpose()?;
                         git.execute_submodule(&prepared, action, auth.as_ref(), Some(progress))
+                    } else if let LocalAction::Repository(action) = &action {
+                        let auth = action.needs_authentication().then(start_authentication).transpose()?;
+                        git.execute_repository_action(&captured, action, auth.as_ref(), Some(progress))
                     } else {
                         let unchanged_refs = !matches!(
                             action,
@@ -1185,7 +1192,8 @@ impl Controller {
                             LocalAction::Recovery(_)
                             | LocalAction::Stash(_)
                             | LocalAction::Remote(_)
-                            | LocalAction::Submodule(_) => unreachable!(),
+                            | LocalAction::Submodule(_)
+                            | LocalAction::Repository(_) => unreachable!(),
                         }
                     };
                     result
@@ -1262,7 +1270,7 @@ impl Controller {
                             Stage::DroppingStash => "ActionTitleStashDrop",
                             Stage::UpdatingBranch => "ActionStageUpdatingBranch",
                             Stage::UpdatingRemote => "RemoteManageTitle",
-                            Stage::UpdatingSubmodule => run.label,
+                            Stage::UpdatingSubmodule | Stage::RepositoryCommand => run.label,
                             Stage::Resetting => "ActionStageResetting",
                             Stage::Reverting => "ActionStageReverting",
                             Stage::Recovering => "ActionStageRecovering",

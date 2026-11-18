@@ -86,6 +86,27 @@ impl Tab {
 }
 
 impl Workspace {
+    pub(super) fn recent_repositories(&self) -> Vec<PathBuf> {
+        self.settings.get("RecentRepositoryPaths")
+            .and_then(serde_json::Value::as_array)
+            .map(|paths| paths.iter().filter_map(serde_json::Value::as_str).take(12).map(PathBuf::from).collect())
+            .unwrap_or_else(|| self.settings.repositories().into_iter().take(12).collect())
+    }
+
+    pub(super) fn remember_recent_repository(&mut self, path: &std::path::Path) {
+        let mut recent = self.recent_repositories();
+        if self.settings.get("RecentRepositoryPaths").is_some()
+            && recent.first().is_some_and(|previous| Self::same_path(previous, path))
+        {
+            return;
+        }
+        recent.retain(|previous| !Self::same_path(previous, path));
+        recent.insert(0, path.to_owned());
+        recent.truncate(12);
+        self.settings.set("RecentRepositoryPaths", serde_json::json!(recent));
+        self.preferences_dirty = true;
+    }
+
     /// Adjacent paths in reversed-component order share the longest suffix.
     /// Rebuild on membership changes so ordinary frames only read the label.
     pub(super) fn update_tab_names(&mut self) {
@@ -150,6 +171,10 @@ impl Workspace {
             previous.view.reopen_commit_owner = None;
         }
         self.selected = index;
+        if self.tabs[index].history.is_some() && !self.tabs[index].view.identity_blocked {
+            let path = self.tabs[index].path.clone();
+            self.remember_recent_repository(&path);
+        }
         self.tab_markers.invalidate(self.tabs[index].id);
         self.tabs[index].view.last_use = Some(std::time::Instant::now());
         egui::Popup::close_all(ctx);

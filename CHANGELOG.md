@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.51.6 - 2026-11-19
+
+- Use square, contiguous repository tabs on a dark strip with left-aligned markers and thin dividers.
+- Put recent repositories in File, window controls in Window, and release notes and keyboard shortcuts in Help.
+- Add Repository menu shortcuts and commands for tags, linked worktrees, patch application, bisect, Git Flow features, and Git LFS.
+- Warm restored tabs one at a time after the active repository is ready, including the initial commit comparison.
+
 ## Rust 0.51.5 - 2026-11-19
 
 - Use matching arrows for Fetch, Pull, and Push, with a hollow Fetch arrow and an upward Push arrow.

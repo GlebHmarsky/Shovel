@@ -314,10 +314,8 @@ pub fn action_with_count(
             ]],
             "Commit" => &[&[(2., 10.), (7., 15.), (18., 3.)]],
             "BranchToolbar" => &[
-                &[(5., 2.), (5., 18.)],
-                &[(5., 12.), (8., 9.), (13., 9.), (15., 7.), (15., 3.)],
-                &[(11., 4.), (19., 4.)],
-                &[(15., 0.), (15., 8.)],
+                &[(5., 6.), (5., 15.)],
+                &[(5., 13.), (8., 10.), (12., 10.), (15., 8.), (15., 6.)],
             ],
             "Stashes" => &[
                 &[(2., 7.), (10., 3.), (18., 7.), (10., 11.), (2., 7.)],
@@ -328,6 +326,11 @@ pub fn action_with_count(
         };
         if matches!(key, "Fetch" | "Pull" | "Push") {
             network_arrow(ui.painter(), origin, color, key == "Fetch", key == "Push");
+        }
+        if key == "BranchToolbar" {
+            for (x, y) in [(5., 3.5), (5., 17.5), (15., 3.5)] {
+                ui.painter().circle_stroke(origin + egui::vec2(x,y), 2.4, Stroke::new(1.5, color));
+            }
         }
         for path in paths {
             let points = path

@@ -13,6 +13,7 @@ struct SavedView {
 #[derive(Default)]
 pub(super) struct State {
     pub generation: u64,
+    pub prewarm: bool,
     pub preview: Option<(shovel_core::git::Snapshot, chrono::DateTime<chrono::Utc>)>,
     pub initial_history: bool,
     pub last_use: Option<Instant>,
@@ -30,6 +31,9 @@ pub(super) struct State {
     views: BTreeMap<usize, SavedView>,
 }
 impl State {
+    pub(super) fn restored() -> Self {
+        Self { prewarm: true, ..Self::default() }
+    }
     pub fn remember(&mut self, page: Option<&Page>, selected: &Option<String>) {
         if let Some(page) = page {
             self.views.insert(
@@ -173,6 +177,29 @@ pub(super) fn read_page(
     result.map_err(Into::into)
 }
 impl Workspace {
+    pub(super) fn warm_restored_tabs(&mut self, ctx: &egui::Context) {
+        if self.closing || self.pending_exit || self.confirm_exit_without_save
+            || self.git_selection.busy() || self.scheduler.has_accepted_work()
+            || self.tabs.iter().any(|tab| tab.loading || tab.locating.is_some())
+        {
+            return;
+        }
+        let Some(active) = self.tabs.get(self.selected) else { return; };
+        let Some(validated) = active.view.validated.filter(|_| active.history.is_some()) else { return; };
+        let Some(id) = self.tabs.iter().find(|tab| {
+            tab.id != active.id && tab.view.prewarm && tab.page.is_none()
+                && tab.error.is_none() && !tab.view.identity_blocked
+        }).map(|tab| tab.id) else { return; };
+        let wait = std::time::Duration::from_millis(300).saturating_sub(validated.elapsed());
+        if !wait.is_zero() {
+            ctx.request_repaint_after(wait);
+        } else if self.read_workers.idle() {
+            self.refresh_owner(id, ctx);
+        } else {
+            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        }
+    }
+
     pub(super) fn activate_history(&mut self, index: usize, ctx: &egui::Context) {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
             return;

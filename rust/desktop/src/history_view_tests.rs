@@ -88,6 +88,41 @@ pub(crate) fn wait(app: &mut Workspace, ctx: &egui::Context) {
     }
 }
 
+#[test]
+fn restored_tab_prewarms_after_the_active_history_and_keeps_its_page_when_selected() {
+    let first = Fixture::new();
+    let second = Fixture::new();
+    let ctx = egui::Context::default();
+    let mut app = first.app(&ctx);
+    let active = app.tabs[app.selected].id;
+    let index = app.ensure_tab(second.root.clone());
+    app.tabs[index].view.prewarm = true;
+    let (started, release) = crate::history_cache::tests::hold_read(second.root.clone());
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        app.receive(&ctx);
+        if started.try_recv().is_ok() { break; }
+        assert!(Instant::now() < deadline, "restored history read did not start");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(app.tabs[app.selected].id, active);
+    assert!(app.tabs[app.selected].history.is_some());
+    assert!(app.tabs[index].loading && app.tabs[index].page.is_none());
+    release.send(()).unwrap();
+    loop {
+        app.receive(&ctx);
+        if app.tabs[index].comparison.as_ref().is_some_and(|pane| !pane.is_loading()) { break; }
+        assert!(Instant::now() < deadline, "restored comparison did not warm");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let foreground = app.tabs[index].page.as_ref().unwrap().entries.as_ptr();
+    let switched = Instant::now();
+    app.select_tab(index, &ctx);
+    paint(&mut app, &ctx, vec![]);
+    assert_eq!(app.tabs[index].page.as_ref().unwrap().entries.as_ptr(), foreground);
+    println!("warm restored-tab first layout after selection: {:?}", switched.elapsed());
+}
+
 // Run with --ignored --nocapture and SHOVEL_NAVIGATION_FIXTURES pointing to a
 // disposable parent containing Small and Merge-20k repositories and gitconfig.
 #[test]

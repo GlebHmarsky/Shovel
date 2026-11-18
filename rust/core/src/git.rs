@@ -1007,17 +1007,18 @@ fn bounded_file(path: &Path, limit: usize) -> Result<Vec<u8>, Error> {
     }
     Ok(bytes)
 }
-const OPERATION_MARKERS: [(&str, &str); 6] = [
+const OPERATION_MARKERS: [(&str, &str); 7] = [
     ("MERGE_HEAD", "merge"),
     ("rebase-merge", "rebase"),
     ("rebase-apply", "rebase-apply"),
     ("CHERRY_PICK_HEAD", "cherry-pick"),
     ("REVERT_HEAD", "revert"),
     ("sequencer", "sequencer"),
+    ("BISECT_START", "bisect"),
 ];
 
 fn worktree_has_unfinished_operation(root: &Path) -> std::io::Result<bool> {
-    for name in OPERATION_MARKERS.map(|(path, _)| path).into_iter().chain(["BISECT_START"]) {
+    for name in OPERATION_MARKERS.map(|(path, _)| path) {
         match fs::symlink_metadata(root.join(name)) {
             Ok(_) => return Ok(true),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}

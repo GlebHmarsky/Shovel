@@ -75,10 +75,13 @@ impl Status {
 }
 
 pub(super) fn marker<'a>(color: Color, status: Status) -> egui::Atom<'a> {
-    let (_, _, color) = color.properties();
     egui::Atom::paint((14., 14.), move |ui, args| {
-        let center = args.rect.center();
-        let painter = ui.painter();
+        paint_marker(ui.painter(), args.rect.center(), color, status);
+    })
+}
+
+pub(super) fn paint_marker(painter: &egui::Painter, center: egui::Pos2, color: Color, status: Status) {
+    let (_, _, color) = color.properties();
         if status == Status::Changed {
             painter.circle_filled(center, 4., color);
         } else {
@@ -91,7 +94,6 @@ pub(super) fn marker<'a>(color: Color, status: Status) -> egui::Atom<'a> {
                 );
             }
         }
-    })
 }
 
 pub(super) fn picker(ui: &mut egui::Ui, current: Option<Color>) -> Option<Option<Color>> {
