@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Recover an interrupted update restart check
+
+If the background restart checks stopped unexpectedly, Shovel could stay in its closing state with Restart disabled. An interruption before the Windows helper launch now reports an error through the normal updater result. The workspace resumes and keeps the verified package available for a fresh Restart.
+
+The controlled worker interruption reproduced the stuck shutdown. The corrected path reopened Updates with the verified offer, resumed background work and made zero helper launch attempts. The 23 standard updater checks, all-target Clippy and diff checks passed. The 18 bounded smoke checks took 31.88 seconds on source fingerprint `E0F16D586BCA7CCD304DFDF87C29174D3F701E1752C03EF0E1ED26415F4777AB`. Installed apply and restart remain separate acceptance checks.
+
 ## Windows Rust Beta 0.50.22 release checks
 
 This Cargo and changelog cut includes keyboard navigation for Settings, safer global Git identity editing, direct restart preflight, and terminal outcomes for interrupted History work. The Settings, identity, restart, interruption, operation queue, History cache and native History groups passed 45 focused test runs. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 44.50 seconds on local source fingerprint `3E52EDCD6E352E0AADF5BC66162FCF488A6DA16D6528E0B0C00092D57A03BF64`. The native public bundle verifier was built from this source.

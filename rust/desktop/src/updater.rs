@@ -942,12 +942,9 @@ impl Controller {
         let offer = self.offer.clone();
         let ready = self.ready;
         let channel = self.channel;
-        self.phase = Phase::Applying;
-        self.status = text("UpdateInstalling");
-        let tx = self.tx.clone();
-        let worker_ctx = ctx.clone();
-        let worker = std::thread::Builder::new().spawn(move || {
-            let result = (|| {
+        self.start_apply(
+            ctx,
+            move || {
                 let offer = offer
                     .filter(|o| ready && o.release.channel() == channel)
                     .ok_or_else(|| text("RustUpdateInvalid"))?;
@@ -960,9 +957,28 @@ impl Controller {
                     .join(offer.release.file_name());
                 let package = verify_for_restart(&target, &offer.release)?;
                 recheck_offer(&offer, &cancel)?;
-                handoff_update(&manager(&offer, cancel)?, &offer, std::env::args_os().skip(1))?;
+                Ok((package, manager(&offer, cancel)?, offer))
+            },
+            |(package, manager, offer)| {
+                handoff_update(&manager, &offer, std::env::args_os().skip(1))?;
                 Ok(package)
-            })();
+            },
+        );
+    }
+
+    fn start_apply<T>(
+        &mut self,
+        ctx: &egui::Context,
+        prepare: impl FnOnce() -> Result<T, ApplyError> + Send + 'static,
+        handoff: impl FnOnce(T) -> Result<File, ApplyError> + Send + 'static,
+    ) {
+        self.phase = Phase::Applying;
+        self.status = text("UpdateInstalling");
+        let tx = self.tx.clone();
+        let worker_ctx = ctx.clone();
+        let worker = std::thread::Builder::new().spawn(move || {
+            // Retry is safe during preparation. After handoff the helper may already be waiting.
+            let result = background_result(prepare).and_then(handoff);
             let _ = tx.send(Event::Applied(result));
             worker_ctx.request_repaint();
         });
@@ -1284,6 +1300,48 @@ mod tests {
         assert!(app.updater.needs_tool_confirmation(true));
         assert!(!app.updater.restart_requested && !app.updater.exit_ready());
         assert!(!app.pending_exit && !app.closing && !app.exit_ready);
+    }
+
+    #[test]
+    fn interrupted_restart_preflight_restores_the_verified_update_and_workspace() {
+        let ctx = egui::Context::default();
+        let mut app = crate::workspace_interaction_tests::workspace();
+        app.tabs.clear();
+        app.closing = true;
+        app.updater.last = Some(Instant::now());
+        app.updater.offer = Some(published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        ));
+        app.updater.ready = true;
+        app.updater.restart_requested = true;
+        assert!(app.updater.stop_and_drained());
+        let (started, helper) = mpsc::channel();
+        app.updater.start_apply(
+            &ctx,
+            || -> Result<(), ApplyError> { panic!("fixture restart preflight unwind") },
+            move |()| {
+                started.send(()).unwrap();
+                Ok(tempfile::tempfile().unwrap())
+            },
+        );
+
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while app.updater.busy() {
+            app.receive(&ctx);
+            assert!(Instant::now() < deadline, "restart preflight did not settle");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        app.receive(&ctx);
+
+        assert!(matches!(
+            helper.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+        assert_eq!(app.updater.status, text("RustUpdateWorkerFailed"));
+        assert!(app.updater.open && app.updater.ready && app.updater.offer.is_some());
+        assert!(!app.updater.workers.stopping() && !app.updater.restart_requested);
+        assert!(!app.closing && !app.pending_exit && !app.exit_ready && !app.updater.exit_ready());
     }
 
     #[test]
