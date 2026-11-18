@@ -1063,6 +1063,7 @@
   "SettingsIdentityLoaded": "Global identity loaded. Edit the values and choose Apply.",
   "SettingsIdentitySaveFailed": "Git could not save the complete identity. A partial change may remain. Load the current values before trying again.",
   "SettingsIdentityLoadFailed": "Git could not read the global identity. You can retry Load.",
+  "SettingsIdentityResultLost": "Shovel could not confirm the Git identity result. Load the current values before applying again.",
   "SettingsIdentityInvalid": "Enter a name and email without control characters (maximum 512 characters each).",
   "SettingsIdentityChanged": "Global Git identity changed since it was loaded. Load it again before applying edits.",
   "QueuedRequestCancelled": "Waiting request removed. No command was started.",

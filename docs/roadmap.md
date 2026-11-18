@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Validate both Git identity fields before writing
+
+Applying a valid name with an invalid email used to change the name before reporting the validation error. The editor now validates both values before starting the worker or writing Git configuration. It counts Unicode characters and keeps the reviewed values while the user corrects invalid input. A completed Apply re-reads both values before reporting success. A disconnected or interrupted worker clears the busy state, retains the typed fields and asks the user to load the current identity before applying again.
+
+The isolated Git fixture reproduced the unintended name change. The corrected path retained the original config byte for byte and then successfully applied a 512-character Hebrew name after the email was corrected. A disconnected worker fixture verified release of the busy state and retention of the typed fields. Three identity, four Settings, and eleven shutdown checks passed, as did all-target Clippy and diff checks. All 18 smoke checks took 30.32 seconds on `16D628FBD9F9BB093C11A3822EA966CEDE0A52F4A206BFFE451C184B14F6EF2A`.
+
 ## Make Settings categories keyboard accessible
 
 The seven left-hand Settings categories expose a named vertical tab list to Windows accessibility. The selected tab names its associated form and provides the keyboard stop for the list. Up and Down cycle between categories, and Home and End jump to the first and last. Tab moves from the selected category into its form. [Vertical tab interaction pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/)
