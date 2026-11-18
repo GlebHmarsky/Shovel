@@ -33,6 +33,10 @@ impl ComputerMut<Stamp, String> for Formatter {
     }
 }
 
+pub fn invalidate(ctx: &Context) {
+    ctx.memory_mut(|m| *m.caches.cache::<FrameCache<String, Formatter>>() = Default::default());
+}
+
 fn cached(ctx: &Context, stamp: Stamp) -> String {
     ctx.memory_mut(|m| {
         m.caches
@@ -157,5 +161,13 @@ mod tests {
             assert!(observed.contains(&timestamp.offset().to_string()));
         }
         assert_ne!(original(&ctx, &east), original(&ctx, &west));
+        use eframe::egui::cache::CacheTrait;
+        let cached_count =
+            || ctx.memory_mut(|m| m.caches.cache::<FrameCache<String, Formatter>>().len());
+        assert_eq!(cached_count(), 3);
+        invalidate(&ctx);
+        assert_eq!(cached_count(), 0);
+        assert_eq!(local(&ctx, &east), local(&ctx, &west));
+        assert_eq!(cached_count(), 1);
     }
 }

@@ -1715,11 +1715,10 @@ impl eframe::App for Workspace {
         {
             self.page(false, &ctx);
         }
-        if ctx.input(|i| {
-            i.events
-                .iter()
-                .any(|event| matches!(event, egui::Event::WindowFocused(true)))
-        }) {
+        let focused = ctx.input(|i| {
+            i.events.iter().any(|event| matches!(event, egui::Event::WindowFocused(true)))
+        });
+        if focused {
             for tab in &self.tabs {
                 self.tab_markers.invalidate(tab.id);
             }
@@ -1730,6 +1729,12 @@ impl eframe::App for Workspace {
             }) {
                 self.activate_history(self.selected, &ctx);
             }
+        }
+        let system_changed = caption::take_system_change();
+        if system_changed {
+            dates::invalidate(&ctx);
+        }
+        if system_changed || focused {
             theme(
                 &ctx,
                 self.settings

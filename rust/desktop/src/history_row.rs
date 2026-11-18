@@ -61,7 +61,7 @@ pub(super) struct Style<'a> {
     pub refs_right: bool,
 }
 
-fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette) {
+fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
     let colors = if ui.visuals().dark_mode {
         [0xdba24a, 0xd78279, 0x82b787, 0x7eabe0, 0xb398d5]
     } else {
@@ -70,7 +70,7 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette) {
     let lane_color = |i: usize| {
         let value = colors[i % colors.len()];
         if p.high_contrast {
-            p.text
+            foreground
         } else {
             Color32::from_rgb((value >> 16) as u8, (value >> 8) as u8, value as u8)
         }
@@ -183,13 +183,17 @@ pub fn show(
     };
     ui.painter().rect_filled(rect, 0., background);
     if response.has_focus() {
-        ui.painter()
-            .rect_stroke(rect, 0., Stroke::new(1., p.focus), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(
+            rect,
+            0.,
+            Stroke::new(1., if p.high_contrast { fg } else { p.focus }),
+            egui::StrokeKind::Inside,
+        );
     }
     let column = |x: f32, w: f32| {
         Rect::from_min_size(egui::pos2(x, rect.top()), egui::vec2(w, rect.height()))
     };
-    graph(ui, entry, column(rect.left(), graph_width), p);
+    graph(ui, entry, column(rect.left(), graph_width), p, fg);
     let hash = column(rect.right() - 76., 72.);
     let date = column(hash.left() - 154., 150.);
     let author = column(date.left() - 134., 130.);
@@ -358,10 +362,9 @@ pub fn paint_avatar(
 mod tests {
     use super::*;
 
-    #[test]
-    fn history_paints_the_local_commit_time_and_exposes_the_original_identities() {
+    fn entry() -> Entry {
         let hash = "a".repeat(40);
-        let entry = Entry {
+        Entry {
             commit: Commit {
                 hash: hash.clone(),
                 parents: vec![],
@@ -386,7 +389,44 @@ mod tests {
                 hash,
                 upstream: None,
             }],
-        };
+        }
+    }
+
+    #[test]
+    fn high_contrast_graph_uses_the_visible_foreground_on_selected_and_plain_rows() {
+        let entry = entry();
+        let ctx = egui::Context::default();
+        let mut palette = Palette::for_mode(true);
+        palette.high_contrast = true;
+        palette.text = Color32::YELLOW;
+        palette.history_text = Color32::YELLOW;
+        palette.selected = Color32::YELLOW;
+        palette.active_selection = Color32::YELLOW;
+        palette.selection_text = Color32::BLACK;
+        for (selected, expected) in [(false, Color32::YELLOW), (true, Color32::BLACK)] {
+            let out = ctx.run_ui(Default::default(), |ui| {
+                show(
+                    ui,
+                    &entry,
+                    1,
+                    Style {
+                        worktree: std::path::Path::new(""),
+                        selected,
+                        peer: false,
+                        ahead: false,
+                        refs_right: false,
+                    },
+                    &palette,
+                );
+            });
+            assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,egui::Shape::Circle(node) if (node.radius-3.3).abs()<0.01 && node.fill==expected)));
+            out.drop_without_applying_deltas();
+        }
+    }
+
+    #[test]
+    fn history_paints_the_local_commit_time_and_exposes_the_original_identities() {
+        let entry = entry();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let local = crate::dates::local(&ctx, &entry.commit.committed);

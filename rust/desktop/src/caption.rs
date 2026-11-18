@@ -2,7 +2,7 @@
 //! Windows still owns the resize frame, drag, system menu and maximize behavior.
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use windows_sys::Win32::{
     Foundation::*,
     Graphics::Gdi::ScreenToClient,
@@ -12,6 +12,13 @@ use windows_sys::Win32::{
     },
 };
 thread_local! {static REGION:Cell<Option<[i32;4]>>=const{Cell::new(None)};static ACTIVE:Cell<bool>=const{Cell::new(false)};}
+thread_local! {
+    static SYSTEM_CHANGED: Cell<bool> = const { Cell::new(false) };
+    static REPAINT: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
+}
+pub fn take_system_change() -> bool {
+    SYSTEM_CHANGED.replace(false)
+}
 pub fn install(cc: &eframe::CreationContext<'_>) {
     let Ok(handle) = cc.window_handle() else {
         return;
@@ -20,6 +27,9 @@ pub fn install(cc: &eframe::CreationContext<'_>) {
         return;
     };
     attach(raw.hwnd.get() as HWND);
+    if ACTIVE.get() {
+        REPAINT.replace(Some(cc.egui_ctx.clone()));
+    }
 }
 fn attach(hwnd: HWND) {
     // No Rust pointers are retained by Windows. The subclass lives on the window thread.
@@ -48,6 +58,17 @@ unsafe extern "system" fn proc(
 ) -> LRESULT {
     // WM_NCCALCSIZE supplies either a RECT or NCCALCSIZE_PARAMS whose first member is a RECT.
     unsafe {
+        if matches!(
+            msg,
+            WM_THEMECHANGED | WM_SYSCOLORCHANGE | WM_SETTINGCHANGE | WM_TIMECHANGE
+        ) {
+            SYSTEM_CHANGED.set(true);
+            REPAINT.with_borrow(|context| {
+                if let Some(ctx) = context {
+                    ctx.request_repaint_of(egui::ViewportId::ROOT);
+                }
+            });
+        }
         if msg == WM_NCCALCSIZE && l != 0 {
             let r = l as *mut RECT;
             let old = *r;
@@ -58,6 +79,8 @@ unsafe extern "system" fn proc(
         if msg == WM_NCDESTROY {
             ACTIVE.set(false);
             REGION.set(None);
+            SYSTEM_CHANGED.set(false);
+            REPAINT.replace(None);
             RemoveWindowSubclass(hwnd, Some(proc), 1);
         }
         let hit = DefSubclassProc(hwnd, msg, w, l);
@@ -194,6 +217,17 @@ mod tests {
             let mut before = RECT::default();
             GetClientRect(hwnd, &mut before);
             attach(hwnd);
+            take_system_change();
+            for message in [
+                WM_SETTINGCHANGE,
+                WM_SYSCOLORCHANGE,
+                WM_THEMECHANGED,
+                WM_TIMECHANGE,
+            ] {
+                SendMessageW(hwnd, message, 0, 0);
+                assert!(take_system_change());
+                assert!(!take_system_change());
+            }
             let mut after = RECT::default();
             GetClientRect(hwnd, &mut after);
             assert!(after.bottom > before.bottom && after.right == before.right);

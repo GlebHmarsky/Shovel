@@ -156,12 +156,19 @@ pub fn apply(ctx: &egui::Context, light: bool) {
     let p = Palette::for_mode(!light);
     #[cfg(windows)]
     let p = p.with_system_contrast();
+    apply_palette(ctx, light, p);
+}
+
+fn apply_palette(ctx: &egui::Context, light: bool, p: Palette) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique("workspace-palette"), p));
-    ctx.set_theme(if light {
-        egui::Theme::Light
+    ctx.set_theme(if p.high_contrast {
+        egui::ThemePreference::System
+    } else if light {
+        egui::ThemePreference::Light
     } else {
-        egui::Theme::Dark
+        egui::ThemePreference::Dark
     });
+    let light = ctx.theme() == egui::Theme::Light;
     let mut v = if light {
         egui::Visuals::light()
     } else {
@@ -499,4 +506,54 @@ pub fn install_windows_font(ctx: &egui::Context) {
         }],
     });
     ctx.request_repaint();
+}
+
+#[cfg(test)]
+mod native_caption_tests {
+    use super::*;
+    #[test]
+    fn native_caption_theme_follows_user_appearance_and_system_contrast_in_each_window() {
+        use egui::{
+            SystemTheme::{Dark, Light, SystemDefault},
+            ViewportCommand, ViewportId,
+        };
+        let ctx = egui::Context::default();
+        let root = ViewportId::ROOT;
+        let child = ViewportId::from_hash_of("theme-dialog");
+        let draw = |id| {
+            let mut input = egui::RawInput {
+                viewport_id: id,
+                ..Default::default()
+            };
+            input.viewports.entry(root).or_default();
+            input.viewports.entry(child).or_default().parent = Some(root);
+            let output = ctx.run_ui(input, |_| {});
+            let commands: Vec<_> = output
+                .viewport_output
+                .get(&id)
+                .into_iter()
+                .flat_map(|v| &v.commands)
+                .filter_map(|cmd| match cmd {
+                    ViewportCommand::SetTheme(theme) => Some(*theme),
+                    _ => None,
+                })
+                .collect();
+            output.drop_without_applying_deltas();
+            commands
+        };
+        for (light, contrast, theme) in [
+            (false, false, Dark),
+            (true, false, Light),
+            (true, true, SystemDefault),
+            (false, false, Dark),
+        ] {
+            let mut p = Palette::for_mode(!light);
+            p.high_contrast = contrast;
+            apply_palette(&ctx, light, p);
+            for id in [root, child] {
+                assert_eq!(draw(id), [theme]);
+                assert!(draw(id).is_empty());
+            }
+        }
+    }
 }
