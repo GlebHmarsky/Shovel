@@ -501,6 +501,144 @@ fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
 }
 
 #[test]
+fn draft_read_finishing_after_replacement_keeps_typed_text_and_never_adopts_the_foreign_draft() {
+    let h = Harness::new();
+    let mut editor = Editor::new(
+        h.editor.path.clone(),
+        h.editor.git.clone(),
+        h.editor.scheduler.clone(),
+        h.editor.store.clone(),
+    );
+    editor.owner_fingerprint = h.editor.owner_fingerprint.clone();
+    let (started, release) = crate::history_cache::tests::hold_read(editor.store.directory.clone());
+    editor.initialize(&h.ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while editor.context.is_none() {
+        editor.poll(&h.ctx);
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    editor.draft.subject = "typed before the draft load".into();
+    editor.edited();
+    fs::rename(&editor.path, h._temp.path().join("former")).unwrap();
+    fs::create_dir(&editor.path).unwrap();
+    h.git(&["init", "-b", "main"]);
+    let foreign = identity::read(&editor.path).unwrap();
+    let other_text = drafts::Text {
+        subject: "foreign draft".into(),
+        description: String::new(),
+    };
+    editor
+        .store
+        .save(&foreign, None, &other_text, &Cancellation::default())
+        .unwrap();
+    release.send(()).unwrap();
+    while !editor.draft_loaded {
+        editor.poll(&h.ctx);
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(editor.draft_dirty && editor.draft_error.is_some());
+    assert!(editor.current_context().is_none() && editor.identity.is_none());
+    assert_eq!(editor.draft.subject, "typed before the draft load");
+    assert_eq!(
+        editor
+            .store
+            .load(&foreign, &Cancellation::default())
+            .unwrap()
+            .text,
+        other_text
+    );
+}
+
+#[test]
+fn replacing_the_open_worktree_cannot_send_its_draft_or_stage_request_to_the_new_owner() {
+    let mut h = Harness::new();
+    let root = h.editor.path.clone();
+    let old = h.editor.identity.clone().unwrap();
+    h.editor.draft.subject = "Only for the first repository".into();
+    h.editor.edited();
+    h.editor.flush(&h.ctx);
+    h.until(|e| !e.draft_dirty && !e.draft_saving);
+    let old_file = h
+        .editor
+        .store
+        .directory
+        .join(format!("{}.json", drafts::Store::key(&old)));
+    let saved = fs::read(&old_file).unwrap();
+    fs::rename(&root, h._temp.path().join("former")).unwrap();
+    fs::create_dir(&root).unwrap();
+    h.git(&["init", "-b", "main"]);
+    fs::write(root.join("different"), b"replacement\n").unwrap();
+    h.git(&["add", "different"]);
+    let before = h.git(&["ls-files", "--stage"]);
+    let fresh = identity::read(&root).unwrap();
+    assert_ne!(old, fresh);
+    let replacement_draft = drafts::Text {
+        subject: "Only for the replacement".into(),
+        description: String::new(),
+    };
+    h.editor
+        .store
+        .save(&fresh, None, &replacement_draft, &Cancellation::default())
+        .unwrap();
+    h.editor.refresh(&h.ctx);
+    h.until(|e| !e.loading && e.snapshot_error.is_some());
+    assert_eq!(
+        h.editor.snapshot_error.as_deref(),
+        Some(text("IdentityChanged").as_str())
+    );
+    assert_eq!(h.editor.context.as_ref().unwrap().repository.identity, old);
+    assert_eq!(h.editor.draft.subject, "Only for the first repository");
+    h.editor.request_commit(false, &h.ctx);
+    h.editor.stage(false, true, &h.ctx);
+    assert!(h.editor.scheduler.records().is_empty());
+    assert_eq!(h.git(&["ls-files", "--stage"]), before);
+    h.editor.draft.description = "unsaved recovery text".into();
+    h.editor.edited();
+
+    let mut app = crate::workspace_interaction_tests::workspace();
+    app.tabs.clear();
+    app.git = Some(h.editor.git.clone());
+    app.draft_store = Some(h.editor.store.clone());
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    h.editor.inline = true;
+    app.editors.push(h.editor);
+    app.open(root, &h.ctx);
+    let start = Instant::now();
+    while app.tabs[0].loading {
+        app.receive(&h.ctx);
+        assert!(start.elapsed() < Duration::from_secs(15));
+        thread::sleep(Duration::from_millis(5));
+    }
+    app.open_commit();
+    assert_eq!(app.editors.len(), 2);
+    assert!(
+        app.editors[0].open && !app.editors[0].inline && app.editors[0].current_context().is_none()
+    );
+    assert_eq!(app.editors[0].draft.description, "unsaved recovery text");
+    app.editors[1].initialize(&h.ctx);
+    while !app.editors[1].draft_loaded || app.editors[1].loading {
+        app.receive(&h.ctx);
+        assert!(start.elapsed() < Duration::from_secs(15));
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(app.editors[1].draft, replacement_draft);
+    assert_eq!(
+        app.editors[1]
+            .current_context()
+            .unwrap()
+            .repository
+            .identity,
+        fresh
+    );
+    assert_ne!(app.editors[0].recovery_id, app.editors[1].recovery_id);
+    assert_eq!(fs::read(old_file).unwrap(), saved);
+}
+
+#[test]
 fn stage_and_unstage_keep_the_focused_file_while_an_older_full_read_is_held() {
     let mut h = Harness::new();
     let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());

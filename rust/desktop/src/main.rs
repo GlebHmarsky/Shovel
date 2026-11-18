@@ -738,6 +738,16 @@ impl Workspace {
                         continue;
                     };
                     self.remember_identity(&owner_path, &history.snapshot.identity.fingerprint);
+                    let mut reopen_inline = false;
+                    for editor in &mut self.editors {
+                        if (Self::same_path(&editor.path, &owner_path)
+                            || Self::same_path(&editor.path, &history.snapshot.worktree))
+                            && !editor.accept_identity(&history.snapshot.identity)
+                        {
+                            reopen_inline |= editor.inline && editor.open;
+                            editor.detach_replaced();
+                        }
+                    }
                     if let Some(git) = &self.git {
                         self.operations.resolve_initialization(
                             &owner_path,
@@ -783,6 +793,14 @@ impl Workspace {
                                 &self.read_workers,
                             );
                         }
+                    }
+                    if reopen_inline
+                        && self
+                            .tabs
+                            .get(self.selected)
+                            .is_some_and(|tab| tab.id == id && tab.local_changes)
+                    {
+                        self.open_commit();
                     }
                 }
                 Event::Page(id, generation, page, older) => {
@@ -861,6 +879,11 @@ impl Workspace {
                         tab.view.checking_identity = false;
                         let error = failure.message;
                         if failure.identity {
+                            for editor in &mut self.editors {
+                                if tab.matches_path(&editor.path) {
+                                    editor.block_repository(&error);
+                                }
+                            }
                             self.tab_markers.forget(id);
                             tab.view.generation = tab.view.generation.wrapping_add(1);
                             tab.locate_cancel.cancel();
@@ -1182,15 +1205,35 @@ impl Workspace {
     }
 
     fn open_commit(&mut self) {
-        let Some(tab) = self.tabs.get_mut(self.selected) else {
+        let Some(tab) = self.tabs.get(self.selected) else {
             return;
         };
+        if tab.view.identity_blocked {
+            self.notice = tab.error.clone();
+            return;
+        }
+        let expected = tab
+            .observed_snapshot()
+            .map(|s| s.identity.fingerprint.clone())
+            .or_else(|| self.known_identity(&tab.path));
+        let tab = &mut self.tabs[self.selected];
         let inline = self.settings.commit_in_workspace();
-        if let Some(editor) = self
-            .editors
-            .iter_mut()
-            .find(|editor| Self::same_path(&editor.path, &tab.path))
-        {
+        self.editors.retain(|editor| {
+            !(tab.matches_path(&editor.path)
+                && !editor.matches_owner(expected.as_deref())
+                && editor.can_retire())
+        });
+        // A draft from the old repository can remain open for copying. A
+        // deliberately reopened replacement receives its own editor and draft.
+        for editor in &mut self.editors {
+            if tab.matches_path(&editor.path) && !editor.matches_owner(expected.as_deref()) {
+                editor.block_repository(&strings::text("IdentityChanged"));
+                editor.detach_replaced();
+            }
+        }
+        if let Some(editor) = self.editors.iter_mut().find(|editor| {
+            tab.matches_path(&editor.path) && editor.matches_owner(expected.as_deref())
+        }) {
             tab.local_changes = inline;
             editor.inline = inline;
             editor.activate();
@@ -1206,6 +1249,7 @@ impl Workspace {
             tab.local_changes = inline;
             editor.inline = inline;
             editor.read_workers = self.read_workers.clone();
+            editor.owner_fingerprint = expected;
             editor.authentication = Some(self.operations.external_authentication());
             editor.restore_layout(&self.settings);
             editor.apply_preferences(&self.settings);
@@ -1218,9 +1262,9 @@ impl Workspace {
             .tabs
             .get(self.selected)
             .filter(|tab| tab.local_changes)?;
-        self.editors.iter().position(|editor| {
-            editor.inline && editor.open && Self::same_path(&editor.path, &tab.path)
-        })
+        self.editors
+            .iter()
+            .position(|editor| editor.inline && editor.open && tab.owns_editor(editor))
     }
 
     fn show_history(&mut self, ctx: &egui::Context) {
@@ -2007,10 +2051,8 @@ impl eframe::App for Workspace {
                                                 .truncate(),
                                             );
                                         }
-                                        let editor = self
-                                            .editors
-                                            .iter()
-                                            .find(|e| Self::same_path(&e.path, &tab.path));
+                                        let editor =
+                                            self.editors.iter().find(|e| tab.owns_editor(e));
                                         let progress = self
                                             .operations
                                             .progress(&tab.path, &self.scheduler)

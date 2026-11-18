@@ -11,6 +11,13 @@ pub(super) enum TabAction {
 }
 
 impl Tab {
+    pub(super) fn owns_editor(&self, editor: &commit::Editor) -> bool {
+        self.matches_path(&editor.path)
+            && editor.matches_owner(
+                self.observed_snapshot()
+                    .map(|s| s.identity.fingerprint.as_str()),
+            )
+    }
     pub(super) fn matches_path(&self, path: &std::path::Path) -> bool {
         Workspace::same_path(&self.path, path)
             || self

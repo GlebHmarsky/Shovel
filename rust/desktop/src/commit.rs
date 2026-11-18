@@ -96,6 +96,7 @@ pub struct Editor {
     diff_options: shovel_core::diff::Options,
     diff_error: Option<String>,
     draft: drafts::Text,
+    pub(super) owner_fingerprint: Option<String>,
     identity: Option<Identity>,
     revision: Option<String>,
     draft_loaded: bool,
@@ -179,6 +180,7 @@ impl Editor {
             diff_error: None,
             draft: drafts::Text::default(),
             identity: None,
+            owner_fingerprint: None,
             revision: None,
             draft_loaded: false,
             draft_sequence: 0,
@@ -217,6 +219,47 @@ impl Editor {
         self.context
             .as_deref()
             .filter(|_| self.snapshot_error.is_none())
+    }
+    pub(super) fn matches_owner(&self, expected: Option<&str>) -> bool {
+        expected.is_none_or(|expected| {
+            self.owner_fingerprint
+                .as_deref()
+                .is_none_or(|owner| owner == expected)
+                || self
+                    .identity
+                    .as_ref()
+                    .is_some_and(|live| live.matches_recorded_fingerprint(expected))
+        })
+    }
+    pub(super) fn accept_identity(&mut self, identity: &Identity) -> bool {
+        if self
+            .owner_fingerprint
+            .as_deref()
+            .is_some_and(|owner| !identity.matches_recorded_fingerprint(owner))
+        {
+            self.block_repository(&text("IdentityChanged"));
+            return false;
+        }
+        self.owner_fingerprint = Some(identity.fingerprint.clone());
+        true
+    }
+    pub(super) fn block_repository(&mut self, reason: &str) {
+        self.snapshot_error = Some(reason.to_owned());
+        self.generation += 1;
+        self.diff_generation += 1;
+        self.scan_cancel.cancel();
+        self.diff_cancel.cancel();
+        self.loading = false;
+        self.refresh_pending = false;
+        self.target_rows_current = false;
+        self.diff_deferred = false;
+        self.confirm_amend = None;
+        self.file_confirmation = None;
+        self.file_menu = None;
+    }
+    pub(super) fn detach_replaced(&mut self) {
+        self.inline = false;
+        self.open |= self.draft_dirty || self.unsaved_conflict();
     }
     pub fn activate(&mut self) {
         self.open = true;
@@ -552,6 +595,13 @@ impl Editor {
                     self.draft_loaded = true;
                     match result {
                         Ok((identity, result)) => {
+                            if !self.accept_identity(&identity) {
+                                self.draft_error = Some(strings::format(
+                                    "CommitDraftIdentityChanged",
+                                    &[&self.store.directory.to_string_lossy()],
+                                ));
+                                continue;
+                            }
                             self.identity = Some(identity);
                             match result {
                                 Ok(snapshot) => {
@@ -660,6 +710,9 @@ impl Editor {
         self.snapshot_error = Some(detail);
     }
     fn apply(&mut self, context: Context, ctx: &egui::Context) {
+        if !self.accept_identity(&context.repository.identity) {
+            return;
+        }
         self.snapshot_error = None;
         self.target_rows_current = false;
         let resolved_path = self
@@ -853,7 +906,7 @@ impl Editor {
         if !self.open || self.inline {
             return;
         }
-        let id = egui::ViewportId::from_hash_of(("commit", &self.path));
+        let id = egui::ViewportId::from_hash_of(("commit", &self.recovery_id));
         let title = format!(
             "{} · {}",
             text("LocalChanges"),
