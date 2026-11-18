@@ -594,11 +594,7 @@ impl Git {
                 .extend(args.into_iter().map(OsString::from));
             request.environment.extend(environment.clone());
             let result = process::run(&request, cancel, None)?;
-            let command = Command {
-                outcome: result.outcome,
-                exit_code: result.exit_code,
-                elapsed: result.elapsed,
-            };
+            let command = Command::from_git(&request, &result);
             let succeeded = command.succeeded();
             output_truncated |= result.outcome == process::Outcome::OutputLimit;
             append(

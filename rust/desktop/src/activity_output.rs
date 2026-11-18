@@ -4,6 +4,79 @@ use std::sync::{Arc, Mutex};
 
 const DISPLAY_LIMIT: usize = 32768;
 
+pub(crate) fn has_git_warning(output: &str) -> bool {
+    output.lines().any(|line| {
+        let line = line.trim_start().as_bytes();
+        [b"warning:".as_slice(), b"remote: warning:"]
+            .iter()
+            .any(|prefix| {
+                line.get(..prefix.len())
+                    .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+            })
+    })
+}
+
+pub(crate) fn bounded(mut output: String) -> String {
+    if output.len() > DISPLAY_LIMIT {
+        let omitted = crate::strings::text("ActivityOutputLimit");
+        let room = DISPLAY_LIMIT.saturating_sub(omitted.len() + 1);
+        output.truncate(output.floor_char_boundary(room));
+        output.push('\n');
+        output.push_str(&omitted);
+        output.shrink_to_fit();
+    }
+    output
+}
+
+// Called on the Git worker. Keep failure reasons and actual command exits ahead
+// of verbose hook output so they survive the session display limit.
+pub(crate) fn prepare_git(result: &mut shovel_core::network::Completed) {
+    use crate::{operations, strings};
+    use std::fmt::Write;
+    if result.warning.is_none() && result.succeeded() && has_git_warning(&result.output) {
+        result.warning = Some("RustActionWarning".into());
+    }
+    let mut detail = String::new();
+    for key in [&result.message, &result.warning].into_iter().flatten() {
+        let _ = writeln!(detail, "{}", strings::text(key));
+    }
+    if let Err(error) = &result.updated {
+        let _ = writeln!(detail, "{}", operations::error_log(error));
+    } else if result
+        .updated
+        .as_ref()
+        .is_ok_and(|s| !s.operations.is_empty())
+    {
+        let _ = writeln!(detail, "{}", strings::text("RecoveryPending"));
+    }
+    if let Some(failure) = result.authentication_failure {
+        let _ = writeln!(
+            detail,
+            "{}",
+            strings::text(operations::authentication_error(failure))
+        );
+    }
+    if result.output_truncated {
+        let _ = writeln!(detail, "{}", strings::text("ActivityOutputLimit"));
+    }
+    for command in &result.commands {
+        let name = command
+            .verb
+            .map_or_else(|| "git".to_owned(), |verb| format!("git {verb}"));
+        let line = strings::format(
+            "RustGitCommandResult",
+            &[
+                &name,
+                &command.exit_code.to_string(),
+                &command.elapsed.as_millis().to_string(),
+            ],
+        );
+        let _ = writeln!(detail, "{line}");
+    }
+    detail.push_str(&result.output);
+    result.output = bounded(detail);
+}
+
 #[derive(Default)]
 pub(crate) struct OutputStream {
     capture: Mutex<Capture>,

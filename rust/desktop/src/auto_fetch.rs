@@ -161,36 +161,26 @@ impl Controller {
                         }
                         g.automatic_fetch(&context, &token)
                     })();
-                    let (succeeded, output) = match result {
-                        Ok(result) => {
-                            let succeeded = result.succeeded() && !result.has_conflicts;
-                            let mut details = result.output;
-                            for key in [result.message, result.warning].into_iter().flatten() {
-                                details.push_str(&format!("\n{}", crate::strings::text(&key)));
-                            }
-                            if result.output_truncated {
-                                details.push_str(&format!(
-                                    "\n{}",
-                                    crate::strings::text("ActivityOutputLimit")
-                                ));
-                            }
-                            if let Err(error) = result.updated {
-                                details.push_str(&format!(
-                                    "\n{}",
-                                    crate::operations::error_log(&error)
-                                ));
-                            }
-                            (succeeded, details)
+                    let (succeeded, mut status, output) = match result {
+                        Ok(mut result) => {
+                            crate::activity_output::prepare_git(&mut result);
+                            let ok = result.succeeded() && !result.has_conflicts;
+                            let status = match (ok, result.warning.is_some()) {
+                                (true, true) => "RustActionWarning",
+                                (true, false) => "RustAutoFetchDone",
+                                (false, _) => "RustAutoFetchFailed",
+                            };
+                            (ok, status, result.output)
                         }
-                        Err(error) => (false, crate::operations::error_log(&error)),
+                        Err(error) => (
+                            false,
+                            "RustAutoFetchFailed",
+                            crate::operations::error_log(&error),
+                        ),
                     };
-                    let status = if succeeded {
-                        "RustAutoFetchDone"
-                    } else if token.is_cancelled() {
-                        "ActionStoppedShort"
-                    } else {
-                        "RustAutoFetchFailed"
-                    };
+                    if !succeeded && token.is_cancelled() {
+                        status = "ActionStoppedShort";
+                    }
                     let _ = tx.send((
                         id,
                         Finished {

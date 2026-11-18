@@ -228,6 +228,16 @@ enum Event {
     OptionsReady(u64, Box<ReadyOptions>),
     OptionsClosed(u64),
 }
+impl Event {
+    fn completed(sequence: u64, result: Result<network::Completed, String>) -> Self {
+        let result = result.map(|mut result| {
+            crate::activity_output::prepare_git(&mut result);
+            result
+        });
+        Self::Completed(sequence, Box::new(result))
+    }
+}
+
 #[derive(Default, PartialEq, Eq, Clone, Copy)]
 pub enum ActivityFilter {
     #[default]
@@ -955,7 +965,7 @@ impl Controller {
                 }
                 _ => Outcome::Failed,
             };
-            let _ = sender.send(Event::Completed(sequence, Box::new(result)));
+            let _ = sender.send(Event::completed(sequence, result));
             ctx.request_repaint();
             outcome
         });
@@ -1203,7 +1213,7 @@ impl Controller {
                     }
                     _ => Outcome::Failed,
                 };
-                let _ = sender.send(Event::Completed(sequence, Box::new(result)));
+                let _ = sender.send(Event::completed(sequence, result));
                 ctx.request_repaint();
                 outcome
             },
@@ -1330,51 +1340,23 @@ impl Controller {
                                     && commands_succeeded;
                                 let succeeded = result.succeeded();
                                 run.show_failure = !succeeded && !awaiting_recovery;
-                                run.status = text(
-                                    if succeeded
-                                        && (result.warning.is_some()
-                                            || has_git_warning(&result.output))
-                                    {
-                                        "RustActionWarning"
-                                    } else if succeeded {
-                                        "ActionCompletedShort"
-                                    } else if result.has_conflicts {
-                                        "ActionConflictShort"
-                                    } else if awaiting_recovery {
-                                        "RecoveryPending"
-                                    } else if result.updated.is_err()
-                                        && result.message.is_none()
-                                        && commands_succeeded
-                                    {
-                                        "ActionRefreshFailedShort"
-                                    } else {
-                                        "ActionFailedShort"
-                                    },
-                                );
-                                run.output = result.output;
-                                for message in
-                                    [result.message, result.warning].into_iter().flatten()
+                                run.status = text(if succeeded && result.warning.is_some() {
+                                    "RustActionWarning"
+                                } else if succeeded {
+                                    "ActionCompletedShort"
+                                } else if result.has_conflicts {
+                                    "ActionConflictShort"
+                                } else if awaiting_recovery {
+                                    "RecoveryPending"
+                                } else if result.updated.is_err()
+                                    && result.message.is_none()
+                                    && commands_succeeded
                                 {
-                                    run.output.push_str(&format!("\n{}", text(&message)));
-                                }
-                                if let Err(error) = result.updated {
-                                    run.output.push('\n');
-                                    run.output.push_str(&error_log(&error));
-                                }
-                                if pending {
-                                    run.output
-                                        .push_str(&format!("\n{}", text("RecoveryPending")));
-                                }
-                                if result.output_truncated {
-                                    run.output
-                                        .push_str(&format!("\n{}", text("ActivityOutputLimit")));
-                                }
-                                if let Some(failure) = result.authentication_failure {
-                                    run.output.push_str(&format!(
-                                        "\n{}",
-                                        text(authentication_error(failure))
-                                    ));
-                                }
+                                    "ActionRefreshFailedShort"
+                                } else {
+                                    "ActionFailedShort"
+                                });
+                                run.output = result.output;
                             }
                             Err(error) => {
                                 run.show_failure = true;
@@ -1434,7 +1416,7 @@ impl Controller {
         if let Some(run) = self.runs.iter_mut().find(|r| r.request == activity.request) {
             run.show_failure |= !run.done && activity.done && activity.failed;
             run.status = activity.status;
-            run.output = activity.output;
+            run.output = crate::activity_output::bounded(activity.output);
             run.done = activity.done;
             run.reopen_commit = activity.reopen_commit;
         } else {
@@ -1447,7 +1429,7 @@ impl Controller {
                 path,
                 label: activity.label,
                 status: activity.status,
-                output: activity.output,
+                output: crate::activity_output::bounded(activity.output),
                 done: activity.done,
                 dialog_open: false,
                 reopen_commit: activity.reopen_commit,
@@ -1472,7 +1454,7 @@ impl Controller {
             path,
             label: failure.unwrap_or("Commit"),
             status,
-            output: network::redact(&output).chars().take(32768).collect(),
+            output: crate::activity_output::bounded(network::redact(&output)),
             done: true,
             dialog_open: false,
             reopen_commit: None,
@@ -1483,11 +1465,7 @@ impl Controller {
     pub fn record_background(&mut self, result: crate::auto_fetch::Finished) {
         let sequence = self.next;
         self.next += 1;
-        let status = if result.succeeded && has_git_warning(&result.output) {
-            "RustActionWarning"
-        } else {
-            result.status
-        };
+        let status = result.status;
         self.runs.push(Run {
             background: true,
             sequence,
@@ -1495,10 +1473,7 @@ impl Controller {
             path: result.path,
             label: "RustAutomaticFetch",
             status: text(status),
-            output: network::redact(&result.output)
-                .chars()
-                .take(32768)
-                .collect(),
+            output: crate::activity_output::bounded(network::redact(&result.output)),
             done: true,
             dialog_open: false,
             reopen_commit: None,
@@ -1753,18 +1728,6 @@ impl Controller {
             ctx.request_repaint();
         }
     }
-}
-
-fn has_git_warning(output: &str) -> bool {
-    output.lines().any(|line| {
-        let line = line.trim_start().as_bytes();
-        [b"warning:".as_slice(), b"remote: warning:"]
-            .iter()
-            .any(|prefix| {
-                line.get(..prefix.len())
-                    .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
-            })
-    })
 }
 
 pub(crate) fn authentication_error(failure: authentication::Failure) -> &'static str {
@@ -2082,6 +2045,7 @@ mod tests {
             controller.runs[0].output
         );
         assert!(controller.runs[0].output.contains("fixture push succeeded"));
+        assert!(controller.runs[0].output.contains("git push · exit 0"));
         assert!(controller.progress(path, &scheduler).is_none());
         assert!(!controller.runs[0].show_failure);
         assert_eq!(
@@ -2092,7 +2056,7 @@ mod tests {
         let snapshot = git.inspect(path, &Cancellation::default()).unwrap();
         fs::write(
             &hook,
-            "#!/bin/sh\necho 'fixture push rejected' >&2\nexit 1\n",
+            "#!/bin/sh\necho 'fixture push rejected' >&2\nprintf '%045000d' 0 >&2\nexit 1\n",
         )
         .unwrap();
         controller.submit(
@@ -2107,6 +2071,13 @@ mod tests {
             controller.runs.len() == 2 && controller.runs[1].done
         });
         assert!(controller.runs[1].show_failure);
+        assert!(controller.runs[1].output.contains("git push · exit 1"));
+        assert!(
+            controller.runs[1]
+                .output
+                .ends_with(&text("ActivityOutputLimit"))
+        );
+        assert!(controller.runs[1].output.len() <= 32768);
         let frame = |controller: &mut Controller| {
             ctx.run_ui(
                 egui::RawInput {
@@ -2198,11 +2169,13 @@ mod tests {
             assert_eq!(draw(&mut controller, root, child), expected);
             assert_eq!(draw(&mut controller, false, Some(false)), 0);
         }
-        assert!(has_git_warning(
+        assert!(crate::activity_output::has_git_warning(
             "To origin
   REMOTE: Warning: message"
         ));
-        assert!(!has_git_warning("commit subject contains warning: inside"));
+        assert!(!crate::activity_output::has_git_warning(
+            "commit subject contains warning: inside"
+        ));
     }
 
     #[test]

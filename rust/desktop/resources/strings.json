@@ -1076,6 +1076,7 @@
   "CheckoutStashMessage": "Shovel checkout",
   "RustExitWithoutSaving": "Exit without saving",
   "RustStayOpen": "Stay open",
+  "RustGitCommandResult": "{0} · exit {1} · {2:N0} ms",
   "RustActionWarning": "Completed with a warning — see details",
   "RustNewBranchHelp": "Create a local branch at the selected commit. If checkout is selected, review local changes before the branch is created and checked out.",
   "RustDeleteBranchConfirmation": "Confirm deletion in {0}\nBranch: {1}\nExact tip: {2}\n\nThe branch, its reflog and branch-specific configuration will be removed. Git's merged-branch and checked-out-worktree protections remain in effect.",

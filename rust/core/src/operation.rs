@@ -27,15 +27,71 @@ impl Error {
 }
 #[derive(Debug)]
 pub struct Command {
+    pub verb: Option<&'static str>,
     pub outcome: process::Outcome,
     pub exit_code: u32,
     pub elapsed: Duration,
 }
 impl Command {
+    pub(crate) fn from_git(request: &process::Request, result: &process::Result) -> Self {
+        Self {
+            verb: git_verb(&request.arguments),
+            outcome: result.outcome,
+            exit_code: result.exit_code,
+            elapsed: result.elapsed,
+        }
+    }
     pub fn succeeded(&self) -> bool {
         self.outcome.accepted_succeeded(self.exit_code)
     }
 }
+// Only retain a known Git command name. Configuration, paths, remotes, message
+// arguments and the environment are not needed to identify which command exited.
+fn git_verb(arguments: &[OsString]) -> Option<&'static str> {
+    const VERBS: &[&str] = &[
+        "add",
+        "am",
+        "apply",
+        "branch",
+        "checkout",
+        "cherry-pick",
+        "clean",
+        "clone",
+        "commit",
+        "config",
+        "fetch",
+        "init",
+        "merge",
+        "mv",
+        "pull",
+        "push",
+        "rebase",
+        "remote",
+        "reset",
+        "restore",
+        "revert",
+        "rm",
+        "stash",
+        "submodule",
+        "switch",
+        "tag",
+        "update-index",
+        "update-ref",
+        "worktree",
+    ];
+    let mut args = arguments.iter();
+    while let Some(arg) = args.next() {
+        match arg.to_str()? {
+            "-c" | "-C" | "--git-dir" | "--work-tree" => {
+                args.next()?;
+            }
+            "--no-pager" | "--no-lazy-fetch" | "--no-optional-locks" | "--literal-pathspecs" => {}
+            verb => return VERBS.iter().copied().find(|item| *item == verb),
+        }
+    }
+    None
+}
+
 pub struct Completed {
     pub commands: Vec<Command>,
     pub output: String,
@@ -124,11 +180,7 @@ impl Transcript {
         self.output.push_str(&output[..available]);
         self.truncated |=
             available != output.len() || result.outcome == process::Outcome::OutputLimit;
-        let command = Command {
-            outcome: result.outcome,
-            exit_code: result.exit_code,
-            elapsed: result.elapsed,
-        };
+        let command = Command::from_git(request, &result);
         self.commands.push(command);
         Ok(result)
     }
@@ -161,5 +213,31 @@ impl Transcript {
             related: Vec::new(),
             authentication_failure: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod command_name_tests {
+    use super::*;
+    #[test]
+    fn activity_commands_exclude_global_values_aliases_and_arguments() {
+        let name = |args: &[&str]| git_verb(&args.iter().map(OsString::from).collect::<Vec<_>>());
+        assert_eq!(
+            name(&[
+                "--no-pager",
+                "-c",
+                "credential.helper=sensitive",
+                "-C",
+                "push",
+                "--literal-pathspecs",
+                "checkout",
+                "--",
+                "private path"
+            ]),
+            Some("checkout")
+        );
+        assert_eq!(name(&["-c", "fetch"]), None);
+        assert_eq!(name(&["external-alias", "push"]), None);
+        assert_eq!(name(&["--unknown", "push"]), None);
     }
 }
