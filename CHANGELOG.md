@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.50.20 - 2026-11-18
+
+- Protect accepted Git work during an update restart. Shovel pauses command dialogs while closing and checks the queue again before exiting. A competing Windows process that has already exited now releases the restart guard even if it returned status 259.
+- Open configured editors or Git Bash while Git is starting without letting the tool hold Git's input or output pipes open.
+- Mask authorization headers, cookies, password and token fields, and password-bearing URLs in Git diagnostics while retaining the surrounding error text.
+
 ## Rust 0.50.19 - 2026-11-18
 
 - Reopening Shovel restores Restart when the current signed update is already verified in the installation cache. If Windows cannot start the update helper, Shovel stays open with the package ready for retry or installer repair.

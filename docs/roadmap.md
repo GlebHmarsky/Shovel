@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.20 release checks
+
+The 0.50.20 Cargo and changelog cut includes restart input and process protections, Git pipe isolation during configured tool launches, and Activity credential masking. The native process, network, updater restart, tool handoff and Activity suites passed their focused checks. Release-policy fixtures, all-target Clippy and diff checks passed. All 18 bounded smoke checks passed in 29.36 seconds on local source fingerprint `DE29FAE1C3CF2541FD5939092C4BE9CCC6F9EA64988ABC23FCFA87DCFD0672E0`. The native bundle verifier built from 0.50.20 source.
+
+The archived 0.50.17 installer also passed a fresh anonymous download. Its 21,692,893 bytes, SHA-256 and Windows product version match the original receipt. The native verifier checked the archived feed signature and the exact full update package for commit `b2a1d83a869789b0f13cc81d77889278f5e2edd6`. [0.50.17 publication receipt](evidence/rust-beta-0.50.17-publication.json)
+
 ## Keep Git pipes out of configured tools
 
 Git uses a Windows handle allowlist, but the Rust standard launcher used for configured tools can inherit any eligible handle in the parent. Launching an editor or Git Bash while a Git child was being prepared could let the tool retain a pipe and keep the Git command waiting. The two launch paths now coordinate until Git closes its inheritable ends in the parent. The guard releases before either process is awaited. Configured paths, arguments and detached tool lifetime use their existing launcher. [Windows handle inheritance](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw#remarks) · [Pinned Rust Windows launcher](https://github.com/rust-lang/rust/blob/58cf8f9c35b355199727627d07ae34a4e2846d67/library/std/src/sys/process/windows.rs)
