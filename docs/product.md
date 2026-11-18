@@ -73,10 +73,10 @@ Started user commands, including manual Fetch and configured hooks/tools, cannot
 | --- | --- |
 | Appearance | Dark/Light and 70–200% app scale in 10% steps, shared with Ctrl+Plus/Minus. Window/pane sizes and tab order continue saving automatically. |
 | History & avatars | Left/right branch and tag labels (Left default), picture source and optional Gitea website base address. |
-| Diff | Default unified/side-by-side view and 9–24 font size. Individual comparison toggles remain temporary. |
+| Diff | A local sample shows unified or side-by-side lines at the chosen 9–24 font size as you edit. Save sets the defaults for Commit and History. Each comparison also has its own layout toggle. |
 | Git | Automatic fetch enablement and 10–3600-second interval; enabled every 60 seconds remains the default. |
 | Git identity | Explicitly load and apply global name/email using the selected Git installation. Repository-specific identity overrides remain in effect. |
-| Tools | Existing Git-default/named/custom merge tool and optional Rider, VS Code and Bash executable paths. Blank paths retain discovery when the tool is used. |
+| Tools | The Open in table pairs Rider, Visual Studio Code, Git Bash and Visual Studio with their executable paths. An empty path enables discovery when you use the application. The external merge tool has separate controls for Git configuration, a named tool or a custom command. |
 | Updates | Stable/Beta channel and periodic checks. Launch/manual discovery and approval before download/restart retain their existing behavior. |
 
 **Apply global identity** is a separate, immediate Git action; the form states that Cancel cannot undo it. Load reads only the two identity keys. Apply rejects a changed reviewed identity and respects native Git locks. If a write only partly succeeds, the message requires loading the actual values before retrying; it does not roll back unrelated configuration.

@@ -102,15 +102,26 @@ impl Editor {
 
     pub fn show(&mut self, ui: &mut egui::Ui, git: Option<Arc<Git>>) {
         self.poll();
-        ui.heading(text("SettingsPageIdentity"));
-        ui.label(text("SettingsIdentityHelp"));
-        ui.label(&self.status);
+        crate::settings_ui::section(ui, "SettingsGlobalIdentity");
+        crate::settings_ui::note(ui, "SettingsIdentityHelp");
         ui.add_enabled_ui(!self.busy, |ui| {
-            ui.label(text("SettingsIdentityName"));
-            ui.add(egui::TextEdit::singleline(&mut self.name).char_limit(512));
-            ui.label(text("SettingsIdentityEmail"));
-            ui.add(egui::TextEdit::singleline(&mut self.email).char_limit(512));
-            ui.horizontal(|ui| {
+            crate::settings_ui::form_row(ui, "SettingsIdentityName", |ui, label| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.name)
+                        .desired_width(f32::INFINITY)
+                        .char_limit(512),
+                )
+                .labelled_by(label);
+            });
+            crate::settings_ui::form_row(ui, "SettingsIdentityEmail", |ui, label| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.email)
+                        .desired_width(f32::INFINITY)
+                        .char_limit(512),
+                )
+                .labelled_by(label);
+            });
+            ui.horizontal_wrapped(|ui| {
                 let load = ui
                     .add_enabled(
                         git.is_some(),
@@ -148,6 +159,7 @@ impl Editor {
                 }
             });
         });
+        ui.label(&self.status);
     }
 }
 #[cfg(test)]

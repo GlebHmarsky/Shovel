@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.50.17 - 2026-11-18
+
+- Settings keeps its categories on the left and groups related controls under section headings. Preview unified and side-by-side diffs at the selected font size before saving. Edit application paths together in Tools. Narrow windows stack labels above fields and keep Save and Cancel in reach.
+- Since the last Beta, History can load author pictures using the saved provider. Activity shows Git exit results and filters manual and background commands by repository.
+- Recover unsaved commit messages on exit and reopen failed commits in their original worktree. Repository tabs distinguish matching names and restore the selected repository. File History and Stashes remember their window sizes.
+
 ## Rust 0.50.16 - 2026-11-18
 
 - Hold Shift when clicking Commit, or press Ctrl+Shift+Enter, to commit and push that exact commit to the configured upstream. A rejected push keeps the local commit and explains what happened.

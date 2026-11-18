@@ -307,6 +307,26 @@ fn row(
     width: f32,
     selected: bool,
 ) -> egui::Response {
+    let (label, fill) = line_style(ui, line, side, font, selected, 6);
+    egui::Frame::new()
+        .fill(fill)
+        .show(ui, |ui| {
+            ui.add_sized(
+                [width, font + 6.],
+                egui::Label::new(label).extend().sense(egui::Sense::click()),
+            )
+        })
+        .inner
+}
+
+fn line_style(
+    ui: &egui::Ui,
+    line: &Line,
+    side: Option<bool>,
+    font: f32,
+    selected: bool,
+    digits: usize,
+) -> (RichText, Color32) {
     let p = crate::workspace_style::Palette::current(ui);
     let (mut color, mut fill) = match line.kind {
         LineKind::Added => (p.diff_added_text, p.diff_added_background),
@@ -326,24 +346,82 @@ fn row(
         _ => ' ',
     };
     let label = match side {
-        None => format!("{old:>6} {new:>6} {marker} {}", line.text),
+        None => format!("{old:>digits$} {new:>digits$} {marker} {}", line.text),
         Some(new_side) => format!(
-            "{:>6} {marker} {}",
+            "{:>digits$} {marker} {}",
             if new_side { new } else { old },
             line.text
         ),
     };
+    (
+        RichText::new(label).monospace().size(font).color(color),
+        fill,
+    )
+}
+
+/// A local example painted with the same line numbers, markers and colors as a real patch.
+pub(super) fn settings_preview(ui: &mut egui::Ui, paired: bool, font: f32) {
+    static SAMPLE: std::sync::LazyLock<Vec<Line>> = std::sync::LazyLock::new(|| {
+        shovel_core::diff::parse_lines("@@ -1,3 +1,3 @@\n fn limit() -> u8 {\n-    10\n+    60\n }")
+            .expect("valid built-in patch")
+    });
+    let p = crate::workspace_style::Palette::current(ui);
     egui::Frame::new()
-        .fill(fill)
+        .fill(p.canvas)
+        .stroke((1., p.border))
+        .inner_margin(8)
         .show(ui, |ui| {
-            ui.add_sized(
-                [width, font + 6.],
-                egui::Label::new(RichText::new(label).monospace().size(font).color(color))
-                    .extend()
-                    .sense(egui::Sense::click()),
-            )
-        })
-        .inner
+            let width = ui.available_width();
+            ui.set_min_width(width);
+            ui.label(
+                RichText::new("config.rs")
+                    .monospace()
+                    .small()
+                    .color(p.muted),
+            );
+            ui.separator();
+            egui::ScrollArea::horizontal()
+                .id_salt("settings-diff-sample")
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(4., 1.);
+                    let cell = |ui: &mut egui::Ui, line: &Line, side, width| {
+                        let (label, fill) = line_style(ui, line, side, font, false, 1);
+                        egui::Frame::new().fill(fill).show(ui, |ui| {
+                            ui.set_min_width(width);
+                            ui.add(egui::Label::new(label).extend().selectable(false));
+                        });
+                    };
+                    if paired {
+                        // Size both columns for the longest numbered sample line at the chosen font.
+                        let example = "1   fn limit() -> u8 {";
+                        let minimum = ui
+                            .painter()
+                            .layout_no_wrap(example.into(), egui::FontId::monospace(font), p.text)
+                            .size()
+                            .x;
+                        let half = ((width - ui.spacing().item_spacing.x) / 2.).max(minimum);
+                        for pair in align(&SAMPLE) {
+                            if pair.shared {
+                                cell(ui, &SAMPLE[pair.old.unwrap()], None, width);
+                            } else {
+                                ui.horizontal(|ui| {
+                                    for (side, index) in [(false, pair.old), (true, pair.new)] {
+                                        if let Some(index) = index {
+                                            cell(ui, &SAMPLE[index], Some(side), half);
+                                        } else {
+                                            ui.allocate_space(egui::vec2(half, font));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    } else {
+                        for line in SAMPLE.iter() {
+                            cell(ui, line, None, width);
+                        }
+                    }
+                });
+        });
 }
 #[cfg(test)]
 mod tests {
