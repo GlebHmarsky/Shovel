@@ -12,8 +12,8 @@ use std::{
 };
 
 pub const MAX_BYTES: usize = 4 * 1024 * 1024;
-// Schema 2 invalidates cached graph rows from before inline stash connections.
-pub const PREVIEW_SCHEMA: u32 = 2;
+// Invalidate cached rows that send detached stash bases into a side lane.
+pub const PREVIEW_SCHEMA: u32 = 3;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Preview {
     pub schema: u32,

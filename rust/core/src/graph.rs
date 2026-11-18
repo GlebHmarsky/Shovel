@@ -52,7 +52,7 @@ fn allocate(lanes: &mut Vec<Lane>, lane: Lane) -> Result<usize, GraphError> {
 }
 
 pub fn build<'a>(
-    commits: impl IntoIterator<Item = (&'a str, &'a [String], bool)>,
+    commits: impl IntoIterator<Item = (&'a str, &'a [String], bool, Option<&'a str>)>,
     cursor: &Cursor,
 ) -> Result<(Vec<Row>, Cursor), GraphError> {
     let mut lanes = cursor.lanes.clone();
@@ -62,7 +62,7 @@ pub fn build<'a>(
     if lanes.len() > MAX_LANES {
         return Err(GraphError::TooWide);
     }
-    for (hash, parents, is_stash) in commits {
+    for (hash, parents, is_stash, stash_base_parent) in commits {
         if parents.len() > MAX_LANES {
             return Err(GraphError::TooWide);
         }
@@ -90,16 +90,33 @@ pub fn build<'a>(
             {
                 Some(target) => (lanes.len(), target),
                 None => {
-                    // The stash starts this lane, so connect straight down to its base.
-                    let node = allocate(
-                        &mut lanes,
-                        Lane {
-                            hash: parents[0].clone(),
-                            color,
-                            is_stash: false,
-                        },
-                    )?;
-                    (node, node)
+                    // A stash-only former tip can use its parent's lane. Route the
+                    // existing edge around the stash and base so it still joins
+                    // their common parent without implying an extra Git parent.
+                    if let Some(target) = stash_base_parent.and_then(|parent| {
+                        lanes.iter().position(|l| l.hash == parent && !l.is_stash)
+                    }) && lanes.len() < MAX_LANES
+                    {
+                        let bypass = lanes.len();
+                        lanes.push(lanes[target].clone());
+                        lines
+                            .iter_mut()
+                            .find(|line| line.from == target)
+                            .unwrap()
+                            .to = bypass;
+                        lanes[target].hash.clone_from(&parents[0]);
+                        (target, target)
+                    } else {
+                        let node = allocate(
+                            &mut lanes,
+                            Lane {
+                                hash: parents[0].clone(),
+                                color,
+                                is_stash: false,
+                            },
+                        )?;
+                        (node, node)
+                    }
                 }
             };
             if node >= MAX_LANES {
@@ -243,17 +260,21 @@ mod tests {
             ("base", vec![], false),
         ];
         let (all, end) = build(
-            commits.iter().map(|(h, p, s)| (*h, p.as_slice(), *s)),
+            commits.iter().map(|(h, p, s)| (*h, p.as_slice(), *s, None)),
             &Cursor::default(),
         )
         .unwrap();
         let (mut first, cursor) = build(
-            commits[..2].iter().map(|(h, p, s)| (*h, p.as_slice(), *s)),
+            commits[..2]
+                .iter()
+                .map(|(h, p, s)| (*h, p.as_slice(), *s, None)),
             &Cursor::default(),
         )
         .unwrap();
         let (last, split_end) = build(
-            commits[2..].iter().map(|(h, p, s)| (*h, p.as_slice(), *s)),
+            commits[2..]
+                .iter()
+                .map(|(h, p, s)| (*h, p.as_slice(), *s, None)),
             &cursor,
         )
         .unwrap();
@@ -269,7 +290,7 @@ mod tests {
         let (rows, cursor) = build(
             hashes
                 .iter()
-                .map(|h| (h.as_str(), parents.as_slice(), true)),
+                .map(|h| (h.as_str(), parents.as_slice(), true, None)),
             &Cursor::default(),
         )
         .unwrap();
@@ -279,7 +300,7 @@ mod tests {
         assert!(rows[1..].iter().all(|r| r.width == 2 && r.node == 1));
         assert_eq!(cursor.lanes.len(), 1);
         assert!(!cursor.lanes[0].is_stash);
-        let (base, end) = build([("base", &[][..], false)], &cursor).unwrap();
+        let (base, end) = build([("base", &[][..], false, None)], &cursor).unwrap();
         assert_eq!(base[0].node, 0);
         assert!(end.lanes.is_empty());
     }

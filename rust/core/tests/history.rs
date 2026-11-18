@@ -115,7 +115,7 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
 }
 
 #[test]
-fn stash_and_its_detached_base_share_a_lane() {
+fn autostash_and_detached_previous_tip_stay_on_the_main_lane() {
     let (temp, mut git) = fixture();
     let root = temp.path();
     fs::write(root.join("tracked.txt"), "base\n").unwrap();
@@ -155,7 +155,6 @@ fn stash_and_its_detached_base_share_a_lane() {
     assert_eq!(tip.commit.parents, common_parent);
     assert_eq!(base.commit.parents, common_parent);
     assert_eq!(stash.graph.node, base.graph.node);
-    assert_eq!(stash.graph.color, base.graph.color);
     assert_eq!(stash.graph.width, 2);
     assert!(stash.graph.lines.iter().any(|line| {
         line.from == stash.graph.node
@@ -163,8 +162,20 @@ fn stash_and_its_detached_base_share_a_lane() {
             && line.to == base.graph.node
             && line.to_y == 1.
     }));
-    assert_ne!(base.graph.node, tip.graph.node);
+    assert_eq!(base.graph.node, 0);
+    assert_eq!(base.graph.node, tip.graph.node);
+    assert_eq!(base.graph.color, tip.graph.color);
     assert_eq!(tip.graph.node, common.graph.node);
+    let bypass = 1;
+    assert!(stash.graph.lines.iter().any(|line| {
+        line.from == tip.graph.node && line.from_y == 0. && line.to == bypass && line.to_y == 1.
+    }));
+    assert!(base.graph.lines.iter().any(|line| {
+        line.from == bypass && line.from_y == 0. && line.to == bypass && line.to_y == 1.
+    }));
+    assert!(common.graph.lines.iter().any(|line| {
+        line.from == bypass && line.from_y == 0. && line.to == common.graph.node && line.to_y == 0.5
+    }));
 }
 
 #[test]

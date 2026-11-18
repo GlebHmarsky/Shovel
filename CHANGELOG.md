@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.15 - 2026-11-18
+
+- Keep an autostash and its detached former branch tip on the shared parent's history lane. Route the newer commit's edge around them to preserve Git's parent relationships.
+
 ## Rust 0.50.14 - 2026-11-18
 
 - Name the installed Windows app and shortcuts Shovel. Ship `Shovel.exe` in `Shovel-Setup.exe` and retain the existing signed update package and profile identities.

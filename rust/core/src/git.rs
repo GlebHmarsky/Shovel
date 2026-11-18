@@ -618,8 +618,13 @@ impl Git {
             .take(PAGE_SIZE)
             .map(|(c, _, _)| c.clone())
             .collect::<Vec<_>>();
-        let graph_commits = shown.iter().map(|c| {
+        let graph_commits = projected.iter().take(PAGE_SIZE).map(|(c, raw_index, _)| {
             let stash = history.stashes.iter().any(|s| s.hash == c.hash);
+            let base = &raw[*raw_index];
+            let stash_base_parent = (stash
+                && !history.snapshot.references.iter().any(|r| r.hash == base.hash))
+                .then(|| base.parents.first().map(String::as_str))
+                .flatten();
             (
                 c.hash.as_str(),
                 if stash {
@@ -628,6 +633,7 @@ impl Git {
                     c.parents.as_slice()
                 },
                 stash,
+                stash_base_parent,
             )
         });
         let (graph, next_graph) = graph::build(graph_commits, &cursor.graph)?;
