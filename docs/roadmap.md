@@ -58,6 +58,12 @@ New first-status ranges were 1,130–1,395 ms and 943–1,416 ms. New refresh ra
 
 Twenty-two native branch, conflict and working-copy checks and five desktop watcher, draft and layout checks passed. Fixtures exercised unborn, detached, conflicted and linked repositories, the final index check, and included LFS config with a valueless `required` setting. All-target Clippy, `git diff --check` and all 18 bounded smoke checks passed. Smoke took 37.27 seconds on source fingerprint `59607261C4D94F4F9E1EE0CD01E8766134AA08E6131A264A6411038A374AA6B5`.
 
+### Keep inline Local Changes ready between tab switches
+
+Switching repositories suspends inline Local Changes and preserves its context, selected file, diff and draft. A recent observation lets the returning view reuse its validated context. If the worktree changed while the view was suspended, it shows the retained rows immediately and refreshes in the background. An old or failed read and a missing watcher also trigger refresh on return.
+
+In a two-repository headless workspace test, returning to unchanged Local Changes laid out in 76 ms. It reused the same working-copy context and diff generation, with the selected file and draft still in place. An external file created while the editor was suspended appeared 1.35 seconds after returning. All four Commit editor checks and the layout-switch regression passed. Clippy, `git diff --check` and all 18 smoke checks passed in the final run. Smoke took 32.91 seconds on source fingerprint `7F62896AD952C015C7190BAFB3B23AC89F650F6B56430B4E87F9E54264BCA091`.
+
 
 ## Windows Rust 0.51.0 local build checks
 

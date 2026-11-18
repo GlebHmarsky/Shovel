@@ -1371,6 +1371,15 @@ impl Workspace {
             .or_else(|| self.known_identity(&tab.path));
         let tab = &mut self.tabs[self.selected];
         let inline = self.settings.commit_in_workspace();
+        let observed_recently = tab
+            .view
+            .watch
+            .as_ref()
+            .is_some_and(|watch| watch.available())
+            && tab
+                .view
+                .validated
+                .is_some_and(|time| time.elapsed().as_secs() < 30);
         self.editors.retain(|editor| {
             !(tab.matches_path(&editor.path)
                 && !editor.matches_owner(expected.as_deref())
@@ -1387,6 +1396,9 @@ impl Workspace {
         if let Some(editor) = self.editors.iter_mut().find(|editor| {
             tab.matches_path(&editor.path) && editor.matches_owner(expected.as_deref())
         }) {
+            if inline && !editor.open && (!observed_recently || editor.current_context().is_none()) {
+                editor.external_changed();
+            }
             tab.local_changes = inline;
             editor.inline = inline;
             editor.activate();
@@ -1435,9 +1447,9 @@ impl Workspace {
             if editor.inline
                 && editor.open
                 && !editor.exit_prompt_open()
-                && target.is_none_or(|tab| !Self::same_path(&editor.path, &tab.path))
+                && target.is_none_or(|tab| !tab.owns_editor(editor))
             {
-                editor.hide(ctx);
+                editor.suspend(ctx);
                 editor.save_layout(&mut self.settings);
                 self.preferences_dirty = true;
             }

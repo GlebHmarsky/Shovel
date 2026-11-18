@@ -46,6 +46,8 @@ Each open repository retains its current history page, selection, scroll positio
 
 External file and Git changes refresh the affected repository automatically. A worktree edit updates open Local Changes and the optional dirty marker. Ref changes refresh selected history in the background, with the existing rows visible while Git reads. Inactive tabs keep their view and refresh on return when they have pending ref changes.
 
+Returning to inline Local Changes keeps the last file list, selection, diff and draft visible. A recent, observed repository reuses its existing status until an external change requires an update. The editor refreshes after returning if the previous read failed or observation is unavailable.
+
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
 Stashes appear as short leaf connections immediately above their actual base commit. Their timestamps do not reorder ordinary branch history; multiple stashes on one base share a compact connection. Details retain the real stash parents and contents.

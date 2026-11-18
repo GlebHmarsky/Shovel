@@ -219,6 +219,7 @@ impl Editor {
         !self.open
             && !self.loading
             && !self.blocks_exit()
+            && !self.has_prompt()
             && !self.inspector.as_ref().is_some_and(|v| v.open || v.busy)
     }
     pub fn current_context(&self) -> Option<&Context> {
@@ -271,10 +272,16 @@ impl Editor {
         self.open = true;
     }
     pub fn hide(&mut self, ctx: &egui::Context) {
-        self.leave = None;
-        self.confirm_amend = None;
-        self.files_focus = None;
         self.finish_leave(Leave::Close, ctx);
+    }
+    pub(super) fn suspend(&mut self, ctx: &egui::Context) {
+        self.files_focus = None;
+        self.file_menu = None;
+        if let Some(pane) = &mut self.conflict {
+            pane.pause();
+        }
+        self.open = false;
+        self.flush(ctx);
     }
     pub fn has_prompt(&self) -> bool {
         self.confirm_amend.is_some() || self.leave.is_some() || self.file_confirmation.is_some()
@@ -383,14 +390,11 @@ impl Editor {
         match next {
             Leave::Menu(menu) => self.begin_file_menu(*menu),
             Leave::Close | Leave::Exit => {
-                self.file_menu = None;
+                self.leave = None;
+                self.confirm_amend = None;
                 self.file_confirmation = None;
-                if let Some(pane) = &mut self.conflict {
-                    pane.pause();
-                }
-                self.open = false;
                 self.refresh_pending = true;
-                self.flush(ctx);
+                self.suspend(ctx);
             }
             Leave::Select {
                 entry,
@@ -1672,6 +1676,84 @@ mod tests {
             .drop_without_applying_deltas();
             assert!((reopened.size - native).length() < 0.01);
         }
+    }
+
+    #[test]
+    fn inline_changes_keep_rows_diff_and_draft_until_their_worktree_changes() {
+        use crate::history_view::tests::{Fixture, paint, wait};
+
+        let first = Fixture::new();
+        let second = Fixture::new();
+        std::fs::write(first.root.join("visible.txt"), "initial change\n").unwrap();
+        let ctx = egui::Context::default();
+        let mut app = first.app(&ctx);
+        app.settings
+            .set("CommitInWorkspace", serde_json::json!(true));
+        app.draft_store = Some(drafts::Store {
+            directory: first._temp.path().join("drafts"),
+            legacy_directory: None,
+        });
+        let until = |app: &mut crate::Workspace, ready: &dyn Fn(&Editor) -> bool| {
+            let started = Instant::now();
+            while !ready(&app.editors[0]) {
+                assert!(started.elapsed() < Duration::from_secs(15));
+                app.receive(&ctx);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        app.open_commit();
+        paint(&mut app, &ctx, vec![]);
+        until(&mut app, &|editor| {
+            editor.draft_loaded && editor.current_context().is_some()
+        });
+        let editor = &mut app.editors[0];
+        let previous = editor.context.clone().unwrap();
+        let entry = previous
+            .change(Group::Untracked, "visible.txt")
+            .unwrap()
+            .clone();
+        let selected = (entry.group, entry.path.clone());
+        editor.selection.insert(selected.clone());
+        editor.show_diff(entry, &ctx);
+        editor.draft.subject = "retained repository draft".into();
+        editor.edited();
+        until(&mut app, &|editor| editor.diff.is_some());
+        let previous_diff = app.editors[0].diff_generation;
+
+        app.open(second.root.clone(), &ctx);
+        wait(&mut app, &ctx);
+        assert!(!app.editors[0].open);
+        assert!(!app.editors[0].refresh_pending);
+        let started = Instant::now();
+        app.select_tab(0, &ctx);
+        paint(&mut app, &ctx, vec![]);
+        app.receive(&ctx);
+        println!("warm Local Changes layout: {:?}", started.elapsed());
+        let editor = &app.editors[0];
+        assert!(editor.open && !editor.loading);
+        assert!(Arc::ptr_eq(editor.context.as_ref().unwrap(), &previous));
+        assert!(editor.selection.contains(&selected));
+        assert_eq!(editor.diff_generation, previous_diff);
+        assert_eq!(editor.draft.subject, "retained repository draft");
+
+        app.select_tab(1, &ctx);
+        std::fs::write(first.root.join("external.txt"), "added while inactive\n").unwrap();
+        until(&mut app, &|editor| editor.refresh_pending);
+        assert!(!app.editors[0].loading);
+        let started = Instant::now();
+        app.select_tab(0, &ctx);
+        assert!(Arc::ptr_eq(
+            app.editors[0].context.as_ref().unwrap(),
+            &previous
+        ));
+        until(&mut app, &|editor| {
+            editor.current_context().is_some_and(|context| {
+                context.change(Group::Untracked, "external.txt").is_some()
+            })
+        });
+        println!("dirty Local Changes return to fresh rows: {:?}", started.elapsed());
+        assert!(app.editors[0].selection.contains(&selected));
+        assert_eq!(app.editors[0].draft.subject, "retained repository draft");
     }
 
     #[test]
