@@ -161,11 +161,22 @@ impl VerifiedRelease {
     }
 
     /// Check exactly the signed bytes without allocating a package-sized buffer.
-    pub fn verify_package(&self, mut input: impl Read) -> Result<(), UpdateError> {
+    pub fn verify_package(&self, input: impl Read) -> Result<(), UpdateError> {
+        self.verify_package_cancellable(input, || false)
+    }
+
+    pub fn verify_package_cancellable(
+        &self,
+        mut input: impl Read,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<(), UpdateError> {
         let mut hash = Sha256::new();
         let mut buffer = [0; 65536];
         let mut size = 0u64;
         loop {
+            if cancelled() {
+                return Err(std::io::Error::from(std::io::ErrorKind::Interrupted).into());
+            }
             let count = input.read(&mut buffer)?;
             if count == 0 {
                 break;
@@ -182,6 +193,32 @@ impl VerifiedRelease {
             return Err(UpdateError::PackageMismatch);
         }
         Ok(())
+    }
+
+    /// Called after download approval, under the installation's package lock.
+    /// Only an exact signed target whose contents failed verification is removed.
+    pub fn prepare_cached_download(
+        &self,
+        directory: &std::path::Path,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<bool, UpdateError> {
+        let target = directory.join(self.file_name());
+        let input = match std::fs::File::open(&target) {
+            Ok(input) => input,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        match self.verify_package_cancellable(input, &cancelled) {
+            Ok(()) => Ok(true),
+            Err(UpdateError::PackageMismatch) => {
+                if cancelled() {
+                    return Err(std::io::Error::from(std::io::ErrorKind::Interrupted).into());
+                }
+                std::fs::remove_file(target)?;
+                Ok(false)
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -319,6 +356,47 @@ mod tests {
         assert!(!release.is_newer_than(&Version::new(0, 48, 0)));
         assert!(!release.is_newer_than(&Version::new(0, 49, 0)));
         assert!(release.is_newer_than(&Version::new(0, 47, 0)));
+    }
+
+    #[test]
+    fn cached_download_reuses_signed_bytes_and_only_removes_the_damaged_target() {
+        let release = verify_feed_with_key(Channel::Beta, TEST_KEY, VALID, SIGNATURE).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join(release.file_name());
+        let other = directory.path().join("other-release.nupkg");
+        std::fs::write(&other, b"retain").unwrap();
+        assert!(
+            !release
+                .prepare_cached_download(directory.path(), || false)
+                .unwrap()
+        );
+        for bad in [
+            b"short".as_slice(),
+            b"Rust package fixturf\n",
+            b"Rust package fixture\nextra",
+        ] {
+            std::fs::write(&target, bad).unwrap();
+            assert!(
+                matches!(release.prepare_cached_download(directory.path(), || true), Err(UpdateError::Io(e)) if e.kind() == std::io::ErrorKind::Interrupted)
+            );
+            assert_eq!(std::fs::read(&target).unwrap(), bad);
+            assert!(
+                !release
+                    .prepare_cached_download(directory.path(), || false)
+                    .unwrap()
+            );
+            assert!(!target.exists());
+            assert_eq!(std::fs::read(&other).unwrap(), b"retain");
+        }
+        std::fs::write(&target, b"Rust package fixture\n").unwrap();
+        assert!(
+            release
+                .prepare_cached_download(directory.path(), || false)
+                .unwrap()
+        );
+        release
+            .verify_package(std::fs::File::open(&target).unwrap())
+            .unwrap();
     }
 
     #[test]

@@ -595,7 +595,10 @@ impl Workspace {
             }
             match event {
                 Event::ToolFinished(result) => {
-                    self.external_tools_opened |= result.is_ok();
+                    if result.is_ok() {
+                        self.external_tools_opened = true;
+                        self.updater.tool_opened();
+                    }
                     self.notice = result.err();
                 }
                 Event::PreferencesSaved(store, mut saved, result, scale_revision) => {
@@ -1234,6 +1237,14 @@ impl Workspace {
     // Recheck immediately before every final close: saving settings yields to
     // other views and must never turn a previously safe exit into a command kill.
     fn prepare_exit(&mut self, ctx: &egui::Context) -> bool {
+        if self.updater.restart_requested
+            && self.updater.needs_tool_confirmation(self.external_tools_opened)
+        {
+            self.pending_exit = false;
+            self.updater.restart_requested = false;
+            self.updater.open = true;
+            return false;
+        }
         if self.git_selection.busy() {
             self.notice = Some(strings::text("RustGitSelecting"));
             return false;

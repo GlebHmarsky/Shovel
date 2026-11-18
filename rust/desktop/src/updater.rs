@@ -76,8 +76,17 @@ fn transfer(
         .header("User-Agent", "ShovelRust")
         .call()
         .map_err(failure)?;
-    let mut reader = response.body_mut().as_reader();
+    copy_response(response.body_mut().as_reader(), out, max, cancel, progress)
+}
+fn copy_response(
+    mut reader: impl Read,
+    out: &mut impl Write,
+    max: u64,
+    cancel: &Cancellation,
+    progress: Option<&mpsc::Sender<i16>>,
+) -> Result<(), String> {
     let mut total = 0;
+    let mut last_percent = None;
     let mut buffer = [0u8; 65536];
     loop {
         if cancel.is_cancelled() {
@@ -93,7 +102,11 @@ fn transfer(
         }
         out.write_all(&buffer[..n]).map_err(failure)?;
         if let Some(tx) = progress {
-            let _ = tx.send((total.saturating_mul(100) / max.max(1)).min(100) as i16);
+            let percent = (total.saturating_mul(100) / max.max(1)).min(100) as i16;
+            if last_percent != Some(percent) {
+                let _ = tx.send(percent);
+                last_percent = Some(percent);
+            }
         }
     }
     Ok(())
@@ -216,7 +229,7 @@ impl UpdateSource for FrozenSource {
         drop(file);
         self.offer
             .release
-            .verify_package(File::open(path)?)
+            .verify_package_cancellable(File::open(path)?, || self.cancel.is_cancelled())
             .map_err(|e| err(e.to_string()))
     }
 }
@@ -239,18 +252,42 @@ fn manager(offer: &Offer, cancel: Cancellation) -> Result<UpdateManager, String>
     }
     Ok(manager)
 }
-fn package_path(offer: &Offer) -> Result<PathBuf, String> {
-    let locator = velopack::locator::auto_locate_app_manifest(
-        velopack::locator::LocationContext::FromCurrentExe,
-    )
-    .map_err(failure)?;
-    Ok(locator.get_packages_dir().join(offer.release.file_name()))
+fn installed_locator() -> Result<velopack::locator::VelopackLocator, String> {
+    velopack::locator::auto_locate_app_manifest(velopack::locator::LocationContext::FromCurrentExe)
+        .map_err(|_| text("RustUpdateInstallNeeded"))
+}
+enum ApplyError {
+    Retry(String),
+    DownloadAgain,
+}
+impl From<String> for ApplyError {
+    fn from(message: String) -> Self {
+        Self::Retry(message)
+    }
+}
+fn verify_for_restart(package: &Path, release: &VerifiedRelease) -> Result<(), ApplyError> {
+    let input = File::open(package).map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound => ApplyError::DownloadAgain,
+        _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
+    })?;
+    release.verify_package(input).map_err(|error| match error {
+        updates::UpdateError::PackageMismatch => ApplyError::DownloadAgain,
+        _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
+    })
 }
 enum Event {
-    Applied(Result<(), String>),
+    Applied(Result<(), ApplyError>),
     Checked(u64, Result<Option<Offer>, CheckError>),
     Downloaded(u64, Result<Offer, String>),
     Progress(u64, i16),
+}
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Phase {
+    #[default]
+    Idle,
+    Checking,
+    Downloading(u8),
+    Applying,
 }
 pub struct Controller {
     pub open: bool,
@@ -262,7 +299,7 @@ pub struct Controller {
     channel: Channel,
     offer: Option<Offer>,
     status: String,
-    busy: bool,
+    phase: Phase,
     cancel: Cancellation,
     tx: mpsc::Sender<Event>,
     rx: mpsc::Receiver<Event>,
@@ -282,7 +319,7 @@ impl Default for Controller {
             channel: Channel::Beta,
             offer: None,
             status: String::new(),
-            busy: false,
+            phase: Phase::Idle,
             cancel: Default::default(),
             workers: Default::default(),
             tx,
@@ -296,6 +333,9 @@ impl Default for Controller {
     }
 }
 impl Controller {
+    fn busy(&self) -> bool {
+        self.phase != Phase::Idle
+    }
     pub fn stop_and_drained(&self) -> bool {
         self.cancel();
         self.workers.cancel_and_drained()
@@ -305,6 +345,12 @@ impl Controller {
     }
     pub fn cancel(&self) {
         self.cancel.cancel();
+    }
+    pub fn tool_opened(&mut self) {
+        self.tools_confirmed = false;
+    }
+    pub fn needs_tool_confirmation(&self, tools_opened: bool) -> bool {
+        tools_opened && !self.tools_confirmed
     }
     pub fn available_version(&self, channel: Channel) -> Option<&semver::Version> {
         self.offer
@@ -328,10 +374,11 @@ impl Controller {
         if self.channel != channel {
             self.cancel();
             self.generation += 1;
-            self.busy = false;
+            self.phase = Phase::Idle;
             self.restart_requested = false;
             self.channel = channel;
             self.offer = None;
+            self.tools_confirmed = false;
             self.ready = false;
             self.last = None;
             self.status = text("RustUpdateChecking");
@@ -339,24 +386,35 @@ impl Controller {
         while let Ok(event) = self.rx.try_recv() {
             match event {
                 Event::Applied(result) => {
-                    self.busy = false;
+                    self.phase = Phase::Idle;
                     match result {
                         Ok(()) => self.exit_ready = true,
                         Err(error) => {
-                            self.status = error;
+                            self.status = match error {
+                                ApplyError::Retry(message) => message,
+                                ApplyError::DownloadAgain => {
+                                    self.ready = false;
+                                    self.tools_confirmed = false;
+                                    text("RustUpdateDownloadAgain")
+                                }
+                            };
                             self.restart_requested = false;
                             self.open = true;
                         }
                     }
                 }
-                Event::Progress(id, p) if id == self.generation => {
-                    self.status = format("RustUpdateProgress", &[&p.to_string()])
+                Event::Progress(id, p)
+                    if id == self.generation && matches!(self.phase, Phase::Downloading(_)) =>
+                {
+                    let percent = p.clamp(0, 100) as u8;
+                    self.phase = Phase::Downloading(percent);
+                    self.status = format("RustUpdateProgress", &[&percent.to_string()])
                 }
                 Event::Checked(id, result) if id == self.generation => {
-                    self.busy = false;
+                    self.phase = Phase::Idle;
                     match result {
                         Ok(Some(offer)) if offer.release.channel() == self.channel => {
-                            self.ready &= self.offer.as_ref().is_some_and(|current| {
+                            let same_release = self.offer.as_ref().is_some_and(|current| {
                                 current.release.version() == offer.release.version()
                                     && current.release.size() == offer.release.size()
                                     && current
@@ -364,6 +422,8 @@ impl Controller {
                                         .SHA256
                                         .eq_ignore_ascii_case(&offer.asset.SHA256)
                             });
+                            self.ready &= same_release;
+                            self.tools_confirmed &= same_release;
                             self.status = if self.ready {
                                 text("UpdateReadyShort")
                             } else {
@@ -386,7 +446,7 @@ impl Controller {
                     }
                 }
                 Event::Downloaded(id, result) if id == self.generation => {
-                    self.busy = false;
+                    self.phase = Phase::Idle;
                     match result {
                         Ok(offer) if offer.release.channel() == self.channel => {
                             self.offer = Some(offer);
@@ -400,7 +460,7 @@ impl Controller {
                 _ => {}
             }
         }
-        if self.busy || self.restart_requested || self.exit_ready || self.workers.stopping() {
+        if self.busy() || self.restart_requested || self.exit_ready || self.workers.stopping() {
             return;
         }
         match self.last {
@@ -427,7 +487,7 @@ impl Controller {
         now: Instant,
         run: impl FnOnce(Channel, Cancellation) -> Result<Option<Offer>, CheckError> + Send + 'static,
     ) {
-        if self.busy
+        if self.busy()
             || self.restart_requested
             || self.exit_ready
             || self.workers.stopping()
@@ -437,7 +497,7 @@ impl Controller {
         }
         self.generation += 1;
         let generation = self.generation;
-        self.busy = true;
+        self.phase = Phase::Checking;
         self.last = Some(now);
         self.status = text("RustUpdateChecking");
         self.cancel = Cancellation::default();
@@ -447,7 +507,12 @@ impl Controller {
         let cancel = self.cancel.clone();
         let lease = self.workers.start(cancel.clone());
         std::thread::spawn(move || {
-            let result = run(channel, cancel);
+            let result = run(channel, cancel.clone());
+            let result = if cancel.is_cancelled() {
+                Err(text("ActionResultCancelled").into())
+            } else {
+                result
+            };
             drop(lease);
             let _ = tx.send(Event::Checked(generation, result));
             ctx.request_repaint();
@@ -469,28 +534,52 @@ impl Controller {
                     env!("CARGO_PKG_VERSION"),
                     self.channel.label()
                 ));
-                ui.label(&self.status);
+                let cancelling = self.cancel.is_cancelled()
+                    && matches!(self.phase, Phase::Checking | Phase::Downloading(_));
+                let status = if cancelling {
+                    text("RustUpdateCancelling")
+                } else {
+                    self.status.clone()
+                };
+                match self.phase {
+                    Phase::Downloading(percent) => {
+                        ui.add(egui::ProgressBar::new(f32::from(percent) / 100.).text(status));
+                    }
+                    Phase::Checking | Phase::Applying => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(status);
+                        });
+                    }
+                    Phase::Idle => {
+                        ui.label(status);
+                    }
+                }
                 if let Some(offer) = &self.offer {
                     ui.label(offer.release.notes());
                 }
                 if self.ready && tools_opened {
                     ui.checkbox(&mut self.tools_confirmed, text("UpdateToolsQuestion"));
                 }
-                let blocked = blocked || (tools_opened && !self.tools_confirmed);
+                let blocked = blocked || self.needs_tool_confirmation(tools_opened);
                 ui.horizontal(|ui| {
                     if ui
-                        .add_enabled(!self.busy, egui::Button::new(text("UpdateRetry")))
+                        .add_enabled(!self.busy(), egui::Button::new(text("UpdateRetry")))
                         .clicked()
                     {
                         self.check(ctx);
                     }
-                    if self.busy && ui.button(text("Cancel")).clicked() {
+                    if matches!(self.phase, Phase::Checking | Phase::Downloading(_))
+                        && ui
+                            .add_enabled(!cancelling, egui::Button::new(text("Cancel")))
+                            .clicked()
+                    {
                         self.cancel();
                     }
                     if self.ready {
                         if ui
                             .add_enabled(
-                                !blocked && !self.busy,
+                                !blocked && !self.busy(),
                                 egui::Button::new(text("RustUpdateRestart")),
                             )
                             .on_disabled_hover_text(text("RustUpdateBlocked"))
@@ -499,12 +588,13 @@ impl Controller {
                             self.restart_requested = true;
                         }
                     } else if self.offer.is_some()
-                        && !self.busy
+                        && !self.busy()
                         && ui.button(text("RustUpdateDownload")).clicked()
                     {
                         self.generation += 1;
                         let generation = self.generation;
-                        self.busy = true;
+                        self.phase = Phase::Downloading(0);
+                        self.status = format("RustUpdateProgress", &["0"]);
                         self.cancel = Cancellation::default();
                         let offer = self.offer.clone().unwrap();
                         let cancel = self.cancel.clone();
@@ -514,13 +604,22 @@ impl Controller {
                         std::thread::spawn(move || {
                             let result = (|| {
                                 recheck_offer(&offer, &cancel)?;
-                                let manager = manager(&offer, cancel)?;
-                                let target = package_path(&offer)?;
-                                if target.exists() {
-                                    offer
+                                let manager = manager(&offer, cancel.clone())?;
+                                let locator = installed_locator()?;
+                                let directory = locator.get_packages_dir();
+                                {
+                                    let _lock = locator
+                                        .try_get_exclusive_lock()
+                                        .map_err(|_| text("RustUpdateCacheUnavailable"))?;
+                                    if offer
                                         .release
-                                        .verify_package(File::open(&target).map_err(failure)?)
-                                        .map_err(|_| text("RustUpdateInvalid"))?;
+                                        .prepare_cached_download(&directory, || {
+                                            cancel.is_cancelled()
+                                        })
+                                        .map_err(|_| text("RustUpdateCacheUnavailable"))?
+                                    {
+                                        return Ok(offer);
+                                    }
                                 }
                                 let pt = tx.clone();
                                 let pc = ctx.clone();
@@ -543,11 +642,20 @@ impl Controller {
                                 )?;
                                 offer
                                     .release
-                                    .verify_package(File::open(target).map_err(failure)?)
+                                    .verify_package_cancellable(
+                                        File::open(directory.join(offer.release.file_name()))
+                                            .map_err(failure)?,
+                                        || cancel.is_cancelled(),
+                                    )
                                     .map_err(|_| text("RustUpdateInvalid"))?;
                                 Ok(offer)
                             })();
                             drop(lease);
+                            let result = if cancel.is_cancelled() {
+                                Err(text("ActionResultCancelled"))
+                            } else {
+                                result
+                            };
                             let _ = tx.send(Event::Downloaded(generation, result));
                             ctx.request_repaint();
                         });
@@ -565,7 +673,8 @@ impl Controller {
         let offer = self.offer.clone();
         let ready = self.ready;
         let channel = self.channel;
-        self.busy = true;
+        self.phase = Phase::Applying;
+        self.status = text("UpdateInstalling");
         let tx = self.tx.clone();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
@@ -577,17 +686,17 @@ impl Controller {
                             .inspect(&path, &Cancellation::default())
                             .map_err(|_| text("RustUpdateRepositoryState"))?;
                         if !snapshot.operations.is_empty() {
-                            return Err(text("RustUpdateRepositoryState"));
+                            return Err(text("RustUpdateRepositoryState").into());
                         }
                     }
                 }
                 let offer = offer
                     .filter(|o| ready && o.release.channel() == channel)
                     .ok_or_else(|| text("RustUpdateInvalid"))?;
-                offer
-                    .release
-                    .verify_package(File::open(package_path(&offer)?).map_err(failure)?)
-                    .map_err(|_| text("RustUpdateInvalid"))?;
+                let target = installed_locator()?
+                    .get_packages_dir()
+                    .join(offer.release.file_name());
+                verify_for_restart(&target, &offer.release)?;
                 recheck_offer(&offer, &Cancellation::default())?;
                 manager(&offer, Cancellation::default())?
                     .wait_exit_then_apply_updates(
@@ -596,7 +705,7 @@ impl Controller {
                         true,
                         std::env::args_os().skip(1),
                     )
-                    .map_err(failure)
+                    .map_err(|error| failure(error).into())
             })();
             let _ = tx.send(Event::Applied(result));
             ctx.request_repaint();
@@ -682,6 +791,132 @@ fn other_instances() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_tool_handoff_reopens_restart_confirmation_while_exit_is_pending() {
+        let ctx = egui::Context::default();
+        let mut app = crate::workspace_interaction_tests::workspace();
+        app.tabs.clear();
+        app.external_tools_opened = true;
+        app.updater.tools_confirmed = true;
+        app.updater.ready = true;
+        app.updater.restart_requested = true;
+        app.pending_exit = true;
+        app.sender.send(crate::Event::ToolFinished(Ok(()))).unwrap();
+        app.receive(&ctx);
+        assert!(app.updater.open && app.updater.ready);
+        assert!(app.updater.needs_tool_confirmation(true));
+        assert!(!app.updater.restart_requested && !app.updater.exit_ready);
+        assert!(!app.pending_exit && !app.closing && !app.exit_ready);
+    }
+
+    #[test]
+    fn damaged_or_missing_package_returns_to_download_but_a_blocked_restart_stays_ready() {
+        let directory = tempfile::tempdir().unwrap();
+        let feed = include_bytes!("../../core/tests/fixtures/beta-0.50.14.json");
+        let sig = include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig");
+        let release = updates::verify_feed(Channel::Beta, feed, sig).unwrap();
+        let asset = serde_json::from_slice::<VelopackAssetFeed>(feed)
+            .unwrap()
+            .Assets
+            .remove(0);
+        let path = directory.path().join(release.file_name());
+        let mut controller = Controller {
+            offer: Some(Offer { release, asset }),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        for damaged in [false, true] {
+            controller.ready = true;
+            controller.restart_requested = true;
+            if damaged {
+                std::fs::write(&path, b"incomplete").unwrap();
+            }
+            let result = verify_for_restart(&path, &controller.offer.as_ref().unwrap().release);
+            assert!(matches!(result, Err(ApplyError::DownloadAgain)));
+            controller.tx.send(Event::Applied(result)).unwrap();
+            controller.tick(&ctx, Channel::Beta, false);
+            assert!(controller.open && controller.offer.is_some());
+            assert!(!controller.ready && !controller.restart_requested && !controller.exit_ready);
+            assert_eq!(controller.status, text("RustUpdateDownloadAgain"));
+        }
+        assert_eq!(std::fs::read(path).unwrap(), b"incomplete");
+        controller.ready = true;
+        controller
+            .tx
+            .send(Event::Applied(Err(ApplyError::Retry(text(
+                "RustUpdateInstances",
+            )))))
+            .unwrap();
+        controller.tick(&ctx, Channel::Beta, false);
+        assert!(controller.ready && !controller.exit_ready);
+        assert_eq!(controller.status, text("RustUpdateInstances"));
+    }
+
+    #[test]
+    fn bounded_transfer_reports_each_percentage_once_and_renders_download_progress() {
+        struct ShortReads(usize);
+        impl Read for ShortReads {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                let count = buffer.len().min(self.0).min(2);
+                buffer[..count].fill(7);
+                self.0 -= count;
+                Ok(count)
+            }
+        }
+        let (tx, rx) = mpsc::channel();
+        let mut output = vec![];
+        copy_response(
+            ShortReads(1000),
+            &mut output,
+            1000,
+            &Cancellation::default(),
+            Some(&tx),
+        )
+        .unwrap();
+        assert_eq!(output, vec![7; 1000]);
+        assert_eq!(
+            rx.try_iter().collect::<Vec<_>>(),
+            (0..=100).collect::<Vec<_>>()
+        );
+        assert!(
+            copy_response(
+                ShortReads(1002),
+                &mut Vec::new(),
+                1000,
+                &Cancellation::default(),
+                None
+            )
+            .is_err()
+        );
+
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut controller = Controller {
+            open: true,
+            phase: Phase::Downloading(0),
+            ..Default::default()
+        };
+        controller.tx.send(Event::Progress(0, 47)).unwrap();
+        controller.tick(&ctx, Channel::Beta, false);
+        let expected = format("RustUpdateProgress", &["47"]);
+        assert_eq!(controller.status, expected);
+        let mut visible = false;
+        for _ in 0..3 {
+            let frame = ctx.run_ui(egui::RawInput::default(), |_| {
+                controller.show(&ctx, false, false)
+            });
+            if let Some(update) = &frame.platform_output.accesskit_update {
+                visible |= update.nodes.iter().any(|(_, node)| {
+                    node.role() == egui::Role::ProgressIndicator
+                        && node.label() == Some(expected.as_str())
+                });
+            }
+            frame.drop_without_applying_deltas();
+        }
+        assert!(visible);
+    }
+
     #[test]
     fn obsolete_update_events_cannot_restore_previous_channel_or_progress() {
         let mut controller = Controller {
@@ -796,7 +1031,7 @@ mod tests {
         assert!(!controller.stop_and_drained());
         controller.tick(&ctx, Channel::Stable, false);
         assert!(cancel.is_cancelled());
-        assert!(!controller.busy);
+        assert!(!controller.busy());
         assert!(
             !controller.stop_and_drained(),
             "presentation idle is not worker completion"
@@ -814,7 +1049,7 @@ mod tests {
             assert_eq!(channel, Channel::Stable);
             Ok(None)
         });
-        while controller.busy {
+        while controller.busy() {
             controller.tick(&ctx, Channel::Stable, false);
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(2));
@@ -842,7 +1077,7 @@ mod tests {
             received.recv_timeout(Duration::from_secs(5)).unwrap(),
             Channel::Stable
         );
-        assert!(controller.busy && !controller.open);
+        assert!(controller.busy() && !controller.open);
         let tick = |controller: &mut Controller, periodic, now| {
             let calls = calls.clone();
             controller.tick_at(&ctx, Channel::Stable, periodic, now, move |channel, _| {
@@ -855,7 +1090,7 @@ mod tests {
         assert_eq!(controller.last, Some(start));
         release.send(()).unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
-        while controller.busy {
+        while controller.busy() {
             tick(&mut controller, false, start);
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(2));
