@@ -1735,6 +1735,7 @@ impl eframe::App for Workspace {
         }
         let system_changed = caption::take_system_change();
         if system_changed {
+            numbers::refresh();
             dates::invalidate(&ctx);
         }
         if system_changed || focused {

@@ -1,5 +1,5 @@
 //! Display numbers using Windows regional grouping and separators without converting Git's integer counts to floating point.
-use std::sync::OnceLock;
+use std::sync::{LazyLock, RwLock};
 use windows_sys::Win32::Globalization::{
     GetLocaleInfoEx, GetNumberFormatEx, LOCALE_ILZERO, LOCALE_INEGNUMBER, LOCALE_NOUSEROVERRIDE,
     LOCALE_SDECIMAL, LOCALE_SGROUPING, LOCALE_STHOUSAND, NUMBERFMTW,
@@ -98,17 +98,56 @@ impl Rules {
     }
 }
 
+struct RegionalRules(RwLock<Option<Rules>>);
+
+impl RegionalRules {
+    fn refresh(&self, locale: Option<&str>) {
+        let current = Rules::load(locale);
+        *self.0.write().unwrap() = current;
+    }
+
+    fn format(&self, value: &str, spec: &str) -> Option<String> {
+        self.0.read().unwrap().as_ref()?.format(value, spec)
+    }
+}
+
+static REGIONAL: LazyLock<RegionalRules> =
+    LazyLock::new(|| RegionalRules(RwLock::new(Rules::load(None))));
+
+pub(super) fn refresh() {
+    REGIONAL.refresh(None);
+}
+
 pub(super) fn format(value: &str, spec: &str) -> Option<String> {
-    static RULES: OnceLock<Option<Rules>> = OnceLock::new();
-    RULES
-        .get_or_init(|| Rules::load(None))
-        .as_ref()?
-        .format(value, spec)
+    REGIONAL.format(value, spec)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn an_open_session_reloads_number_rules_for_ui_and_worker_readers() {
+        let regional = RegionalRules(RwLock::new(Rules::load(Some("en-US"))));
+        assert_eq!(
+            regional.format("12345.6", "N1").as_deref(),
+            Some("12,345.6")
+        );
+        regional.refresh(Some("de-DE"));
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(|| regional.format("12345.6", "N1").unwrap());
+            assert_eq!(
+                regional.format("12345.6", "N1").as_deref(),
+                Some("12.345,6")
+            );
+            assert_eq!(worker.join().unwrap(), "12.345,6");
+        });
+        regional.refresh(Some("hi-IN"));
+        assert_eq!(
+            regional.format("12345678", "N0").as_deref(),
+            Some("1,23,45,678")
+        );
+    }
+
     #[test]
     fn windows_formats_exact_byte_counts_decimals_and_indian_groups() {
         let us = Rules::load(Some("en-US")).unwrap();

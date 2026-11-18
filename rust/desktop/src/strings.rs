@@ -7,9 +7,9 @@ pub fn text(key: &str) -> String {
     });
     strings
         .get(key)
-        .cloned()
-        .unwrap_or_else(|| key.to_owned())
-        .replace('_', "")
+        .map(|label| label.strip_prefix('_').unwrap_or(label))
+        .unwrap_or(key)
+        .to_owned()
 }
 pub fn format(key: &str, values: &[&str]) -> String {
     format_template(&text(key), values)
@@ -59,6 +59,18 @@ fn format_template(template: &str, values: &[&str]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_catalogue_access_key_markers_are_removed_from_display_text() {
+        assert_eq!(text("FileMenu"), "File");
+        for original in [
+            "_private_repo/FETCH_HEAD",
+            "hook_failed: Review user_name",
+            "_quoted_",
+        ] {
+            assert_eq!(text(original), original);
+        }
+    }
+
     #[test]
     fn inserted_git_text_is_never_reinterpreted_as_a_format_string() {
         assert_eq!(
