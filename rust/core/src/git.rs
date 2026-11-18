@@ -147,20 +147,40 @@ impl Git {
                 }
             }
         }
-        let executable = candidates
-            .into_iter()
-            .find(|p| {
-                p.is_absolute()
-                    && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe"))
-                    && p.is_file()
-            })
-            .ok_or(Error::MissingGit)?;
+        Self::discover_candidates(candidates, cancel)
+    }
+
+    fn discover_candidates(
+        candidates: impl IntoIterator<Item = PathBuf>,
+        cancel: &Cancellation,
+    ) -> Result<Self, Error> {
+        let mut last_error = Error::MissingGit;
+        for path in candidates {
+            if !path.is_absolute()
+                || !path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+                || !path.is_file()
+            {
+                continue;
+            }
+            match Self::probe_executable(path, cancel) {
+                Ok(git) => return Ok(git),
+                Err(error) if cancel.is_cancelled() => return Err(error),
+                Err(error) => last_error = error,
+            }
+        }
+        Err(last_error)
+    }
+
+    fn probe_executable(executable: PathBuf, cancel: &Cancellation) -> Result<Self, Error> {
         let mut git = Self {
             executable,
             version: String::new(),
             environment: BTreeMap::new(),
         };
-        let output = git.read(&std::env::current_dir()?, ["--version"], cancel, 4096)?;
+        let directory = git.executable.parent().ok_or(Error::MissingGit)?;
+        let output = git.read(directory, ["--version"], cancel, 4096)?;
         let version = text(&output.stdout)
             .trim()
             .strip_prefix("git version ")
@@ -844,4 +864,37 @@ pub fn parse_commits(bytes: &[u8], maximum: usize) -> Result<Vec<Commit>, Error>
         });
     }
     Ok(commits)
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    use super::*;
+
+    #[test]
+    fn damaged_preferred_git_does_not_hide_a_usable_install_but_explicit_choice_is_exact() {
+        let cancel = Cancellation::default();
+        let installed = Git::discover(None, &cancel).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let damaged = temp.path().join("git.exe");
+        fs::write(&damaged, b"incomplete installation fixture").unwrap();
+        let wrong_type = temp.path().join("git.cmd");
+        fs::write(&wrong_type, b"fixture").unwrap();
+        let fallback = Git::discover_candidates(
+            [
+                PathBuf::from("git.exe"),
+                wrong_type,
+                damaged.clone(),
+                installed.executable.clone(),
+            ],
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(fallback.executable, installed.executable);
+        assert_eq!(fallback.version, installed.version);
+        assert!(Git::discover(Some(&damaged), &cancel).is_err());
+        assert!(Git::discover(Some(Path::new("git.exe")), &cancel).is_err());
+        let cancelled = Cancellation::default();
+        cancelled.cancel();
+        assert!(Git::discover_candidates([installed.executable], &cancelled).is_err());
+    }
 }
