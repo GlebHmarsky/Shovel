@@ -1,12 +1,12 @@
 # Package inputs, including native resources, signing policy and delivery tooling.
-# Documentation is excluded; packaged release notes are hashed separately.
+# The changelog supplies the notes embedded in the signed package.
 function Get-RustSourceFingerprint {
     param([Parameter(Mandatory)][string]$Root)
     $files = git -C $Root -c core.quotepath=false ls-files --cached --others --exclude-standard
     if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate Rust source inputs.' }
     $entries = foreach ($file in ($files | Sort-Object -Unique -CaseSensitive)) {
         if ($file -match '^(rust/|scripts/|distribution/|third-party/rust/)' -or
-            $file -in @('Cargo.toml','Cargo.lock','rust-toolchain.toml','.config/dotnet-tools.json','LICENSE','third-party/VELOPACK-LICENSE.txt','.github/workflows/rust-windows.yml')) {
+            $file -in @('Cargo.toml','Cargo.lock','CHANGELOG.md','rust-toolchain.toml','.config/dotnet-tools.json','LICENSE','third-party/VELOPACK-LICENSE.txt','.github/workflows/rust-windows.yml')) {
             $path = Join-Path $Root $file
             $hash = if (Test-Path -LiteralPath $path -PathType Leaf) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash } else { 'DELETED' }
             "$file=$hash"

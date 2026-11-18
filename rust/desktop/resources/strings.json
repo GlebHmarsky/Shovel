@@ -1114,6 +1114,7 @@
   "RustToolOpened": "Repository opened in the selected application.",
   "RustUpdatesHelp": "Rust Beta and Rust Stable receive only signed Rust releases from GlebHmarsky/Shovel. Stable is reserved for owner-approved releases. Switching channels does not downgrade this installation.",
   "RustUpdatesTitle": "Shovel updates",
+  "RustUpdateWhatsNew": "What’s new",
   "UpdateShovel": "Update Shovel",
   "RustUpdateChecking": "Checking signed Rust releases…",
   "RustUpdateFailed": "Could not complete the update request. Check your connection and try again. This Rust channel may not have a published release yet.",

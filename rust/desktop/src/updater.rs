@@ -569,7 +569,7 @@ impl Controller {
                     }
                 }
                 if let Some(offer) = &self.offer {
-                    ui.label(offer.release.notes());
+                    release_notes(ui, offer.release.notes());
                 }
                 if self.ready && tools_opened {
                     ui.checkbox(&mut self.tools_confirmed, text("UpdateToolsQuestion"));
@@ -719,6 +719,20 @@ impl Controller {
     }
 }
 
+fn release_notes(ui: &mut egui::Ui, notes: &str) {
+    if notes.trim().is_empty() {
+        return;
+    }
+    ui.strong(text("RustUpdateWhatsNew"));
+    egui::ScrollArea::vertical()
+        .id_salt("update-release-notes")
+        .max_height(150.)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.add(egui::Label::new(notes).wrap().selectable(true));
+        });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -850,6 +864,32 @@ mod tests {
         controller.tick(&ctx, Channel::Beta, false);
         assert!(controller.ready && !controller.exit_ready);
         assert_eq!(controller.status, text("RustUpdateInstances"));
+    }
+
+    #[test]
+    fn long_release_notes_keep_the_download_action_visible_and_empty_notes_take_no_space() {
+        let ctx = egui::Context::default();
+        let notes = "- Local Changes keeps the previous file selection after refresh.\n".repeat(100);
+        for value in [notes.as_str(), ""] {
+            let mut action = egui::Rect::NOTHING;
+            let mut height = 0.;
+            let out = ctx.run_ui(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600., 380.))),
+                ..Default::default()
+            }, |ui| {
+                let before = ui.cursor().top();
+                release_notes(ui, value);
+                height = ui.cursor().top() - before;
+                action = ui.button(text("RustUpdateDownload")).rect;
+            });
+            out.drop_without_applying_deltas();
+            assert!(action.bottom() < 380.);
+            if value.is_empty() {
+                assert_eq!(height, 0.);
+            } else {
+                assert!((150. ..200.).contains(&height), "{height}");
+            }
+        }
     }
 
     #[test]

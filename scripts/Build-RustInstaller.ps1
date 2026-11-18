@@ -35,8 +35,8 @@ try{
         & dotnet tool restore
         if($LASTEXITCODE -ne 0){throw 'Pinned Velopack tool restore failed.'}
         $notes=Join-Path $output 'release-notes.md'
-        $releaseChannel=if($plan.GitHubPrerelease){'Beta'}else{'Stable'}
-        [IO.File]::WriteAllText($notes,"Shovel $version $releaseChannel. See the changelog for changes and TODO for verification limits.")
+        $releaseNotes = Get-RustChangelogNotes ([IO.File]::ReadAllText((Join-Path $root 'CHANGELOG.md'))) $version
+        [IO.File]::WriteAllText($notes, $releaseNotes)
         & dotnet vpk pack --packId $plan.Product --packVersion $version --packDir (Join-Path $payload 'app') --mainExe $plan.Executable --packTitle 'Shovel' --packAuthors 'Shovel contributors' --channel $Channel --runtime win-x64 --delta None --icon (Join-Path $root 'rust/assets/Shovel.ico') --outputDir $output --releaseNotes $notes
         if($LASTEXITCODE -ne 0){throw 'Rust installer packaging failed.'}
     }finally{Pop-Location}
@@ -48,6 +48,7 @@ try{
     $metadata=Get-Content -LiteralPath $feed -Raw | ConvertFrom-Json
     $assets=@($metadata.Assets | Where-Object {$_.Type -eq 'Full' -and $_.Version -eq $version -and $_.PackageId -eq 'ShovelRust'})
     if($assets.Count -ne 1 -or $assets[0].FileName -ne $plan.Package){throw 'Unexpected Rust package identity.'}
+    if(([string]$assets[0].NotesMarkdown).ReplaceLineEndings() -cne $releaseNotes.ReplaceLineEndings()){throw 'Packaged release notes differ from the changelog.'}
     $package=Join-Path $output $plan.Package
     $archive=[IO.Compression.ZipFile]::OpenRead($package)
     try{
@@ -69,8 +70,9 @@ try{
     if($LASTEXITCODE -ne 0){throw 'Production Rust signature/package verification failed.'}
     [ordered]@{Version=$version;Product='ShovelRust';Channel=$Channel;Repository=$plan.Repository;Tag=$plan.Tag;FeedTag=$plan.FeedTag;SourceCommit=$commit;SourceFingerprint=$fingerprint;Published=$false;Authenticode=$false;ParityVerified=$false} |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'release-info.json') -Encoding utf8NoBOM
-    Get-ChildItem -LiteralPath $output -File | Sort-Object Name | ForEach-Object {
+    Get-RustInstallerFiles $output $plan | Sort-Object Name | ForEach-Object {
         (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+$_.Name
     } | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt') -Encoding utf8NoBOM
+    $null = Get-RustInstallerHashes $output $plan
     Write-Output $output
 }finally{$key.Dispose();$public.Dispose()}

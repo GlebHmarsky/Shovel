@@ -54,7 +54,45 @@ try {
     Assert-Refusal { Assert-RustPayload $fixture $plan $fingerprint } '*differs from receipt: Shovel.exe'
     [IO.File]::WriteAllText((Join-Path $app 'other.dll'),'unlisted')
     Assert-Refusal { Assert-RustPayload $fixture $plan $fingerprint } '*recorded inventory*'
-    Write-Output 'PASS release provenance and immutable tag fixtures.'
+
+    $installer = [IO.Directory]::CreateDirectory((Join-Path $fixture 'installer')).FullName
+    $checksums = Join-Path $installer 'SHA256SUMS.txt'
+    $names = @(Get-RustPublicAssetNames $plan | Where-Object { $_ -cne 'SHA256SUMS.txt' }) +
+        @("assets.$($plan.Channel).json", "RELEASES-$($plan.Channel)", "$($plan.Product)-$($plan.Channel)-Portable.zip")
+    $lines = foreach ($name in $names) {
+        $path = Join-Path $installer $name
+        [IO.File]::WriteAllText($path, "fixture $name")
+        (Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() + '  ' + $name
+    }
+    $lines | Set-Content -LiteralPath $checksums
+    $verified = Get-RustInstallerHashes $installer $plan
+    if ($verified.Count -ne 9) { throw 'Expected all installer and pinned Velopack outputs.' }
+    $lines[0..($lines.Count - 2)] | Set-Content -LiteralPath $checksums
+    Assert-Refusal { Get-RustInstallerHashes $installer $plan } 'Missing verified artifact:*'
+    @($lines + $lines[0]) | Set-Content -LiteralPath $checksums
+    Assert-Refusal { Get-RustInstallerHashes $installer $plan } 'Unexpected release checksum entry.'
+    $lines | Set-Content -LiteralPath $checksums
+    $unexpected = Join-Path $installer 'unrelated.txt'
+    [IO.File]::WriteAllText($unexpected, 'unrelated')
+    Assert-Refusal { Get-RustInstallerHashes $installer $plan } 'Unexpected file or directory*'
+    Remove-Item -LiteralPath $unexpected
+    $unexpected = [IO.Directory]::CreateDirectory((Join-Path $installer 'nested')).FullName
+    Assert-Refusal { Get-RustInstallerHashes $installer $plan } 'Unexpected file or directory*'
+    [IO.Directory]::Delete($unexpected)
+    [IO.File]::AppendAllText((Join-Path $installer $plan.Installer), 'changed')
+    Assert-Refusal { Get-RustInstallerHashes $installer $plan } 'Changed release artifact:*'
+    $history = @(
+        '## Rust 0.1.10 - 2026-11-18', '', '- A different version.', '',
+        '## Rust 0.1.0 Stable promotion - 2026-11-18', '', 'Promotion only.', '',
+        '## Rust 0.1.0 - 2026-11-17', '', '- First change.', '- Second change.', '',
+        '## Rust 0.0.9 - 2026-11-15', '', '- Older.'
+    ) -join [Environment]::NewLine
+    $notes = Get-RustChangelogNotes $history '0.1.0'
+    if ($notes -cne ('- First change.' + [Environment]::NewLine + '- Second change.')) { throw 'Incorrect versioned release notes.' }
+    Assert-Refusal { Get-RustChangelogNotes $history '0.2.0' } 'Expected one nonempty*'
+    Assert-Refusal { Get-RustChangelogNotes ($history + [Environment]::NewLine + $history) '0.1.0' } 'Expected one nonempty*'
+    Assert-Refusal { Get-RustChangelogNotes ("## Rust 0.1.0 - 2026-11-18" + [Environment]::NewLine) '0.1.0' } 'Expected one nonempty*'
+    Write-Output 'PASS release provenance, exact installer inventory, versioned changelog and immutable tag fixtures.'
 } finally {
     $env:GIT_CONFIG_GLOBAL = $priorGlobal
     $env:GIT_CONFIG_NOSYSTEM = $priorNoSystem

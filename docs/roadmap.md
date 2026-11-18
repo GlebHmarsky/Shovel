@@ -2,6 +2,10 @@
 
 ## Overnight Rust Beta work (2026-11-18)
 
+**Versioned release notes and installer inventory (R04/R08).** Packaging takes the release notes from the exact Cargo version's changelog section. It checks the text embedded by Velopack before signing the feed. The updater shows the notes in a bounded, selectable area so download and restart stay reachable. The changelog is now a package fingerprint input. GitHub archives only the selected version's installer directory, application, verifier, receipt and Cargo metadata. Installer checksums must account for each output, including the pinned Velopack side files. Unexpected files, directories and links are rejected.
+
+Offline fixtures checked exact version selection against a similarly numbered release and a Stable promotion, duplicate and missing notes, a valid nine-file inventory, omitted and duplicate checksums, and additional or changed outputs. Thirteen updater tests passed. A 100-line changelog left the action visible in a 600 × 380 headless layout. All-target Clippy, diff checks and all 18 bounded smoke checks passed in 19.34 s on fingerprint `F064FA5392722608F32E46ED7119EC3736B0C766F299F7821872538B64DC2A26`. Hosted packaging and publication with the new notes are pending.
+
 **Closing during a preferences write (R24).** Closing could return to the workspace after an ordinary preferences write finished, even though the final repository list and window layout were still waiting to be saved. A deterministic regression delivered the earlier completion between Close and the final write and reproduced the lost exit request. Shovel now retains Close and waits for the final save. The fixture reopened the saved profile and checked all three repository paths in order.
 
 All eleven history-cache and shutdown tests passed in 11.28 s, including closing the last tab with a history read still held. Thirteen updater checks, workspace all-target Clippy and diff checks also passed. Native window-manager closure and installed restart remain separate acceptance items.

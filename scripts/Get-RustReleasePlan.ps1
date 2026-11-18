@@ -1,4 +1,13 @@
 # Pure release identity/policy; no Git, credentials, network or mutation here.
+function Get-RustChangelogNotes([string]$Changelog, [string]$Version) {
+    $heading = [regex]::Escape("## Rust $Version - ")
+    $sections = [regex]::Matches($Changelog, "(?ms)^${heading}[^\r\n]+\r?\n(?<notes>.*?)(?=^## |\z)")
+    if ($sections.Count -ne 1 -or [string]::IsNullOrWhiteSpace($sections[0].Groups['notes'].Value)) {
+        throw "Expected one nonempty Rust $Version changelog section for the release notes."
+    }
+    return $sections[0].Groups['notes'].Value.Trim()
+}
+
 function Get-RustReleasePlan {
     [CmdletBinding()]
     param(

@@ -19,7 +19,7 @@ $origin=git -C $root remote get-url origin
 if($origin -notin @('https://github.com/GlebHmarsky/Shovel.git','https://github.com/GlebHmarsky/Shovel','git@github.com:GlebHmarsky/Shovel.git')){throw 'Unexpected publishing repository.'}
 $PayloadDirectory=(Resolve-Path -LiteralPath $PayloadDirectory).Path
 $hashes=Get-VerifiedRustReleaseHashes $directory $PayloadDirectory $plan (Get-RustSourceFingerprint $root)
-$assetNames=@($plan.Installer,$plan.Package,$plan.Feed,"$($plan.Feed).sig",'SHA256SUMS.txt','release-info.json','release-notes.md')
+$assetNames=@(Get-RustPublicAssetNames $plan)
 $verifier=Join-Path $PayloadDirectory 'verify_update_bundle.exe'
 # Reuse the established GCM login without printing, persisting or forwarding it to download hosts.
 $priorPrompt=$env:GIT_TERMINAL_PROMPT;$priorInteractive=$env:GCM_INTERACTIVE

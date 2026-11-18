@@ -14,7 +14,13 @@ function Assert-RustPayload {
         $files[$entry.Name] = $entry
     }
     $app = Join-Path $Directory 'app'
-    $actual = @(Get-ChildItem -LiteralPath $app -Recurse -File -Force)
+    if ((Get-Item -LiteralPath $app).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw 'Unexpected link in Rust application payload.'
+    }
+    $actual = @(foreach ($item in Get-ChildItem -LiteralPath $app -Recurse -Force) {
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Unexpected link in Rust application payload.' }
+        if (!$item.PSIsContainer) { $item }
+    })
     if ($files.Count -ne $actual.Count -or !$files.ContainsKey($Plan.Executable) -or !$files.ContainsKey('ShovelAskPass.exe')) {
         throw 'Payload files differ from the recorded inventory.'
     }
@@ -31,6 +37,40 @@ function Assert-RustPayload {
     }
 }
 
+function Get-RustPublicAssetNames($Plan) {
+    @($Plan.Installer, $Plan.Package, $Plan.Feed, "$($Plan.Feed).sig", 'release-info.json', 'release-notes.md', 'SHA256SUMS.txt')
+}
+
+# Velopack also produces these three channel-specific files for the CI archive.
+function Get-RustInstallerFiles([string]$Directory, $Plan) {
+    $allowed = @(Get-RustPublicAssetNames $Plan) + @(
+        "assets.$($Plan.Channel).json", "RELEASES-$($Plan.Channel)", "$($Plan.Product)-$($Plan.Channel)-Portable.zip"
+    )
+    foreach ($item in Get-ChildItem -LiteralPath $Directory -Force) {
+        if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.Name -cnotin $allowed) {
+            throw 'Unexpected file or directory in Rust installer output.'
+        }
+        if ($item.Name -cne 'SHA256SUMS.txt') { $item }
+    }
+}
+
+function Get-RustInstallerHashes([string]$Directory, $Plan) {
+    $files = @(Get-RustInstallerFiles $Directory $Plan)
+    $hashes = @{}
+    foreach ($line in Get-Content -LiteralPath (Join-Path $Directory 'SHA256SUMS.txt')) {
+        if ($line -cnotmatch '^([a-f0-9]{64})  ([A-Za-z0-9_.-]+)$') { throw 'Invalid checksum entry.' }
+        $hash = $Matches[1]
+        $name = $Matches[2]
+        if ($hashes.ContainsKey($name) -or $name -cnotin $files.Name) { throw 'Unexpected release checksum entry.' }
+        if ((Get-FileHash -LiteralPath (Join-Path $Directory $name)).Hash -ne $hash) { throw "Changed release artifact: $name" }
+        $hashes[$name] = $hash
+    }
+    foreach ($name in @(Get-RustPublicAssetNames $Plan) + $files.Name) {
+        if ($name -cne 'SHA256SUMS.txt' -and !$hashes.ContainsKey($name)) { throw "Missing verified artifact: $name" }
+    }
+    return $hashes
+}
+
 function Get-VerifiedRustReleaseHashes {
     param([string]$Directory, [string]$PayloadDirectory, $Plan, [string]$Fingerprint)
     Assert-RustPayload $PayloadDirectory $Plan $Fingerprint
@@ -39,18 +79,7 @@ function Get-VerifiedRustReleaseHashes {
         if ($info.$field -cne $Plan.$field) { throw "Installer receipt differs from release plan: $field" }
     }
     if ($info.SourceFingerprint -cne $Fingerprint) { throw 'Installer source fingerprint differs.' }
-    $hashes = @{}
-    foreach ($line in Get-Content -LiteralPath (Join-Path $Directory 'SHA256SUMS.txt')) {
-        if ($line -cnotmatch '^([a-f0-9]{64})  ([A-Za-z0-9_.-]+)$') { throw 'Invalid checksum entry.' }
-        $hash = $Matches[1]
-        $name = $Matches[2]
-        if ($hashes.ContainsKey($name) -or $name -match '\.(key|pem|pfx|p12)$') { throw 'Unexpected release asset.' }
-        if ((Get-FileHash -LiteralPath (Join-Path $Directory $name)).Hash -ne $hash) { throw "Changed release artifact: $name" }
-        $hashes[$name] = $hash
-    }
-    foreach ($name in @($Plan.Installer,$Plan.Package,$Plan.Feed,"$($Plan.Feed).sig",'release-info.json','release-notes.md')) {
-        if (!$hashes.ContainsKey($name)) { throw "Missing verified artifact: $name" }
-    }
+    $hashes = Get-RustInstallerHashes $Directory $Plan
     & (Join-Path $PayloadDirectory 'verify_update_bundle.exe') $Plan.Channel $Plan.Version $Plan.SourceCommit `
         (Join-Path $Directory $Plan.Feed) (Join-Path $Directory "$($Plan.Feed).sig") (Join-Path $Directory $Plan.Package) | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Production Rust verification failed.' }

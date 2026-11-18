@@ -60,6 +60,7 @@ jobs:
             target
           key: windows-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
       - name: Build signed Rust Beta installer
+        id: package
         env:
           UPDATE_KEY: ${{ secrets.RUST_UPDATE_PRIVATE_KEY }}
         run: |
@@ -68,6 +69,8 @@ jobs:
           try {
             [IO.File]::WriteAllText($key, $env:UPDATE_KEY)
             ./scripts/Build-Release.ps1 -Channel win-rust-beta -PackageOnly -PrivateKeyPath $key
+            . ./scripts/Get-RustSourceFingerprint.ps1
+            "version=$(Get-RustVersion $PWD)" >> $env:GITHUB_OUTPUT
           } finally {
             Remove-Item -LiteralPath $key -ErrorAction SilentlyContinue
           }
@@ -75,8 +78,11 @@ jobs:
         with:
           name: Shovel-Windows-${{ github.sha }}
           path: |
-            Build/rust-*-installer-win-rust-beta/*
-            Build/rust-*-win-x64/*
+            Build/rust-${{ steps.package.outputs.version }}-installer-win-rust-beta/*
+            Build/rust-${{ steps.package.outputs.version }}-win-x64/app/
+            Build/rust-${{ steps.package.outputs.version }}-win-x64/VERIFICATION.json
+            Build/rust-${{ steps.package.outputs.version }}-win-x64/verify_update_bundle.exe
+            Build/rust-${{ steps.package.outputs.version }}-win-x64/cargo-metadata.json
             Build/rust-smoke.json
           if-no-files-found: error
           retention-days: 30
