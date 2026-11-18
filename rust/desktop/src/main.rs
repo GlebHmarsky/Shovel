@@ -1054,29 +1054,32 @@ impl Workspace {
             self.operations.record_owned(path, activity);
         }
         let mut changed = self.operations.poll(ctx);
-        changed.extend(
-            self.auto_fetch.tick(
-                ctx,
-                self.initialized
-                    && !self.closing
-                    && !self.pending_exit
-                    && !self.confirm_exit_without_save
-                    && !self.git_selection.busy()
-                    && self
-                        .settings
-                        .get("AutoFetchEnabled")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true),
-                self.settings
-                    .get("AutoFetchIntervalSeconds")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(60)
-                    .clamp(10, 3600),
-                self.tabs.iter().filter_map(Tab::observed_snapshot),
-                self.git.clone(),
-                &self.scheduler,
-            ),
-        );
+        for result in self.auto_fetch.tick(
+            ctx,
+            self.initialized
+                && !self.closing
+                && !self.pending_exit
+                && !self.confirm_exit_without_save
+                && !self.git_selection.busy()
+                && self
+                    .settings
+                    .get("AutoFetchEnabled")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true),
+            self.settings
+                .get("AutoFetchIntervalSeconds")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(60)
+                .clamp(10, 3600),
+            self.tabs.iter().filter_map(Tab::observed_snapshot),
+            self.git.clone(),
+            &self.scheduler,
+        ) {
+            if result.succeeded {
+                changed.push(result.path.clone());
+            }
+            self.operations.record_background(result);
+        }
         for tab in self.tabs.iter_mut().chain(self.retained_tabs.iter_mut()) {
             tab.divergence.poll(ctx);
             if Some(tab.id) == protected_owner {
@@ -2298,37 +2301,27 @@ impl eframe::App for Workspace {
                 .enabled(!modal_open && !self.closing)
                 .default_width(580.)
                 .show(&ctx, |ui| {
-                    ui.checkbox(
-                        &mut self.activity_all,
-                        strings::text("ActivityAllRepositories"),
-                    );
+                    ui.horizontal_wrapped(|ui| {
+                        for (filter, key) in [
+                            (operations::ActivityFilter::All, "ActivityAll"),
+                            (operations::ActivityFilter::User, "ActivityUser"),
+                            (operations::ActivityFilter::Background, "ActivityBackground"),
+                        ] {
+                            ui.selectable_value(&mut self.operations.filter, filter, strings::text(key));
+                        }
+                        ui.separator();
+                        ui.checkbox(&mut self.activity_all, strings::text("ActivityAllRepositories"));
+                    });
                     egui::ScrollArea::vertical()
                         .max_height(420.)
                         .show(ui, |ui| {
-                            egui::CollapsingHeader::new(strings::text("ActivityBackground")).show(
-                                ui,
-                                |ui| {
-                                    for (path, message) in self.auto_fetch.activity.iter().rev() {
-                                        ui.label(
-                                            path.file_name().unwrap_or_default().to_string_lossy(),
-                                        );
-                                        ui.add(egui::Label::new(message).wrap());
-                                    }
-                                },
-                            );
-                            if self.activity_all || selected_path.is_some() {
-                                reopen = self.operations.status(
-                                    ui,
-                                    if self.activity_all {
-                                        None
-                                    } else {
-                                        selected_path.as_ref()
-                                    },
-                                    &self.scheduler,
-                                );
+                            let scope = selected_path.as_ref().filter(|_| !self.activity_all);
+                            reopen = self.operations.status(ui, scope, &self.scheduler);
+                            if self.operations.filter == operations::ActivityFilter::Background {
+                                return;
                             }
                             for editor in self.editors.iter_mut().filter(|editor| {
-                                (self.activity_all || selected_path.as_ref() == Some(&editor.path))
+                                scope.is_none_or(|path| Self::same_path(path, &editor.path))
                                     && !editor.failed_commit
                                     && (editor.status.is_some() || !editor.output.is_empty())
                             }) {

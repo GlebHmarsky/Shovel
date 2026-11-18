@@ -1579,7 +1579,7 @@ fn shutdown_drains_real_automatic_fetch_then_preserves_save_or_discard_intent() 
         assert!(app.auto_fetch.drained());
         assert!(!app.scheduler.has_accepted_work());
         assert_eq!(
-            app.auto_fetch.activity.len(),
+            app.operations.background_count(),
             1,
             "shutdown must not start another automatic fetch"
         );

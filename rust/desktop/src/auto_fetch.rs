@@ -11,13 +11,19 @@ use std::{
     sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
+pub struct Finished {
+    pub path: PathBuf,
+    pub succeeded: bool,
+    pub status: &'static str,
+    pub output: String,
+}
+
 pub struct Controller {
     due: HashMap<PathBuf, Instant>,
     interval: Option<Duration>,
     active: HashMap<u64, Cancellation>,
-    tx: mpsc::Sender<(u64, PathBuf, bool, String)>,
-    rx: mpsc::Receiver<(u64, PathBuf, bool, String)>,
-    pub activity: Vec<(PathBuf, String)>,
+    tx: mpsc::Sender<(u64, Finished)>,
+    rx: mpsc::Receiver<(u64, Finished)>,
     next: u64,
 }
 
@@ -30,7 +36,6 @@ impl Default for Controller {
             active: Default::default(),
             tx,
             rx,
-            activity: vec![],
             next: 1,
         }
     }
@@ -61,37 +66,22 @@ impl Controller {
         snapshots: impl Iterator<Item = &'a Snapshot>,
         git: Option<Arc<Git>>,
         scheduler: &Scheduler,
-    ) -> Vec<PathBuf> {
-        let mut changed = vec![];
+    ) -> Vec<Finished> {
+        let mut completed = vec![];
         let now = Instant::now();
         let interval = Duration::from_secs(seconds);
-        while let Ok((id, path, ok, message)) = self.rx.try_recv() {
+        while let Ok((id, result)) = self.rx.try_recv() {
             self.active.remove(&id);
-            if let Some(due) = self.due.get_mut(&path) {
+            if let Some(due) = self.due.get_mut(&result.path) {
                 *due = now + interval;
             }
-            if ok {
-                changed.push(path.clone());
-            }
-            let message = if message.is_empty() {
-                crate::strings::text(if ok {
-                    "RustAutoFetchDone"
-                } else {
-                    "RustAutoFetchFailed"
-                })
-            } else {
-                message.chars().take(32768).collect()
-            };
-            self.activity.push((path, message));
-            if self.activity.len() > 128 {
-                self.activity.remove(0);
-            }
+            completed.push(result);
         }
         if !enabled {
             self.interval = None;
             self.due.clear();
             self.cancel();
-            return changed;
+            return completed;
         }
         if self
             .interval
@@ -106,9 +96,9 @@ impl Controller {
             .any(|r| !r.key.starts_with("automatic-fetch:"))
         {
             self.cancel();
-            return changed;
+            return completed;
         }
-        let Some(git) = git else { return changed };
+        let Some(git) = git else { return completed };
         for snapshot in snapshots {
             if self.active.len() >= 2 {
                 break;
@@ -146,11 +136,45 @@ impl Controller {
                     let result = g
                         .prepare_network(&path, &token)
                         .and_then(|c| g.automatic_fetch(&c, &token));
-                    let (ok, message) = match result {
-                        Ok(r) => (r.succeeded() && !r.has_conflicts, r.output),
-                        Err(e) => (false, crate::strings::text(&e.to_string())),
+                    let (succeeded, output) = match result {
+                        Ok(result) => {
+                            let succeeded = result.succeeded() && !result.has_conflicts;
+                            let mut details = result.output;
+                            for key in [result.message, result.warning].into_iter().flatten() {
+                                details.push_str(&format!("\n{}", crate::strings::text(&key)));
+                            }
+                            if result.output_truncated {
+                                details.push_str(&format!(
+                                    "\n{}",
+                                    crate::strings::text("ActivityOutputLimit")
+                                ));
+                            }
+                            if let Err(error) = result.updated {
+                                details.push_str(&format!(
+                                    "\n{}",
+                                    crate::operations::error_log(&error)
+                                ));
+                            }
+                            (succeeded, details)
+                        }
+                        Err(error) => (false, crate::operations::error_log(&error)),
                     };
-                    let _ = tx.send((id, path, ok, message));
+                    let status = if succeeded {
+                        "RustAutoFetchDone"
+                    } else if token.is_cancelled() {
+                        "ActionStoppedShort"
+                    } else {
+                        "RustAutoFetchFailed"
+                    };
+                    let _ = tx.send((
+                        id,
+                        Finished {
+                            path,
+                            succeeded,
+                            status,
+                            output,
+                        },
+                    ));
                     ctx.request_repaint();
                     // A background failure must not clear queued user work.
                     Outcome::Succeeded
@@ -158,9 +182,12 @@ impl Controller {
                 move |_| {
                     let _ = discard.send((
                         id,
-                        dp,
-                        false,
-                        crate::strings::text("ActionResultCancelled"),
+                        Finished {
+                            path: dp,
+                            succeeded: false,
+                            status: "ActionStoppedShort",
+                            output: crate::strings::text("ActionResultCancelled"),
+                        },
                     ));
                     dc.request_repaint();
                 },
@@ -169,7 +196,7 @@ impl Controller {
                 self.active.insert(id, cancel);
             }
         }
-        changed
+        completed
     }
 }
 
@@ -224,9 +251,17 @@ mod tests {
         // in Activity without restoring a timer for the closed repository.
         controller
             .tx
-            .send((1, path.clone(), true, String::new()))
+            .send((
+                1,
+                Finished {
+                    path: path.clone(),
+                    succeeded: true,
+                    status: "RustAutoFetchDone",
+                    output: String::new(),
+                },
+            ))
             .unwrap();
-        let changed = controller.tick(
+        let completed = controller.tick(
             &ctx,
             true,
             10,
@@ -234,8 +269,9 @@ mod tests {
             Some(git.clone()),
             &scheduler,
         );
-        assert_eq!(changed.as_slice(), std::slice::from_ref(path));
+        assert_eq!(completed.len(), 1);
+        assert_eq!(&completed[0].path, path);
+        assert!(completed[0].succeeded);
         assert!(controller.due.is_empty());
-        assert_eq!(controller.activity.len(), 1);
     }
 }

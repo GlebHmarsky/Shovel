@@ -1148,6 +1148,7 @@
   "RustUpdateRepositoryState": "Finish repository merge/rebase operations and refresh unavailable repositories before installing an update.",
   "RustUpdateWorktreeBlocked": "Cannot restart with the current state of {0}. Resolve any unfinished Git operation or index conflicts, then refresh or close this repository.",
   "RustUpdateOfferChanged": "The approved release is no longer offered. Check again to review the current update.",
+  "RustAutomaticFetch": "Automatic fetch",
   "RustAutoFetchDone": "Automatic fetch completed.",
   "RustAutoFetchFailed": "Automatic fetch did not complete. Manual Fetch can show authentication prompts.",
   "RustRepositoryChooserOpen": "Close the repository folder chooser before exiting or restarting Shovel.",

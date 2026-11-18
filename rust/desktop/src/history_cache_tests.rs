@@ -364,7 +364,7 @@ fn automatic_fetch_updates_an_evicted_repository_without_preloading_inactive_his
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         app.receive(&ctx);
-        if !app.auto_fetch.activity.is_empty() {
+        if app.operations.background_count() > 0 {
             break;
         }
         assert!(

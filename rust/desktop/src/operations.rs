@@ -228,7 +228,16 @@ enum Event {
     OptionsReady(u64, Box<ReadyOptions>),
     OptionsClosed(u64),
 }
+#[derive(Default, PartialEq, Eq, Clone, Copy)]
+pub enum ActivityFilter {
+    #[default]
+    All,
+    User,
+    Background,
+}
+
 struct Run {
+    background: bool,
     sequence: u64,
     request: u64,
     path: PathBuf,
@@ -294,6 +303,7 @@ struct PendingNetwork {
     bound: Option<(String, Option<String>)>,
 }
 pub struct Controller {
+    pub filter: ActivityFilter,
     pub divergence: crate::divergence::Display,
     pending: Vec<PendingNetwork>,
     refresh_paths: Vec<PathBuf>,
@@ -312,6 +322,7 @@ impl Default for Controller {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            filter: ActivityFilter::default(),
             divergence: Default::default(),
             pending: vec![],
             refresh_paths: vec![],
@@ -620,6 +631,7 @@ impl Controller {
             return None;
         }
         self.runs.push(Run {
+            background: false,
             sequence,
             request,
             path: path.to_path_buf(),
@@ -1202,6 +1214,7 @@ impl Controller {
         );
         if accepted {
             self.runs.push(Run {
+                background: false,
                 sequence,
                 request,
                 path: snapshot.worktree.clone(),
@@ -1428,6 +1441,7 @@ impl Controller {
             let sequence = self.next;
             self.next += 1;
             self.runs.push(Run {
+                background: false,
                 sequence,
                 request: activity.request,
                 path,
@@ -1452,6 +1466,7 @@ impl Controller {
         let sequence = self.next;
         self.next += 1;
         self.runs.push(Run {
+            background: false,
             sequence,
             request: 0,
             path,
@@ -1465,12 +1480,44 @@ impl Controller {
         });
         self.trim_finished();
     }
+    pub fn record_background(&mut self, result: crate::auto_fetch::Finished) {
+        let sequence = self.next;
+        self.next += 1;
+        let status = if result.succeeded && has_git_warning(&result.output) {
+            "RustActionWarning"
+        } else {
+            result.status
+        };
+        self.runs.push(Run {
+            background: true,
+            sequence,
+            request: 0,
+            path: result.path,
+            label: "RustAutomaticFetch",
+            status: text(status),
+            output: network::redact(&result.output)
+                .chars()
+                .take(32768)
+                .collect(),
+            done: true,
+            dialog_open: false,
+            reopen_commit: None,
+            show_failure: false,
+        });
+        self.trim_finished();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn background_count(&self) -> usize {
+        self.runs.iter().filter(|run| run.background).count()
+    }
+
     pub fn summary(&self, path: &std::path::Path) -> Option<String> {
         let mut runs = self
             .runs
             .iter()
             .rev()
-            .filter(|r| crate::Workspace::same_path(&r.path, path));
+            .filter(|r| !r.background && crate::Workspace::same_path(&r.path, path));
         runs.clone()
             .find(|r| !r.done)
             .or_else(|| runs.next())
@@ -1523,7 +1570,14 @@ impl Controller {
         for run in self
             .runs
             .iter()
-            .filter(|r| path.is_none_or(|p| &r.path == p))
+            .filter(|r| {
+                path.is_none_or(|p| crate::Workspace::same_path(&r.path, p))
+                    && match self.filter {
+                        ActivityFilter::All => true,
+                        ActivityFilter::User => !r.background,
+                        ActivityFilter::Background => r.background,
+                    }
+            })
             .rev()
         {
             ui.horizontal(|ui| {
@@ -2249,6 +2303,124 @@ mod activity_layout_test {
     use super::*;
     use crate::workspace_interaction_tests::{frame, workspace};
     #[test]
+    fn activity_filters_user_background_and_repository_independently() {
+        use crate::workspace_interaction_tests::{frame, workspace};
+        let ctx = egui::Context::default();
+        let mut app = workspace();
+        app.activity_open = true;
+        for (path, message) in [("Alpha", "alpha run"), ("Bravo", "bravo run")] {
+            app.operations
+                .record_local(path.into(), message.into(), String::new(), None);
+        }
+        for path in ["Alpha", "brAVo"] {
+            app.operations
+                .record_background(crate::auto_fetch::Finished {
+                    path: path.into(),
+                    succeeded: false,
+                    status: "RustAutoFetchFailed",
+                    output: "fixture fetch https://user:private@work.example/repo".into(),
+                });
+        }
+        assert_eq!(app.operations.background_count(), 2);
+        assert!(app.operations.failure_path().is_none());
+        assert!(
+            app.operations
+                .summary(Path::new("Bravo"))
+                .unwrap()
+                .contains("bravo run")
+        );
+        assert!(
+            app.operations
+                .runs
+                .last()
+                .unwrap()
+                .output
+                .contains("work.example")
+        );
+        assert!(
+            !app.operations
+                .runs
+                .last()
+                .unwrap()
+                .output
+                .contains("private")
+        );
+        let rows = |app: &mut crate::Workspace| {
+            frame(&ctx, app, vec![]).drop_without_applying_deltas();
+            let frame = frame(&ctx, app, vec![]);
+            let drawn = frame
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            frame.drop_without_applying_deltas();
+            drawn
+        };
+        let click = |app: &mut crate::Workspace, label: &str| {
+            let output = frame(&ctx, app, vec![]);
+            let point = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(tag) if tag.galley.text() == label => {
+                        Some(tag.visual_bounding_rect().center())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("control {label}"));
+            output.drop_without_applying_deltas();
+            for pressed in [true, false] {
+                frame(
+                    &ctx,
+                    app,
+                    vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                )
+                .drop_without_applying_deltas();
+            }
+        };
+        let visible =
+            |rows: &[String], prefix: &str| rows.iter().any(|line| line.starts_with(prefix));
+        let selected = rows(&mut app);
+        assert!(visible(&selected, "Bravo · Commit · bravo run"));
+        assert!(visible(&selected, "brAVo · Automatic fetch"));
+        assert!(!visible(&selected, "Alpha · Automatic fetch"));
+        click(&mut app, &text("ActivityBackground"));
+        let background = rows(&mut app);
+        assert!(visible(&background, "brAVo · Automatic fetch"));
+        assert!(!visible(&background, "Bravo · Commit · bravo run"));
+        click(&mut app, &text("ActivityAllRepositories"));
+        let all_repos = rows(&mut app);
+        assert!(visible(&all_repos, "Alpha · Automatic fetch"));
+        click(&mut app, &text("ActivityUser"));
+        let user = rows(&mut app);
+        assert!(visible(&user, "Alpha · Commit · alpha run"));
+        assert!(visible(&user, "Bravo · Commit · bravo run"));
+        assert!(!visible(&user, "Alpha · Automatic fetch"));
+        for _ in 0..130 {
+            app.operations
+                .record_background(crate::auto_fetch::Finished {
+                    path: "Alpha".into(),
+                    succeeded: true,
+                    status: "RustAutoFetchDone",
+                    output: String::new(),
+                });
+        }
+        assert_eq!(app.operations.runs.len(), 128);
+        assert_eq!(app.operations.background_count(), 128);
+    }
+
+    #[test]
     fn retained_operation_output_does_not_push_down_repository_tabs() {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
@@ -2274,6 +2446,7 @@ mod activity_layout_test {
         let before = tab_y(&mut app);
         for seq in 1..=8 {
             app.operations.runs.push(Run {
+                background: false,
                 sequence: seq,
                 request: seq,
                 path: "Bravo".into(),
