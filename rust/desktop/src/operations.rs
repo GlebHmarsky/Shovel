@@ -394,7 +394,10 @@ impl Controller {
         self.helper = Some(helper);
     }
     pub fn active_modal_open(&self) -> bool {
-        !self.prompts.is_empty() || self.options.is_some()
+        self.authentication_open() || self.options.is_some()
+    }
+    pub fn authentication_open(&self) -> bool {
+        !self.prompts.is_empty()
     }
     pub fn modal_open(&self) -> bool {
         self.active_modal_open() || !self.ready_options.is_empty()
@@ -1918,6 +1921,65 @@ mod tests {
         assert!(!scheduler.has_accepted_work());
         assert!(controller.runs.is_empty());
     }
+    #[test]
+    fn repository_options_keep_their_owner_during_tab_switch_and_close() {
+        use crate::workspace_interaction_tests::{frame, workspace};
+
+        let (_first, git, owner) = fixture();
+        let (_second, _, other) = fixture();
+        let ctx = egui::Context::default();
+        let mut app = workspace();
+        app.tabs.clear();
+        app.git = Some(git);
+        app.open(owner.worktree.clone(), &ctx);
+        crate::history_view::tests::wait(&mut app, &ctx);
+        let owner_id = app.tabs[0].id;
+        app.ensure_tab(other.worktree.clone());
+        app.operations.options = Some((
+            Options::load(&app.settings, &owner, Kind::Pull),
+            owner.clone(),
+        ));
+        frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+
+        let press = |app: &mut crate::Workspace, key| {
+            let modifiers = egui::Modifiers {
+                ctrl: true,
+                ..Default::default()
+            };
+            for pressed in [true, false] {
+                frame(
+                    &ctx,
+                    app,
+                    vec![
+                        egui::Event::ModifiersChanged(modifiers),
+                        egui::Event::Key {
+                            key,
+                            physical_key: None,
+                            pressed,
+                            repeat: false,
+                            modifiers,
+                        },
+                    ],
+                )
+                .drop_without_applying_deltas();
+            }
+        };
+        press(&mut app, egui::Key::Tab);
+        assert_eq!(app.tabs[app.selected].path, other.worktree);
+        press(&mut app, egui::Key::Tab);
+        assert_eq!(app.tabs[app.selected].id, owner_id);
+        press(&mut app, egui::Key::W);
+        assert_eq!(app.tabs[app.selected].path, other.worktree);
+        assert!(app.retained_tabs.iter().any(|tab| tab.id == owner_id));
+
+        let (options, captured) = app.operations.options.as_ref().unwrap();
+        assert_eq!(options.kind, Kind::Pull);
+        assert_eq!(captured.identity, owner.identity);
+        assert_eq!(captured.worktree, owner.worktree);
+        assert!(app.operations.runs.is_empty());
+        crate::history_view::tests::wait(&mut app, &ctx);
+    }
+
     #[test]
     fn remembered_flags_persist_and_explicit_targets_are_branch_bound() {
         let (temporary, _, snapshot) = fixture();

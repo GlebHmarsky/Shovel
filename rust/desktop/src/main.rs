@@ -1707,11 +1707,14 @@ impl eframe::App for Workspace {
         self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
         let sidebar_commit = self.settings.commit_in_workspace();
-        let modal_open = self.closing
+        let workspace_modal = self.closing
             || self.pending_exit
             || self.confirm_exit_without_save
             || self.git_selection.busy()
             || self.settings_dialog.is_some()
+            || self.operations.authentication_open()
+            || self.initialization.is_open();
+        let modal_open = workspace_modal
             || self
                 .editors
                 .iter()
@@ -1719,13 +1722,12 @@ impl eframe::App for Workspace {
             || self.operations.modal_open()
             || self.remotes.is_open()
             || self.branches.is_open()
-            || self.initialization.is_open()
             || self.stash_views.iter().any(|view| view.open);
-        let shortcuts_blocked = modal_open
-            || self
-                .inline_editor()
-                .is_some_and(|i| self.editors[i].has_prompt());
-        if modal_open || self.closing {
+        let inline_prompt = self
+            .inline_editor()
+            .is_some_and(|i| self.editors[i].has_prompt());
+        let shortcuts_blocked = modal_open || inline_prompt;
+        if workspace_modal {
             ui.disable();
         }
         if self.confirm_exit_without_save {
@@ -1791,7 +1793,7 @@ impl eframe::App for Workspace {
                     == Some(1),
             );
         }
-        if !shortcuts_blocked && !self.tabs.is_empty() {
+        if !workspace_modal && !inline_prompt && !self.tabs.is_empty() {
             if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::W)) {
                 self.close_tab(self.tabs[self.selected].id, &ctx);
             } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Tab)) {
@@ -1808,6 +1810,9 @@ impl eframe::App for Workspace {
         egui::Panel::top("toolbar")
             .frame(workspace_style::pane(palette.chrome, 6, 2))
             .show(ui, |ui| {
+                if modal_open {
+                    ui.disable();
+                }
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button(strings::text("FileMenu"), |ui| {
                         if ui
@@ -2579,6 +2584,9 @@ impl eframe::App for Workspace {
             .exact_size(Divider::Sidebar.size(ui, &self.settings, width))
             .resizable(false)
             .show(ui, |ui| {
+                if modal_open {
+                    ui.disable();
+                }
                 if sidebar_commit && self.tabs.get(self.selected).is_some() {
                     let local = self.inline_editor().is_some();
                     if ui.selectable_label(!local, strings::text("FileHistoryTab")).clicked() {
@@ -2956,6 +2964,9 @@ impl eframe::App for Workspace {
             .resizable(false);
         let details = inline_editor.is_none().then(|| {
             details_panel.show(ui, |ui| {
+                if modal_open {
+                    ui.disable();
+                }
                 if let Some(tab) = self.tabs.get_mut(self.selected)
                     && let Some(commit) = tab
                         .page
@@ -3038,6 +3049,9 @@ impl eframe::App for Workspace {
         egui::CentralPanel::default()
             .frame(workspace_style::pane(palette.canvas, 0, 0))
             .show(ui, |ui| {
+                if modal_open {
+                    ui.disable();
+                }
                 if let Some(index) = inline_editor {
                     self.editors[index].show_inline(ui, !modal_open);
                     return;

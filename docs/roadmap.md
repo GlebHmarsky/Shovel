@@ -27,6 +27,13 @@ Four disposable repositories exercised return to page two after other tabs opene
 
 The optimized Windows x64 payload from `e1a73d062a6eed8e9678c2497b74f1c8bdcbc795` matched all 19 SHA-256 file entries in `Build/navigation-e1a73d0-win-x64/VERIFICATION.json`. The same command-line launch probe reached the selected-commit details read in 2,709 ms on the small repository and 3,095 ms on the merge-heavy repository. Both traces confirmed two ref enumerations before layout instead of the previous three. These single native startup samples include process and renderer initialization, so they are separate from the in-app 400 ms target. The two isolated processes closed after recording their traces.
 
+### Keep tab navigation available during repository dialogs
+
+Repository-owned dialogs permit tab selection and closure while keeping Git controls gated. A headless workspace test opened Pull options for one disposable repository, switched to a second, returned, and closed the first tab. The open dialog retained the first repository's worktree and physical identity, with no Git command submitted. The existing test also verified that editing options and dismissing the dialog saved its flags. Native dialog timing and other window lifetimes remain open.
+
+Both focused dialog checks, all-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 32.79 seconds on source fingerprint `F2753DDBEDC5E2113BC6579EF6AB2A01A34820E11D6CB487DB4B8076B260AE5F`.
+
+
 ## Windows Rust 0.51.0 local build checks
 
 The 0.51.0 source includes fresh checks when opening Updates, a **Later** action that keeps verified downloads, native SSH and credential-manager preferences, and cancellation checks before Windows starts obsolete background Git work.

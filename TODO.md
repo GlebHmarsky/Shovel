@@ -37,6 +37,7 @@ Current partial implementation includes selected submodule Open/Update/Sync with
 - [ ] **Opening latency (R19, R31, R72).** Approach the observed 400 ms Fork reference on small and merge-heavy repositories. Measure initial usable history and completion of fresh reads separately. [First measurements](docs/roadmap.md#repository-navigation-and-responsiveness)
 - [ ] **Retained views (R15, R19, R31, R41).** Open tabs keep their history and comparison state beyond three visited repositories. Verify changes, drafts and repository-owned dialogs across navigation in the running application.
 - [ ] **Refresh and ownership (R09, R15, R31, R41).** Coalesce targeted refreshes for native and external changes, preserve repository-owned dialogs and operations through tab and window changes, and reject obsolete worker results. Exercise these in the Windows app with an isolated profile and disposable repositories.
+  **Dialog navigation:** Repository tabs remain available while a repository-owned dialog is open. The Pull options fixture verifies switching tabs and closing the owner with the dialog still attached to its original worktree. [Evidence](docs/roadmap.md#keep-tab-navigation-available-during-repository-dialogs)
 
 **Owner checkpoint (2026-11-10), completed:** delivered local-only Windows Rust 0.50.0 from 3e42466 and paused for testing without publication, installation or merge. The owner subsequently resumed the goal. The existing test payload remains unchanged; all unfinished R rows remain required.
 
