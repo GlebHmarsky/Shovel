@@ -373,6 +373,10 @@ impl Git {
                 });
                 continue;
             }
+            // A remote symbolic ref is an alias (for example origin/HEAD), not a branch tip.
+            if fields[0].starts_with("refs/remotes/") && !fields[5].is_empty() {
+                continue;
+            }
             if !(fields[0].starts_with("refs/heads/")
                 || fields[0].starts_with("refs/remotes/")
                 || fields[0].starts_with("refs/tags/")

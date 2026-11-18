@@ -4,6 +4,7 @@ use crate::{
     identity,
     process::Cancellation,
 };
+use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum State {
     #[default]
@@ -45,20 +46,39 @@ fn parse(bytes: &[u8]) -> Result<State, Error> {
 }
 impl Git {
     pub fn divergence(&self, snapshot: &Snapshot, cancel: &Cancellation) -> Result<State, Error> {
+        self.compare_upstream(snapshot, cancel, false)
+            .map(|(state, _)| state)
+    }
+
+    pub fn divergence_with_ahead(
+        &self,
+        snapshot: &Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<(State, HashSet<String>), Error> {
+        self.compare_upstream(snapshot, cancel, true)
+    }
+
+    fn compare_upstream(
+        &self,
+        snapshot: &Snapshot,
+        cancel: &Cancellation,
+        include_ahead: bool,
+    ) -> Result<(State, HashSet<String>), Error> {
+        let unavailable = |state| Ok((state, HashSet::new()));
         let Some(head) = &snapshot.head else {
-            return Ok(State::Unborn);
+            return unavailable(State::Unborn);
         };
         if snapshot.branch.is_none() {
-            return Ok(State::Detached);
+            return unavailable(State::Detached);
         }
         let Some(upstream) = &snapshot.upstream else {
-            return Ok(State::NoUpstream);
+            return unavailable(State::NoUpstream);
         };
         let Some(upstream) = snapshot.references.iter().find(|r| &r.name == upstream) else {
-            return Ok(State::MissingUpstream);
+            return unavailable(State::MissingUpstream);
         };
         if snapshot.shallow {
-            return Ok(State::Shallow);
+            return unavailable(State::Shallow);
         }
         if [head, &upstream.hash]
             .iter()
@@ -76,10 +96,37 @@ impl Git {
             cancel,
             4096,
         )?;
+        let state = parse(&output.stdout)?;
+        let ahead = if include_ahead && matches!(state, State::Available { ahead: 1.., .. }) {
+            // Counts remain useful if the bounded optional walk cannot publish its full result.
+            self.read(
+                &snapshot.worktree,
+                ["rev-list", "--left-only", &range, "--"],
+                cancel,
+                4 * 1024 * 1024,
+            )
+            .ok()
+            .and_then(|result| {
+                let text = std::str::from_utf8(&result.stdout).ok()?;
+                let hashes = text.lines().map(str::to_owned).collect::<HashSet<_>>();
+                let State::Available { ahead, .. } = state else {
+                    return None;
+                };
+                (hashes.len() as u64 == ahead
+                    && hashes.iter().all(|hash| {
+                        hash.len() == head.len()
+                            && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    }))
+                .then_some(hashes)
+            })
+            .unwrap_or_default()
+        } else {
+            HashSet::new()
+        };
         if identity::read(&snapshot.worktree)? != snapshot.identity {
             return Err(Error::Changed);
         }
-        parse(&output.stdout)
+        Ok((state, ahead))
     }
 }
 #[cfg(test)]

@@ -897,8 +897,12 @@ impl Editor {
                 {
                     self.refresh(&ctx);
                 }
-                if let Some(context) = &self.context {
-                    ui.label(context.repository.branch.as_deref().unwrap_or("HEAD"));
+                if let Some(branch) = self
+                    .context
+                    .as_ref()
+                    .and_then(|c| c.repository.branch.as_deref())
+                {
+                    ui.label(branch);
                 }
                 if self.progress().is_none()
                     && let Some(status) = &self.status

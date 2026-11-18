@@ -1974,15 +1974,11 @@ impl eframe::App for Workspace {
                                             tab.history.as_ref().map(|h| &h.snapshot).or_else(
                                                 || tab.view.preview.as_ref().map(|(s, _)| s),
                                             )
+                                            && let Some(branch) = &snapshot.branch
                                         {
                                             ui.add(
                                                 egui::Label::new(
-                                                    RichText::new(
-                                                        snapshot
-                                                            .branch
-                                                            .as_deref()
-                                                            .unwrap_or("HEAD"),
-                                                    )
+                                                    RichText::new(branch)
                                                     .small()
                                                     .color(palette.muted),
                                                 )
@@ -2480,7 +2476,7 @@ impl eframe::App for Workspace {
                                                             .snapshot
                                                             .references
                                                             .iter()
-                                                            .filter(|r| r.name.starts_with(&prefix))
+                                                            .filter(|r| r.name.starts_with(&prefix) && history_row::visible_ref(&r.name))
                                                         {
                                                             let response =
                                                                 workspace_style::reference_row(
@@ -2907,7 +2903,12 @@ impl eframe::App for Workspace {
                             let response = ui
                                 .push_id(&entry.commit.hash, |ui| {
                                     history_row::show(
-                                        ui, entry, lanes, selected, peer, refs_right, &palette,
+                                        ui, entry, lanes,
+                                        history_row::Style {
+                                            selected, peer, refs_right,
+                                            ahead: tab.divergence.is_ahead(&entry.commit.hash),
+                                        },
+                                        &palette,
                                     )
                                 })
                                 .inner;

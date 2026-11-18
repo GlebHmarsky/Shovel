@@ -23,6 +23,21 @@ pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color3
 
 pub(super) const HEIGHT: f32 = 23.;
 
+pub(super) fn visible_ref(name: &str) -> bool {
+    name != "HEAD"
+        && !name
+            .strip_prefix("refs/remotes/")
+            .and_then(|name| name.split_once('/'))
+            .is_some_and(|(_, branch)| branch == "HEAD")
+}
+
+pub(super) struct Style {
+    pub selected: bool,
+    pub peer: bool,
+    pub ahead: bool,
+    pub refs_right: bool,
+}
+
 fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette) {
     let colors = if ui.visuals().dark_mode {
         [0xdba24a, 0xd78279, 0x82b787, 0x7eabe0, 0xb398d5]
@@ -76,15 +91,13 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette) {
     }
 }
 
-pub fn show(
-    ui: &mut Ui,
-    entry: &Entry,
-    lanes: usize,
-    selected: bool,
-    peer: bool,
-    refs_right: bool,
-    p: &Palette,
-) -> egui::Response {
+pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette) -> egui::Response {
+    let Style {
+        selected,
+        peer,
+        ahead,
+        refs_right,
+    } = style;
     let graph_width = lanes as f32 * 16.;
     let width = ui.available_width().max(graph_width + 535.);
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, HEIGHT), egui::Sense::click());
@@ -92,6 +105,7 @@ pub fn show(
     let refs = entry
         .references
         .iter()
+        .filter(|r| visible_ref(&r.name))
         .map(|r| r.name.as_str())
         .collect::<Vec<_>>()
         .join(", ");
@@ -103,6 +117,12 @@ pub fn show(
         c.hash,
         refs
     );
+    let ahead_label = ahead.then(|| crate::strings::text("HistoryAhead"));
+    let description = if let Some(label) = &ahead_label {
+        format!("{description} · {label}")
+    } else {
+        description
+    };
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, &description)
     });
@@ -121,6 +141,8 @@ pub fn show(
     };
     let fg = if selected || response.hovered() {
         p.selection_text
+    } else if ahead && !p.high_contrast {
+        p.muted
     } else {
         p.history_text
     };
@@ -175,7 +197,7 @@ pub fn show(
     let budget = (subject.width() * 0.48).min(210.);
     let mut badges = Vec::new();
     let mut used = 0.;
-    for r in &entry.references {
+    for r in entry.references.iter().filter(|r| visible_ref(&r.name)) {
         let name = r
             .name
             .trim_start_matches("refs/heads/")
@@ -190,7 +212,16 @@ pub fn show(
         if width < 24. {
             break;
         }
-        badges.push((name, width));
+        let (badge_fg, badge_bg) = if p.high_contrast {
+            (fg, None)
+        } else if r.name.starts_with("refs/heads/") {
+            (p.diff_added_text, Some(p.diff_added_background))
+        } else if r.name.starts_with("refs/remotes/") {
+            (p.diff_removed_text, Some(p.diff_removed_background))
+        } else {
+            (fg, None)
+        };
+        badges.push((name, width, badge_fg, badge_bg));
         used += width + 4.;
     }
     let mut x = if refs_right {
@@ -198,12 +229,15 @@ pub fn show(
     } else {
         subject.left()
     };
-    for (name, width) in badges {
+    for (name, width, badge_fg, badge_bg) in badges {
         let badge = Rect::from_min_size(egui::pos2(x, rect.top() + 3.), egui::vec2(width, 17.));
+        if let Some(bg) = badge_bg {
+            ui.painter().rect_filled(badge, 3., bg);
+        }
         ui.painter().rect_stroke(
             badge,
             3.,
-            Stroke::new(1., secondary),
+            Stroke::new(1., badge_bg.map_or(secondary, |_| badge_fg)),
             egui::StrokeKind::Inside,
         );
         text(
@@ -211,7 +245,7 @@ pub fn show(
             badge.shrink2(egui::vec2(4., 0.)),
             name,
             FontId::proportional(11.),
-            fg,
+            badge_fg,
         );
         x += width + 4.;
     }
@@ -222,8 +256,14 @@ pub fn show(
     }
     text(ui, subject, c.subject(), font, fg);
     response.on_hover_text(format!(
-        "{}\n{} <{}>\n{}\n{}\n{}",
-        c.message, c.author, c.email, c.authored, c.hash, refs
+        "{}\n{} <{}>\n{}\n{}\n{}{}",
+        c.message,
+        c.author,
+        c.email,
+        c.authored,
+        c.hash,
+        refs,
+        ahead_label.map_or_else(String::new, |label| format!("\n{label}"))
     ))
 }
 

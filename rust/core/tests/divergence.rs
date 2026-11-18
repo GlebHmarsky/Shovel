@@ -56,6 +56,12 @@ fn native_counts_follow_captured_pull_upstream_and_preserve_repository_state() {
         &root,
         &["commit-tree", &tree, "-p", &base, "-m", "Upstream one"],
     );
+    let unrelated = command(
+        &git,
+        &root,
+        &["commit-tree", &tree, "-p", &base, "-m", "Other branch"],
+    );
+    command(&git, &root, &["update-ref", "refs/heads/other", &unrelated]);
     for (key, value) in [
         ("remote.team.url", "https://example.invalid/never-contact"),
         ("remote.team.fetch", "+refs/heads/*:refs/remotes/team/*"),
@@ -90,6 +96,14 @@ fn native_counts_follow_captured_pull_upstream_and_preserve_repository_state() {
         );
         let value = git.divergence(&snapshot, &cancel).unwrap();
         assert_eq!(value, State::Available { ahead, behind });
+        let (state, hashes) = git.divergence_with_ahead(&snapshot, &cancel).unwrap();
+        assert_eq!(state, value);
+        assert_eq!(hashes.len(), ahead as usize);
+        if ahead != 0 {
+            assert!(hashes.contains(&tip) && hashes.contains(&left));
+        }
+        assert!(!hashes.contains(&unrelated));
+        assert!(!hashes.contains(&right));
         assert_eq!(fs::read(root.join(".git/HEAD")).unwrap(), head_before);
         assert_eq!(fs::read(root.join(".git/config")).unwrap(), config);
         assert_eq!(

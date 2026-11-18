@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.50.13 - 2026-11-18
+
+- Grey history commits ahead of the checked-out branch's configured upstream. Show green local branch badges and red remote branch badges, and hide HEAD aliases from the workspace.
+
 ## Rust 0.50.12 - 2026-11-18
 
 - Add optional per-repository colored tab markers. A hollow circle means the working tree is clean, and a filled circle means it has local changes.

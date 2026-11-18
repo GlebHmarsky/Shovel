@@ -366,6 +366,8 @@ Task 1 and Task 2 may append localization entries to `Strings.resx` using disjoi
 
 ## Backlog
 
+- [ ] **Improve color guidance across Shovel.** Use consistent, meaningful colors for Git actions, statuses, and instructions. Pair each color with a clear label or symbol, and verify readability in Dark, Light, and Windows high-contrast modes.
+
 - [ ] **P2 — LFS locks (low priority).** Discuss a separately authorized server-capability/authentication test, then consider owner display and Lock/Unlock. Server support is unknown; no live test or fetch yet.
 - [ ] **P2 — Theme polish (low priority).** Extend the [shared pattern](docs/theme.md): popup/focus/hover/mixed-DPI/RTL and OS high-contrast desktop review. Preserve fast views and native control behavior; do not delay Git functionality.
 - [ ] **P2 — Diff/editor extensions.** Individual-line staging, broader hunk file types, image previews, chosen encodings, ignored-file inspection and further draft recovery UX; preserve bounded reads and clear unsupported states.

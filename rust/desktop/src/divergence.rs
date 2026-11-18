@@ -7,6 +7,7 @@ use shovel_core::{
     process::Cancellation,
 };
 use std::{
+    collections::HashSet,
     sync::{
         Arc,
         mpsc::{self, Receiver, Sender},
@@ -28,11 +29,14 @@ impl Default for Display {
         }
     }
 }
-struct Event(u64, Result<State, String>);
+type Comparison = (State, HashSet<String>);
+struct Event(u64, Result<Comparison, String>);
 pub struct Counter {
     state: State,
     generation: u64,
     stale: bool,
+    fingerprint: String,
+    ahead_commits: HashSet<String>,
     busy: bool,
     upstream: String,
     observed: String,
@@ -48,6 +52,8 @@ impl Default for Counter {
             state: State::Pending,
             generation: 0,
             stale: false,
+            fingerprint: String::new(),
+            ahead_commits: HashSet::new(),
             busy: false,
             upstream: String::new(),
             observed: String::new(),
@@ -78,6 +84,10 @@ impl Counter {
         workers: &crate::read_workers::Workers,
     ) {
         self.invalidate();
+        if self.fingerprint != snapshot.fingerprint {
+            self.ahead_commits.clear();
+            self.fingerprint.clone_from(&snapshot.fingerprint);
+        }
         self.state = State::Pending;
         self.error = None;
         self.stale = false;
@@ -96,7 +106,7 @@ impl Counter {
             #[cfg(test)]
             crate::history_cache::tests::wait_for_read(&snapshot.worktree);
             let result = git
-                .divergence(&snapshot, &cancel)
+                .divergence_with_ahead(&snapshot, &cancel)
                 .map_err(crate::error_text);
             let _ = sender.send(Event(generation, result));
             ctx.request_repaint();
@@ -109,9 +119,13 @@ impl Counter {
             }
             self.busy = false;
             match result {
-                Ok(state) => self.state = state,
+                Ok((state, ahead)) => {
+                    self.state = state;
+                    self.ahead_commits = ahead;
+                }
                 Err(error) => {
                     self.state = State::Failed;
+                    self.ahead_commits.clear();
                     self.error = Some(error);
                 }
             }
@@ -119,6 +133,9 @@ impl Counter {
         if self.busy {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
+    }
+    pub fn is_ahead(&self, hash: &str) -> bool {
+        self.ahead_commits.contains(hash)
     }
     pub fn display(&self) -> Display {
         if let State::Available { ahead, behind } = self.state {
@@ -203,7 +220,7 @@ mod tests {
                 .trim_end()
                 .to_owned()
         };
-        cmd(&root, &["init", "--initial-branch=main"]);
+        cmd(&root, &["init", "--initial-branch=master"]);
         cmd(&root, &["commit", "--allow-empty", "-m", "base"]);
         let base = cmd(&root, &["rev-parse", "HEAD"]);
         cmd(&root, &["commit", "--allow-empty", "-m", "local"]);
@@ -217,9 +234,20 @@ mod tests {
             ],
         );
         cmd(&root, &["update-ref", "refs/remotes/team/topic", &base]);
-        cmd(&root, &["config", "branch.main.remote", "team"]);
-        cmd(&root, &["config", "branch.main.merge", "refs/heads/topic"]);
-        cmd(&root, &["config", "branch.main.pushRemote", "different"]);
+        cmd(
+            &root,
+            &[
+                "symbolic-ref",
+                "refs/remotes/team/HEAD",
+                "refs/remotes/team/topic",
+            ],
+        );
+        cmd(&root, &["config", "branch.master.remote", "team"]);
+        cmd(
+            &root,
+            &["config", "branch.master.merge", "refs/heads/topic"],
+        );
+        cmd(&root, &["config", "branch.master.pushRemote", "different"]);
         let mut app = workspace();
         app.tabs.clear();
         app.settings
@@ -231,6 +259,9 @@ mod tests {
         let start = Instant::now();
         loop {
             app.receive(&ctx);
+            if app.tabs[0].history.is_some() {
+                app.tabs[0].selected = Some(base.clone());
+            }
             let output = frame(&ctx, &mut app, vec![]);
             if app.tabs[0].divergence.state
                 == (State::Available {
@@ -247,6 +278,18 @@ mod tests {
                     .iter()
                     .filter_map(|(_, n)| n.label().or_else(|| n.value()).map(str::to_owned))
                     .collect::<Vec<_>>();
+                let palette =
+                    crate::workspace_style::Palette::for_mode(ctx.global_style().visuals.dark_mode);
+                let has_text_color = |label, color| {
+                    output.shapes.iter().any(|shape| {
+                    matches!(&shape.shape, egui::Shape::Text(text)
+                        if text.galley.text() == label
+                            && text.galley.job.sections.iter().any(|section| section.format.color == color))
+                })
+                };
+                assert!(has_text_color("local", palette.muted));
+                assert!(has_text_color("master", palette.diff_added_text));
+                assert!(has_text_color("team/topic", palette.diff_removed_text));
                 output.drop_without_applying_deltas();
                 assert!(app.tabs[0].history.is_some());
                 assert!(!app.tabs[0].loading);
@@ -257,6 +300,26 @@ mod tests {
                     );
                 }
                 assert!(!labels.iter().any(|n| n.starts_with("Commits behind")));
+                assert!(
+                    labels
+                        .iter()
+                        .any(|n| n.starts_with("local  ") && n.ends_with("Ahead of upstream"))
+                );
+                assert!(
+                    !labels
+                        .iter()
+                        .any(|n| n.starts_with("base  ") && n.contains("Ahead of upstream"))
+                );
+                assert!(!labels.iter().any(|n| n.contains("team/HEAD")
+                    || n == "HEAD"
+                    || (n.starts_with("local  ") && n.contains(" HEAD"))));
+                let snapshot = &app.tabs[0].history.as_ref().unwrap().snapshot;
+                assert!(
+                    app.tabs[0]
+                        .divergence
+                        .is_ahead(snapshot.head.as_deref().unwrap())
+                );
+                assert!(!app.tabs[0].divergence.is_ahead(&base));
                 break;
             }
             output.drop_without_applying_deltas();
@@ -279,10 +342,13 @@ mod tests {
             .sender
             .send(Event(
                 0,
-                Ok(State::Available {
-                    ahead: 0,
-                    behind: 2,
-                }),
+                Ok((
+                    State::Available {
+                        ahead: 0,
+                        behind: 2,
+                    },
+                    HashSet::new(),
+                )),
             ))
             .unwrap();
         value.poll(&ctx);
@@ -293,32 +359,41 @@ mod tests {
             .sender
             .send(Event(
                 0,
-                Ok(State::Available {
-                    ahead: 99,
-                    behind: 99,
-                }),
+                Ok((
+                    State::Available {
+                        ahead: 99,
+                        behind: 99,
+                    },
+                    HashSet::from(["obsolete".into()]),
+                )),
             ))
             .unwrap();
         value.poll(&ctx);
         assert_eq!(value.display().behind.as_deref(), Some("2"));
+        assert!(!value.is_ahead("obsolete"));
         value
             .sender
             .send(Event(
                 1,
-                Ok(State::Available {
-                    ahead: 3,
-                    behind: 4,
-                }),
+                Ok((
+                    State::Available {
+                        ahead: 3,
+                        behind: 4,
+                    },
+                    HashSet::from(["ahead".into()]),
+                )),
             ))
             .unwrap();
         value.poll(&ctx);
         assert_eq!(value.display().ahead.as_deref(), Some("3"));
+        assert!(value.is_ahead("ahead"));
         value
             .sender
             .send(Event(1, Err("fixture failure".into())))
             .unwrap();
         value.poll(&ctx);
         assert!(value.display().ahead.is_none());
+        assert!(!value.is_ahead("ahead"));
         assert!(value.display().behind.is_none());
         assert!(value.display().help.contains("fixture failure"));
     }
