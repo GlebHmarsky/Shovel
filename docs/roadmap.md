@@ -41,6 +41,8 @@ In the final headless Windows fixture, a burst of eight writes reached the dirty
 
 The three watcher checks, nine history checks, draft preservation and initialization reattachment passed. The latter guards against reopening a tab scheduling a second initialization. All-target Clippy, `git diff --check` and all 18 bounded smoke checks passed. Smoke took 33.50 seconds on source fingerprint `2023B26D4E07BBC7FD16C63AF7A8AC3DFF667D3021DE3B94B20646229A0FD07F`.
 
+A command-line launch of the real Windows development executable from `720f3c7` exercised a disposable 301-commit clone and isolated profile. An external file write started a new Git status read in 474 ms, with the history log count unchanged. An external commit reached the history validation trace 793 ms after the Git command returned. On orderly exit, the saved 200-row page contained the new commit at the top and retained the previously selected commit. The trace, profile and receipt are in `Build/navigation-native-watch-fb10a9af`. The tested executable SHA-256 was `A902F5E425705A24379FC862241661AA4AE2DAF04D00801CD64DD48288F84E6F`. This verifies automatic refresh in a running native process. Native tab and dialog interaction timings are still open.
+
 
 ## Windows Rust 0.51.0 local build checks
 
