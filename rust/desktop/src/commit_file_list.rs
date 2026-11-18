@@ -1,0 +1,166 @@
+use super::*;
+use crate::workspace_style::Palette;
+
+/// The two panes borrow sorted slices from the same reviewed snapshot.
+pub(super) struct FileList<'a> {
+    groups: [&'a [Change]; 3],
+    headings: bool,
+}
+pub(super) enum Row<'a> {
+    Heading(Group, usize),
+    File(&'a Change),
+}
+impl<'a> FileList<'a> {
+    pub fn new(context: Option<&'a Context>, staged: bool) -> Self {
+        let rows = |group| context.map_or(&[][..], |c| c.group(group));
+        let groups = if staged {
+            [rows(Group::Staged), &[], &[]]
+        } else {
+            [
+                rows(Group::Conflicted),
+                rows(Group::Unstaged),
+                rows(Group::Untracked),
+            ]
+        };
+        let headings = !staged && (!groups[0].is_empty() || !groups[2].is_empty());
+        Self { groups, headings }
+    }
+    pub fn count(&self) -> usize {
+        self.groups.iter().map(|group| group.len()).sum()
+    }
+    pub fn row_count(&self) -> usize {
+        self.count()
+            + if self.headings {
+                self.groups.iter().filter(|g| !g.is_empty()).count()
+            } else {
+                0
+            }
+    }
+    pub fn row(&self, mut index: usize) -> Option<Row<'a>> {
+        for group in self.groups {
+            let Some(first) = group.first() else { continue };
+            if self.headings {
+                if index == 0 {
+                    return Some(Row::Heading(first.group, group.len()));
+                }
+                index -= 1;
+            }
+            if let Some(entry) = group.get(index) {
+                return Some(Row::File(entry));
+            }
+            index -= group.len();
+        }
+        None
+    }
+    pub fn entries(&self) -> impl Iterator<Item = &'a Change> {
+        self.groups.into_iter().flatten()
+    }
+}
+fn group_name(group: Group) -> String {
+    text(match group {
+        Group::Conflicted => "ChangesConflicted",
+        Group::Staged => "ChangesStaged",
+        Group::Unstaged => "ChangesUnstaged",
+        Group::Untracked => "ChangesUntracked",
+        Group::Ignored => "ChangesIgnored",
+    })
+}
+pub(super) fn heading(ui: &mut egui::Ui, group: Group, count: usize) {
+    let name = if group == Group::Unstaged {
+        text("CommitTrackedFiles")
+    } else {
+        group_name(group)
+    };
+    ui.add_sized(
+        [ui.available_width(), 22.],
+        egui::Label::new(
+            egui::RichText::new(strings::format(
+                "CommitFileGroup",
+                &[&name, &count.to_string()],
+            ))
+            .small()
+            .strong(),
+        )
+        .halign(egui::Align::Min),
+    );
+}
+pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egui::Response {
+    let p = Palette::current(ui);
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.), egui::Sense::click());
+    let highlighted = selected || response.hovered();
+    if highlighted {
+        let fill = if selected && response.has_focus() {
+            p.active_selection
+        } else if selected {
+            p.selected
+        } else {
+            p.hover
+        };
+        ui.painter().rect_filled(rect, 2., fill);
+    }
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            2.,
+            egui::Stroke::new(1., p.focus),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let fg = if highlighted {
+        p.selection_text
+    } else {
+        p.text
+    };
+    let secondary = if highlighted { fg } else { p.muted };
+    let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+    painter.text(
+        rect.left_center() + egui::vec2(8., 0.),
+        egui::Align2::LEFT_CENTER,
+        entry.code,
+        egui::FontId::monospace(12.),
+        secondary,
+    );
+    let (directory, name) = entry.path.rsplit_once('/').unwrap_or(("", &entry.path));
+    let mut job = egui::text::LayoutJob::simple_singleline(
+        name.to_owned(),
+        egui::FontId::proportional(13.),
+        fg,
+    );
+    if !directory.is_empty() {
+        job.append(
+            directory,
+            9.,
+            egui::TextFormat::simple(egui::FontId::proportional(12.), secondary),
+        );
+    }
+    job.wrap.max_width = (rect.width() - 31.).max(1.);
+    job.wrap.max_rows = 1;
+    let galley = painter.layout_job(job);
+    painter.galley(
+        egui::pos2(rect.left() + 25., rect.center().y - galley.size().y / 2.),
+        galley,
+        fg,
+    );
+    let kind = text(&format!("ChangeCode{}", entry.code));
+    let label = if entry.group == Group::Untracked {
+        strings::format(
+            "CommitUntrackedRow",
+            &[&group_name(entry.group), &entry.path],
+        )
+    } else {
+        strings::format(
+            "CommitChangeRow",
+            &[&group_name(entry.group), &kind, &entry.path],
+        )
+    };
+    let label = if let Some(original) = &entry.original {
+        strings::format("CommitOriginalPath", &[&label, original])
+    } else {
+        label
+    };
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, &label)
+    });
+    response.on_hover_text(label)
+}

@@ -2,6 +2,12 @@
 
 ## Overnight Rust Beta work (2026-11-18)
 
+**Local Changes file list and keyboard copy (R12/R37/R42).** The Commit window and sidebar view borrow grouped slices of the status snapshot. Repaints visit visible files, and opening a menu retains the reviewed snapshot without copying every entry. Filenames appear first, followed by their folder. Screen-reader labels and tooltips distinguish staged and unstaged copies of a path and include both endpoints of renames. The lists have empty states, and the subject and description inputs are associated with their labels. The file list now accepts the native Windows Copy event emitted for Ctrl+C and Ctrl+Insert. Ctrl+Shift+C copies a full Windows path with consistent separators.
+
+Sixteen headless file-menu checks and seven queue checks passed. A 20,000-entry status fixture checked the final borrowed row, off-screen virtualization, conflict and untracked groups, Unicode filenames, rename text and input labels in Light and Dark. Disposable Git tests covered native hooks, selection, file actions and queue ownership. Native screen-reader, DPI and paired performance acceptance remain open.
+
+Workspace all-target Clippy, diff checks and all 18 smoke checks passed. The smoke script reported 26.05 s on source fingerprint `4025F7D095917C53EC4852DAAAA6F5D66F6C8237CBA8C97BA1DCB9763166472B`.
+
 **Recoverable update downloads and restart (R07/R08).** Velopack skips a package whose final filename already exists. The downloader now checks that file against its signed size and SHA-256 under the installation lock. It reuses valid bytes and removes only a damaged target so a retry can fetch it. A missing or damaged package discovered at restart returns to Download. Other restart failures retain the verified package. A successful external-tool handoff during pending shutdown asks for renewed confirmation.
 
 Eight core and ten headless updater checks passed, along with the workspace tool-handoff shutdown check, all-target Clippy and diff checks. Fixtures cover truncated, oversized and equal-length wrong content, cancelled verification, unrelated files, recoverable restart and a late tool handoff. A stream delivered in 500 reads produced 101 percentage updates. AccessKit exposed the progress value at 47%. An actual interrupted installation and native screen-reader interaction remain open.

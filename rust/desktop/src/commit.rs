@@ -649,12 +649,8 @@ impl Editor {
         if resolved_path.is_some() {
             self.conflict = None;
         }
-        self.selection.retain(|(group, path)| {
-            context
-                .entries
-                .iter()
-                .any(|e| &e.group == group && &e.path == path)
-        });
+        self.selection
+            .retain(|(group, path)| context.change(*group, path).is_some());
         let focus = self
             .focused
             .as_ref()
@@ -687,18 +683,14 @@ impl Editor {
         let Some(context) = &self.context else {
             return;
         };
-        let entries = context
-            .entries
-            .iter()
-            .filter(|e| {
-                (if unstage {
-                    e.group == Group::Staged
-                } else {
-                    !matches!(e.group, Group::Staged | Group::Ignored)
-                }) && (all || self.selection.contains(&(e.group, e.path.clone())))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
+        let entries = if all {
+            file_list::FileList::new(Some(context), unstage)
+                .entries()
+                .cloned()
+                .collect()
+        } else {
+            self.selected_entries(context, unstage)
+        };
         if !entries.is_empty() {
             self.submit(
                 if unstage {
@@ -720,7 +712,7 @@ impl Editor {
             Some("CommitMessageRequired")
         } else if self.draft.message().len() > 65536 {
             Some("CommitMessageLimit")
-        } else if context.entries.iter().any(|e| e.group == Group::Conflicted) {
+        } else if !context.group(Group::Conflicted).is_empty() {
             Some("CommitUnresolved")
         } else if !context.repository.operations.is_empty()
             && context.repository.operations != ["merge"]
@@ -728,7 +720,7 @@ impl Editor {
             Some("ActionSequence")
         } else if !self.amend
             && context.repository.operations != ["merge"]
-            && !context.entries.iter().any(|e| e.group == Group::Staged)
+            && context.group(Group::Staged).is_empty()
             && !self.queue.has_stage()
         {
             Some("CommitNothingStaged")
@@ -923,16 +915,21 @@ impl Editor {
             if let Some(error) = &self.draft_error {
                 ui.colored_label(ui.visuals().error_fg_color, error);
             }
-            ui.label(text("CommitSubject"));
-            let subject = ui.add(
-                egui::TextEdit::singleline(&mut self.draft.subject).desired_width(f32::INFINITY),
-            );
-            ui.label(text("CommitDescription"));
-            let body = ui.add(
-                egui::TextEdit::multiline(&mut self.draft.description)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(3),
-            );
+            let subject_label = ui.label(text("CommitSubject"));
+            let subject = ui
+                .add(
+                    egui::TextEdit::singleline(&mut self.draft.subject)
+                        .desired_width(f32::INFINITY),
+                )
+                .labelled_by(subject_label.id);
+            let body_label = ui.label(text("CommitDescription"));
+            let body = ui
+                .add(
+                    egui::TextEdit::multiline(&mut self.draft.description)
+                        .desired_width(f32::INFINITY)
+                        .desired_rows(3),
+                )
+                .labelled_by(body_label.id);
             if subject.changed() || body.changed() {
                 self.edited();
             }
@@ -1001,20 +998,10 @@ impl Editor {
         .resizable(true)
         .show(ui, |ui| {
             let mut chosen = None;
+            let snapshot = self.context.clone();
             for staged in [false, true] {
-                let rows = self
-                    .context
-                    .as_ref()
-                    .map(|c| {
-                        c.entries
-                            .iter()
-                            .filter(|e| {
-                                (e.group == Group::Staged) == staged && e.group != Group::Ignored
-                            })
-                            .cloned()
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
+                let rows = file_list::FileList::new(snapshot.as_deref(), staged);
+                let count = rows.count();
                 ui.horizontal(|ui| {
                     ui.strong(strings::format(
                         if staged {
@@ -1022,28 +1009,34 @@ impl Editor {
                         } else {
                             "CommitUnstagedCount"
                         },
-                        &[&rows.len().to_string()],
+                        &[&count.to_string()],
                     ));
-                    let selected = rows
+                    let selected = self
+                        .selection
                         .iter()
-                        .any(|e| self.selection.contains(&(e.group, e.path.clone())));
+                        .any(|(group, _)| (*group == Group::Staged) == staged);
                     let all = ui.input(|i| i.modifiers.shift);
                     if ui
                         .add_enabled(
-                            self.working_ready() && (selected || all && !rows.is_empty()),
+                            self.working_ready() && (selected || all && count > 0),
                             egui::Button::new(text(if staged {
                                 "CommitUnstage"
                             } else {
                                 "CommitStage"
                             })),
                         )
+                        .on_hover_text(text(if staged {
+                            "CommitUnstageHelp"
+                        } else {
+                            "CommitStageHelp"
+                        }))
                         .clicked()
                     {
                         self.stage(staged, all, &ctx);
                     }
                     if ui
                         .add_enabled(
-                            self.working_ready() && !rows.is_empty(),
+                            self.working_ready() && count > 0,
                             egui::Button::new(text(if staged {
                                 "CommitUnstageAll"
                             } else {
@@ -1056,74 +1049,94 @@ impl Editor {
                     }
                 });
                 let height = (ui.available_height() / if staged { 1. } else { 2. } - 32.).max(65.);
-                egui::ScrollArea::both()
+                let empty_snapshot = count == 0 && snapshot.is_some();
+                egui::ScrollArea::vertical()
                     .id_salt(("files", staged))
+                    .auto_shrink([false, false])
                     .max_height(height)
                     .min_scrolled_height(height)
-                    .show_rows(ui, 22., rows.len(), |ui, range| {
-                        for index in range {
-                            let entry = &rows[index];
-                            let key = (entry.group, entry.path.clone());
-                            let selected = self.selection.contains(&key);
-                            let response = ui.add_enabled(
-                                !self.working_blocked(),
-                                egui::Button::selectable(
-                                    selected,
-                                    format!("{}  {}", entry.code, entry.path),
-                                ),
-                            );
-                            if response.clicked() {
-                                response.request_focus();
-                                self.files_focus = Some(response.id);
-                                let mut selection = self.selection.clone();
-                                if !ui.input(|i| i.modifiers.ctrl) {
-                                    selection.clear();
-                                }
-                                if selected && ui.input(|i| i.modifiers.ctrl) {
-                                    selection.remove(&key);
+                    .show_rows(
+                        ui,
+                        22.,
+                        rows.row_count() + usize::from(empty_snapshot),
+                        |ui, range| {
+                            if empty_snapshot {
+                                ui.weak(text(if staged {
+                                    "CommitNoStaged"
                                 } else {
-                                    selection.insert(key);
-                                }
-                                chosen = Some(Leave::Select {
-                                    entry: Box::new(entry.clone()),
-                                    selection,
-                                    stage: false,
-                                });
+                                    "CommitNoUnstaged"
+                                }));
+                                return;
                             }
-                            if response.double_clicked() {
-                                chosen = Some(Leave::Select {
-                                    entry: Box::new(entry.clone()),
-                                    selection: BTreeSet::from([(entry.group, entry.path.clone())]),
-                                    stage: true,
-                                });
-                            }
-                            if response.secondary_clicked() && !self.action_busy() {
-                                response.request_focus();
-                                self.files_focus = Some(response.id);
-                                if let Some(context) = self.context.clone() {
-                                    let entries = if selected {
-                                        rows.iter()
-                                            .filter(|e| {
-                                                self.selection.contains(&(e.group, e.path.clone()))
-                                            })
-                                            .cloned()
-                                            .collect()
+                            for index in range {
+                                let entry = match rows.row(index) {
+                                    Some(file_list::Row::Heading(group, count)) => {
+                                        file_list::heading(ui, group, count);
+                                        continue;
+                                    }
+                                    Some(file_list::Row::File(entry)) => entry,
+                                    None => continue,
+                                };
+                                let key = (entry.group, entry.path.clone());
+                                let selected = self.selection.contains(&key);
+                                let response = ui
+                                    .push_id((entry.group as u8, &entry.path), |ui| {
+                                        if self.working_blocked() {
+                                            ui.disable();
+                                        }
+                                        file_list::file_row(ui, entry, selected)
+                                    })
+                                    .inner;
+                                if response.clicked() {
+                                    response.request_focus();
+                                    self.files_focus = Some(response.id);
+                                    let mut selection = self.selection.clone();
+                                    if !ui.input(|i| i.modifiers.ctrl) {
+                                        selection.clear();
+                                    }
+                                    if selected && ui.input(|i| i.modifiers.ctrl) {
+                                        selection.remove(&key);
                                     } else {
-                                        vec![entry.clone()]
-                                    };
-                                    chosen = Some(Leave::Menu(Box::new(file_menu::Menu {
-                                        selected: file_menu::Selection { context, entries },
-                                        all: rows.clone(),
-                                        entry: entry.clone(),
-                                        position: response
-                                            .interact_pointer_pos()
-                                            .unwrap_or(response.rect.left_bottom()),
-                                        layer: ui.layer_id(),
-                                    })));
+                                        selection.insert(key);
+                                    }
+                                    chosen = Some(Leave::Select {
+                                        entry: Box::new(entry.clone()),
+                                        selection,
+                                        stage: false,
+                                    });
+                                }
+                                if response.double_clicked() {
+                                    chosen = Some(Leave::Select {
+                                        entry: Box::new(entry.clone()),
+                                        selection: BTreeSet::from([(
+                                            entry.group,
+                                            entry.path.clone(),
+                                        )]),
+                                        stage: true,
+                                    });
+                                }
+                                if response.secondary_clicked() && !self.action_busy() {
+                                    response.request_focus();
+                                    self.files_focus = Some(response.id);
+                                    if let Some(context) = self.context.clone() {
+                                        let entries = if selected {
+                                            self.selected_entries(&context, staged)
+                                        } else {
+                                            vec![entry.clone()]
+                                        };
+                                        chosen = Some(Leave::Menu(Box::new(file_menu::Menu {
+                                            selected: file_menu::Selection { context, entries },
+                                            entry: entry.clone(),
+                                            position: response
+                                                .interact_pointer_pos()
+                                                .unwrap_or(response.rect.left_bottom()),
+                                            layer: ui.layer_id(),
+                                        })));
+                                    }
                                 }
                             }
-                        }
-                    });
+                        },
+                    );
                 ui.separator();
             }
             if let Some(next) = chosen {
@@ -1249,6 +1262,8 @@ impl Editor {
 #[cfg(test)]
 #[path = "commit_conflict_tests.rs"]
 mod conflict_tests;
+#[path = "commit_file_list.rs"]
+mod file_list;
 #[path = "commit_file_menu.rs"]
 mod file_menu;
 #[cfg(test)]

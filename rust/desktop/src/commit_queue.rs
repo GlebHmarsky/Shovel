@@ -97,7 +97,9 @@ fn adopt_owned(
         && owned.repository.branch == captured.repository.branch
         && owned.repository.head == captured.repository.head
         && owned.config_stamp == captured.config_stamp
-        && entries.iter().all(|entry| owned.entries.contains(entry))
+        && entries
+            .iter()
+            .all(|entry| owned.change(entry.group, &entry.path) == Some(entry))
     {
         owned.clone()
     } else {

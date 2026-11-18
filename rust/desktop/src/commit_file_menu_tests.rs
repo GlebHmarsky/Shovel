@@ -64,6 +64,115 @@ struct Harness {
 }
 
 #[test]
+fn native_copy_event_and_full_path_shortcut_follow_the_focused_file_list() {
+    let mut h = Harness::new();
+    h.click("Unstaged · Modified · file.txt");
+    h.render(vec![egui::Event::Copy])
+        .drop_without_applying_deltas();
+    h.key(
+        egui::Key::C,
+        egui::Modifiers {
+            ctrl: true,
+            command: true,
+            shift: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        h.copied,
+        ["file.txt", h.editor.path.join("file.txt").to_str().unwrap()]
+    );
+    h.ctx
+        .memory_mut(|memory| memory.surrender_focus(h.editor.files_focus.unwrap()));
+    h.render(vec![egui::Event::Copy])
+        .drop_without_applying_deltas();
+    assert_eq!(h.copied.len(), 2);
+}
+
+#[test]
+fn large_snapshot_groups_visible_rows_and_names_both_message_fields() {
+    let mut h = Harness::new();
+    let mut context = (**h.editor.context.as_ref().unwrap()).clone();
+    let mut rename = context.group(Group::Staged)[0].clone();
+    rename.code = 'R';
+    rename.path = "src/новое.rs".into();
+    rename.original = Some("old/name.rs".into());
+    let mut conflict = rename.clone();
+    conflict.group = Group::Conflicted;
+    conflict.code = 'U';
+    conflict.path = "conflict.txt".into();
+    conflict.original = None;
+    let mut tracked = conflict.clone();
+    tracked.group = Group::Unstaged;
+    tracked.code = 'M';
+    tracked.path = "src/שלום.txt".into();
+    context.entries = vec![conflict, rename, tracked.clone()];
+    for index in 0..19_997 {
+        let mut entry = tracked.clone();
+        entry.group = Group::Untracked;
+        entry.code = '?';
+        entry.path = format!("nested/new-{index:05}.txt");
+        context.entries.push(entry);
+    }
+    let list = file_list::FileList::new(Some(&context), false);
+    assert_eq!((list.count(), list.row_count()), (19_999, 20_002));
+    let Some(file_list::Row::File(last)) = list.row(20_001) else {
+        panic!("last untracked path")
+    };
+    assert!(std::ptr::eq(last, context.entries.last().unwrap()));
+    assert!(list.row(20_002).is_none());
+    h.editor.context = Some(Arc::new(context));
+    for light in [false, true] {
+        crate::workspace_style::apply(&h.ctx, light);
+        h.render(vec![]).drop_without_applying_deltas();
+        let out = h.render(vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+        let labels = nodes
+            .iter()
+            .filter_map(|(_, n)| n.label().or(n.value()))
+            .collect::<Vec<_>>();
+        for expected in [
+            "Conflicted (1)",
+            "Tracked files (1)",
+            "Untracked (19997)",
+            "Conflicted · Unmerged · conflict.txt",
+            "Unstaged · Modified · src/שלום.txt",
+            "Staged · Renamed · src/новое.rs\nOriginal path: old/name.rs",
+            "Untracked · nested/new-00000.txt",
+        ] {
+            assert!(
+                labels.contains(&expected),
+                "{expected} missing from {labels:?}"
+            );
+        }
+        assert!(!labels.contains(&"Untracked · nested/new-19996.txt"));
+        assert!(
+            nodes.len() < 300,
+            "off-screen file rows must remain virtual"
+        );
+        for expected in [text("CommitSubject"), text("CommitDescription")] {
+            assert!(nodes.iter().any(|(_, input)| input.labelled_by().iter().any(|id|
+                nodes.iter().any(|(label_id, label)| label_id == id && label.value() == Some(expected.as_str()))
+            )), "Missing input label {expected}");
+        }
+        out.drop_without_applying_deltas();
+    }
+    Arc::make_mut(h.editor.context.as_mut().unwrap())
+        .entries
+        .clear();
+    let out = h.render(vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    for key in ["CommitNoStaged", "CommitNoUnstaged"] {
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, n)| n.value() == Some(text(key).as_str()))
+        );
+    }
+    out.drop_without_applying_deltas();
+}
+
+#[test]
 fn patch_picker_cancellation_reads_nothing_and_keeps_owner_alive() {
     let mut h = Harness::new();
     let index = fs::read(h.editor.path.join(".git/index")).unwrap();
@@ -298,9 +407,8 @@ impl Harness {
         self.click_at(point, egui::PointerButton::Primary);
     }
     fn menu(&mut self) {
-        // Both lists contain the partially staged path; the first matching row
-        // is the unstaged list, matching its actual displayed order.
-        let point = self.point("M  file.txt");
+        // A partially staged path has distinct accessible names in the two lists.
+        let point = self.point("Unstaged · Modified · file.txt");
         self.click_at(point, egui::PointerButton::Secondary);
         assert!(self.editor.file_menu.is_some());
         self.render(vec![]).drop_without_applying_deltas();
@@ -444,7 +552,7 @@ fn shell_open_menu_and_shortcut_handoff_current_working_bytes_survive_view_close
         count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     });
-    h.click("M  file.txt");
+    h.click("Unstaged · Modified · file.txt");
     h.key(
         egui::Key::O,
         egui::Modifiers {
@@ -473,7 +581,7 @@ fn shell_explorer_fallback_and_launch_failures_keep_the_real_repository_unchange
                     .any(|e| e.path == "file.txt" && e.code == 'D')
             })
     });
-    let point = h.point("D  file.txt");
+    let point = h.point("Unstaged · Deleted · file.txt");
     h.click_at(point, egui::PointerButton::Secondary);
     let output = h.render(vec![]);
     assert!(
@@ -501,7 +609,7 @@ fn shell_explorer_fallback_and_launch_failures_keep_the_real_repository_unchange
         h.editor.context.as_ref().unwrap().repository.worktree
     );
     let index = fs::read(h.editor.path.join(".git/index")).unwrap();
-    let point = h.point("D  file.txt");
+    let point = h.point("Unstaged · Deleted · file.txt");
     h.click_at(point, egui::PointerButton::Secondary);
     h.editor.shell_launcher = Arc::new(|_| Err("FileMenuOpenFailed"));
     h.click(&text("FileMenuExplorer"));
@@ -577,7 +685,7 @@ fn file_menu_reads_nothing_and_confirmation_freezes_actual_targets_before_discar
 #[test]
 fn stale_confirmation_disables_discard_and_delete_does_not_allow_commit_shortcut() {
     let mut h = Harness::new();
-    h.click("M  file.txt");
+    h.click("Unstaged · Modified · file.txt");
     h.editor.draft.subject = "must not commit".into();
     h.key(egui::Key::Delete, egui::Modifiers::NONE);
     assert!(h.editor.file_confirmation.is_some());
@@ -670,7 +778,10 @@ fn selected_stash_confirms_frozen_paths_and_message_then_finishes_after_view_clo
         .find(|(_, n)| {
             n.role() == egui::Role::TextInput
                 && n.bounds().is_some_and(|r| r.height() < 60.)
-                && n.labelled_by().len() == 1
+                && nodes.iter().any(|(id, label)| {
+                    n.labelled_by().contains(id)
+                        && label.value() == Some(text("StashMessage").as_str())
+                })
         })
         .unwrap();
     let bounds = input.1.bounds().unwrap();
@@ -806,7 +917,7 @@ fn ignore_submenu_reads_nothing_and_writes_only_the_selected_root_rule() {
     let mut missing = (*original).clone();
     missing.executable = h._temp.path().join("missing-git.exe");
     h.editor.git = Arc::new(missing);
-    let point = h.point("?  new [literal].tmp");
+    let point = h.point("Untracked · new [literal].tmp");
     h.click_at(point, egui::PointerButton::Secondary);
     h.click(&text("FileIgnoreMenu"));
     assert!(!h.editor.loading && !h.editor.scheduler.has_accepted_work());

@@ -22,6 +22,8 @@ The central repository status shows the current Git action and phase, and includ
 
 In **File → Settings → Appearance**, **Commit layout** selects the toolbar **Commit** window or the sidebar **Local Changes** view. The toolbar window is the default for existing profiles. In sidebar mode, **History** and **Local Changes** switch the active repository’s main pane. The Local Changes view stays open after submitting a commit and uses the same staging, diff, draft and Git operation handling as the window.
 
+Local Changes lists conflicted, tracked and untracked files above the staged list. Rows show the filename first and its folder alongside it. Hover or focus a row with a screen reader to read its status and full path, including the original path of a rename. With the file list focused, Ctrl+C copies selected repository-relative paths and Ctrl+Shift+C copies full paths.
+
 ## Rust toolbar and Git output (0.50.5)
 
 Pull and Push show a badge when their upstream count is positive. **Open In...** opens a destination menu, and the adjacent **Console (Git Bash)** icon opens Git Bash in the active repository.

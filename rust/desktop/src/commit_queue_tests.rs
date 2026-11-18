@@ -153,7 +153,7 @@ impl Harness {
         }
     }
     fn stage(&mut self, name: &str) {
-        self.click(&format!("M  {name}"));
+        self.click(&format!("Unstaged · Modified · {name}"));
         self.click(&text("CommitStage"));
     }
     fn submit_commit(&mut self, subject: &str) {

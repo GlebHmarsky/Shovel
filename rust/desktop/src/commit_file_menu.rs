@@ -13,7 +13,6 @@ pub(super) struct Selection {
 }
 pub(super) struct Menu {
     pub selected: Selection,
-    pub all: Vec<Change>,
     pub entry: Change,
     pub position: egui::Pos2,
     pub layer: egui::LayerId,
@@ -76,6 +75,13 @@ impl Confirmation {
     }
 }
 impl Editor {
+    pub(super) fn selected_entries(&self, context: &Context, staged: bool) -> Vec<Change> {
+        self.selection
+            .iter()
+            .filter(|(group, _)| (*group == Group::Staged) == staged && *group != Group::Ignored)
+            .filter_map(|(group, path)| context.change(*group, path).cloned())
+            .collect()
+    }
     fn file_selection_current(&self, selection: &Selection) -> bool {
         self.context
             .as_ref()
@@ -110,7 +116,7 @@ impl Editor {
             .map(|e| {
                 if full {
                     working::path(&selection.context.repository.worktree, &e.path)
-                        .map(|p| p.to_string_lossy().into_owned())
+                        .map(|p| p.to_string_lossy().replace('/', "\\"))
                 } else {
                     Ok(e.path.clone())
                 }
@@ -189,7 +195,7 @@ impl Editor {
             }
             if ui
                 .add_enabled(
-                    enabled && !menu.all.is_empty(),
+                    enabled,
                     egui::Button::new(text(if staged {
                         "CommitUnstageAll"
                     } else {
@@ -381,7 +387,10 @@ impl Editor {
                     let entries = if action == 0 {
                         menu.selected.entries.clone()
                     } else {
-                        menu.all.clone()
+                        super::file_list::FileList::new(Some(&menu.selected.context), staged)
+                            .entries()
+                            .cloned()
+                            .collect()
                     };
                     self.submit(
                         if staged {
@@ -690,52 +699,70 @@ impl Editor {
         {
             return;
         }
-        let Some(context) = self.context.clone() else {
+        enum Shortcut {
+            Open,
+            Discard,
+            Copy(bool),
+            Stage(bool),
+        }
+        let shortcut = ctx.input_mut(|input| {
+            let modifiers = input.modifiers;
+            if let Some(index) = input
+                .events
+                .iter()
+                .position(|event| matches!(event, egui::Event::Copy))
+            {
+                // egui-winit replaces the native Ctrl+C / Ctrl+Insert keydown with Copy.
+                input.events.remove(index);
+                Some(Shortcut::Copy(false))
+            } else if modifiers.ctrl
+                && modifiers.shift
+                && modifiers.alt
+                && input.consume_key(modifiers, egui::Key::O)
+            {
+                Some(Shortcut::Open)
+            } else if input.consume_key(egui::Modifiers::NONE, egui::Key::Delete) {
+                Some(Shortcut::Discard)
+            } else if modifiers.ctrl && !modifiers.alt && input.consume_key(modifiers, egui::Key::C)
+            {
+                Some(Shortcut::Copy(modifiers.shift))
+            } else if !modifiers.ctrl
+                && !modifiers.alt
+                && input.consume_key(modifiers, egui::Key::Enter)
+            {
+                Some(Shortcut::Stage(modifiers.shift))
+            } else if modifiers.ctrl
+                && modifiers.shift
+                && modifiers.alt
+                && input.consume_key(modifiers, egui::Key::S)
+            {
+                Some(Shortcut::Stage(false))
+            } else {
+                None
+            }
+        });
+        let (Some(shortcut), Some(context), Some(focus)) =
+            (shortcut, self.context.as_ref(), self.focused.as_ref())
+        else {
             return;
         };
-        let Some(focus) = self.focused.clone() else {
-            return;
-        };
-        let entries = context
-            .entries
-            .iter()
-            .filter(|e| {
-                self.selection.contains(&(e.group, e.path.clone()))
-                    && (e.group == Group::Staged) == (focus.group == Group::Staged)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
+        let staged = focus.group == Group::Staged;
+        let entries = self.selected_entries(context, staged);
         if entries.is_empty() {
             return;
         }
-        let selection = Selection { context, entries };
-        let modifiers = ctx.input(|i| i.modifiers);
-        if modifiers.ctrl
-            && modifiers.shift
-            && modifiers.alt
-            && ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::O))
-        {
-            self.begin_shell(selection, false, ctx);
-        } else if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
-            && files::supported(&selection.entries)
-        {
-            self.file_confirmation = Some(Confirmation::new(selection, FileAction::Discard));
-        } else if modifiers.ctrl
-            && !modifiers.alt
-            && ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::C))
-        {
-            self.copy_paths(&selection, modifiers.shift, ctx);
-        } else if !modifiers.ctrl
-            && !modifiers.alt
-            && ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::Enter))
-        {
-            self.stage(focus.group == Group::Staged, modifiers.shift, ctx);
-        } else if modifiers.ctrl
-            && modifiers.shift
-            && modifiers.alt
-            && ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::S))
-        {
-            self.stage(focus.group == Group::Staged, false, ctx);
+        let selection = Selection {
+            context: context.clone(),
+            entries,
+        };
+        match shortcut {
+            Shortcut::Open => self.begin_shell(selection, false, ctx),
+            Shortcut::Discard if files::supported(&selection.entries) => {
+                self.file_confirmation = Some(Confirmation::new(selection, FileAction::Discard));
+            }
+            Shortcut::Discard => {}
+            Shortcut::Copy(full) => self.copy_paths(&selection, full, ctx),
+            Shortcut::Stage(all) => self.stage(staged, all, ctx),
         }
     }
 }

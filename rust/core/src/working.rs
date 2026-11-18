@@ -41,6 +41,7 @@ pub struct Change {
 #[derive(Clone, Debug)]
 pub struct Context {
     pub repository: Snapshot,
+    /// Working-copy status and targeted reconciliation both order rows by (group, path).
     pub entries: Vec<Change>,
     pub index_stamp: String,
     pub config_stamp: String,
@@ -48,6 +49,20 @@ pub struct Context {
     pub merge_message: String,
     pub(crate) filters: Vec<OsString>,
     pub(crate) standard_lfs: bool,
+}
+impl Context {
+    pub fn group(&self, group: Group) -> &[Change] {
+        let start = self.entries.partition_point(|entry| entry.group < group);
+        let rest = &self.entries[start..];
+        &rest[..rest.partition_point(|entry| entry.group == group)]
+    }
+
+    pub fn change(&self, group: Group, path: &str) -> Option<&Change> {
+        let rows = self.group(group);
+        rows.binary_search_by(|entry| entry.path.as_str().cmp(path))
+            .ok()
+            .map(|index| &rows[index])
+    }
 }
 #[derive(Clone, Debug)]
 pub enum Action {
