@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{
     collections::{BTreeMap, HashSet},
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     path::Path,
     sync::Arc,
 };
@@ -250,8 +250,17 @@ impl Git {
         key: &str,
         cancel: &Cancellation,
     ) -> Result<Option<String>, Error> {
+        self.network_config_output(root, &["config", "--get-all", key], cancel)
+    }
+
+    fn network_config_output(
+        &self,
+        root: &Path,
+        args: &[&str],
+        cancel: &Cancellation,
+    ) -> Result<Option<String>, Error> {
         let result = process::run(
-            &self.request(root, ["config", "--get-all", key], Lifetime::Read, LIMIT),
+            &self.request(root, args.iter().copied(), Lifetime::Read, LIMIT),
             cancel,
             None,
         )?;
@@ -484,11 +493,29 @@ impl Git {
         cancel: &Cancellation,
     ) -> Result<BTreeMap<OsString, Option<OsString>>, Error> {
         let mut environment = auth.map(|a| a.environment.clone()).unwrap_or_default();
+        let gcm = if auth.is_some() {
+            self.network_environment_value("GCM_INTERACTIVE")
+        } else {
+            Some("never".into())
+        };
+        environment.insert("GCM_INTERACTIVE".into(), gcm);
         environment.insert("GIT_MERGE_AUTOEDIT".into(), Some("no".into()));
         environment.insert("GIT_EDITOR".into(), Some("false".into()));
-        if self
-            .network_config(root, "core.sshCommand", cancel)?
-            .is_some()
+        if ["GIT_SSH_COMMAND", "GIT_SSH", "GIT_SSH_VARIANT"]
+            .iter()
+            .any(|key| self.network_environment_value(key).is_some())
+            || self
+                .network_config_output(
+                    root,
+                    &[
+                        "config",
+                        "--name-only",
+                        "--get-regexp",
+                        r"^(core\.sshcommand|ssh\.variant)$",
+                    ],
+                    cancel,
+                )?
+                .is_some()
         {
             // Git owns the configured SSH command and its variant. Its normal
             // transport selection also leaves local and HTTPS remotes usable.
@@ -525,6 +552,14 @@ impl Git {
         );
         environment.insert("GIT_SSH_VARIANT".into(), Some("ssh".into()));
         Ok(environment)
+    }
+
+    fn network_environment_value(&self, key: &str) -> Option<OsString> {
+        self.environment
+            .iter()
+            .rev()
+            .find(|(name, _)| name.eq_ignore_ascii_case(OsStr::new(key)))
+            .map_or_else(|| std::env::var_os(key), |(_, value)| value.clone())
     }
     pub fn push_created_commit(
         &self,

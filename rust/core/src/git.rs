@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashSet},
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -230,7 +230,12 @@ impl Git {
             if (key.starts_with("GIT_")
                 && !matches!(
                     key.as_str(),
-                    "GIT_CONFIG_GLOBAL" | "GIT_CONFIG_SYSTEM" | "GIT_CONFIG_NOSYSTEM"
+                    "GIT_CONFIG_GLOBAL"
+                        | "GIT_CONFIG_SYSTEM"
+                        | "GIT_CONFIG_NOSYSTEM"
+                        | "GIT_SSH"
+                        | "GIT_SSH_COMMAND"
+                        | "GIT_SSH_VARIANT"
                 ))
                 || key.starts_with("GCM_TRACE")
                 || key.starts_with("SHOVEL_ASKPASS_")
@@ -272,7 +277,14 @@ impl Git {
                 .environment
                 .insert("GIT_OPTIONAL_LOCKS".into(), Some("0".into()));
         }
-        request.environment.extend(self.environment.clone());
+        request.environment.extend(self.environment.iter().map(|(name, value)| {
+            let name = if name.eq_ignore_ascii_case(OsStr::new("GCM_INTERACTIVE")) {
+                "GCM_INTERACTIVE".into()
+            } else {
+                name.clone()
+            };
+            (name, value.clone())
+        }));
         request
     }
     pub fn read(

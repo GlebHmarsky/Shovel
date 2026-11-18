@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Preserve native SSH and credential manager preferences
+
+Git receives `GIT_SSH`, `GIT_SSH_COMMAND` and `GIT_SSH_VARIANT` when explicitly configured. Its own command and variant take precedence over Shovel’s bundled OpenSSH defaults. A Windows child process verified that Git received the inherited SSH settings and that Shovel still stripped an inherited repository-directory override. Native Fetch selected the configured wrapper and transferred a real pack from a disposable bare repository. [Git SSH environment](https://git-scm.com/docs/git#Documentation/git.txt-codeGITSSHCOMMANDcode)
+
+Foreground Git operations with a Shovel authentication session now respect the credential manager's configured interaction policy. Automatic Fetch still passes a noninteractive policy, and terminal input and credential tracing remain disabled. A real `git credential fill` invoked the configured fixture helper and verified the default, an explicit refusal of interactivity and the background override. [Git Credential Manager configuration](https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/configuration.md#credentialinteractive)
+
+The AskPass, network, Clone and Git selection groups passed 19 focused test runs. All-target Clippy and diff checks passed. All 18 smoke checks took 40.19 seconds on source fingerprint `4CD847626A9D870C788B56EDBC36884BEC0EBBD799997EE638D3B906E0D5B1F6`. The credential fixture used synthetic values and did not open a browser. Live provider and physical picker acceptance remain open.
+
 ## Refresh updates on open and keep downloads for later
 
 The toolbar Update Shovel card and Help menu now open the same background check. Opening during an active check preserves that check. The update dialog offers **Later** when a release is available and **Close** otherwise. A verified download remains ready after dismissal, and download and restart keep their own approval actions.

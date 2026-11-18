@@ -3327,6 +3327,7 @@ name = "shovel-askpass"
 version = "0.50.23"
 dependencies = [
  "shovel-core",
+ "tempfile",
  "winresource",
 ]
 

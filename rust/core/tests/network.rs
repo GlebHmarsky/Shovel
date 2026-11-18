@@ -439,13 +439,13 @@ fn merge_choice_overrides_branch_merge_options_and_autostash_conflicts_are_not_s
 
 #[test]
 fn fetch_honors_configured_ssh_and_keeps_local_transport_usable() {
-    let f = Fixture::new();
+    let mut f = Fixture::new();
     let cancel = Cancellation::default();
     let incoming = f.incoming("fetch.txt", "incoming\n");
     let head = command(&f.git, &f.root, &["rev-parse", "HEAD"]);
     let index_path = f.root.join(".git/index");
     let index = fs::read(&index_path).unwrap();
-    let tracking = || command(&f.git, &f.root, &["rev-parse", "refs/remotes/origin/main"]);
+    let tracking = |git: &Git| command(git, &f.root, &["rev-parse", "refs/remotes/origin/main"]);
     let fetch = || Action::Fetch {
         remote: Some("origin".into()),
         all: false,
@@ -457,7 +457,7 @@ fn fetch_honors_configured_ssh_and_keeps_local_transport_usable() {
     );
     let local = f.run(fetch());
     assert!(local.succeeded(), "{}", local.output);
-    assert_eq!(tracking(), incoming);
+    assert_eq!(tracking(&f.git), incoming);
     assert!(!f.root.join("ssh-marker").exists());
 
     let shell_path = |path: &Path| {
@@ -499,7 +499,7 @@ fn fetch_honors_configured_ssh_and_keeps_local_transport_usable() {
         }
         .unwrap();
         assert!(fetched.succeeded(), "{}", fetched.output);
-        assert_eq!(tracking(), incoming);
+        assert_eq!(tracking(&f.git), incoming);
         assert_eq!(
             fs::read_to_string(&marker).unwrap().lines().collect::<Vec<_>>(),
             ["fixture@host.invalid", "git-upload-pack 'fixture.git'"],
@@ -507,7 +507,26 @@ fn fetch_honors_configured_ssh_and_keeps_local_transport_usable() {
     }
     assert_eq!(command(&f.git, &f.root, &["rev-parse", "HEAD"]), head);
     assert_eq!(fs::read(config_path).unwrap(), config);
-    assert_eq!(fs::read(index_path).unwrap(), index);
+    assert_eq!(fs::read(&index_path).unwrap(), index);
+
+    command(&f.git, &f.root, &["config", "--unset", "core.sshCommand"]);
+    command(&f.git, &f.root, &["config", "ssh.variant", "ssh"]);
+    f.git.environment.insert("GIT_SSH_COMMAND".into(), Some(ssh.into()));
+    f.git.environment
+        .insert("GIT_SSH_VARIANT".into(), Some("simple".into()));
+    let environment = f.git.network_environment(&f.root, None, &cancel).unwrap();
+    assert!(!environment.contains_key(std::ffi::OsStr::new("GIT_SSH_COMMAND")));
+    assert!(!environment.contains_key(std::ffi::OsStr::new("GIT_SSH_VARIANT")));
+    command(&f.git, &f.root, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    fs::remove_file(&marker).unwrap();
+    let fetched = f.run(fetch());
+    assert!(fetched.succeeded(), "{}", fetched.output);
+    assert_eq!(tracking(&f.git), incoming);
+    assert_eq!(
+        fs::read_to_string(marker).unwrap().lines().collect::<Vec<_>>(),
+        ["fixture@host.invalid", "git-upload-pack 'fixture.git'"],
+    );
+    assert_eq!(fs::read(&index_path).unwrap(), index);
 }
 
 #[test]
