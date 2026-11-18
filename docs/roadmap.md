@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Guard the final Windows update restart
+
+During shutdown, Shovel suspends the New Repository, Settings and queued command dialogs and keeps their state available if restart fails. Authentication stays available for accepted Git work. A final scheduler check after helper handoff defers native close while accepted work remains. The competing-process guard checks the live image name and waits zero milliseconds on the Windows process handle. It ignores a process that has already exited even when the real exit code is 259. [Windows process exit codes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getexitcodeprocess) · [Windows wait API](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)
+
+Thirteen focused checks passed. A headless form reproduced Enter submitting New Repository during restart and verified that it can still create a real temporary repository after restart is stopped. A simulated helper handoff kept Shovel open while a command owned a scheduler slot. Hidden Windows fixtures exercised a retained process handle after exit code 259, live instances from the same and different installations, and the legacy executable name. All-target Clippy, diff checks and 18 bounded smoke checks passed in 32.74 seconds on fingerprint `042151A7EAB5961BD7F8A2B43263814D89FF107F8925AF226E769D2E1906EEE8`. Cross-session and installed restart remain open.
+
 ## Mask explicit credentials in Git diagnostics
 
 Git trace and Activity redaction now cover Authorization, Proxy-Authorization, Cookie and Set-Cookie fields, credential-helper password and token records, and password-bearing SSH URLs. Surrounding trace context, SSH usernames without passwords and unrelated Git diagnostics keep their original text. A streamed Authorization field fragmented across three chunks stayed hidden until the complete line could be safely published. The fixture uses synthetic data and covers explicit credential syntax. Arbitrary hook messages still require review when they contain unstructured sensitive output.

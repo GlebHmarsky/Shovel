@@ -100,9 +100,14 @@ fn check_installation_processes(
             let name = String::from_utf16_lossy(&entry.szExeFile[..end]);
             if entry.th32ProcessID != std::process::id()
                 && (name.eq_ignore_ascii_case(legacy_name)
-                    || name.eq_ignore_ascii_case(executable_name)
-                        && process_uses_installation(entry.th32ProcessID, directory)
-                            .map_err(|_| blocked())?)
+                    || name.eq_ignore_ascii_case(executable_name))
+                && process_uses_installation(
+                    entry.th32ProcessID,
+                    directory,
+                    executable_name,
+                    legacy_name,
+                )
+                .map_err(|_| blocked())?
             {
                 return Err(blocked());
             }
@@ -117,22 +122,31 @@ fn check_installation_processes(
     }
 }
 
-fn process_uses_installation(pid: u32, directory: &std::path::Path) -> std::io::Result<bool> {
+fn process_uses_installation(
+    pid: u32,
+    directory: &std::path::Path,
+    executable_name: &str,
+    legacy_name: &str,
+) -> std::io::Result<bool> {
     use std::os::windows::{
         ffi::OsStringExt,
         io::{AsRawHandle, FromRawHandle, OwnedHandle},
     };
     use windows_sys::Win32::{
-        Foundation::{ERROR_INVALID_PARAMETER, GetLastError, STILL_ACTIVE},
+        Foundation::{ERROR_INVALID_PARAMETER, GetLastError, WAIT_OBJECT_0, WAIT_TIMEOUT},
         System::Threading::{
-            GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-            QueryFullProcessImageNameW,
+            OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+            SYNCHRONIZATION_SYNCHRONIZE, WaitForSingleObject,
         },
     };
     let mut image = vec![0u16; 32768];
     let mut length = image.len() as u32;
     unsafe {
-        let raw = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        let raw = OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZATION_SYNCHRONIZE,
+            0,
+            pid,
+        );
         if raw.is_null() {
             let error = GetLastError();
             return if error == ERROR_INVALID_PARAMETER {
@@ -149,19 +163,27 @@ fn process_uses_installation(pid: u32, directory: &std::path::Path) -> std::io::
             &mut length,
         ) == 0)
             .then(std::io::Error::last_os_error);
-        // A process may exit after the snapshot. Windows can still return its image
-        // while another owner holds its handle, even though it no longer blocks restart.
-        let mut exit_code = 0;
-        if GetExitCodeProcess(process.as_raw_handle(), &mut exit_code) != 0
-            && exit_code != STILL_ACTIVE as u32
-        {
-            return Ok(false);
+        // The process handle signals on exit even when the real exit code is STILL_ACTIVE.
+        match WaitForSingleObject(process.as_raw_handle(), 0) {
+            WAIT_OBJECT_0 => return Ok(false),
+            WAIT_TIMEOUT => {}
+            _ => return Err(std::io::Error::last_os_error()),
         }
         if let Some(error) = image_error {
             return Err(error);
         }
     }
     let path = PathBuf::from(std::ffi::OsString::from_wide(&image[..length as usize]));
+    // The snapshot's PID could have been reused. Match the image of the opened process.
+    let Some(name) = path.file_name().and_then(std::ffi::OsStr::to_str) else {
+        return Ok(false);
+    };
+    if name.eq_ignore_ascii_case(legacy_name) {
+        return Ok(true);
+    }
+    if !name.eq_ignore_ascii_case(executable_name) {
+        return Ok(false);
+    }
     let parent = path
         .parent()
         .ok_or_else(|| std::io::Error::other("process image has no directory"))?;
@@ -216,7 +238,10 @@ mod tests {
         assert_eq!(check().unwrap_err(), text("RustUpdateInstances"));
         drop(competing.0.stdin.take());
         competing.0.wait().unwrap();
-        assert!(!process_uses_installation(competing.0.id(), &installation).unwrap());
+        assert!(
+            !process_uses_installation(competing.0.id(), &installation, &executable, &legacy)
+                .unwrap()
+        );
         drop(competing);
         check().unwrap();
         let old_rust = start(&other, &legacy);
@@ -229,15 +254,54 @@ mod tests {
     fn process_image_matches_its_physical_directory_and_distinguishes_other_installs() {
         let exe = std::env::current_exe().unwrap();
         let installation = exe.parent().unwrap();
+        let name = exe.file_name().unwrap().to_str().unwrap();
         let canonical = installation.canonicalize().unwrap();
         let alias = PathBuf::from(installation.to_string_lossy().to_uppercase());
+        let matches = |directory| {
+            process_uses_installation(std::process::id(), directory, name, "legacy.exe")
+        };
         for directory in [installation, canonical.as_path(), alias.as_path()] {
-            assert!(process_uses_installation(std::process::id(), directory).unwrap());
+            assert!(matches(directory).unwrap());
         }
         let other = tempfile::tempdir().unwrap();
-        assert!(!process_uses_installation(std::process::id(), other.path()).unwrap());
+        assert!(!matches(other.path()).unwrap());
+        assert!(matches(&other.path().join("missing")).is_err());
         assert!(
-            process_uses_installation(std::process::id(), &other.path().join("missing")).is_err()
+            !process_uses_installation(std::process::id(), installation, "shovel.exe", "legacy.exe")
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn process_with_exit_code_259_no_longer_blocks_restart() {
+        use std::{
+            os::windows::process::CommandExt,
+            process::{Command, Stdio},
+        };
+        use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
+        const CHILD: &str = "SHOVEL_TEST_RESTART_EXIT_259";
+        if std::env::var_os(CHILD).is_some() {
+            std::process::exit(259);
+        }
+        let image = std::env::current_exe().unwrap();
+        let mut child = Command::new(&image)
+            .args([
+                "--exact",
+                "update_restart::tests::process_with_exit_code_259_no_longer_blocks_restart",
+            ])
+            .env(CHILD, "1")
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        assert_eq!(child.wait().unwrap().code(), Some(259));
+        let name = image.file_name().unwrap().to_str().unwrap();
+        assert!(
+            !process_uses_installation(child.id(), image.parent().unwrap(), name, "legacy.exe")
+                .unwrap()
         );
     }
 }

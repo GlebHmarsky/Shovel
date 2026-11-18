@@ -110,6 +110,36 @@ fn options_and_cancel_perform_no_git_or_destination_preparation() {
     assert!(!target.exists());
     assert!(h.app.notice.is_none());
 }
+
+#[test]
+fn restart_in_progress_cannot_submit_a_previously_open_init_form() {
+    let mut h = Harness::new();
+    let target = h.temp.path().join("after-restart");
+    h.options("FileMenu", &target);
+    h.app.closing = true;
+    h.app.updater.restart_requested = true;
+    let enter = || egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: Some(egui::Key::Enter),
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame(&h.ctx, &mut h.app, vec![enter()]).drop_without_applying_deltas();
+    assert!(!h.app.initialization.busy);
+    assert!(h.app.scheduler.records().is_empty());
+    assert!(!target.exists());
+    assert_eq!(
+        h.app.initialization.form.as_ref().unwrap().directory,
+        target.to_string_lossy()
+    );
+    h.app.closing = false;
+    h.app.updater.restart_requested = false;
+    h.click(&text("InitCreate"));
+    h.until(|app| !app.initialization.busy);
+    assert!(target.join(".git").exists());
+}
+
 #[test]
 fn menu_create_opens_unborn_history_and_persists_the_real_repository_tab() {
     let mut h = Harness::new();

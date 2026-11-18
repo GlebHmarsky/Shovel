@@ -1028,8 +1028,13 @@ impl Workspace {
             );
         }
         if self.updater.exit_ready() {
-            self.exit_ready = true;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            if self.scheduler.has_accepted_work() {
+                self.notice = Some(strings::text("AppCommandRunningClose"));
+                ctx.request_repaint_after(std::time::Duration::from_millis(25));
+            } else {
+                self.exit_ready = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
         } else if self.closing
             && !self.updater.restart_requested
             && !self.saving
@@ -3293,14 +3298,16 @@ impl eframe::App for Workspace {
                 self.preferences_dirty = true;
             }
         }
-        self.initialization.show(
-            &ctx,
-            self.git.as_ref(),
-            &self.scheduler,
-            self.tabs.get(self.selected).map(|t| t.id),
-            &self.operations,
-        );
-        self.settings_window(&ctx);
+        if !self.closing {
+            self.initialization.show(
+                &ctx,
+                self.git.as_ref(),
+                &self.scheduler,
+                self.tabs.get(self.selected).map(|t| t.id),
+                &self.operations,
+            );
+            self.settings_window(&ctx);
+        }
         let update_blocked = self.initialization.picking
             || self.scheduler.has_accepted_work()
             || self.saving
@@ -3314,16 +3321,16 @@ impl eframe::App for Workspace {
             self.close(&ctx);
         }
 
-        if !self.remotes.is_open() {
+        if !self.closing && !self.remotes.is_open() {
             self.operations.open_ready_branch(&mut self.branches);
-        }
-        if !self.branches.is_open() && !self.remotes.is_open() {
-            self.preferences_dirty |= self.operations.options_dialog(
-                &ctx,
-                &mut self.settings,
-                self.git.as_ref(),
-                &self.scheduler,
-            );
+            if !self.branches.is_open() {
+                self.preferences_dirty |= self.operations.options_dialog(
+                    &ctx,
+                    &mut self.settings,
+                    self.git.as_ref(),
+                    &self.scheduler,
+                );
+            }
         }
         let allow_remote_input =
             !self.closing && !self.operations.active_modal_open() && !self.branches.is_open();

@@ -1257,6 +1257,32 @@ mod tests {
     }
 
     #[test]
+    fn updater_handoff_waits_for_accepted_work_before_requesting_native_close() {
+        use shovel_core::scheduler::Lane;
+        let ctx = egui::Context::default();
+        let mut app = crate::workspace_interaction_tests::workspace();
+        app.closing = true;
+        app.updater.restart_requested = true;
+        let (request, _) = app.scheduler.reserve(
+            "workspace fixture".into(),
+            "workspace fixture".into(),
+            "accepted Git command".into(),
+            Lane::Exclusive,
+            |_| {},
+        );
+        app.updater
+            .tx
+            .send(Event::Applied(Ok(tempfile::tempfile().unwrap())))
+            .unwrap();
+        app.receive(&ctx);
+        assert!(app.updater.exit_ready());
+        assert!(!app.exit_ready);
+        assert!(app.scheduler.remove_waiting(request));
+        app.receive(&ctx);
+        assert!(app.exit_ready);
+    }
+
+    #[test]
     fn failed_profile_save_returns_to_the_ready_update_without_retrying_or_exiting() {
         use crate::workspace_interaction_tests::{frame, sidebar_click, workspace};
         use shovel_core::settings::SettingsStore;
