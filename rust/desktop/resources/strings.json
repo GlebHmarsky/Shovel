@@ -1119,6 +1119,7 @@
   "RustUpdateChecking": "Checking signed Rust releases…",
   "RustUpdateFailed": "Could not complete the update request. Check your connection and try again. This Rust channel may not have a published release yet.",
   "RustUpdateInvalid": "Update verification failed. No update was applied.",
+  "RustUpdateIncomplete": "The download ended before the full update arrived. Download it again to retry.",
   "RustUpdateReplay": "The feed offers an older version than one already verified. No update was applied.",
   "RustUpdateCheckingElsewhere": "Another Shovel window is checking this update channel. Try again in a moment.",
   "RustUpdateFloorUnavailable": "Shovel could not read or save the latest trusted version for this channel. Check access to the update data folder and retry.",

@@ -44,21 +44,50 @@ struct Offer {
 fn failure(_: impl std::fmt::Display) -> String {
     text("RustUpdateFailed")
 }
-fn bytes(url: &str, max: u64, cancel: &Cancellation) -> Result<Vec<u8>, String> {
+fn bytes(url: &str, max: u64, cancel: &Cancellation) -> Result<Vec<u8>, CheckError> {
     let mut output = Vec::new();
-    transfer(url, &mut output, max, CHECK_HTTP_TIMEOUT, cancel, None)?;
+    transfer(
+        url,
+        &mut output,
+        ResponseSize::AtMost(max),
+        CHECK_HTTP_TIMEOUT,
+        cancel,
+        None,
+    )
+    .map_err(|key| match key {
+        "RustUpdateInvalid" => CheckError::Rejected(key),
+        _ => CheckError::Unavailable(text(key)),
+    })?;
     Ok(output)
+}
+#[derive(Clone, Copy)]
+enum ResponseSize {
+    AtMost(u64),
+    Exact(u64),
+}
+impl ResponseSize {
+    fn limit(self) -> u64 {
+        match self {
+            Self::AtMost(size) | Self::Exact(size) => size,
+        }
+    }
+    fn accepts(self, length: u64) -> bool {
+        match self {
+            Self::AtMost(max) => length <= max,
+            Self::Exact(size) => length == size,
+        }
+    }
 }
 fn transfer(
     url: &str,
     out: &mut impl Write,
-    max: u64,
+    size: ResponseSize,
     timeout: Duration,
     cancel: &Cancellation,
     progress: Option<&mpsc::Sender<i16>>,
-) -> Result<(), String> {
+) -> Result<(), &'static str> {
     if cancel.is_cancelled() {
-        return Err(text("ActionResultCancelled"));
+        return Err("ActionResultCancelled");
     }
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .https_only(true)
@@ -71,45 +100,80 @@ fn transfer(
         .timeout_per_read(Some(Duration::from_secs(30)))
         .build()
         .into();
-    let mut response = agent
+    let response = agent
         .get(url)
         .header("User-Agent", "ShovelRust")
+        .header("Accept-Encoding", "identity")
         .call()
-        .map_err(failure)?;
-    copy_response(response.body_mut().as_reader(), out, max, cancel, progress)
+        .map_err(|_| "RustUpdateFailed")?;
+    receive_response(response, out, size, cancel, progress)
+}
+fn receive_response(
+    mut response: ureq::http::Response<ureq::Body>,
+    out: &mut impl Write,
+    size: ResponseSize,
+    cancel: &Cancellation,
+    progress: Option<&mpsc::Sender<i16>>,
+) -> Result<(), &'static str> {
+    if response.status() != ureq::http::StatusCode::OK
+        || response
+            .headers()
+            .contains_key(ureq::http::header::CONTENT_RANGE)
+        || response
+            .body()
+            .content_length()
+            .is_some_and(|length| !size.accepts(length))
+    {
+        return Err("RustUpdateInvalid");
+    }
+    copy_response(response.body_mut().as_reader(), out, size, cancel, progress)
 }
 fn copy_response(
     mut reader: impl Read,
     out: &mut impl Write,
-    max: u64,
+    size: ResponseSize,
     cancel: &Cancellation,
     progress: Option<&mpsc::Sender<i16>>,
-) -> Result<(), String> {
+) -> Result<(), &'static str> {
     let mut total = 0;
     let mut last_percent = None;
     let mut buffer = [0u8; 65536];
     loop {
         if cancel.is_cancelled() {
-            return Err(text("ActionResultCancelled"));
+            return Err("ActionResultCancelled");
         }
-        let n = reader.read(&mut buffer).map_err(failure)?;
+        let read = reader.read(&mut buffer);
+        if cancel.is_cancelled() {
+            return Err("ActionResultCancelled");
+        }
+        let n = match read {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                return Err("RustUpdateIncomplete");
+            }
+            result => result.map_err(|_| "RustUpdateFailed")?,
+        };
         if n == 0 {
-            break;
+            return if size.accepts(total) {
+                Ok(())
+            } else {
+                Err("RustUpdateIncomplete")
+            };
         }
         total += n as u64;
-        if total > max {
-            return Err(text("RustUpdateInvalid"));
+        if total > size.limit() {
+            return Err("RustUpdateInvalid");
         }
-        out.write_all(&buffer[..n]).map_err(failure)?;
+        out.write_all(&buffer[..n])
+            .map_err(|_| "RustUpdateCacheUnavailable")?;
         if let Some(tx) = progress {
-            let percent = (total.saturating_mul(100) / max.max(1)).min(100) as i16;
+            let percent = (total.saturating_mul(100) / size.limit().max(1)).min(100) as i16;
             if last_percent != Some(percent) {
                 let _ = tx.send(percent);
                 last_percent = Some(percent);
             }
         }
     }
-    Ok(())
 }
 fn with_progress(
     run: impl FnOnce(mpsc::Sender<i16>) -> Result<(), String>,
@@ -209,28 +273,51 @@ impl UpdateSource for FrozenSource {
         path: &Path,
         progress: Option<mpsc::Sender<i16>>,
     ) -> Result<(), velopack::Error> {
-        let err = |s: String| velopack::Error::NotSupported(s);
         if asset.FileName != self.offer.release.file_name()
             || asset.SHA256 != self.offer.asset.SHA256
         {
-            return Err(err(text("RustUpdateInvalid")));
+            return Err(velopack::Error::InvalidPackage("RustUpdateInvalid".into()));
         }
         let mut file = File::create(path)?;
         transfer(
             &self.offer.release.package_url(),
             &mut file,
-            self.offer.release.size(),
+            ResponseSize::Exact(self.offer.release.size()),
             Duration::from_secs(600),
             &self.cancel,
             progress.as_ref(),
         )
-        .map_err(err)?;
+        .map_err(|key| velopack::Error::Other(key.into()))?;
         file.sync_all()?;
         drop(file);
         self.offer
             .release
             .verify_package_cancellable(File::open(path)?, || self.cancel.is_cancelled())
-            .map_err(|e| err(e.to_string()))
+            .map_err(|error| match error {
+                updates::UpdateError::Io(error) => velopack::Error::Io(error),
+                _ => velopack::Error::InvalidPackage("RustUpdateInvalid".into()),
+            })
+    }
+}
+fn download_error(error: velopack::Error) -> String {
+    use velopack::Error;
+    match error {
+        Error::Other(key)
+            if matches!(
+                key.as_str(),
+                "RustUpdateIncomplete"
+                    | "RustUpdateInvalid"
+                    | "ActionResultCancelled"
+                    | "RustUpdateCacheUnavailable"
+            ) =>
+        {
+            text(&key)
+        }
+        Error::InvalidPackage(_) | Error::SizeInvalid(..) | Error::ChecksumInvalid(..) => {
+            text("RustUpdateInvalid")
+        }
+        Error::Io(_) | Error::FileNotFound(_) => text("RustUpdateCacheUnavailable"),
+        _ => text("RustUpdateFailed"),
     }
 }
 fn manager(offer: &Offer, cancel: Cancellation) -> Result<UpdateManager, String> {
@@ -646,7 +733,7 @@ impl Controller {
                                                 },
                                                 Some(progress),
                                             )
-                                            .map_err(failure)
+                                            .map_err(download_error)
                                     },
                                     move |p| {
                                         let _ = pt.send(Event::Progress(generation, p));
@@ -908,7 +995,7 @@ mod tests {
         copy_response(
             ShortReads(1000),
             &mut output,
-            1000,
+            ResponseSize::Exact(1000),
             &Cancellation::default(),
             Some(&tx),
         )
@@ -922,7 +1009,7 @@ mod tests {
             copy_response(
                 ShortReads(1002),
                 &mut Vec::new(),
-                1000,
+                ResponseSize::Exact(1000),
                 &Cancellation::default(),
                 None
             )
@@ -985,14 +1072,150 @@ mod tests {
             transfer(
                 "not a URL",
                 &mut output,
-                100,
+                ResponseSize::AtMost(100),
                 CHECK_HTTP_TIMEOUT,
                 &cancel,
                 None
             ),
-            Err(text("ActionResultCancelled"))
+            Err("ActionResultCancelled")
         );
         assert!(output.is_empty());
+    }
+
+    #[test]
+    fn interrupted_loopback_response_can_be_retried_with_a_complete_signed_feed() {
+        use std::io::{BufRead, BufReader};
+        use std::net::TcpListener;
+        let feed = include_bytes!("../../core/tests/fixtures/beta-0.50.14.json");
+        let signature = include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig");
+        let fetch = |headers: String, bytes: &'static [u8], size, out: &mut Vec<u8>| {
+            let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(4)))
+                    .unwrap();
+                let mut request = BufReader::new(&stream);
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    if request.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                        break;
+                    }
+                }
+                write!(stream, "{headers}\r\nConnection: close\r\n\r\n").unwrap();
+                stream.write_all(bytes).unwrap();
+            });
+            let agent: ureq::Agent = ureq::Agent::config_builder()
+                .proxy(None)
+                .timeout_global(Some(Duration::from_secs(4)))
+                .build()
+                .into();
+            let response = agent
+                .get(format!("http://{address}/fixture"))
+                .call()
+                .unwrap();
+            let result = receive_response(response, out, size, &Cancellation::default(), None);
+            server.join().unwrap();
+            result
+        };
+        let size = ResponseSize::Exact(feed.len() as u64);
+        let headers = format!("HTTP/1.1 200 OK\r\nContent-Length: {}", feed.len());
+        let mut partial = Vec::new();
+        assert!(fetch(headers.clone(), &feed[..64], size, &mut partial).is_err());
+        assert!(updates::verify_feed(Channel::Beta, &partial, signature).is_err());
+
+        let mut complete = Vec::new();
+        fetch(headers, feed, size, &mut complete).unwrap();
+        assert_eq!(
+            updates::verify_feed(Channel::Beta, &complete, signature)
+                .unwrap()
+                .version(),
+            &semver::Version::new(0, 50, 14)
+        );
+
+        for (headers, bytes, size, expected) in [
+            (
+                "HTTP/1.1 200 OK\r\nContent-Length: 4",
+                &b"data"[..],
+                ResponseSize::AtMost(3),
+                "RustUpdateInvalid",
+            ),
+            (
+                "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-3/8",
+                &b"data"[..],
+                ResponseSize::Exact(4),
+                "RustUpdateInvalid",
+            ),
+            (
+                "HTTP/1.1 200 OK\r\nContent-Range: bytes 0-3/8",
+                &b"data"[..],
+                ResponseSize::AtMost(4),
+                "RustUpdateInvalid",
+            ),
+            (
+                "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked",
+                &b"2\r\nab\r\n0\r\n\r\n"[..],
+                ResponseSize::Exact(4),
+                "RustUpdateIncomplete",
+            ),
+        ] {
+            let mut out = Vec::new();
+            assert_eq!(fetch(headers.into(), bytes, size, &mut out), Err(expected));
+            if expected == "RustUpdateInvalid" {
+                assert!(out.is_empty());
+            }
+            assert_eq!(
+                download_error(velopack::Error::Other(expected.into())),
+                text(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn cancellation_during_a_read_discards_that_chunk_and_plain_http_is_rejected() {
+        let cancel = Cancellation::default();
+        struct CancelRead(Cancellation);
+        impl Read for CancelRead {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                self.0.cancel();
+                buffer[0] = 7;
+                Ok(1)
+            }
+        }
+        let mut out = Vec::new();
+        let (tx, rx) = mpsc::channel();
+        assert_eq!(
+            copy_response(
+                CancelRead(cancel.clone()),
+                &mut out,
+                ResponseSize::Exact(1),
+                &cancel,
+                Some(&tx)
+            ),
+            Err("ActionResultCancelled")
+        );
+        assert!(out.is_empty() && rx.try_recv().is_err());
+
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        assert!(
+            transfer(
+                &format!("http://{address}/"),
+                &mut out,
+                ResponseSize::AtMost(32),
+                Duration::from_millis(300),
+                &Cancellation::default(),
+                None
+            )
+            .is_err()
+        );
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
     }
 
     #[test]
