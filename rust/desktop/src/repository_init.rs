@@ -143,7 +143,7 @@ impl Controller {
                         output: String::new(),
                         done: false,
                         failed: false,
-                        reopen_commit: false,
+                        reopen_commit: None,
                     });
                 }
                 Event::Output(stream) => {
@@ -155,7 +155,7 @@ impl Controller {
                         output: self.output.clone(),
                         done: false,
                         failed: false,
-                        reopen_commit: false,
+                        reopen_commit: None,
                     });
                 }
                 Event::Completed(result) => {
@@ -207,7 +207,7 @@ impl Controller {
                             output: output.chars().take(32768).collect(),
                             done: true,
                             failed: notice.is_some(),
-                            reopen_commit: false,
+                            reopen_commit: None,
                         });
                     }
                     completed = Some(Completion {
@@ -226,7 +226,7 @@ impl Controller {
                         output: String::new(),
                         done: true,
                         failed: false,
-                        reopen_commit: false,
+                        reopen_commit: None,
                     });
                 }
             }
@@ -414,7 +414,7 @@ impl Controller {
             output: String::new(),
             done: false,
             failed: false,
-            reopen_commit: false,
+            reopen_commit: None,
         });
         let tx = self.sender.clone();
         let ctx = ctx.clone();

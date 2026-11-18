@@ -144,6 +144,11 @@ impl Workspace {
         if index >= self.tabs.len() {
             return;
         }
+        if self.selected != index
+            && let Some(previous) = self.tabs.get_mut(self.selected)
+        {
+            previous.view.reopen_commit_owner = None;
+        }
         self.selected = index;
         self.tab_markers.invalidate(self.tabs[index].id);
         self.tabs[index].view.last_use = Some(std::time::Instant::now());
@@ -162,6 +167,7 @@ impl Workspace {
         };
         let selected = self.tabs.get(self.selected).map(|t| t.id);
         let mut owner = self.tabs.remove(index);
+        owner.view.reopen_commit_owner = None;
         self.update_tab_names();
         self.tab_markers.forget(id);
         if let Some(snapshot) = owner.observed_snapshot() {

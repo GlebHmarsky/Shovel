@@ -2,6 +2,10 @@
 
 ## Overnight Rust Beta work (2026-11-18)
 
+**Reopening a failed commit after its tab closes (R09/R11/R18).** Activity remembers which worktree submitted a failed commit and provides a separate Copy submitted message action. Reopen waits for the existing background history inspection before it opens the current draft. The original draft and staged index were recovered after its editor and retained tab had both been evicted. When an unrelated Git repository took the same folder, Reopen kept its draft and index intact, and Copy returned the original subject and body. Closing the tab during a held read prevented a late Commit window from opening.
+
+Nineteen Commit queue tests, the history cache regressions, all-target Clippy, diff checks and all 18 smoke checks passed. Smoke took 18.44 seconds on `FCEE13377D97C374CD8AC647FAAFBF98A3FA0AA3A1EF1F2CCECD6409DBB508D7`. This fix follows the 0.50.16 release cut.
+
 **Accepted Git processes and Clone results after the 0.50.16 release cut (R10/R27).** Accepted commands wait directly on the Windows process handle. Empty input closes the child's stdin immediately, avoiding a writer thread on ordinary Git reads and commands. A successful Clone with verbose checkout hooks now opens its repository and reports that its log was shortened. A failing hook still reports failure and preserves the partial destination.
 
 Fourteen native process tests covered exact binary input, immediate EOF, execution lifetime and output limits. Five real Clone fixtures included successful and failing hooks writing over 1 MiB. The desktop held-hook fixture covered closing the tab and attempting to exit while Clone ran. Working-copy and desktop repository checks, all-target Clippy, diff checks and all 18 smoke checks passed. Smoke took 19.44 seconds on `DB7B5C5F1F717805DB46AFF0E1F2E007E7527C42F08147661FBA2888E752C422`.

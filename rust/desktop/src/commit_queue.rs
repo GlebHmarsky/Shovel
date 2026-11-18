@@ -7,7 +7,7 @@ use std::sync::Mutex;
 pub(super) struct WorkingResult {
     command: Result<working::Completed, working::Error>,
     output: String,
-    submitted: Option<drafts::Text>,
+    submitted: Option<(String, drafts::Text)>,
     push: Option<PushReport>,
 }
 struct PushReport {
@@ -102,6 +102,10 @@ impl PushReport {
         report
     }
 }
+pub(crate) struct FailedCommit {
+    pub owner: String,
+    pub message: String,
+}
 #[derive(Clone)]
 pub(crate) struct OwnedActivity {
     pub request: u64,
@@ -110,7 +114,7 @@ pub(crate) struct OwnedActivity {
     pub output: String,
     pub done: bool,
     pub failed: bool,
-    pub reopen_commit: bool,
+    pub reopen_commit: Option<Arc<FailedCommit>>,
 }
 struct Entry {
     activity: OwnedActivity,
@@ -283,7 +287,7 @@ impl Editor {
                     output: String::new(),
                     done: false,
                     failed: false,
-                    reopen_commit: false,
+                    reopen_commit: None,
                 },
                 stage: matches!(action, Action::Stage(_)),
                 dirty: true,
@@ -371,7 +375,8 @@ impl Editor {
                 Box::new(WorkingResult {
                     command: result,
                     output,
-                    submitted,
+                    submitted: submitted
+                        .map(|text| (context.repository.identity.fingerprint.clone(), text)),
                     push,
                 }),
             ));
@@ -434,8 +439,14 @@ impl Editor {
                 || !result
                     .as_ref()
                     .is_ok_and(|r| r.succeeded() && r.updated.is_ok());
-            entry.activity.reopen_commit =
-                submitted.is_some() && !result.as_ref().is_ok_and(|r| r.succeeded());
+            if !result.as_ref().is_ok_and(|r| r.succeeded())
+                && let Some((owner, draft)) = &submitted
+            {
+                entry.activity.reopen_commit = Some(Arc::new(FailedCommit {
+                    owner: owner.clone(),
+                    message: draft.message(),
+                }));
+            }
         }
         match result {
             Ok(result) => {
@@ -453,7 +464,7 @@ impl Editor {
                             summary
                         }
                     });
-                    if let Some(submitted) = submitted {
+                    if let Some((_, submitted)) = submitted {
                         self.failed_commit = false;
                         if self.draft == submitted {
                             self.draft = drafts::Text::default();

@@ -18,6 +18,7 @@ pub(super) struct State {
     pub stale: bool,
     pub identity_blocked: bool,
     pub checking_identity: bool,
+    pub reopen_commit_owner: Option<String>,
     pub validated: Option<Instant>,
     pub offset: egui::Vec2,
     pub restore_offset: Option<egui::Vec2>,
@@ -178,6 +179,7 @@ impl Workspace {
             return;
         }
         if tab.history.is_none()
+            || tab.view.reopen_commit_owner.is_some()
             || tab.refresh_again
             || tab.view.stale
             || tab

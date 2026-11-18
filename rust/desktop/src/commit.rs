@@ -1,7 +1,7 @@
 //! Repository-owned Local Changes state shared by the workspace and native window.
 use crate::strings::{self, text};
 use eframe::egui;
-pub(crate) use queue::OwnedActivity;
+pub(crate) use queue::{FailedCommit, OwnedActivity};
 use shovel_core::{
     drafts,
     git::Git,

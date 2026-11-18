@@ -1054,6 +1054,8 @@
   "OperationQueuedCount": "{0} queued",
   "AppCommandRunningClose": "Cannot close Shovel while a command or accepted request is running. It will finish in the background; you can keep using other repositories. See Activity for details.",
   "CancelWaitingRequest": "Remove waiting request",
+  "CopySubmittedMessage": "Copy submitted message",
+  "FailedCommitOwnerUnavailable": "The original worktree is unavailable. You can copy the submitted commit message from Activity.",
   "ReopenCommit": "Reopen Commit for this repository",
   "ActivityAllRepositories": "All repositories",
   "CommitCloseBeforeReopen": "Close the current Commit window first, then use Reopen Commit in Activity for the failed repository.",

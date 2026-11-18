@@ -926,6 +926,15 @@ fn distinct_unstage_requests_adopt_only_prior_owned_index() {
 
 #[test]
 fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_index() {
+    exercise_retired_commit(false);
+}
+
+#[test]
+fn failed_commit_activity_preserves_the_message_when_another_repo_takes_its_path() {
+    exercise_retired_commit(true);
+}
+
+fn exercise_retired_commit(replace: bool) {
     use crate::workspace_interaction_tests::{frame, workspace};
     let mut h = Harness::new();
     h.git(&["add", "one.txt"]);
@@ -985,9 +994,29 @@ fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_inde
         "saved failed editors must not grow without bound"
     );
     assert!(app.tabs.is_empty());
+    let parked = h._temp.path().join("parked-original");
+    let store = app.draft_store.clone().unwrap();
+    let original = identity::read(&root).unwrap();
+    let foreign = drafts::Text {
+        subject: "replacement draft".into(),
+        description: "separate owner".into(),
+    };
+    let cancel = Cancellation::default();
+    if replace {
+        fs::rename(&root, &parked).unwrap();
+        fs::create_dir(&root).unwrap();
+        command(&git, &root, &["init", "--initial-branch=unrelated"]);
+        fs::write(root.join("foreign.txt"), b"new repository").unwrap();
+        command(&git, &root, &["add", "foreign.txt"]);
+        let replacement = identity::read(&root).unwrap();
+        assert_ne!(original, replacement);
+        store.save(&replacement, None, &foreign, &cancel).unwrap();
+    }
+    let foreign_index = replace.then(|| command(&git, &root, &["ls-files", "--stage", "-z"]));
     app.activity_open = true;
     app.activity_all = true;
     let mut point = None;
+    let mut copy_point = None;
     let mut saw_failure_log = false;
     for _ in 0..3 {
         let out = frame(&ctx, &mut app, vec![]);
@@ -996,43 +1025,99 @@ fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_inde
                 .label()
                 .or_else(|| node.value())
                 .is_some_and(|label| label.contains("retired-fixture-failure"));
-            if node.label() == Some(text("ReopenCommit").as_str()) {
-                assert!(!node.is_disabled());
-                let r = node.bounds().unwrap();
-                point = Some(egui::pos2(
-                    (r.x0 + r.x1) as f32 / 2.,
-                    (r.y0 + r.y1) as f32 / 2.,
-                ));
-            }
+            let target = if node.label() == Some(text("ReopenCommit").as_str()) {
+                &mut point
+            } else if node.label() == Some(text("CopySubmittedMessage").as_str()) {
+                &mut copy_point
+            } else {
+                continue;
+            };
+            assert!(!node.is_disabled());
+            let r = node.bounds().unwrap();
+            *target = Some(egui::pos2(
+                (r.x0 + r.x1) as f32 / 2.,
+                (r.y0 + r.y1) as f32 / 2.,
+            ));
         }
         out.drop_without_applying_deltas();
     }
     assert!(saw_failure_log, "the failure log survives editor retirement");
-    let pos = point.expect("completed Activity retains Reopen after editor retirement");
-    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
-    for pressed in [true, false] {
-        frame(
-            &ctx,
-            &mut app,
-            vec![egui::Event::PointerButton {
-                pos,
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: Default::default(),
-            }],
-        )
-        .drop_without_applying_deltas();
-    }
+    let mut click = |pos| {
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
+        let mut copied = None;
+        for pressed in [true, false] {
+            let out = frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                }],
+            );
+            for command in &out.platform_output.commands {
+                if let egui::OutputCommand::CopyText(value) = command {
+                    copied = Some(value.clone());
+                }
+            }
+            out.drop_without_applying_deltas();
+        }
+        copied
+    };
+    assert_eq!(
+        click(copy_point.unwrap()).as_deref(),
+        Some("retain failed subject\n\nretain failed body")
+    );
+    click(point.expect("completed Activity retains Reopen after editor retirement"));
     assert_eq!(app.tabs[app.selected].path, root);
-    assert_eq!(app.editors.len(), 1);
-    assert!(app.editors[0].open);
     let start = Instant::now();
-    while !app.editors[0].draft_loaded || app.editors[0].loading {
+    while app.tabs[app.selected].loading
+        || app.tabs[app.selected].view.reopen_commit_owner.is_some()
+        || (!replace
+            && app
+                .editors
+                .first()
+                .is_none_or(|e| !e.draft_loaded || e.loading))
+    {
         app.receive(&ctx);
         frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
         assert!(start.elapsed() < Duration::from_secs(20));
         thread::sleep(Duration::from_millis(10));
     }
+    if replace {
+        assert!(app.editors.is_empty());
+        assert_eq!(
+            app.notice.as_deref(),
+            Some(text("FailedCommitOwnerUnavailable").as_str())
+        );
+        assert!(app.tabs[app.selected].view.identity_blocked);
+        assert!(app.tabs[app.selected].history.is_none());
+        assert_eq!(
+            command(&git, &root, &["ls-files", "--stage", "-z"]),
+            foreign_index.unwrap()
+        );
+        assert_eq!(
+            fs::read(root.join("foreign.txt")).unwrap(),
+            b"new repository"
+        );
+        assert_eq!(
+            store
+                .load(&identity::read(&root).unwrap(), &cancel)
+                .unwrap()
+                .text,
+            foreign
+        );
+        fs::rename(&root, h._temp.path().join("parked-replacement")).unwrap();
+        fs::rename(&parked, &root).unwrap();
+        assert_eq!(
+            store.load(&original, &cancel).unwrap().text.message(),
+            "retain failed subject\n\nretain failed body"
+        );
+        return;
+    }
+    assert_eq!(app.editors.len(), 1);
+    assert!(app.editors[0].open);
     assert_eq!(app.editors[0].draft.subject, "retain failed subject");
     assert_eq!(app.editors[0].draft.description, "retain failed body");
     assert_eq!(command(&git, &root, &["rev-parse", "HEAD"]), head);
@@ -1049,6 +1134,33 @@ fn failed_commit_can_retire_and_activity_reopens_its_durable_draft_and_real_inde
             .iter()
             .any(|entry| entry.group == Group::Staged && entry.path == "one.txt")
     );
+}
+
+#[test]
+fn closing_a_tab_during_failed_commit_reopen_leaves_the_editor_closed() {
+    let h = Harness::new();
+    let root = h.editor.path.clone();
+    let owner = identity::read(&root).unwrap().fingerprint;
+    let mut app = crate::workspace_interaction_tests::workspace();
+    app.tabs.clear();
+    app.git = Some(h.editor.git.clone());
+    app.draft_store = Some(h.editor.store.clone());
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    let (started, release) = crate::history_cache::tests::hold_read(root.clone());
+    app.reopen_failed_commit(root, owner, &h.ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(app.tabs[0].view.reopen_commit_owner.is_some());
+    app.close_tab(app.tabs[0].id, &h.ctx);
+    release.send(()).unwrap();
+    let start = Instant::now();
+    while app.retained_tabs[0].loading {
+        app.receive(&h.ctx);
+        assert!(start.elapsed() < Duration::from_secs(20));
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(app.tabs.is_empty() && app.editors.is_empty());
+    assert!(app.retained_tabs[0].view.reopen_commit_owner.is_none());
 }
 
 #[test]

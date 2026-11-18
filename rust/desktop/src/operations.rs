@@ -238,7 +238,7 @@ struct Run {
     done: bool,
     dialog_open: bool,
     changed: bool,
-    reopen_commit: bool,
+    reopen_commit: Option<Arc<crate::commit::FailedCommit>>,
     show_failure: bool,
 }
 struct Question {
@@ -630,7 +630,7 @@ impl Controller {
             done: false,
             dialog_open: false,
             changed: false,
-            reopen_commit: false,
+            reopen_commit: None,
             show_failure: false,
         });
         Some((request, sequence))
@@ -1212,7 +1212,7 @@ impl Controller {
                 done: false,
                 dialog_open: false,
                 changed: false,
-                reopen_commit: false,
+                reopen_commit: None,
                 show_failure: false,
             });
         }
@@ -1257,7 +1257,7 @@ impl Controller {
                                 output: String::new(),
                                 done: false,
                                 failed: false,
-                                reopen_commit: false,
+                                reopen_commit: None,
                             },
                         );
                     }
@@ -1458,7 +1458,7 @@ impl Controller {
             done: true,
             dialog_open: false,
             changed: false,
-            reopen_commit: false,
+            reopen_commit: None,
             show_failure: failure.is_some(),
         });
     }
@@ -1514,7 +1514,7 @@ impl Controller {
         ui: &mut egui::Ui,
         path: Option<&PathBuf>,
         scheduler: &Scheduler,
-    ) -> Option<PathBuf> {
+    ) -> Option<(PathBuf, String)> {
         let mut reopen = None;
         let records = scheduler.active_records();
         for run in self
@@ -1538,8 +1538,13 @@ impl Controller {
                 {
                     scheduler.remove_waiting(run.request);
                 }
-                if run.reopen_commit && ui.button(text("ReopenCommit")).clicked() {
-                    reopen = Some(run.path.clone());
+                if let Some(failed) = &run.reopen_commit {
+                    if ui.button(text("ReopenCommit")).clicked() {
+                        reopen = Some((run.path.clone(), failed.owner.clone()));
+                    }
+                    if ui.button(text("CopySubmittedMessage")).clicked() {
+                        ui.ctx().copy_text(failed.message.clone());
+                    }
                 }
                 if !run.output.is_empty() {
                     egui::CollapsingHeader::new(text("ActionOutput"))
@@ -2133,7 +2138,7 @@ mod activity_layout_test {
                 done: true,
                 dialog_open: false,
                 changed: false,
-                reopen_commit: false,
+                reopen_commit: None,
                 show_failure: false,
             });
         }

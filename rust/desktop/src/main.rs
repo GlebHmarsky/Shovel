@@ -342,9 +342,11 @@ impl Workspace {
             .chain(self.retained_tabs.iter())
             .find(|t| t.id == id)
             .and_then(|t| {
-                t.observed_snapshot()
-                    .map(|s| s.identity.fingerprint.clone())
-                    .or_else(|| self.known_identity(&t.path))
+                t.view.reopen_commit_owner.clone().or_else(|| {
+                    t.observed_snapshot()
+                        .map(|s| s.identity.fingerprint.clone())
+                        .or_else(|| self.known_identity(&t.path))
+                })
             });
         let Some(git) = self.git.clone() else {
             return;
@@ -751,6 +753,7 @@ impl Workspace {
                     };
                     self.remember_identity(&owner_path, &history.snapshot.identity.fingerprint);
                     let mut reopen_inline = false;
+                    let mut reopen_failed = false;
                     for editor in &mut self.editors {
                         if (Self::same_path(&editor.path, &owner_path)
                             || Self::same_path(&editor.path, &history.snapshot.worktree))
@@ -780,6 +783,16 @@ impl Workspace {
                                 view.observe(&history.snapshot);
                             }
                         }
+                        if let Some(expected) = tab.view.reopen_commit_owner.take() {
+                            reopen_failed = history
+                                .snapshot
+                                .identity
+                                .matches_recorded_fingerprint(&expected);
+                            if !reopen_failed {
+                                reopen_inline = false;
+                                self.notice = Some(strings::text("FailedCommitOwnerUnavailable"));
+                            }
+                        }
                         tab.publish_history(*history, *page, keep, first);
                         if !self.closing
                             && !self.pending_exit
@@ -806,11 +819,12 @@ impl Workspace {
                             );
                         }
                     }
-                    if reopen_inline
-                        && self
-                            .tabs
-                            .get(self.selected)
-                            .is_some_and(|tab| tab.id == id && tab.local_changes)
+                    if !self.closing
+                        && !self.pending_exit
+                        && !self.confirm_exit_without_save
+                        && self.tabs.get(self.selected).is_some_and(|tab| {
+                            tab.id == id && (reopen_failed || reopen_inline && tab.local_changes)
+                        })
                     {
                         self.open_commit();
                     }
@@ -889,6 +903,13 @@ impl Workspace {
                     {
                         tab.loading = false;
                         tab.view.checking_identity = false;
+                        if tab.view.reopen_commit_owner.take().is_some() {
+                            self.notice = Some(if failure.identity {
+                                strings::text("FailedCommitOwnerUnavailable")
+                            } else {
+                                failure.message.clone()
+                            });
+                        }
                         let error = failure.message;
                         if failure.identity {
                             for editor in &mut self.editors {
@@ -1216,6 +1237,30 @@ impl Workspace {
         }
     }
 
+    fn reopen_failed_commit(&mut self, path: PathBuf, owner: String, ctx: &egui::Context) {
+        if self.git.is_none() || self.closing || self.pending_exit || self.confirm_exit_without_save
+        {
+            return;
+        }
+        if self.tabs.len() >= 20 && !self.tabs.iter().any(|tab| tab.matches_path(&path)) {
+            self.notice = Some(strings::text("TooManyRepositories"));
+            return;
+        }
+        if self.tabs.iter().chain(&self.retained_tabs).any(|tab| {
+            tab.matches_path(&path)
+                && (tab.view.identity_blocked
+                    || tab.observed_snapshot().is_some_and(|snapshot| {
+                        !snapshot.identity.matches_recorded_fingerprint(&owner)
+                    }))
+        }) {
+            self.notice = Some(strings::text("FailedCommitOwnerUnavailable"));
+            return;
+        }
+        let index = self.ensure_tab(path);
+        self.tabs[index].view.reopen_commit_owner = Some(owner);
+        self.select_tab(index, ctx);
+    }
+
     fn open_commit(&mut self) {
         let Some(tab) = self.tabs.get(self.selected) else {
             return;
@@ -1280,10 +1325,11 @@ impl Workspace {
     }
 
     fn show_history(&mut self, ctx: &egui::Context) {
-        if let Some(tab) = self.tabs.get_mut(self.selected)
-            && std::mem::take(&mut tab.local_changes)
-        {
-            self.sync_inline_editor(ctx);
+        if let Some(tab) = self.tabs.get_mut(self.selected) {
+            tab.view.reopen_commit_owner = None;
+            if std::mem::take(&mut tab.local_changes) {
+                self.sync_inline_editor(ctx);
+            }
         }
     }
 
@@ -2303,9 +2349,8 @@ impl eframe::App for Workspace {
                         });
                 });
             self.activity_open = open;
-            if let Some(path) = reopen {
-                self.open(path, &ctx);
-                self.open_commit();
+            if let Some((path, owner)) = reopen {
+                self.reopen_failed_commit(path, owner, &ctx);
             }
         }
         egui::Panel::top("repository-tabs")
