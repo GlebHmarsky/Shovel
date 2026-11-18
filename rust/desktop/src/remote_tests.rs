@@ -277,7 +277,7 @@ fn cached_unsupported_dialog_and_removed_waiting_request_never_write() {
     h.git = Arc::new(f.git.clone());
     let (held, accepted) = h.scheduler.reserve(
         snapshot.identity.fingerprint.clone(),
-        snapshot.common_directory.to_string_lossy().to_uppercase(),
+        shovel_core::case::path_key(&snapshot.common_directory),
         "fixture pending".into(),
         Lane::Exclusive,
         |_| {},
@@ -362,7 +362,7 @@ fn workspace_menus_refresh_linked_caches_and_retained_owner_after_submission() {
     let snapshot = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
     let (held, _) = app.scheduler.reserve(
         snapshot.identity.fingerprint.clone(),
-        snapshot.common_directory.to_string_lossy().to_uppercase(),
+        shovel_core::case::path_key(&snapshot.common_directory),
         "pending".into(),
         Lane::Exclusive,
         |_| {},

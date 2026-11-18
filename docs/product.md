@@ -2,6 +2,10 @@
 
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
+## Network options during repository loading (2026-11-18)
+
+The arrows beside Fetch, Pull and Push accept requests as soon as a repository tab starts loading. Each options dialog opens with the original repository's branch and remote choices when they are ready. Closing the tab keeps the request. Closing the dialog saves edited choices. Git runs when you click the named action.
+
 ## Repository tab markers (0.50.12)
 
 Right-click a tab to pick a colored circle or clear it with the crossed circle. The choice is saved per repository folder. A hollow circle means the working tree is clean. A filled circle means there are staged, unstaged, untracked, or conflicted files. A dash in the circle indicates that status is pending or unavailable. Only marked tabs receive the optional local status checks, one at a time in the background.

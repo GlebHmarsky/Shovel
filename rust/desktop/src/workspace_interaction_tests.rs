@@ -869,7 +869,7 @@ fn sidebar_remote_fetch_uses_clicked_target_without_changing_toolbar_flags() {
         "SourceBranch":"main","Remote":"other","RemoteBranch":"main","Strategy":0,"AllRemotes":true,"AllTags":false,
         "SetUpstream":false,"AutoStash":false,"ExplicitTarget":true}]);
     app.settings.set("NetworkActions", prefs.clone());
-    let common = snapshot.common_directory.to_string_lossy().to_uppercase();
+    let common = shovel_core::case::path_key(&snapshot.common_directory);
     let (held, _) = app.scheduler.reserve(
         snapshot.identity.fingerprint.clone(),
         common.clone(),
@@ -899,8 +899,14 @@ fn sidebar_remote_fetch_uses_clicked_target_without_changing_toolbar_flags() {
         app.scheduler
             .records()
             .iter()
-            .any(|r| r.outcome.is_none() && r.key == "network:Fetch:origin"),
-        "context menu must submit the explicit remote, not the toolbar action"
+            .any(|r| {
+                r.outcome.is_none()
+                    && !r.running
+                    && r.lane == Lane::Fetch
+                    && r.repository == snapshot.identity.fingerprint
+                    && r.common == common
+            }),
+        "the selected remote fetch waits behind the repository's held operation"
     );
     assert_eq!(app.settings.get("NetworkActions"), Some(&prefs));
     let owner = app.tabs[0].id;

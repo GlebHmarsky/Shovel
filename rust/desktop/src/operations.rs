@@ -234,9 +234,27 @@ struct Question {
     focus: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DeferredDialog {
-    Fetch,
+enum RequestKind {
+    Network(Kind),
+    Options(Kind),
     NewBranch,
+}
+impl RequestKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Network(kind) => kind.key(),
+            Self::Options(Kind::Fetch) => "RustFetchOptions",
+            Self::Options(Kind::Pull) => "PullOptions",
+            Self::Options(Kind::Push) => "PushOptions",
+            Self::NewBranch => "ActionTitleNewBranch",
+        }
+    }
+    fn lane(self) -> Lane {
+        match self {
+            Self::Network(Kind::Fetch) | Self::Options(Kind::Fetch) => Lane::Fetch,
+            _ => Lane::Exclusive,
+        }
+    }
 }
 pub struct DialogLease {
     request: u64,
@@ -258,9 +276,8 @@ struct PendingNetwork {
     sequence: u64,
     request: u64,
     path: PathBuf,
-    kind: Kind,
+    action: RequestKind,
     settings: Settings,
-    dialog: Option<DeferredDialog>,
 }
 pub struct Controller {
     pub divergence: crate::divergence::Display,
@@ -395,7 +412,7 @@ impl Controller {
                 if crate::workspace_style::options_button(
                     ui,
                     strings::format("RustNetworkOptions", &[&text(kind.key())]),
-                    available && (snapshot.is_some() || kind == Kind::Fetch),
+                    available,
                 )
                 .clicked()
                     && let Some(path) = path
@@ -404,7 +421,13 @@ impl Controller {
                         self.options =
                             Some((Options::load(settings, snapshot, kind), snapshot.clone()));
                     } else {
-                        self.defer_fetch_options(path, settings, scheduler, ui.ctx());
+                        self.defer(
+                            RequestKind::Options(kind),
+                            path,
+                            settings,
+                            scheduler,
+                            ui.ctx(),
+                        );
                     }
                 }
             });
@@ -546,7 +569,7 @@ impl Controller {
 
     fn reserve_run(
         &mut self,
-        kind: Kind,
+        action: RequestKind,
         path: &Path,
         owner: (&str, &str),
         target_key: Option<&str>,
@@ -560,15 +583,12 @@ impl Controller {
         let (request, accepted) = scheduler.reserve(
             owner.0.into(),
             owner.1.into(),
-            match target_key {
-                Some(key) => format!("network:{}:{key}", kind.key()),
-                None => format!("network:{}", kind.key()),
+            match (action, target_key) {
+                (RequestKind::Network(kind), Some(key)) => format!("network:{}:{key}", kind.key()),
+                (RequestKind::Network(kind), None) => format!("network:{}", kind.key()),
+                _ => format!("dialog:{action:?}"),
             },
-            if kind == Kind::Fetch {
-                Lane::Fetch
-            } else {
-                Lane::Exclusive
-            },
+            action.lane(),
             move |outcome| {
                 let _ = sender.send(Event::Removed(sequence, outcome));
                 ctx.request_repaint();
@@ -581,7 +601,7 @@ impl Controller {
             sequence,
             request,
             path: path.to_path_buf(),
-            label: kind.key(),
+            label: action.label(),
             status: text("OperationWaiting"),
             output: String::new(),
             done: false,
@@ -601,29 +621,7 @@ impl Controller {
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) {
-        let owner = Self::pending_owner(path);
-        if let Some((request, sequence)) =
-            self.reserve_run(kind, path, (&owner, &owner), None, scheduler, ctx)
-        {
-            self.pending.push(PendingNetwork {
-                request,
-                sequence,
-                path: path.to_path_buf(),
-                kind,
-                settings: settings.clone(),
-                dialog: None,
-            });
-        }
-    }
-
-    fn defer_fetch_options(
-        &mut self,
-        path: &Path,
-        settings: &Settings,
-        scheduler: &Scheduler,
-        ctx: &egui::Context,
-    ) {
-        self.defer_dialog(DeferredDialog::Fetch, path, settings, scheduler, ctx);
+        self.defer(RequestKind::Network(kind), path, settings, scheduler, ctx);
     }
 
     pub fn defer_new_branch(
@@ -633,57 +631,27 @@ impl Controller {
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) {
-        self.defer_dialog(DeferredDialog::NewBranch, path, settings, scheduler, ctx);
+        self.defer(RequestKind::NewBranch, path, settings, scheduler, ctx);
     }
 
-    fn defer_dialog(
+    fn defer(
         &mut self,
-        dialog: DeferredDialog,
+        action: RequestKind,
         path: &Path,
         settings: &Settings,
         scheduler: &Scheduler,
         ctx: &egui::Context,
     ) {
         let owner = Self::pending_owner(path);
-        let sequence = self.next;
-        self.next += 1;
-        let sender = self.sender.clone();
-        let wake = ctx.clone();
-        let (label, lane) = match dialog {
-            DeferredDialog::Fetch => ("RustFetchOptions", Lane::Fetch),
-            DeferredDialog::NewBranch => ("ActionTitleNewBranch", Lane::Exclusive),
-        };
-        let (request, accepted) = scheduler.reserve(
-            owner.clone(),
-            owner,
-            format!("dialog:{dialog:?}"),
-            lane,
-            move |outcome| {
-                let _ = sender.send(Event::Removed(sequence, outcome));
-                wake.request_repaint();
-            },
-        );
-        if accepted {
-            self.runs.push(Run {
-                sequence,
-                request,
-                path: path.to_path_buf(),
-                label,
-                status: text("OperationWaiting"),
-                output: String::new(),
-                done: false,
-                dialog_open: false,
-                changed: false,
-                reopen_commit: false,
-                show_failure: false,
-            });
+        if let Some((request, sequence)) =
+            self.reserve_run(action, path, (&owner, &owner), None, scheduler, ctx)
+        {
             self.pending.push(PendingNetwork {
                 request,
                 sequence,
                 path: path.to_path_buf(),
-                kind: Kind::Fetch,
+                action,
                 settings: settings.clone(),
-                dialog: Some(dialog),
             });
         }
     }
@@ -730,8 +698,19 @@ impl Controller {
             Ok(snapshot) => {
                 self.bind_initialization(path, snapshot, scheduler);
                 for request in pending {
-                    if let Some(dialog) = request.dialog {
-                        if dialog == DeferredDialog::NewBranch && !snapshot.operations.is_empty() {
+                    if let RequestKind::Network(kind) = request.action {
+                        self.activate_network(
+                            (request.request, request.sequence),
+                            Options::load(&request.settings, snapshot, kind),
+                            snapshot,
+                            git.clone(),
+                            scheduler,
+                            ctx,
+                        );
+                    } else {
+                        if request.action == RequestKind::NewBranch
+                            && !snapshot.operations.is_empty()
+                        {
                             if let Some(run) = self
                                 .runs
                                 .iter_mut()
@@ -748,9 +727,11 @@ impl Controller {
                         scheduler.activate(request.request, move || {
                             let (release, held) = mpsc::channel();
                             let ready = ReadyOptions {
-                                options: (dialog == DeferredDialog::Fetch).then(|| {
-                                    Options::load(&request.settings, &snapshot, Kind::Fetch)
-                                }),
+                                options: if let RequestKind::Options(kind) = request.action {
+                                    Some(Options::load(&request.settings, &snapshot, kind))
+                                } else {
+                                    None
+                                },
                                 snapshot,
                                 lease: DialogLease {
                                     request: request.request,
@@ -767,16 +748,7 @@ impl Controller {
                             ctx.request_repaint();
                             Outcome::Succeeded
                         });
-                        continue;
                     }
-                    self.activate_network(
-                        (request.request, request.sequence),
-                        Options::load(&request.settings, snapshot, request.kind),
-                        snapshot,
-                        git.clone(),
-                        scheduler,
-                        ctx,
-                    );
                 }
             }
             Err(error) => {
@@ -804,7 +776,7 @@ impl Controller {
     ) -> Option<u64> {
         let common = shovel_core::case::path_key(&snapshot.common_directory);
         if let Some(ticket) = self.reserve_run(
-            options.kind,
+            RequestKind::Network(options.kind),
             &snapshot.worktree,
             (&snapshot.identity.fingerprint, &common),
             None,
@@ -834,7 +806,7 @@ impl Controller {
         options.all_remotes = false;
         let common = shovel_core::case::path_key(&snapshot.common_directory);
         if let Some(ticket) = self.reserve_run(
-            Kind::Fetch,
+            RequestKind::Network(Kind::Fetch),
             &snapshot.worktree,
             (&snapshot.identity.fingerprint, &common),
             Some(&format!("remote:{name}")),
@@ -1804,8 +1776,8 @@ mod tests {
     fn toolbar_push_reaches_native_git_and_survives_leaving_its_view() {
         let (temporary, git, snapshot) = fixture();
         let path = temporary.path();
-        let helper = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/debug/ShovelAskPass.exe");
+        let helper =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/ShovelAskPass.exe");
         assert!(
             helper.is_file(),
             "build shovel-askpass before this focused check"

@@ -197,11 +197,7 @@ impl Harness {
         let (tx, rx) = mpsc::channel();
         self.editor.scheduler.submit(
             context.repository.identity.fingerprint.clone(),
-            context
-                .repository
-                .common_directory
-                .to_string_lossy()
-                .to_uppercase(),
+            shovel_core::case::path_key(&context.repository.common_directory),
             "fixture-barrier".into(),
             Lane::WorkingCopy,
             move || {

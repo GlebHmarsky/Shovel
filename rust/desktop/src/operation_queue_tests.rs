@@ -189,7 +189,7 @@ fn queue_after_native_change(change_branch: bool) {
     let root = snapshot.worktree.clone();
     scheduler.submit(
         snapshot.identity.fingerprint.clone(),
-        snapshot.common_directory.to_string_lossy().to_uppercase(),
+        shovel_core::case::path_key(&snapshot.common_directory),
         "fixture accepted local work".into(),
         Lane::WorkingCopy,
         move || {
@@ -347,8 +347,8 @@ fn initializing_fetch_options_survive_closure_save_without_fetch_and_hold_queue_
     assert_eq!(app.operations.pending.len(), 1);
     assert_eq!(app.operations.runs.len(), 1);
     assert_eq!(
-        app.operations.pending[0].dialog,
-        Some(DeferredDialog::Fetch)
+        app.operations.pending[0].action,
+        RequestKind::Options(Kind::Fetch)
     );
     assert!(app.operations.options.is_none());
     app.close_tab(owner, &ctx);
@@ -404,6 +404,65 @@ fn initializing_fetch_options_survive_closure_save_without_fetch_and_hold_queue_
 }
 
 #[test]
+fn initializing_pull_and_push_options_keep_their_order_and_original_repository() {
+    let (_temp, git, snapshot) = fixture();
+    let remote = snapshot.worktree.join("remote.git");
+    command(&git, &snapshot.worktree, &["tag", "from-options"]);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = workspace();
+    app.tabs.clear();
+    app.selected = 0;
+    app.git = Some(git.clone());
+    app.operations = controller();
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    app.open(snapshot.worktree.clone(), &ctx);
+    let owner = app.tabs[0].id;
+    for kind in [Kind::Pull, Kind::Push, Kind::Pull, Kind::Push] {
+        click_label(
+            &ctx,
+            &mut app,
+            &strings::format("RustNetworkOptions", &[&text(kind.key())]),
+        );
+    }
+    assert_eq!(app.operations.pending.len(), 2);
+    app.close_tab(owner, &ctx);
+    wait(|| {
+        app.receive(&ctx);
+        !app.operations.ready_options.is_empty()
+    });
+    click_label(&ctx, &mut app, &text("ActionAutoStash"));
+    assert_eq!(
+        app.operations.options.as_ref().unwrap().1.worktree,
+        snapshot.worktree
+    );
+    click_label(&ctx, &mut app, &text("Close"));
+    assert!(Options::load(&app.settings, &snapshot, Kind::Pull).auto_stash);
+    assert!(!snapshot.git_directory.join("FETCH_HEAD").exists());
+    wait(|| {
+        app.receive(&ctx);
+        !app.operations.ready_options.is_empty()
+    });
+    assert!(command(&git, &remote, &["for-each-ref"]).is_empty());
+    click_label(&ctx, &mut app, &text("ActionAllTags"));
+    click_label(&ctx, &mut app, &text("Push"));
+    wait(|| {
+        app.receive(&ctx);
+        !app.scheduler.has_accepted_work()
+    });
+    assert!(Options::load(&app.settings, &snapshot, Kind::Push).all_tags);
+    assert_eq!(
+        command(&git, &remote, &["rev-parse", "main"]),
+        snapshot.head.clone().unwrap()
+    );
+    assert_eq!(
+        command(&git, &remote, &["rev-parse", "refs/tags/from-options"]),
+        snapshot.head.unwrap()
+    );
+}
+
+#[test]
 fn initializing_fetch_options_removal_failure_and_multiple_owners_are_scoped() {
     let (_a, git_a, a) = fixture();
     let (_b, git_b, b) = fixture();
@@ -411,15 +470,33 @@ fn initializing_fetch_options_removal_failure_and_multiple_owners_are_scoped() {
     let ctx = egui::Context::default();
     let settings = Settings::default();
     let mut ops = controller();
-    ops.defer_fetch_options(&a.worktree, &settings, &scheduler, &ctx);
+    ops.defer(
+        RequestKind::Options(Kind::Fetch),
+        &a.worktree,
+        &settings,
+        &scheduler,
+        &ctx,
+    );
     let removed = ops.pending[0].request;
     assert!(scheduler.remove_waiting(removed));
     // Resolve before consuming the removal event: activation must still fail.
     ops.resolve_initialization(&a.worktree, Ok(&a), &git_a, &scheduler, &ctx);
     ops.poll(&ctx);
     assert!(ops.ready_options.is_empty());
-    ops.defer_fetch_options(&a.worktree, &settings, &scheduler, &ctx);
-    ops.defer_fetch_options(&b.worktree, &settings, &scheduler, &ctx);
+    ops.defer(
+        RequestKind::Options(Kind::Fetch),
+        &a.worktree,
+        &settings,
+        &scheduler,
+        &ctx,
+    );
+    ops.defer(
+        RequestKind::Options(Kind::Fetch),
+        &b.worktree,
+        &settings,
+        &scheduler,
+        &ctx,
+    );
     ops.resolve_initialization(&a.worktree, Err("fixture failed"), &git_a, &scheduler, &ctx);
     ops.resolve_initialization(&b.worktree, Ok(&b), &git_b, &scheduler, &ctx);
     wait(|| {
@@ -439,7 +516,13 @@ fn initializing_fetch_options_removal_failure_and_multiple_owners_are_scoped() {
     ops.poll(&ctx);
 
     // Independent completions queue their dialogs rather than overwriting one another.
-    ops.defer_fetch_options(&a.worktree, &settings, &scheduler, &ctx);
+    ops.defer(
+        RequestKind::Options(Kind::Fetch),
+        &a.worktree,
+        &settings,
+        &scheduler,
+        &ctx,
+    );
     ops.resolve_initialization(&a.worktree, Ok(&a), &git_a, &scheduler, &ctx);
     wait(|| {
         ops.poll(&ctx);
@@ -514,10 +597,7 @@ fn initializing_new_branch_keeps_owner_and_submission_order_through_checkout_rev
         click_label(&ctx, &mut app, &text("BranchToolbar"));
     }
     assert_eq!(app.operations.pending.len(), 1);
-    assert_eq!(
-        app.operations.pending[0].dialog,
-        Some(DeferredDialog::NewBranch)
-    );
+    assert_eq!(app.operations.pending[0].action, RequestKind::NewBranch);
     // Submitted after the options request but before initialization resolves.
     app.operations.defer_network(
         Kind::Push,
@@ -662,8 +742,13 @@ fn initializing_new_branch_removal_sequence_failure_and_cancel_do_not_mutate() {
     frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
     assert!(app.branches.is_open());
     let (_other_temp, other_git, other) = fixture();
-    app.operations
-        .defer_fetch_options(&other.worktree, &settings, &app.scheduler, &ctx);
+    app.operations.defer(
+        RequestKind::Options(Kind::Fetch),
+        &other.worktree,
+        &settings,
+        &app.scheduler,
+        &ctx,
+    );
     app.operations.resolve_initialization(
         &other.worktree,
         Ok(&other),
