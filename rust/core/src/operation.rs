@@ -33,11 +33,7 @@ pub struct Command {
 }
 impl Command {
     pub fn succeeded(&self) -> bool {
-        self.exit_code == 0
-            && matches!(
-                self.outcome,
-                process::Outcome::Exited | process::Outcome::OutputLimit
-            )
+        self.outcome.accepted_succeeded(self.exit_code)
     }
 }
 pub struct Completed {

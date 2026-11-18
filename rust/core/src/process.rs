@@ -126,6 +126,12 @@ pub enum Outcome {
     TimedOut,
     OutputLimit,
 }
+impl Outcome {
+    /// An accepted process runs to its native exit even when the diagnostic buffer fills.
+    pub fn accepted_succeeded(self, exit_code: u32) -> bool {
+        exit_code == 0 && matches!(self, Self::Exited | Self::OutputLimit)
+    }
+}
 #[derive(Debug)]
 pub struct Result {
     pub outcome: Outcome,
@@ -137,6 +143,9 @@ pub struct Result {
 impl Result {
     pub fn success(&self) -> bool {
         self.outcome == Outcome::Exited && self.exit_code == 0
+    }
+    pub fn command_succeeded(&self) -> bool {
+        self.outcome.accepted_succeeded(self.exit_code)
     }
 }
 pub type OutputCallback = Arc<dyn Fn(bool, &[u8]) + Send + Sync>;
@@ -440,11 +449,15 @@ pub fn run(
     drop(stdin_read);
     drop(stdout_write);
     drop(stderr_write);
-    let input = request.input.clone();
-    let writer = thread::spawn(move || {
-        let mut file = File::from(stdin_write);
-        file.write_all(&input)
-    });
+    let writer = if request.input.is_empty() {
+        drop(stdin_write);
+        None
+    } else {
+        let input = request.input.clone();
+        Some(thread::spawn(move || {
+            File::from(stdin_write).write_all(&input)
+        }))
+    };
     let overflow = Arc::new(AtomicBool::new(false));
     let stdout = drain(
         stdout_read,
@@ -461,8 +474,13 @@ pub fn run(
         true,
     );
     let mut outcome = Outcome::Exited;
+    let wait_ms = if request.lifetime == Lifetime::AcceptedCommand {
+        INFINITE
+    } else {
+        20
+    };
     loop {
-        let wait = unsafe { WaitForSingleObject(process_handle.as_raw_handle(), 20) };
+        let wait = unsafe { WaitForSingleObject(process_handle.as_raw_handle(), wait_ms) };
         if wait == WAIT_OBJECT_0 {
             break;
         }
@@ -497,9 +515,11 @@ pub fn run(
     let join_error = || std::io::Error::other("process capture worker failed");
     let stdout = stdout.join().map_err(|_| join_error())??;
     let stderr = stderr.join().map_err(|_| join_error())??;
-    let input_result = writer.join().map_err(|_| join_error())?;
-    if outcome == Outcome::Exited && exit_code == 0 {
-        input_result?;
+    if let Some(writer) = writer {
+        let input_result = writer.join().map_err(|_| join_error())?;
+        if outcome == Outcome::Exited && exit_code == 0 {
+            input_result?;
+        }
     }
     if overflow.load(Ordering::Acquire) && outcome == Outcome::Exited {
         outcome = Outcome::OutputLimit;
@@ -573,6 +593,10 @@ mod tests {
             unsafe {
                 SetEvent(handle as *mut std::ffi::c_void);
             }
+        } else if mode == "read-stdin" {
+            let mut bytes = Vec::new();
+            std::io::stdin().read_to_end(&mut bytes).unwrap();
+            std::fs::write("received-stdin", bytes).unwrap();
         } else if mode == "reject-input" {
             eprintln!("fixture rejected input");
             std::process::exit(7);
@@ -681,6 +705,24 @@ mod tests {
         canceller.join().unwrap();
         assert_eq!(result.outcome, Outcome::Cancelled);
         assert!(!temp.path().join("finished").exists());
+    }
+    #[test]
+    fn native_process_receives_immediate_eof_or_exact_input() {
+        let temp = tempfile::tempdir().unwrap();
+        for input in [vec![], vec![0, 10, 255, 65]] {
+            let mut request = request(temp.path(), "read-stdin");
+            request.input.clone_from(&input);
+            request.lifetime = Lifetime::AcceptedCommand;
+            assert!(
+                run(&request, &Cancellation::default(), None)
+                    .unwrap()
+                    .command_succeeded()
+            );
+            assert_eq!(
+                std::fs::read(temp.path().join("received-stdin")).unwrap(),
+                input
+            );
+        }
     }
     #[test]
     fn incomplete_stdin_is_not_reported_as_success_or_hidden_native_failure() {

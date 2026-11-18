@@ -262,22 +262,26 @@ fn clone_output_limit_keeps_the_accepted_hook_running_and_hides_partial_credenti
     let f = Fixture::new();
     let hooks = f.temp.path().join("hooks");
     fs::create_dir(&hooks).unwrap();
-    fs::write(hooks.join("post-checkout"),
-        b"#!/bin/sh\nprintf '%1048566s' ''\nprintf 'https://fixture-user:never-log-this@example.invalid/repo'\nprintf 'finished\\n' > hook-finished\n").unwrap();
     f.configure("core.hooksPath", hooks.to_str().unwrap());
-    let options = f.options("output-limit", "");
-    let result = f.git.clone_repository(&options, None, None).unwrap();
-    assert!(!result.succeeded);
-    assert_eq!(result.message, "CloneOutputLimit");
-    assert!(result.repository.is_some());
-    assert_eq!(
-        fs::read(options.directory.join("hook-finished")).unwrap(),
-        b"finished\n"
-    );
-    assert!(!result.output.contains("fixture-user"));
-    assert!(!result.output.contains("never-log-this"));
-    assert_eq!(
-        fs::read(options.directory.join("file.txt")).unwrap(),
-        b"main\n"
-    );
+    for (exit, message) in [(0, "CloneSucceededOutputLimit"), (1, "CloneOutputLimit")] {
+        let hook = format!(
+            "#!/bin/sh\nprintf '%1048566s' ''\nprintf 'https://fixture-user:never-log-this@example.invalid/repo'\nprintf 'finished\\n' > hook-finished\nexit {exit}\n"
+        );
+        fs::write(hooks.join("post-checkout"), hook).unwrap();
+        let options = f.options(&format!("output-limit-{exit}"), "");
+        let result = f.git.clone_repository(&options, None, None).unwrap();
+        assert_eq!(result.succeeded, exit == 0);
+        assert_eq!(result.message, message);
+        assert!(result.repository.is_some());
+        assert_eq!(
+            fs::read(options.directory.join("hook-finished")).unwrap(),
+            b"finished\n"
+        );
+        assert!(!result.output.contains("fixture-user"));
+        assert!(!result.output.contains("never-log-this"));
+        assert_eq!(
+            fs::read(options.directory.join("file.txt")).unwrap(),
+            b"main\n"
+        );
+    }
 }

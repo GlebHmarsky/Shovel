@@ -86,7 +86,7 @@ fn clone_finishes_after_tab_closure_and_opens_history_with_native_hook_result() 
         .to_string_lossy()
         .replace('\\', "/")
         .replace('\'', "'\\''");
-    fs::write(hooks.join("post-checkout"), format!("#!/bin/sh\nprintf 'ran\\n' > hook-ran\nwhile ! test -e '{quoted}'; do sleep 0.1; done\n")).unwrap();
+    fs::write(hooks.join("post-checkout"), format!("#!/bin/sh\nprintf 'ran\\n' > hook-ran\nwhile ! test -e '{quoted}'; do sleep 0.1; done\nprintf '%1049000s\\n' 'done'\n")).unwrap();
     configure(&h, "core.hooksPath", hooks.to_str().unwrap());
     let target = h.temp.path().join("clone");
     options(&mut h, source.to_str().unwrap(), &target);
@@ -115,7 +115,7 @@ fn clone_finishes_after_tab_closure_and_opens_history_with_native_hook_result() 
             .operations
             .summary(&target)
             .unwrap()
-            .contains(&text("CloneSucceeded"))
+            .contains(&text("CloneSucceededOutputLimit"))
     );
 }
 #[test]

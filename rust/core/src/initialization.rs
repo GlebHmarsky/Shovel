@@ -198,12 +198,14 @@ impl Git {
             &cancel,
             None,
         )?;
-        let succeeded = result.success();
+        let succeeded = result.command_succeeded();
         let output = captured_output(&result);
         let mut completed = Completed {
             repository: None,
             succeeded,
-            message: if succeeded {
+            message: if succeeded && result.outcome == process::Outcome::OutputLimit {
+                "InitSucceededOutputLimit"
+            } else if succeeded {
                 "InitSucceeded"
             } else {
                 "InitIncomplete"

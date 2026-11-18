@@ -118,15 +118,8 @@ pub struct Completed {
 }
 impl Completed {
     pub fn succeeded(&self) -> bool {
-        command_succeeded(&self.command)
+        self.command.command_succeeded()
     }
-}
-fn command_succeeded(result: &process::Result) -> bool {
-    result.exit_code == 0
-        && matches!(
-            result.outcome,
-            process::Outcome::Exited | process::Outcome::OutputLimit
-        )
 }
 fn ordinary_modification(entry: &Change) -> bool {
     entry.code == 'M'
@@ -842,7 +835,7 @@ impl Git {
         };
         // Reconciliation failure never changes a successful command into retryable mutation.
         let partial = if let Some(outside) = outside
-            && command_succeeded(&command)
+            && command.command_succeeded()
         {
             self.reconcile_index_paths(context, &targets, &outside, &cancel)
                 .ok()

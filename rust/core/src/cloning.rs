@@ -115,13 +115,15 @@ impl Git {
         let result = process::run(&request, &cancel, progress)?;
         let mut completed = Completed {
             repository: None,
-            succeeded: result.success(),
-            message: if result.outcome == process::Outcome::OutputLimit {
-                "CloneOutputLimit"
-            } else if result.success() {
-                "CloneSucceeded"
-            } else {
-                "CloneIncomplete"
+            succeeded: result.command_succeeded(),
+            message: match (
+                result.command_succeeded(),
+                result.outcome == process::Outcome::OutputLimit,
+            ) {
+                (true, false) => "CloneSucceeded",
+                (true, true) => "CloneSucceededOutputLimit",
+                (false, true) => "CloneOutputLimit",
+                (false, false) => "CloneIncomplete",
             },
             output: captured_output(&result),
         };
