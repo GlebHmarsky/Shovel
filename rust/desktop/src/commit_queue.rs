@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 pub(super) struct WorkingResult {
     command: Result<working::Completed, working::Error>,
+    output: String,
     submitted: Option<drafts::Text>,
     push: Option<PushReport>,
 }
@@ -116,7 +117,6 @@ struct Entry {
     activity: OwnedActivity,
     stage: bool,
     dirty: bool,
-    capture: Capture,
 }
 #[derive(Default)]
 pub(super) struct Queue {
@@ -132,49 +132,6 @@ impl Queue {
     }
     pub(super) fn has_stage(&self) -> bool {
         self.entries.values().any(|e| !e.activity.done && e.stage)
-    }
-}
-
-/// Redact complete lines, preserving independent stdout/stderr chunk boundaries.
-/// Never expose an incomplete bounded line: a URL credential may span chunks.
-#[derive(Default)]
-pub(crate) struct Capture {
-    lines: [Vec<u8>; 2],
-    captured: usize,
-    overflow: bool,
-    pub(crate) text: String,
-}
-impl Capture {
-    pub(crate) fn append(&mut self, stderr: bool, bytes: &[u8]) {
-        let room = (1024 * 1024usize).saturating_sub(self.captured);
-        self.overflow |= bytes.len() > room;
-        let bytes = &bytes[..bytes.len().min(room)];
-        self.captured += bytes.len();
-        let pending = &mut self.lines[usize::from(stderr)];
-        let previous = pending.len();
-        pending.extend_from_slice(bytes);
-        if let Some(end) = bytes.iter().rposition(|b| matches!(b, b'\r' | b'\n')) {
-            let complete: Vec<_> = pending.drain(..=previous + end).collect();
-            self.publish(&complete);
-        }
-    }
-    fn publish(&mut self, bytes: &[u8]) {
-        let redacted = shovel_core::network::redact(&String::from_utf8_lossy(bytes));
-        let room = 32768usize.saturating_sub(self.text.len());
-        let mut end = redacted.len().min(room);
-        while !redacted.is_char_boundary(end) {
-            end -= 1;
-        }
-        self.text.push_str(&redacted[..end]);
-    }
-    pub(crate) fn finish(&mut self, complete: bool) {
-        if complete && !self.overflow {
-            for index in 0..2 {
-                let bytes = std::mem::take(&mut self.lines[index]);
-                self.publish(&bytes);
-            }
-        }
-        self.lines = Default::default();
     }
 }
 
@@ -249,7 +206,7 @@ impl Editor {
     pub(super) fn working_ready(&self) -> bool {
         self.current_context().is_some()
             && !self.working_blocked()
-            && (!self.loading || self.has_working_queue())
+            && (!self.loading || self.target_rows_current || self.has_working_queue())
     }
     pub fn take_activity(&mut self) -> Vec<OwnedActivity> {
         let result = self
@@ -331,7 +288,6 @@ impl Editor {
                 },
                 stage: matches!(action, Action::Stage(_)),
                 dirty: true,
-                capture: Capture::default(),
             },
         );
         self.busy = true;
@@ -353,19 +309,12 @@ impl Editor {
             let context = adopt_owned(&context, owned.lock().unwrap().as_ref(), &action);
             let output_tx = tx.clone();
             let output_ctx = ctx.clone();
-            let published = Arc::new(Mutex::new(0usize));
-            let callback: OutputCallback = Arc::new(move |stderr, bytes| {
-                let mut count = published.lock().unwrap();
-                // One extra byte marks truncation without unbounded event retention.
-                let room = (1024 * 1024 + 1usize).saturating_sub(*count);
-                if room > 0 {
-                    let bytes = &bytes[..room.min(bytes.len())];
-                    *count += bytes.len();
-                    let _ = output_tx.send(Event::WorkingOutput(id, stderr, bytes.to_vec()));
-                    output_ctx.request_repaint();
-                }
+            let stream = Arc::new(crate::activity_output::OutputStream::default());
+            let callback = stream.callback(move |stream| {
+                let _ = output_tx.send(Event::WorkingOutput(id, stream));
+                output_ctx.request_repaint();
             });
-            let mut result = git.execute_working(&context, &action, Some(callback));
+            let mut result = git.execute_working_for_editor(&context, &action, Some(callback));
             let push = if let (Ok(completed), Some(target)) = (&mut result, push)
                 && completed.succeeded()
             {
@@ -390,6 +339,21 @@ impl Editor {
             } else {
                 None
             };
+            let detail = if let Err(working::Error::Git(shovel_core::git::Error::Command {
+                output,
+                ..
+            })) = &result
+            {
+                output.as_str()
+            } else {
+                push.as_ref().map_or("", |report| report.output.as_str())
+            };
+            let output = stream.finish(
+                result
+                    .as_ref()
+                    .is_ok_and(|r| r.command.outcome == shovel_core::process::Outcome::Exited),
+                detail,
+            );
             let outcome = if result
                 .as_ref()
                 .is_ok_and(|r| r.succeeded() && r.updated.is_ok())
@@ -407,6 +371,7 @@ impl Editor {
                 id,
                 Box::new(WorkingResult {
                     command: result,
+                    output,
                     submitted,
                     push,
                 }),
@@ -429,6 +394,8 @@ impl Editor {
             self.output.clear();
             // Retain rows and selections, but invalidate obsolete read publication.
             self.generation += 1;
+            self.scan_cancel.cancel();
+            self.refresh_pending |= self.loading;
             self.diff_generation += 1;
             self.diff_cancel.cancel();
             self.loading = false;
@@ -443,10 +410,9 @@ impl Editor {
             entry.dirty = true;
         }
     }
-    pub(super) fn working_output(&mut self, id: u64, stderr: bool, bytes: &[u8]) {
+    pub(super) fn working_output(&mut self, id: u64, added: &str) {
         if let Some(entry) = self.queue.entries.get_mut(&id) {
-            entry.capture.append(stderr, bytes);
-            entry.activity.output.clone_from(&entry.capture.text);
+            entry.activity.output.push_str(added);
             self.output.clone_from(&entry.activity.output);
             entry.dirty = true;
         }
@@ -459,6 +425,7 @@ impl Editor {
     ) {
         let WorkingResult {
             command: result,
+            output,
             submitted,
             push,
         } = completed;
@@ -470,26 +437,11 @@ impl Editor {
                     .is_ok_and(|r| r.succeeded() && r.updated.is_ok());
             entry.activity.reopen_commit =
                 submitted.is_some() && !result.as_ref().is_ok_and(|r| r.succeeded());
-            if let Err(working::Error::Git(shovel_core::git::Error::Command { output, .. })) =
-                &result
-            {
-                entry.capture.publish(output.as_bytes());
-            }
         }
-        let complete = result
-            .as_ref()
-            .is_ok_and(|r| r.command.outcome == shovel_core::process::Outcome::Exited);
         match result {
             Ok(result) => {
                 if result.succeeded() {
                     self.status = Some(if let Some(report) = push {
-                        if !report.output.is_empty()
-                            && let Some(entry) = self.queue.entries.get_mut(&id)
-                        {
-                            entry.capture.finish(complete);
-                            entry.capture.publish(b"\n");
-                            entry.capture.publish(report.output.as_bytes());
-                        }
                         report.status
                     } else {
                         let summary = result.commit.as_ref().map_or_else(
@@ -515,7 +467,11 @@ impl Editor {
                     self.failed_commit |= submitted.is_some();
                 }
                 match result.updated {
-                    Ok(context) => self.apply(context, ctx),
+                    Ok(context) => {
+                        self.apply(context, ctx);
+                        self.target_rows_current = result.needs_full_scan;
+                        self.refresh_pending |= result.needs_full_scan;
+                    }
                     Err(error) => self.failed_reinspection(error_text(error)),
                 }
             }
@@ -527,7 +483,7 @@ impl Editor {
                 self.failed_commit |= submitted.is_some();
             }
         }
-        self.finish_working(id, complete);
+        self.finish_working(id, output);
     }
     pub(super) fn working_removed(&mut self, id: u64, outcome: Outcome) {
         self.status = Some(text(if outcome == Outcome::Removed {
@@ -535,12 +491,11 @@ impl Editor {
         } else {
             "ActionStoppedShort"
         }));
-        self.finish_working(id, false);
+        self.finish_working(id, String::new());
     }
-    fn finish_working(&mut self, id: u64, complete: bool) {
+    fn finish_working(&mut self, id: u64, output: String) {
         if let Some(entry) = self.queue.entries.get_mut(&id) {
-            entry.capture.finish(complete);
-            entry.activity.output.clone_from(&entry.capture.text);
+            entry.activity.output = output;
             self.output.clone_from(&entry.activity.output);
             entry.activity.status = self.status.clone().unwrap_or_default();
             entry.activity.done = true;
@@ -566,36 +521,5 @@ impl Editor {
                 .0;
             self.queue.entries.remove(&id);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn streamed_activity_redacts_chunked_urls_and_never_publishes_truncated_lines() {
-        let mut capture = Capture::default();
-        capture.append(true, b"failure https://user:sec");
-        assert!(capture.text.is_empty());
-        capture.append(true, b"ret@host/path?token=hidden\n");
-        assert_eq!(
-            capture.text,
-            "failure https://[redacted]@host/path?[redacted]\n"
-        );
-        capture.append(false, "completed \u{2713}".as_bytes());
-        capture.finish(true);
-        assert!(capture.text.ends_with("completed \u{2713}"));
-        assert!(!capture.text.contains("secret"));
-        let mut overflow = Capture::default();
-        overflow.append(true, b"https://user:");
-        overflow.append(true, &vec![b'x'; 1024 * 1024]);
-        overflow.finish(true);
-        assert!(overflow.text.is_empty());
-        assert!(overflow.lines.iter().all(Vec::is_empty));
-        let mut interrupted = Capture::default();
-        interrupted.append(false, b"progress\nhttps://fixture:unfinished");
-        interrupted.finish(false);
-        assert_eq!(interrupted.text, "progress\n");
     }
 }

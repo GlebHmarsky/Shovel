@@ -264,12 +264,6 @@ fn native_clone_uses_rust_authentication_ui_and_decline_does_not_cancel_the_proc
                 > 0,
             !decline
         );
-        assert!(
-            !h.app
-                .initialization
-                .capture
-                .text
-                .contains("fixture-password")
-        );
+        assert!(!h.app.initialization.output.contains("fixture-password"));
     }
 }

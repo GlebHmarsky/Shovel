@@ -1,13 +1,13 @@
 //! Repository-owned Local Changes state shared by the workspace and native window.
 use crate::strings::{self, text};
 use eframe::egui;
-pub(crate) use queue::{Capture, OwnedActivity};
+pub(crate) use queue::OwnedActivity;
 use shovel_core::{
     drafts,
     git::Git,
     identity::{self, Identity},
     network::Target,
-    process::{Cancellation, OutputCallback},
+    process::Cancellation,
     scheduler::{Lane, Outcome, Scheduler},
     working::{self, Action, Change, Context, Group},
 };
@@ -29,7 +29,7 @@ enum Event {
     DraftSaved(u64, Result<drafts::Snapshot, String>),
     WorkingStarted(u64),
     WorkingPushing(u64),
-    WorkingOutput(u64, bool, Vec<u8>),
+    WorkingOutput(u64, Arc<crate::activity_output::OutputStream>),
     WorkingCompleted(u64, Box<queue::WorkingResult>),
     WorkingRemoved(u64, Outcome),
     Removed,
@@ -82,6 +82,8 @@ pub struct Editor {
     receiver: Receiver<Event>,
     initialized: bool,
     loading: bool,
+    scan_cancel: Cancellation,
+    target_rows_current: bool,
     snapshot_error: Option<String>,
     refresh_pending: bool,
     generation: u64,
@@ -162,6 +164,8 @@ impl Editor {
             receiver,
             initialized: false,
             loading: false,
+            scan_cancel: Cancellation::default(),
+            target_rows_current: false,
             snapshot_error: None,
             refresh_pending: false,
             generation: 0,
@@ -424,13 +428,15 @@ impl Editor {
         }
         self.refresh_pending = false;
         self.loading = true;
+        self.scan_cancel.cancel();
+        self.scan_cancel = Cancellation::default();
         self.generation += 1;
         let generation = self.generation;
         let git = self.git.clone();
         let path = self.path.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
-        let cancel = Cancellation::default();
+        let cancel = self.scan_cancel.clone();
         let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
             let _lease = lease;
@@ -590,7 +596,7 @@ impl Editor {
                 }
                 Event::WorkingStarted(id) => self.working_started(id),
                 Event::WorkingPushing(id) => self.working_pushing(id),
-                Event::WorkingOutput(id, stderr, bytes) => self.working_output(id, stderr, &bytes),
+                Event::WorkingOutput(id, stream) => self.working_output(id, &stream.take_pending()),
                 Event::WorkingCompleted(id, result) => self.working_completed(id, *result, ctx),
                 Event::WorkingRemoved(id, outcome) => self.working_removed(id, outcome),
                 Event::FileStarted(action) => self.status = Some(text(action.phase())),
@@ -655,6 +661,7 @@ impl Editor {
     }
     fn apply(&mut self, context: Context, ctx: &egui::Context) {
         self.snapshot_error = None;
+        self.target_rows_current = false;
         let resolved_path = self
             .conflict
             .as_ref()
@@ -663,17 +670,26 @@ impl Editor {
         if resolved_path.is_some() {
             self.conflict = None;
         }
-        self.selection
-            .retain(|(group, path)| context.change(*group, path).is_some());
+        let matching_row = |group, path: &str| {
+            context.change(group, path).or_else(|| {
+                [
+                    Group::Conflicted,
+                    Group::Unstaged,
+                    Group::Untracked,
+                    Group::Staged,
+                ]
+                .into_iter()
+                .find_map(|other| context.change(other, path))
+            })
+        };
+        self.selection = std::mem::take(&mut self.selection)
+            .into_iter()
+            .filter_map(|(group, path)| matching_row(group, &path).map(|entry| (entry.group, path)))
+            .collect();
         let focus = self
             .focused
             .as_ref()
-            .and_then(|old| {
-                context.entries.iter().find(|e| {
-                    e.path == old.path
-                        && (e.group == old.group || resolved_path.as_ref() == Some(&e.path))
-                })
-            })
+            .and_then(|old| matching_row(old.group, &old.path))
             .cloned();
         self.context = Some(Arc::new(context));
         // Keep edited text even when an external operation removes this conflict.

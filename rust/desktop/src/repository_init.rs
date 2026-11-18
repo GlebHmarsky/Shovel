@@ -1,8 +1,5 @@
 //! Local repository creation owns its worker independently of any visible tab.
-use crate::{
-    commit::{Capture, OwnedActivity},
-    strings::text,
-};
+use crate::{activity_output::OutputStream, commit::OwnedActivity, strings::text};
 use eframe::egui;
 use sha2::{Digest, Sha256};
 use shovel_core::{
@@ -24,7 +21,7 @@ use std::{
 enum Event {
     Picked(Option<PathBuf>),
     Started,
-    Output(bool, Vec<u8>),
+    Output(Arc<OutputStream>),
     Completed(Box<Result<initialization::Completed, Error>>),
     Removed,
 }
@@ -62,7 +59,7 @@ struct Form {
 }
 pub struct Controller {
     kind: Kind,
-    capture: Capture,
+    output: String,
     form: Option<Form>,
     pub busy: bool,
     pub picking: bool,
@@ -85,7 +82,7 @@ impl Default for Controller {
         let (sender, receiver) = mpsc::channel();
         Self {
             kind: Kind::Initialize,
-            capture: Default::default(),
+            output: String::new(),
             form: None,
             busy: false,
             picking: false,
@@ -149,13 +146,13 @@ impl Controller {
                         reopen_commit: false,
                     });
                 }
-                Event::Output(stderr, bytes) => {
-                    self.capture.append(stderr, &bytes);
+                Event::Output(stream) => {
+                    self.output.push_str(&stream.take_pending());
                     self.activity = Some(OwnedActivity {
                         request: self.request(),
                         label: self.kind.title(),
                         status: text(self.kind.title()),
-                        output: self.capture.text.clone(),
+                        output: self.output.clone(),
                         done: false,
                         failed: false,
                         reopen_commit: false,
@@ -189,11 +186,9 @@ impl Controller {
                             (None, status.clone(), output, Some(status))
                         }
                     };
-                    // The final operation result owns complete output. The streaming
-                    // fallback can retain a partial line if a pipe was interrupted.
-                    self.capture.finish(false);
+                    // Streaming fallback contains only complete, redacted lines.
                     let output = if output.is_empty() {
-                        &self.capture.text
+                        &self.output
                     } else {
                         &output
                     };
@@ -406,7 +401,7 @@ impl Controller {
         if !accepted {
             return;
         }
-        self.capture = Default::default();
+        self.output.clear();
         self.request_id = request;
         self.path = target;
         self.origin = origin;
@@ -432,8 +427,8 @@ impl Controller {
                 Request::Clone(options) => {
                     let sender = tx.clone();
                     let repaint = ctx.clone();
-                    let progress = Arc::new(move |stderr, bytes: &[u8]| {
-                        let _ = sender.send(Event::Output(stderr, bytes.to_vec()));
+                    let progress = Arc::new(OutputStream::default()).callback(move |stream| {
+                        let _ = sender.send(Event::Output(stream));
                         repaint.request_repaint();
                     });
                     authentication

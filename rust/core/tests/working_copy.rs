@@ -36,6 +36,129 @@ fn fixture() -> (tempfile::TempDir, Git) {
     command(&git, temp.path(), &["init", "--initial-branch=main"]);
     (temp, git)
 }
+
+#[test]
+#[ignore = "opt-in three-sample Local Changes latency fixture with 256 MiB of assets"]
+fn measure_stage_unstage_rows_and_selected_diff() {
+    use std::time::{Duration, Instant, SystemTime};
+    let (temp, git) = fixture();
+    let root = temp.path();
+    command(&git, root, &["config", "core.autocrlf", "false"]);
+    for index in 0..2000 {
+        fs::write(root.join(format!("file-{index}.txt")), b"baseline\n").unwrap();
+    }
+    let mut state = 17_u32;
+    let mut asset = vec![0; 4 * 1024 * 1024];
+    for block in asset.as_chunks_mut::<4>().0 {
+        state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+        block.copy_from_slice(&state.to_le_bytes());
+    }
+    asset[0] = 0;
+    let assets: Vec<_> = (0..64)
+        .map(|index| root.join(format!("asset-{index}.uasset")))
+        .collect();
+    for path in &assets {
+        fs::write(path, &asset).unwrap();
+    }
+    command(&git, root, &["add", "."]);
+    command(&git, root, &["commit", "-m", "Fixture"]);
+    let tip = command(&git, root, &["rev-parse", "HEAD"]);
+    for index in 0..1000 {
+        fs::write(root.join(format!(".git/refs/heads/fixture-{index}")), &tip).unwrap();
+    }
+    let cancel = Cancellation::default();
+    let target = "file-0.txt";
+    for sample in 1..=3 {
+        let timestamp = SystemTime::now() + Duration::from_secs(sample + 1);
+        for path in &assets {
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(timestamp)
+                .unwrap();
+        }
+        fs::write(root.join(target), format!("changed {sample}\n")).unwrap();
+        let mut context = git.working_copy(root, &cancel).unwrap();
+        assert_eq!(
+            context
+                .repository
+                .references
+                .iter()
+                .filter(|r| r.name.starts_with("refs/heads/"))
+                .count(),
+            1001
+        );
+        for (before, after) in [
+            (Group::Unstaged, Group::Staged),
+            (Group::Staged, Group::Unstaged),
+        ] {
+            let selection = vec![context.change(before, target).unwrap().clone()];
+            let (name, action) = if before == Group::Unstaged {
+                ("stage", Action::Stage(selection))
+            } else {
+                ("unstage", Action::Unstage(selection))
+            };
+            let started = Instant::now();
+            let result = git
+                .execute_working_for_editor(&context, &action, None)
+                .unwrap();
+            let command_ms = result.command.elapsed.as_secs_f64() * 1000.0;
+            assert!(result.succeeded());
+            assert!(result.needs_full_scan);
+            context = result.updated.unwrap();
+            let entry = context.change(after, target).unwrap();
+            let rows_ms = started.elapsed().as_secs_f64() * 1000.0;
+            let diff = git.working_diff(&context, entry, &cancel).unwrap();
+            assert!(diff.contains(&format!("+changed {sample}")));
+            let diff_ms = started.elapsed().as_secs_f64() * 1000.0;
+            let wider = Instant::now();
+            let full = git.working_copy(root, &cancel).unwrap();
+            let full_ms = wider.elapsed().as_secs_f64() * 1000.0;
+            assert_eq!(full.entries, context.entries);
+            assert_eq!(full.index_stamp, context.index_stamp);
+            println!(
+                "sample={sample} action={name} command_ms={command_ms:.1} rows_ms={rows_ms:.1} diff_ms={diff_ms:.1} wider_ms={full_ms:.1}"
+            );
+        }
+    }
+    assert_eq!(fs::read(&assets[0]).unwrap(), asset);
+    assert_eq!(command(&git, root, &["show", ":file-0.txt"]), "baseline\n");
+}
+#[test]
+fn targeted_index_actions_fall_back_when_a_native_hook_stages_an_unreviewed_file() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    let cancel = Cancellation::default();
+    for file in ["chosen", "other"] {
+        fs::write(root.join(file), "base\n").unwrap();
+    }
+    command(&git, root, &["add", "."]);
+    command(&git, root, &["commit", "-m", "base"]);
+    for file in ["chosen", "other"] {
+        fs::write(root.join(file), "changed\n").unwrap();
+    }
+    let review = git.working_copy(root, &cancel).unwrap();
+    let chosen = review.change(Group::Unstaged, "chosen").unwrap().clone();
+    fs::write(
+        root.join(".git/hooks/post-index-change"),
+        "#!/bin/sh\nif test ! -f .git/ran-hook; then touch .git/ran-hook; git add -- other; fi\n",
+    )
+    .unwrap();
+    let result = git
+        .execute_working_for_editor(&review, &Action::Stage(vec![chosen]), None)
+        .unwrap();
+    assert!(result.succeeded() && !result.needs_full_scan);
+    let updated = result.updated.unwrap();
+    for file in ["chosen", "other"] {
+        assert!(updated.change(Group::Staged, file).is_some());
+    }
+    assert_eq!(
+        updated.entries,
+        git.working_copy(root, &cancel).unwrap().entries
+    );
+}
+
 #[test]
 fn initial_stage_unstage_commit_and_partial_staging_preserve_exact_content() {
     let (temp, git) = fixture();

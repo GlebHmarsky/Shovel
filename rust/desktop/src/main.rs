@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod activity_output;
 mod auto_fetch;
 mod branches;
 mod caption;

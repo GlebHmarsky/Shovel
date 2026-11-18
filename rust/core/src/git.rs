@@ -265,7 +265,7 @@ impl Git {
         let result = process::run(&self.request(root, args, Lifetime::Read, max), cancel, None)?;
         require(result)
     }
-    pub fn inspect(&self, root: &Path, cancel: &Cancellation) -> Result<Snapshot, Error> {
+    fn inspect_directories(&self, root: &Path, cancel: &Cancellation) -> Result<Snapshot, Error> {
         let identity = crate::identity::read(root)?;
         let output = self.read(
             root,
@@ -294,7 +294,7 @@ impl Git {
         {
             return Err(Error::NotWorktree);
         }
-        let mut snapshot = Snapshot {
+        Ok(Snapshot {
             identity,
             worktree: dirs[1].clone().into(),
             git_directory: dirs[2].clone().into(),
@@ -309,13 +309,65 @@ impl Git {
             shallow: false,
             fingerprint: String::new(),
             references: vec![],
-        };
+        })
+    }
+    pub fn inspect(&self, root: &Path, cancel: &Cancellation) -> Result<Snapshot, Error> {
+        let mut snapshot = self.inspect_directories(root, cancel)?;
         self.refresh_refs(&mut snapshot, cancel)?;
         snapshot.remotes = lines(&self.read(root, ["remote"], cancel, 256 * 1024)?.stdout);
         if crate::identity::read(root)? != snapshot.identity {
             return Err(Error::Changed);
         }
         Ok(snapshot)
+    }
+    pub(crate) fn current_index_target(
+        &self,
+        expected: &Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<bool, Error> {
+        let root = &expected.worktree;
+        let current = self.inspect_directories(root, cancel)?;
+        if current.identity != expected.identity
+            || operation_markers(&current.git_directory) != expected.operations
+        {
+            return Ok(false);
+        }
+        // An index action needs HEAD and its symbolic target. Enumerating tags,
+        // stash history and remote refs here makes unrelated history part of a write.
+        let head = self.read(
+            root,
+            [
+                "for-each-ref",
+                "--include-root-refs",
+                "--format=%(objectname)%00%(symref)%00%(objecttype)",
+                "HEAD",
+            ],
+            cancel,
+            8192,
+        )?;
+        let bytes = std::str::from_utf8(&head.stdout)
+            .map_err(|_| Error::Invalid)?
+            .trim_end_matches(['\r', '\n']);
+        let matches = if bytes.is_empty() {
+            let branch = self.read(
+                root,
+                ["symbolic-ref", "--quiet", "--short", "HEAD"],
+                cancel,
+                4096,
+            )?;
+            expected.head.is_none()
+                && Some(text(&branch.stdout).trim_end_matches(['\r', '\n']))
+                    == expected.branch.as_deref()
+        } else {
+            let fields: Vec<_> = bytes.split('\0').collect();
+            if fields.len() != 3 || !oid(fields[0]) || fields[2] != "commit" {
+                return Err(Error::Invalid);
+            }
+            let branch = (!fields[1].is_empty())
+                .then(|| fields[1].strip_prefix("refs/heads/").unwrap_or(fields[1]));
+            Some(fields[0]) == expected.head.as_deref() && branch == expected.branch.as_deref()
+        };
+        Ok(matches && crate::identity::read(root)? == expected.identity)
     }
     fn refresh_refs(&self, snapshot: &mut Snapshot, cancel: &Cancellation) -> Result<(), Error> {
         if crate::identity::read(&snapshot.worktree)? != snapshot.identity {

@@ -501,6 +501,87 @@ fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
 }
 
 #[test]
+fn stage_and_unstage_keep_the_focused_file_while_an_older_full_read_is_held() {
+    let mut h = Harness::new();
+    let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
+    h.stage("one.txt");
+    h.until(|e| !e.busy && e.target_rows_current && e.loading);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(h.editor.focused.as_ref().unwrap().group, Group::Staged);
+    assert!(
+        h.editor
+            .selection
+            .contains(&(Group::Staged, "one.txt".into()))
+    );
+    let context = h.editor.current_context().unwrap();
+    assert!(context.change(Group::Unstaged, "two.txt").is_some());
+    let stale_generation = h.editor.generation;
+    let stale = context.clone();
+    h.click(&text("CommitUnstage"));
+    h.until(|e| {
+        !e.busy
+            && e.current_context()
+                .is_some_and(|c| c.change(Group::Unstaged, "one.txt").is_some())
+    });
+    assert_eq!(h.git(&["show", ":one.txt"]), "base");
+    assert!(
+        h.editor
+            .selection
+            .contains(&(Group::Unstaged, "one.txt".into()))
+    );
+    assert_eq!(h.editor.focused.as_ref().unwrap().path, "one.txt");
+    assert!(h.editor.generation > stale_generation);
+    // Both a successful stale event and the cancelled native read must be ignored.
+    h.editor
+        .sender
+        .send(Event::Loaded(stale_generation, Box::new(Ok(stale))))
+        .unwrap();
+    release.send(()).unwrap();
+    h.until(|e| !e.loading && !e.target_rows_current);
+    assert!(h.editor.snapshot_error.is_none());
+    assert!(
+        h.editor
+            .current_context()
+            .unwrap()
+            .change(Group::Staged, "one.txt")
+            .is_none()
+    );
+}
+
+#[test]
+fn failed_wider_scan_keeps_successful_target_rows_and_requires_a_fresh_read() {
+    let mut h = Harness::new();
+    let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
+    h.stage("one.txt");
+    h.until(|e| !e.busy && e.target_rows_current && e.loading);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    let moved = h._temp.path().join("temporarily moved");
+    fs::rename(&h.editor.path, &moved).unwrap();
+    release.send(()).unwrap();
+    h.until(|e| !e.loading && e.snapshot_error.is_some());
+    assert!(
+        h.editor
+            .context
+            .as_ref()
+            .unwrap()
+            .change(Group::Staged, "one.txt")
+            .is_some()
+    );
+    assert!(!h.editor.working_ready());
+    assert!(
+        h.editor
+            .scheduler
+            .records()
+            .iter()
+            .any(|r| r.outcome == Some(Outcome::Succeeded))
+    );
+    fs::rename(&moved, &h.editor.path).unwrap();
+    h.editor.refresh(&h.ctx);
+    h.until(|e| !e.loading && e.working_ready());
+    assert_eq!(h.git(&["show", ":one.txt"]), "one");
+}
+
+#[test]
 fn distinct_stage_requests_and_commit_use_owned_index_after_view_closes() {
     let mut h = Harness::new();
     let before = h.editor.context.as_ref().unwrap().repository.head.clone();

@@ -110,6 +110,8 @@ pub struct Completed {
     pub command: process::Result,
     pub commit: Option<String>,
     pub updated: Result<Context, Error>,
+    /// A verified path-limited result is usable while the editor refreshes other rows.
+    pub needs_full_scan: bool,
 }
 impl Completed {
     pub fn succeeded(&self) -> bool {
@@ -122,6 +124,36 @@ fn command_succeeded(result: &process::Result) -> bool {
             result.outcome,
             process::Outcome::Exited | process::Outcome::OutputLimit
         )
+}
+fn ordinary_modification(entry: &Change) -> bool {
+    entry.code == 'M'
+        && entry.original.is_none()
+        && entry.submodule == "N..."
+        && matches!(entry.group, Group::Staged | Group::Unstaged)
+}
+fn index_targets<'a>(context: &Context, action: &'a Action) -> BTreeSet<&'a str> {
+    let (Action::Stage(entries) | Action::Unstage(entries)) = action else {
+        return BTreeSet::new();
+    };
+    // status takes pathspecs on the Windows command line. Wide selections and
+    // rename/copy partners use the complete native status/reconciliation path.
+    if entries.iter().any(|entry| !ordinary_modification(entry))
+        || entries.iter().map(|e| e.path.len() + 3).sum::<usize>() > 12000
+    {
+        return BTreeSet::new();
+    }
+    let selected: BTreeSet<_> = entries.iter().map(|e| e.path.as_str()).collect();
+    if context.entries.iter().any(|entry| {
+        entry
+            .original
+            .as_deref()
+            .is_some_and(|path| selected.contains(path))
+            || selected.contains(entry.path.as_str()) && !ordinary_modification(entry)
+    }) {
+        BTreeSet::new()
+    } else {
+        selected
+    }
 }
 
 // Git prints the object it created after running post-commit. HEAD may already
@@ -312,6 +344,14 @@ impl Git {
         repository: &Snapshot,
         cancel: &Cancellation,
     ) -> Result<String, Error> {
+        Ok(self.index_stamps(repository, &BTreeSet::new(), cancel)?.0)
+    }
+    fn index_stamps(
+        &self,
+        repository: &Snapshot,
+        targets: &BTreeSet<&str>,
+        cancel: &Cancellation,
+    ) -> Result<(String, Option<String>), Error> {
         let output = self
             .read(
                 &repository.worktree,
@@ -321,6 +361,7 @@ impl Git {
             )?
             .stdout;
         let mut digest = Sha256::new();
+        let mut outside = (!targets.is_empty()).then(Sha256::new);
         let mut offset = 0;
         while offset < output.len() {
             let end = output[offset..]
@@ -328,7 +369,8 @@ impl Git {
                 .position(|b| *b == 0)
                 .ok_or(Error::Invalid)?
                 + offset;
-            digest.update(&output[offset..=end]);
+            let record = &output[offset..=end];
+            digest.update(record);
             offset = end + 1;
             let mut last = "";
             for prefix in ["  ctime: ", "  mtime: ", "  dev: ", "  uid: ", "  size: "] {
@@ -348,9 +390,24 @@ impl Git {
             let flags =
                 u32::from_str_radix(last.split_once("flags: ").ok_or(Error::Invalid)?.1, 16)
                     .map_err(|_| Error::Invalid)?;
-            digest.update((flags & 0x60008000).to_le_bytes());
+            let semantic_flags = (flags & 0x60008000).to_le_bytes();
+            digest.update(semantic_flags);
+            if let Some(outside) = &mut outside {
+                let tab = record
+                    .iter()
+                    .position(|b| *b == b'\t')
+                    .ok_or(Error::Invalid)?;
+                let path = std::str::from_utf8(&record[tab + 1..record.len() - 1]);
+                if !path.is_ok_and(|p| targets.contains(p)) {
+                    outside.update(record);
+                    outside.update(semantic_flags);
+                }
+            }
         }
-        Ok(format!("{:X}", digest.finalize()))
+        Ok((
+            format!("{:X}", digest.finalize()),
+            outside.map(|hash| format!("{:X}", hash.finalize())),
+        ))
     }
     fn working_filters(
         &self,
@@ -436,6 +493,7 @@ impl Git {
         root: &Path,
         filters: &[OsString],
         full: bool,
+        paths: &BTreeSet<&str>,
         cancel: &Cancellation,
     ) -> Result<Vec<Change>, Error> {
         let mut args = filters.to_vec();
@@ -459,6 +517,7 @@ impl Git {
             ]
             .map(OsString::from),
         );
+        args.extend(paths.iter().map(OsString::from));
         parse_status(&self.read(root, args, cancel, 4 * 1024 * 1024)?.stdout)
     }
 
@@ -473,7 +532,8 @@ impl Git {
             return Err(Error::Stale);
         }
         let (filters, standard_lfs) = self.working_filters(root, cancel)?;
-        let mut entries = self.read_worktree_status(root, &filters, false, cancel)?;
+        let mut entries =
+            self.read_worktree_status(root, &filters, false, &BTreeSet::new(), cancel)?;
         if standard_lfs
             && entries
                 .iter()
@@ -492,7 +552,8 @@ impl Git {
         let index_stamp = self.semantic_index(&repository, cancel)?;
         let config_stamp = self.config_stamp(root, cancel)?;
         let (filters, standard_lfs) = self.working_filters(root, cancel)?;
-        let mut entries = self.read_worktree_status(root, &filters, true, cancel)?;
+        let mut entries =
+            self.read_worktree_status(root, &filters, true, &BTreeSet::new(), cancel)?;
         if standard_lfs {
             crate::lfs::normalize(self, root, &mut entries, cancel)?;
         }
@@ -559,15 +620,37 @@ impl Git {
         action: &Action,
         output: Option<OutputCallback>,
     ) -> Result<Completed, Error> {
+        self.execute_working_inner(context, action, output, false)
+    }
+    pub fn execute_working_for_editor(
+        &self,
+        context: &Context,
+        action: &Action,
+        output: Option<OutputCallback>,
+    ) -> Result<Completed, Error> {
+        self.execute_working_inner(context, action, output, true)
+    }
+    fn execute_working_inner(
+        &self,
+        context: &Context,
+        action: &Action,
+        output: Option<OutputCallback>,
+        targeted: bool,
+    ) -> Result<Completed, Error> {
         let _gate = MutationGate::acquire(&context.repository.common_directory, false)?;
         let cancel = Cancellation::default();
         let root = &context.repository.worktree;
-        let fresh = self.inspect(root, &cancel)?;
-        if fresh.identity != context.repository.identity
-            || fresh.branch != context.repository.branch
-            || fresh.head != context.repository.head
-            || fresh.operations != context.repository.operations
-            || self.semantic_index(&fresh, &cancel)? != context.index_stamp
+        let reviewed = &context.repository;
+        if !self.current_index_target(reviewed, &cancel)? {
+            return Err(Error::Stale);
+        }
+        let targets = if targeted {
+            index_targets(context, action)
+        } else {
+            BTreeSet::new()
+        };
+        let (index_stamp, outside) = self.index_stamps(reviewed, &targets, &cancel)?;
+        if index_stamp != context.index_stamp
             || self.config_stamp(root, &cancel)? != context.config_stamp
         {
             return Err(Error::Stale);
@@ -578,7 +661,8 @@ impl Git {
                 if preview.context.repository.identity != context.repository.identity
                     || preview.context.index_stamp != context.index_stamp
                     || preview.context.repository.head != context.repository.head
-                    || !context.entries.contains(&preview.change)
+                    || context.change(preview.change.group, &preview.change.path)
+                        != Some(&preview.change)
                 {
                     return Err(Error::HunkStale);
                 }
@@ -618,19 +702,16 @@ impl Git {
                         command: checked,
                         commit: None,
                         updated: self.working_copy(root, &cancel),
+                        needs_full_scan: false,
                     });
                 }
-                let latest = self.inspect(root, &cancel)?;
-                if self.semantic_index(&latest, &cancel)? != context.index_stamp
+                if !self.current_index_target(reviewed, &cancel)?
+                    || self.semantic_index(reviewed, &cancel)? != context.index_stamp
                     || crate::diff::content_stamp(root, &preview.change.path, &cancel)?
                         != preview.content_stamp
                     || self.hunk_attributes(root, &preview.change.path, &cancel)?.1
                         != preview.attribute_stamp
                     || self.config_stamp(root, &cancel)? != context.config_stamp
-                    || latest.identity != fresh.identity
-                    || latest.head != fresh.head
-                    || latest.branch != fresh.branch
-                    || latest.operations != fresh.operations
                 {
                     return Err(Error::HunkStale);
                 }
@@ -641,7 +722,7 @@ impl Git {
                 let unstage = matches!(action, Action::Unstage(_));
                 if entries.is_empty()
                     || entries.iter().any(|e| {
-                        !context.entries.contains(e)
+                        context.change(e.group, &e.path) != Some(e)
                             || if unstage {
                                 e.group != Group::Staged
                             } else {
@@ -668,7 +749,7 @@ impl Git {
                 }
                 let mut args = if !unstage {
                     vec!["add".into(), "--all".into()]
-                } else if let Some(head) = &fresh.head {
+                } else if let Some(head) = &reviewed.head {
                     vec![
                         "reset".into(),
                         "--quiet".into(),
@@ -687,8 +768,8 @@ impl Git {
                 if message.trim().is_empty() || message.len() > 65536 || message.contains('\0') {
                     return Err(Error::Message);
                 }
-                if !fresh.operations.is_empty() && fresh.operations != ["merge"]
-                    || *amend && (fresh.head.is_none() || !fresh.operations.is_empty())
+                if !reviewed.operations.is_empty() && reviewed.operations != ["merge"]
+                    || *amend && (reviewed.head.is_none() || !reviewed.operations.is_empty())
                 {
                     return Err(Error::Sequence);
                 }
@@ -743,12 +824,71 @@ impl Git {
             None
         };
         // Reconciliation failure never changes a successful command into retryable mutation.
-        let updated = self.working_copy(root, &cancel);
+        let partial = if let Some(outside) = outside
+            && command_succeeded(&command)
+        {
+            self.reconcile_index_paths(context, &targets, &outside, &cancel)
+                .ok()
+                .flatten()
+        } else {
+            None
+        };
+        let needs_full_scan = partial.is_some();
+        let updated = match partial {
+            Some(partial) => Ok(partial),
+            None => self.working_copy(root, &cancel).and_then(|updated| {
+                if updated.repository.identity == reviewed.identity {
+                    Ok(updated)
+                } else {
+                    Err(Error::Stale)
+                }
+            }),
+        };
         Ok(Completed {
             command,
             commit,
             updated,
+            needs_full_scan,
         })
+    }
+    fn reconcile_index_paths(
+        &self,
+        context: &Context,
+        targets: &BTreeSet<&str>,
+        prior_outside: &str,
+        cancel: &Cancellation,
+    ) -> Result<Option<Context>, Error> {
+        let reviewed = &context.repository;
+        let root = &reviewed.worktree;
+        let (after, outside) = self.index_stamps(reviewed, targets, cancel)?;
+        // A hook can stage another file. Only a full read may adopt that index.
+        if outside.as_deref() != Some(prior_outside) {
+            return Ok(None);
+        }
+        let mut actual =
+            self.read_worktree_status(root, &context.filters, true, targets, cancel)?;
+        if context.standard_lfs {
+            crate::lfs::normalize(self, root, &mut actual, cancel)?;
+        }
+        if actual
+            .iter()
+            .any(|entry| !ordinary_modification(entry) || !targets.contains(entry.path.as_str()))
+            || self.semantic_index(reviewed, cancel)? != after
+            || self.config_stamp(root, cancel)? != context.config_stamp
+            || !self.current_index_target(reviewed, cancel)?
+        {
+            return Ok(None);
+        }
+        let mut updated = context.clone();
+        updated
+            .entries
+            .retain(|entry| !targets.contains(entry.path.as_str()));
+        updated.entries.extend(actual);
+        updated
+            .entries
+            .sort_by(|a, b| a.group.cmp(&b.group).then(a.path.cmp(&b.path)));
+        updated.index_stamp = after;
+        Ok(Some(updated))
     }
     pub fn working_diff(
         &self,
