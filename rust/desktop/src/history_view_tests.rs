@@ -160,6 +160,83 @@ fn measure_repository_navigation() {
 }
 
 #[test]
+#[ignore = "requires disposable Windows navigation benchmark repositories"]
+fn measure_local_changes() {
+    let fixtures = PathBuf::from(std::env::var_os("SHOVEL_NAVIGATION_FIXTURES").unwrap());
+    let mut git = Git::discover(None, &Cancellation::default()).unwrap();
+    git.environment.insert(
+        "GIT_CONFIG_GLOBAL".into(),
+        Some(fixtures.join("gitconfig").into_os_string()),
+    );
+    git.environment
+        .insert("GIT_CONFIG_NOSYSTEM".into(), Some("1".into()));
+    let git = Arc::new(git);
+    let ctx = egui::Context::default();
+    let mut measurements = Vec::new();
+    for name in ["Small", "Merge-20k"] {
+        for sample in 0..5 {
+            let profile = tempfile::tempdir().unwrap();
+            let mut app = workspace();
+            app.tabs.clear();
+            app.git = Some(git.clone());
+            app.initialized = false;
+            app.settings
+                .set("AutoFetchEnabled", serde_json::json!(false));
+            app.settings
+                .set("CommitInWorkspace", serde_json::json!(true));
+            app.draft_store = Some(shovel_core::drafts::Store {
+                directory: profile.path().join("drafts"),
+                legacy_directory: None,
+            });
+            let root = fixtures.join(name);
+            app.open(root.clone(), &ctx);
+            wait(&mut app, &ctx);
+            let until = |app: &mut Workspace, ready: &dyn Fn(&Workspace) -> bool| {
+                let started = Instant::now();
+                loop {
+                    app.receive(&ctx);
+                    if ready(app) {
+                        break;
+                    }
+                    assert!(started.elapsed() < Duration::from_secs(20));
+                    thread::sleep(Duration::from_millis(5));
+                }
+            };
+            until(&mut app, &|app| app.read_workers.idle());
+            let started = Instant::now();
+            app.open_commit();
+            paint(&mut app, &ctx, vec![]);
+            let layout = started.elapsed();
+            until(&mut app, &|app| app.editors[0].current_context().is_some());
+            paint(&mut app, &ctx, vec![]);
+            let ready = started.elapsed();
+            let first = app.editors[0].context.clone().unwrap();
+
+            let started = Instant::now();
+            app.refresh(&ctx);
+            until(&mut app, &|app| {
+                app.editors[0].context.as_ref().is_some_and(|fresh| !Arc::ptr_eq(fresh, &first))
+            });
+            paint(&mut app, &ctx, vec![]);
+            let refreshed = app.editors[0].context.as_ref().unwrap();
+            assert_eq!(refreshed.entries, first.entries);
+            assert_eq!(refreshed.index_stamp, first.index_stamp);
+            assert_eq!(refreshed.config_stamp, first.config_stamp);
+            assert_eq!(refreshed.repository.head, first.repository.head);
+            measurements.push(serde_json::json!({
+                "repository": name,
+                "sample": sample,
+                "layout_ms": layout.as_secs_f64() * 1000.,
+                "first_status_ms": ready.as_secs_f64() * 1000.,
+                "refresh_ms": started.elapsed().as_secs_f64() * 1000.,
+                "changes": first.entries.len(),
+            }));
+        }
+    }
+    println!("{}", serde_json::to_string(&measurements).unwrap());
+}
+
+#[test]
 fn interrupted_page_and_locate_keep_the_visible_history_available() {
     let fixture = Fixture::new();
     let ctx = egui::Context::default();

@@ -353,6 +353,76 @@ pub fn parse_status(bytes: &[u8]) -> Result<Vec<Change>, Error> {
     Ok(entries)
 }
 
+struct BranchStatus<'a> {
+    head: &'a [u8],
+    branch: &'a [u8],
+    rows: &'a [u8],
+}
+
+fn status_branch(mut bytes: &[u8]) -> Result<BranchStatus<'_>, Error> {
+    let mut head = None;
+    let mut branch = None;
+    while bytes.starts_with(b"# ") {
+        let end = bytes
+            .iter()
+            .position(|byte| *byte == 0)
+            .ok_or(Error::Invalid)?;
+        let header = &bytes[..end];
+        if let Some(value) = header.strip_prefix(b"# branch.oid ") {
+            head = Some(value);
+        } else if let Some(value) = header.strip_prefix(b"# branch.head ") {
+            branch = Some(value);
+        }
+        bytes = &bytes[end + 1..];
+    }
+    Ok(BranchStatus {
+        head: head.ok_or(Error::Invalid)?,
+        branch: branch.ok_or(Error::Invalid)?,
+        rows: bytes,
+    })
+}
+
+fn filter_overrides<'a>(
+    records: impl Iterator<Item = &'a [u8]>,
+) -> Result<(Vec<OsString>, bool), Error> {
+    let mut args = Vec::new();
+    let mut lfs_process = false;
+    let mut lfs_clean = false;
+    let mut size = 0;
+    for record in records {
+        let key = record.split(|byte| *byte == b'\n').next().unwrap();
+        let Some(driver_key) = key.strip_prefix(b"filter.") else {
+            continue;
+        };
+        if ![b".clean".as_slice(), b".process", b".required"]
+            .iter()
+            .any(|suffix| driver_key.ends_with(suffix))
+        {
+            continue;
+        }
+        size += record.len() + 1;
+        if size > 256 * 1024 {
+            return Err(Error::Limit);
+        }
+        let item = std::str::from_utf8(record).map_err(|_| Error::Invalid)?;
+        let (key, value) = item.split_once('\n').unwrap_or((item, "true"));
+        if key.eq_ignore_ascii_case("filter.lfs.process") {
+            lfs_process = value == "git-lfs filter-process";
+        }
+        if key.eq_ignore_ascii_case("filter.lfs.clean") {
+            lfs_clean = value == "git-lfs clean -- %f";
+        }
+        args.push("-c".into());
+        let value = if key.ends_with(".required") {
+            "false"
+        } else {
+            ""
+        };
+        args.push(format!("{key}={value}").into());
+    }
+    Ok((args, lfs_process && lfs_clean))
+}
+
 impl Git {
     pub fn semantic_index(
         &self,
@@ -448,60 +518,49 @@ impl Git {
             git::require(result)?;
             return Err(Error::Invalid);
         }
-        let mut args = Vec::new();
-        let mut lfs_process = false;
-        let mut lfs_clean = false;
-        for item in std::str::from_utf8(&result.stdout)
-            .map_err(|_| Error::Invalid)?
-            .split('\0')
-            .filter(|s| !s.is_empty())
-        {
-            let (key, value) = item.split_once('\n').ok_or(Error::Invalid)?;
-            if !key.starts_with("filter.")
-                || ![".clean", ".process", ".required"]
-                    .iter()
-                    .any(|suffix| key.ends_with(suffix))
-            {
-                return Err(Error::Invalid);
-            }
-            if key.eq_ignore_ascii_case("filter.lfs.process") {
-                lfs_process = value == "git-lfs filter-process";
-            }
-            if key.eq_ignore_ascii_case("filter.lfs.clean") {
-                lfs_clean = value == "git-lfs clean -- %f";
-            }
-            args.push("-c".into());
-            args.push(
-                format!(
-                    "{key}={}",
-                    if key.ends_with(".required") {
-                        "false"
-                    } else {
-                        ""
-                    }
-                )
-                .into(),
-            );
-        }
-        Ok((args, lfs_process && lfs_clean))
+        filter_overrides(result.stdout.split(|byte| *byte == 0))
     }
     pub fn config_stamp(&self, root: &Path, cancel: &Cancellation) -> Result<String, Error> {
-        Ok(hash(
-            &self
-                .read(
-                    root,
-                    [
-                        "config",
-                        "--null",
-                        "--list",
-                        "--show-origin",
-                        "--show-scope",
-                    ],
-                    cancel,
-                    4 * 1024 * 1024,
-                )?
-                .stdout,
-        ))
+        Ok(hash(&self.read_config(root, cancel)?))
+    }
+    fn read_config(&self, root: &Path, cancel: &Cancellation) -> Result<Vec<u8>, Error> {
+        Ok(self
+            .read(
+                root,
+                [
+                    "config",
+                    "--null",
+                    "--list",
+                    "--show-origin",
+                    "--show-scope",
+                ],
+                cancel,
+                4 * 1024 * 1024,
+            )?
+            .stdout)
+    }
+    fn working_configuration(
+        &self,
+        root: &Path,
+        cancel: &Cancellation,
+    ) -> Result<(String, Vec<OsString>, bool), Error> {
+        let raw = self.read_config(root, cancel)?;
+        // With both options Git supplies scope, origin, and key/value for
+        // each record. The exact same bytes authorize later config checks.
+        let records = if raw.is_empty() {
+            Vec::new()
+        } else {
+            raw.strip_suffix(b"\0")
+                .ok_or(Error::Invalid)?
+                .split(|byte| *byte == 0)
+                .collect::<Vec<_>>()
+        };
+        let (records, leftover) = records.as_chunks::<3>();
+        if !leftover.is_empty() {
+            return Err(Error::Invalid);
+        }
+        let (filters, standard_lfs) = filter_overrides(records.iter().map(|record| record[2]))?;
+        Ok((hash(&raw), filters, standard_lfs))
     }
     fn read_worktree_status(
         &self,
@@ -511,6 +570,17 @@ impl Git {
         paths: &BTreeSet<&str>,
         cancel: &Cancellation,
     ) -> Result<Vec<Change>, Error> {
+        parse_status(&self.read_status_bytes(root, filters, full, paths, false, cancel)?)
+    }
+    fn read_status_bytes(
+        &self,
+        root: &Path,
+        filters: &[OsString],
+        full: bool,
+        paths: &BTreeSet<&str>,
+        branch_header: bool,
+        cancel: &Cancellation,
+    ) -> Result<Vec<u8>, Error> {
         let mut args = filters.to_vec();
         args.extend(
             [
@@ -528,12 +598,15 @@ impl Git {
                 "--ignore-submodules=dirty",
                 if full { "--renames" } else { "--no-renames" },
                 "--ignored=no",
-                "--",
             ]
             .map(OsString::from),
         );
+        if branch_header {
+            args.extend(["--branch", "--no-ahead-behind"].map(OsString::from));
+        }
+        args.push("--".into());
         args.extend(paths.iter().map(OsString::from));
-        parse_status(&self.read(root, args, cancel, 4 * 1024 * 1024)?.stdout)
+        Ok(self.read(root, args, cancel, 4 * 1024 * 1024)?.stdout)
     }
 
     pub fn has_local_changes(
@@ -563,39 +636,57 @@ impl Git {
     }
 
     pub fn working_copy(&self, root: &Path, cancel: &Cancellation) -> Result<Context, Error> {
-        let repository = self.inspect(root, cancel)?;
-        let index_stamp = self.semantic_index(&repository, cancel)?;
-        let config_stamp = self.config_stamp(root, cancel)?;
-        let (filters, standard_lfs) = self.working_filters(root, cancel)?;
-        let mut entries =
-            self.read_worktree_status(root, &filters, true, &BTreeSet::new(), cancel)?;
-        if standard_lfs {
-            crate::lfs::normalize(self, root, &mut entries, cancel)?;
+        let directories = self.inspect_directories(root, cancel)?;
+        // Both halves use the bounded read lane. Keep repository discovery
+        // ahead of the scan, and only combine status with the branch it saw.
+        let (
+            (repository, head_message),
+            (status_head, status_branch, entries, index_stamp, config_stamp, filters, standard_lfs),
+        ) = std::thread::scope(|scope| {
+            let metadata = std::thread::Builder::new().spawn_scoped(scope, || {
+                let repository = self.inspect_metadata(root, directories.clone(), cancel)?;
+                let head_message = self.working_head_message(root, &repository, cancel)?;
+                Ok::<_, Error>((repository, head_message))
+            })?;
+            let working = (|| {
+                let index_stamp = self.semantic_index(&directories, cancel)?;
+                let (config_stamp, filters, standard_lfs) =
+                    self.working_configuration(root, cancel)?;
+                if identity::read(root)? != directories.identity {
+                    return Err(Error::Stale);
+                }
+                let status =
+                    self.read_status_bytes(root, &filters, true, &BTreeSet::new(), true, cancel)?;
+                let status = status_branch(&status)?;
+                let mut entries = parse_status(status.rows)?;
+                if standard_lfs {
+                    crate::lfs::normalize(self, root, &mut entries, cancel)?;
+                }
+                Ok((
+                    status.head.to_vec(),
+                    status.branch.to_vec(),
+                    entries,
+                    index_stamp,
+                    config_stamp,
+                    filters,
+                    standard_lfs,
+                ))
+            })();
+            let metadata = metadata
+                .join()
+                .map_err(|_| std::io::Error::other("repository metadata worker stopped"));
+            Ok::<_, Error>((metadata??, working?))
+        })?;
+        if status_head != repository.head.as_deref().unwrap_or("(initial)").as_bytes()
+            || status_branch
+                != repository
+                    .branch
+                    .as_deref()
+                    .unwrap_or("(detached)")
+                    .as_bytes()
+        {
+            return Err(Error::Stale);
         }
-        let head_message = if let Some(head) = &repository.head {
-            String::from_utf8_lossy(
-                &self
-                    .read(
-                        root,
-                        [
-                            "log",
-                            "-1",
-                            "--no-show-signature",
-                            "--no-notes",
-                            "--format=%B",
-                            head,
-                            "--",
-                        ],
-                        cancel,
-                        65536,
-                    )?
-                    .stdout,
-            )
-            .trim_end_matches(['\r', '\n'])
-            .to_owned()
-        } else {
-            String::new()
-        };
         let merge_message = if repository.operations == ["merge"] {
             let file = repository.git_directory.join("MERGE_MSG");
             match fs::File::open(file) {
@@ -615,6 +706,7 @@ impl Git {
         };
         if index_stamp != self.semantic_index(&repository, cancel)?
             || identity::read(root)? != repository.identity
+            || git::operation_markers(&repository.git_directory) != repository.operations
         {
             return Err(Error::Stale);
         }
@@ -628,6 +720,33 @@ impl Git {
             filters,
             standard_lfs,
         })
+    }
+    fn working_head_message(
+        &self,
+        root: &Path,
+        repository: &Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<String, Error> {
+        let Some(head) = &repository.head else {
+            return Ok(String::new());
+        };
+        let output = self.read(
+            root,
+            [
+                "log",
+                "-1",
+                "--no-show-signature",
+                "--no-notes",
+                "--format=%B",
+                head,
+                "--",
+            ],
+            cancel,
+            65536,
+        )?;
+        Ok(String::from_utf8_lossy(&output.stdout)
+            .trim_end_matches(['\r', '\n'])
+            .to_owned())
     }
     pub fn execute_working(
         &self,

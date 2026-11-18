@@ -479,20 +479,27 @@ fn standard_lfs_status_hashes_hydrated_content_without_running_helpers() {
     fs::write(root.join(".gitattributes"), "*.asset filter=lfs\n").unwrap();
     command(&git, root, &["add", "--all"]);
     command(&git, root, &["commit", "-m", "pointer"]);
+    fs::write(
+        root.join(".git/fixture-lfs"),
+        "[filter \"lfs\"]\nclean = git-lfs clean -- %f\nprocess = git-lfs filter-process\nrequired\n",
+    )
+    .unwrap();
     command(
         &git,
         root,
-        &["config", "filter.lfs.clean", "git-lfs clean -- %f"],
+        &["config", "--add", "include.path", "fixture-lfs"],
     );
-    command(
-        &git,
-        root,
-        &["config", "filter.lfs.process", "git-lfs filter-process"],
-    );
-    command(&git, root, &["config", "filter.lfs.required", "true"]);
     fs::write(root.join("art.asset"), asset).unwrap();
     let review = git.working_copy(root, &cancel).unwrap();
     assert!(!review.entries.iter().any(|e| e.path == "art.asset"));
+    assert_eq!(
+        review.config_stamp,
+        git.config_stamp(root, &cancel).unwrap()
+    );
+    assert!(
+        !git.has_local_changes(root, Some(&review.repository.identity.fingerprint), &cancel)
+            .unwrap()
+    );
     let mut changed = asset.to_vec();
     changed[0] = b'X';
     fs::write(root.join("art.asset"), changed).unwrap();

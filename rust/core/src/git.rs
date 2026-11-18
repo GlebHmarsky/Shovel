@@ -297,7 +297,11 @@ impl Git {
         let result = process::run(&self.request(root, args, Lifetime::Read, max), cancel, None)?;
         require(result)
     }
-    fn inspect_directories(&self, root: &Path, cancel: &Cancellation) -> Result<Snapshot, Error> {
+    pub(crate) fn inspect_directories(
+        &self,
+        root: &Path,
+        cancel: &Cancellation,
+    ) -> Result<Snapshot, Error> {
         let identity = crate::identity::read(root)?;
         let output = self.read(
             root,
@@ -344,7 +348,14 @@ impl Git {
         })
     }
     pub fn inspect(&self, root: &Path, cancel: &Cancellation) -> Result<Snapshot, Error> {
-        let mut snapshot = self.inspect_directories(root, cancel)?;
+        self.inspect_metadata(root, self.inspect_directories(root, cancel)?, cancel)
+    }
+    pub(crate) fn inspect_metadata(
+        &self,
+        root: &Path,
+        mut snapshot: Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<Snapshot, Error> {
         self.refresh_refs(&mut snapshot, cancel)?;
         snapshot.remotes = lines(&self.read(root, ["remote"], cancel, 256 * 1024)?.stdout);
         if crate::identity::read(root)? != snapshot.identity {

@@ -43,6 +43,21 @@ The three watcher checks, nine history checks, draft preservation and initializa
 
 A command-line launch of the real Windows development executable from `720f3c7` exercised a disposable 301-commit clone and isolated profile. An external file write started a new Git status read in 474 ms, with the history log count unchanged. An external commit reached the history validation trace 793 ms after the Git command returned. On orderly exit, the saved 200-row page contained the new commit at the top and retained the previously selected commit. The trace, profile and receipt are in `Build/navigation-native-watch-fb10a9af`. The tested executable SHA-256 was `A902F5E425705A24379FC862241661AA4AE2DAF04D00801CD64DD48288F84E6F`. This verifies automatic refresh in a running native process. Native tab and dialog interaction timings are still open.
 
+### Shorten the Local Changes scan
+
+After verifying the worktree directories, Shovel reads refs, remotes and the HEAD message concurrently with configuration, index and status. The same effective config response supplies the config digest and filter overrides. The status result identifies its HEAD and branch, and the scan compares both against repository metadata. The final semantic index, repository identity and operation markers must still match before the editor receives a context. [Git status branch headers](https://git-scm.com/docs/git-status#_branch_headers)
+
+Five headless samples per repository used the same two clean disposable fixtures and temporary draft profiles before and after. Each sample opened inline Commit after history and its background reads settled, then explicitly refreshed. A first-frame layout typically took 3–5 ms with warmed egui caches. The table measures fresh context and UI layout, including the stable-index check.
+
+| Headless median | Small before | Small after | Merge-heavy before | Merge-heavy after |
+| --- | ---: | ---: | ---: | ---: |
+| First fresh Local Changes | 1,755 ms | 1,160 ms | 1,907 ms | 1,178 ms |
+| Explicit refresh | 1,771 ms | 1,174 ms | 1,980 ms | 1,039 ms |
+
+New first-status ranges were 1,130–1,395 ms and 943–1,416 ms. New refresh ranges were 908–1,705 ms and 992–1,382 ms. Raw samples are in `Build/navigation-local-changes-before.log` and `Build/navigation-local-changes-after.log`. Repeat with the ignored `measure_local_changes` test. Native dialog timing and busy worktree measurements remain open.
+
+Twenty-two native branch, conflict and working-copy checks and five desktop watcher, draft and layout checks passed. Fixtures exercised unborn, detached, conflicted and linked repositories, the final index check, and included LFS config with a valueless `required` setting. All-target Clippy, `git diff --check` and all 18 bounded smoke checks passed. Smoke took 37.27 seconds on source fingerprint `59607261C4D94F4F9E1EE0CD01E8766134AA08E6131A264A6411038A374AA6B5`.
+
 
 ## Windows Rust 0.51.0 local build checks
 
