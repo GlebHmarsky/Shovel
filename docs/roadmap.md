@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Windows Rust Beta 0.50.18 published
+
+GitHub Actions run `44298385990` published master commit `789be83e899a8fdab2051aedc993347a97f17416`. The public verifier checked the immutable tag, downloaded all seven assets and confirmed the live signed feed exactly matches the versioned release. Anonymous API polling reached GitHub’s rate limit near the end. The final metadata check used the configured GitHub login, and asset downloads were anonymous. Shovel’s native updater independently discovered and verified the exact package and declined an offer for the already-current version. The downloadable installer reports 0.50.18 and has no Authenticode signature. Installed apply and restart are still open. [Release receipt](evidence/rust-beta-0.50.18-publication.json)
+
+The post-release checkpoint adds authenticated metadata reads as an option for the public verifier. All-target Clippy, diff checks and all 18 smoke checks passed in the worktree. The bounded suite took 36.53 seconds on source fingerprint `4D9D506A98585B5875D8C4D13EA10981E558E7C1AB0F7CF1FE4399FC4DA9AC53`.
+
 ## Coordinate Git mutations across Windows sessions
 
 The native guard holds the existing per-session mutex for compatibility with the C# client. It also holds a system-wide mutex so Rust instances can share the same lock across Windows sessions. Each guard requests the rights needed to wait and release, and releases the first mutex if it cannot acquire the second. Fetch retains its separate lane. [Windows kernel object namespaces](https://learn.microsoft.com/en-us/windows/win32/termserv/kernel-object-namespaces)

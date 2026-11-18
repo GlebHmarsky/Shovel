@@ -10,6 +10,8 @@ To finish an interrupted Beta publication, rerun the Windows workflow on the ori
 
 `scripts/Test-RustPublicBeta.ps1` independently checks a completed Beta run and downloads all seven assets. Pass the version, exact source commit, GitHub run ID and the production verifier built with `cargo build --locked -p shovel-core --example verify_update_bundle`. The script verifies the tag, signed feed, package and installer, compares the live alias and writes a receipt under `Build`.
 
+If the GitHub metadata API is rate-limited, pass an existing GitHub login token as a PowerShell SecureString via `-MetadataToken`. Asset downloads use the public endpoints.
+
 Requirements: Windows MSVC build tools, Git for Windows, pinned Rust from rust-toolchain.toml, PowerShell 7.4+, and .NET 10 SDK for the Velopack packaging tool only. The application contains no .NET runtime or C# host.
 
 ```powershell

@@ -1,0 +1,24 @@
+{
+  "Version": "0.50.18",
+  "Channel": "win-rust-beta",
+  "Commit": "789be83e899a8fdab2051aedc993347a97f17416",
+  "ActionsRun": 44298385990,
+  "Release": "https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.18-win-rust-beta",
+  "VerifiedUTC": "2026-11-18T12:13:18.1670717+00:00",
+  "AssetSHA256": {
+    "Shovel-Setup.exe": "57C27EB1B2975FBE5977B951E837C7B75C1396B36B91137C435C553E38DB5791",
+    "ShovelRust-0.50.18-win-rust-beta-full.nupkg": "F5BB26E3AD0D715940B28E3E520296618F8126D5AC1D6AB9E7827D2E6DA64953",
+    "releases.win-rust-beta.json": "AB5F8FDD4E51655DB207618AFE42AEBF34BFBDDF35F5570AFACD9E10BF0BC31A",
+    "releases.win-rust-beta.json.sig": "FEB31391BDA4331C77C8DBD935B38523559301ECFD6A457EBCC253A0D4AD7F47",
+    "release-info.json": "DABC519D4F0FB37C291EF08B8C15309709A6175F06918D88535811C5C58A9FFA",
+    "release-notes.md": "0E40453A5F8DD03D10FF171B06057F63AB1D5F3F7F7C1A4BB52060E0175806FF",
+    "SHA256SUMS.txt": "8F4ADE00ED2FA693517F05B78A16EB771FD05783F79B7C50C0DCB34B059A6D80"
+  },
+  "LiveFeedMatchesVerifiedSignature": true,
+  "InstallerSize": 21695630,
+  "InstallerProductVersion": "0.50.18",
+  "InstallerAuthenticode": "NotSigned",
+  "HostedSourceFingerprint": "2A3F9613F6806193DC31289C3457220F2856F19088801A8FA28FC2BDA9947F10",
+  "NativeUpdaterVerified": true,
+  "InstalledApplyVerified": false
+}

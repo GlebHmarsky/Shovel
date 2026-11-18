@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory)][string]$Version,
     [Parameter(Mandatory)][string]$SourceCommit,
     [Parameter(Mandatory)][long]$ActionsRun,
-    [Parameter(Mandatory)][string]$Verifier
+    [Parameter(Mandatory)][string]$Verifier,
+    [securestring]$MetadataToken
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Get-RustReleasePlan.ps1')
@@ -16,7 +17,12 @@ $verifierPath = (Resolve-Path -LiteralPath $Verifier).Path
 $plan = Get-RustReleasePlan win-rust-beta $Version $SourceCommit master
 $repositoryUrl = "https://github.com/$($plan.Repository)"
 $api = "https://api.github.com/repos/$($plan.Repository)"
-$run = Invoke-RestMethod "$api/actions/runs/$ActionsRun" -TimeoutSec 30
+$metadataAuth = @{}
+if ($MetadataToken) {
+    $metadataAuth.Authentication = 'Bearer'
+    $metadataAuth.Token = $MetadataToken
+}
+$run = Invoke-RestMethod "$api/actions/runs/$ActionsRun" -TimeoutSec 30 @metadataAuth
 if ($run.path -cne '.github/workflows/rust-windows.yml' -or
     $run.head_branch -cne 'master' -or $run.head_sha -cne $SourceCommit -or
     $run.status -cne 'completed' -or $run.conclusion -cne 'success') {
@@ -26,7 +32,7 @@ if (!(Get-RustReleaseTag $root "$repositoryUrl.git" $plan)) {
     throw 'The immutable Beta tag is missing.'
 }
 
-$release = Invoke-RestMethod "$api/releases/tags/$($plan.Tag)" -TimeoutSec 30
+$release = Invoke-RestMethod "$api/releases/tags/$($plan.Tag)" -TimeoutSec 30 @metadataAuth
 $assets = Get-RustReleaseAssetMap $release $plan
 if ($release.draft -or $assets.Count -ne 7) {
     throw 'The public Windows Beta release is incomplete.'
