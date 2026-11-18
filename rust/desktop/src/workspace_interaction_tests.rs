@@ -174,6 +174,69 @@ fn tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop() {
 }
 
 #[test]
+fn restoring_twenty_tabs_keeps_the_last_selected_repository_and_loads_only_its_history() {
+    let fixture = RepositoryFixture::new();
+    let profile = fixture._temp.path().join("profile");
+    let mut store = SettingsStore::new(profile.clone());
+    let mut settings = store.load().unwrap();
+    let candidates: Vec<_> = (0..23)
+        .map(|i| fixture._temp.path().join(format!("other-{i}")))
+        .collect();
+    let mut saved = vec![
+        String::from("relative"),
+        candidates[0].to_string_lossy().replace('\\', "/"),
+    ];
+    saved.extend(candidates.iter().map(|p| p.to_string_lossy().into_owned()));
+    saved.push(fixture.root.to_string_lossy().into_owned());
+    settings.set("RepositoryPaths", serde_json::json!(saved));
+    settings.set(
+        "SelectedRepositoryPath",
+        serde_json::json!(fixture.root.to_string_lossy().to_uppercase()),
+    );
+    settings.set("AutoFetchEnabled", serde_json::json!(false));
+    store.save(&settings).unwrap();
+    let mut store = SettingsStore::new(profile);
+    let restored = store.load().unwrap();
+    let paths = restored.repositories();
+    assert_eq!(paths.len(), 20);
+    assert!(
+        paths[..19]
+            .iter()
+            .zip(&candidates[..19])
+            .all(|(a, b)| Workspace::same_path(a, b))
+    );
+    assert_eq!(paths[19], fixture.root);
+    let ctx = egui::Context::default();
+    let mut app = workspace();
+    app.tabs.clear();
+    app.sender
+        .send(Event::Initialized(
+            Box::new(restored),
+            Box::new(store),
+            Ok((*fixture.git).clone()),
+            None,
+        ))
+        .unwrap();
+    app.receive(&ctx);
+    assert_eq!(app.selected, 19);
+    assert!(
+        app.tabs[..19]
+            .iter()
+            .all(|t| !t.loading && t.history.is_none() && t.error.is_none())
+    );
+    until(&mut app, &ctx, |a| !a.tabs[19].loading);
+    assert_eq!(
+        app.tabs[19].history.as_ref().unwrap().snapshot.worktree,
+        fixture.root
+    );
+    assert!(
+        app.tabs[..19]
+            .iter()
+            .all(|t| t.page.is_none() && t.history.is_none() && t.error.is_none())
+    );
+}
+
+#[test]
 fn duplicate_tab_names_use_the_shortest_distinct_path_and_keep_equal_slots() {
     let mut app = workspace();
     let ctx = egui::Context::default();

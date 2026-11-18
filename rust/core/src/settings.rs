@@ -117,7 +117,13 @@ impl Settings {
             .filter(|n| *n <= 1)
             .unwrap_or(0);
         self.set("Appearance", json!(appearance));
+        let selected = self
+            .get("SelectedRepositoryPath")
+            .and_then(Value::as_str)
+            .map(|p| crate::case::path_key(Path::new(p)));
+        let mut selected_path = None;
         let mut paths = Vec::<String>::new();
+        let mut retained = std::collections::HashSet::new();
         for path in self
             .get("RepositoryPaths")
             .and_then(Value::as_array)
@@ -125,19 +131,29 @@ impl Settings {
             .flatten()
             .filter_map(Value::as_str)
         {
-            if paths.len() == 20 {
-                break;
+            if !Path::new(path).is_absolute() || path.contains('\0') {
+                continue;
             }
-            if Path::new(path).is_absolute()
-                && !path.contains('\0')
-                && !paths
-                    .iter()
-                    .any(|p| p.to_lowercase() == path.to_lowercase())
-            {
-                paths.push(path.to_owned());
+            let key = crate::case::path_key(Path::new(path));
+            let active = selected.as_ref() == Some(&key);
+            if (paths.len() == 20 && !active) || !retained.insert(key) {
+                continue;
+            }
+            if active {
+                selected_path = Some(path.to_owned());
+                if paths.len() == 20 {
+                    paths.pop();
+                }
+            }
+            paths.push(path.to_owned());
+            if paths.len() == 20 && (selected.is_none() || selected_path.is_some()) {
+                break;
             }
         }
         self.set("RepositoryPaths", json!(paths));
+        if let Some(path) = selected_path {
+            self.set("SelectedRepositoryPath", json!(path));
+        }
         for (name, max) in [
             ("NetworkActions", 60),
             ("WindowLayouts", 32),

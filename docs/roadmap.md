@@ -2,6 +2,8 @@
 
 ## Overnight Rust Beta work (2026-11-18)
 
+**Selected tab at the 20-folder restore limit (R15/R17/R19).** A selected repository beyond the first 20 used to disappear on restart. The profile now keeps the first 19 unique folders and the selected one in their original order when necessary. The existing 20-folder cap and saved path spellings are preserved. A fixture saved 24 distinct folders, a path alias and a relative entry to disk. Restarted settings selected the actual last repository and initialized its history alone. Four core settings tests, all-target Clippy, diff checks and 18 smoke checks passed. Smoke took 21.87 seconds on `C4B193D76DC43AD6AF84A63FD0F5C7D5E67859FDA6A56483BE320AFBE7897F1D`.
+
 **Repository tabs after the 0.50.16 release cut (R12/R15).** Folders with matching names show the shortest path that distinguishes them, both on their tabs and in the selected repository header. Names update when membership changes. Each tab also exposes its full path to accessibility. A drag paints a full-slot destination outline and a label beside the pointer throughout the main window. Dropping changes order, and Escape restores it. Opening and restoring use Windows path comparison.
 
 At 900 × 620 logical points, headless tests checked equal widths, case-varied duplicate names, a drive root, accessible paths and label shortening when a sibling closes. A pointer 400 points down the window produced a repository label there and a full-width outline on the destination tab. They disappeared on release or cancellation. Nine tab regressions, all-target Clippy, diff checks and all 18 smoke checks passed. Smoke took 18.66 seconds on `662AD5B16AD84F7D154F1891115825FD78018EF6E9207004CD22FFD6A4EE929F`. Physical mouse and screen-reader acceptance remain open.
