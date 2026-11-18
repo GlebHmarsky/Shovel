@@ -104,6 +104,8 @@ fn measure_stage_unstage_rows_and_selected_diff() {
                 .execute_working_for_editor(&context, &action, None)
                 .unwrap();
             let command_ms = result.command.elapsed.as_secs_f64() * 1000.0;
+            let validation_ms = result.validation_elapsed.as_secs_f64() * 1000.0;
+            let reconciliation_ms = result.reconciliation_elapsed.as_secs_f64() * 1000.0;
             assert!(result.succeeded());
             assert!(result.needs_full_scan);
             context = result.updated.unwrap();
@@ -118,7 +120,7 @@ fn measure_stage_unstage_rows_and_selected_diff() {
             assert_eq!(full.entries, context.entries);
             assert_eq!(full.index_stamp, context.index_stamp);
             println!(
-                "sample={sample} action={name} command_ms={command_ms:.1} rows_ms={rows_ms:.1} diff_ms={diff_ms:.1} wider_ms={full_ms:.1}"
+                "sample={sample} action={name} validation_ms={validation_ms:.1} command_ms={command_ms:.1} reconciliation_ms={reconciliation_ms:.1} rows_ms={rows_ms:.1} diff_ms={diff_ms:.1} wider_ms={full_ms:.1}"
             );
         }
     }

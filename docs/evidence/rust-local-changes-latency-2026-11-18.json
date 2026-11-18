@@ -1,0 +1,236 @@
+{
+  "date": "2026-11-18",
+  "profile": "Windows x64 Cargo test (unoptimized), native Git, headless",
+  "git": "git version 2.51.1.windows.1",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "fixture": {
+    "trackedTextFiles": 2000,
+    "localBranches": 1001,
+    "unchangedAssets": 64,
+    "bytesPerAsset": 4194304,
+    "assetTimestampsInvalidated": true,
+    "samplesPerAction": 3
+  },
+  "unit": "milliseconds",
+  "measurements": {
+    "before": {
+      "source": "1ef74af9f29e1a31be3b0334e4f5f267b46c71cc plus timing fixture",
+      "samples": [
+        {
+          "sample": 1,
+          "action": "stage",
+          "command_ms": 93.1,
+          "rows_ms": 2346.4,
+          "diff_ms": 3162.5
+        },
+        {
+          "sample": 1,
+          "action": "unstage",
+          "command_ms": 84.4,
+          "rows_ms": 2269.8,
+          "diff_ms": 2828.5
+        },
+        {
+          "sample": 2,
+          "action": "stage",
+          "command_ms": 81.5,
+          "rows_ms": 2293.8,
+          "diff_ms": 3107.7
+        },
+        {
+          "sample": 2,
+          "action": "unstage",
+          "command_ms": 79.4,
+          "rows_ms": 2377.5,
+          "diff_ms": 2974.5
+        },
+        {
+          "sample": 3,
+          "action": "stage",
+          "command_ms": 88.1,
+          "rows_ms": 2196.0,
+          "diff_ms": 2917.1
+        },
+        {
+          "sample": 3,
+          "action": "unstage",
+          "command_ms": 146.1,
+          "rows_ms": 2306.2,
+          "diff_ms": 2866.2
+        }
+      ]
+    },
+    "targeted": {
+      "source": "9b0e50c28f0485cdc2c6655c7ac34b204bcda251",
+      "samples": [
+        {
+          "sample": 1,
+          "action": "stage",
+          "command_ms": 93.9,
+          "rows_ms": 1062.1,
+          "diff_ms": 1844.2,
+          "wider_ms": 1599.9
+        },
+        {
+          "sample": 1,
+          "action": "unstage",
+          "command_ms": 92.5,
+          "rows_ms": 1102.1,
+          "diff_ms": 1716.8,
+          "wider_ms": 1633.0
+        },
+        {
+          "sample": 2,
+          "action": "stage",
+          "command_ms": 86.9,
+          "rows_ms": 999.8,
+          "diff_ms": 1726.5,
+          "wider_ms": 1538.9
+        },
+        {
+          "sample": 2,
+          "action": "unstage",
+          "command_ms": 88.0,
+          "rows_ms": 1085.3,
+          "diff_ms": 1688.2,
+          "wider_ms": 1615.6
+        },
+        {
+          "sample": 3,
+          "action": "stage",
+          "command_ms": 88.5,
+          "rows_ms": 1049.7,
+          "diff_ms": 1858.6,
+          "wider_ms": 1460.1
+        },
+        {
+          "sample": 3,
+          "action": "unstage",
+          "command_ms": 85.5,
+          "rows_ms": 1005.1,
+          "diff_ms": 1552.4,
+          "wider_ms": 1514.1
+        }
+      ]
+    },
+    "overlapped_first": {
+      "source": "2b67e92959606d3dead6d09d168cfe6911ecdbed plus overlapped validation",
+      "samples": [
+        {
+          "sample": 1,
+          "action": "stage",
+          "command_ms": 85.8,
+          "rows_ms": 743.0,
+          "diff_ms": 1481.5,
+          "wider_ms": 1483.2
+        },
+        {
+          "sample": 1,
+          "action": "unstage",
+          "command_ms": 79.8,
+          "rows_ms": 707.1,
+          "diff_ms": 1267.3,
+          "wider_ms": 1481.1
+        },
+        {
+          "sample": 2,
+          "action": "stage",
+          "command_ms": 85.8,
+          "rows_ms": 837.7,
+          "diff_ms": 1612.6,
+          "wider_ms": 1488.3
+        },
+        {
+          "sample": 2,
+          "action": "unstage",
+          "command_ms": 79.5,
+          "rows_ms": 751.5,
+          "diff_ms": 1330.7,
+          "wider_ms": 1505.7
+        },
+        {
+          "sample": 3,
+          "action": "stage",
+          "command_ms": 88.5,
+          "rows_ms": 760.2,
+          "diff_ms": 1610.9,
+          "wider_ms": 1564.7
+        },
+        {
+          "sample": 3,
+          "action": "unstage",
+          "command_ms": 77.2,
+          "rows_ms": 719.1,
+          "diff_ms": 1288.3,
+          "wider_ms": 1498.6
+        }
+      ]
+    },
+    "overlapped_final": {
+      "source": "D28FEC80B8CCFC8DA555D9EF175AD91F06F2205FF1A5F761B0C1DD50649C4475",
+      "samples": [
+        {
+          "sample": 1,
+          "action": "stage",
+          "validation_ms": 258.4,
+          "command_ms": 85.7,
+          "reconciliation_ms": 404.6,
+          "rows_ms": 748.8,
+          "diff_ms": 1471.9,
+          "wider_ms": 1458.3
+        },
+        {
+          "sample": 1,
+          "action": "unstage",
+          "validation_ms": 254.0,
+          "command_ms": 81.6,
+          "reconciliation_ms": 410.7,
+          "rows_ms": 746.4,
+          "diff_ms": 1296.5,
+          "wider_ms": 1446.1
+        },
+        {
+          "sample": 2,
+          "action": "stage",
+          "validation_ms": 246.1,
+          "command_ms": 84.4,
+          "reconciliation_ms": 455.8,
+          "rows_ms": 786.4,
+          "diff_ms": 1505.1,
+          "wider_ms": 1572.7
+        },
+        {
+          "sample": 2,
+          "action": "unstage",
+          "validation_ms": 243.2,
+          "command_ms": 76.1,
+          "reconciliation_ms": 410.9,
+          "rows_ms": 730.3,
+          "diff_ms": 1278.4,
+          "wider_ms": 1433.7
+        },
+        {
+          "sample": 3,
+          "action": "stage",
+          "validation_ms": 230.0,
+          "command_ms": 86.0,
+          "reconciliation_ms": 398.6,
+          "rows_ms": 714.7,
+          "diff_ms": 1503.5,
+          "wider_ms": 1544.4
+        },
+        {
+          "sample": 3,
+          "action": "unstage",
+          "validation_ms": 256.9,
+          "command_ms": 80.9,
+          "reconciliation_ms": 420.9,
+          "rows_ms": 758.7,
+          "diff_ms": 1423.9,
+          "wider_ms": 1490.6
+        }
+      ]
+    }
+  },
+  "limits": "One machine. The wider scan was measured separately after the selected diff. Native desktop latency, p95, other change types and paired installed C# benchmarks remain open."
+}

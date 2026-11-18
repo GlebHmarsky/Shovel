@@ -39,8 +39,7 @@ impl PushReport {
         let pushed = authenticate()
             .and_then(|auth| git.push_created_commit(context, commit, target, Some(&auth)));
         // A native pre-push hook can change the index or worktree.
-        completed.updated =
-            git.working_copy(&context.repository.worktree, &Cancellation::default());
+        completed.updated = git.refresh_working_copy(&context.repository, &Cancellation::default());
         Self::from_result(commit, pushed)
     }
     fn failed(commit: &str, reason: &str) -> Self {

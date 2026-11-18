@@ -14,6 +14,7 @@ use std::{
     io::Read,
     os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 use windows_sys::Win32::{Foundation::*, System::Threading::*};
 
@@ -112,6 +113,8 @@ pub struct Completed {
     pub updated: Result<Context, Error>,
     /// A verified path-limited result is usable while the editor refreshes other rows.
     pub needs_full_scan: bool,
+    pub validation_elapsed: Duration,
+    pub reconciliation_elapsed: Duration,
 }
 impl Completed {
     pub fn succeeded(&self) -> bool {
@@ -622,6 +625,17 @@ impl Git {
     ) -> Result<Completed, Error> {
         self.execute_working_inner(context, action, output, false)
     }
+    pub fn refresh_working_copy(
+        &self,
+        reviewed: &Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<Context, Error> {
+        let updated = self.working_copy(&reviewed.worktree, cancel)?;
+        if updated.repository.identity != reviewed.identity {
+            return Err(Error::Stale);
+        }
+        Ok(updated)
+    }
     pub fn execute_working_for_editor(
         &self,
         context: &Context,
@@ -637,22 +651,18 @@ impl Git {
         output: Option<OutputCallback>,
         targeted: bool,
     ) -> Result<Completed, Error> {
+        let started = Instant::now();
         let _gate = MutationGate::acquire(&context.repository.common_directory, false)?;
         let cancel = Cancellation::default();
         let root = &context.repository.worktree;
         let reviewed = &context.repository;
-        if !self.current_index_target(reviewed, &cancel)? {
-            return Err(Error::Stale);
-        }
         let targets = if targeted {
             index_targets(context, action)
         } else {
             BTreeSet::new()
         };
-        let (index_stamp, outside) = self.index_stamps(reviewed, &targets, &cancel)?;
-        if index_stamp != context.index_stamp
-            || self.config_stamp(root, &cancel)? != context.config_stamp
-        {
+        let (index_stamp, outside) = self.validated_index(context, &targets, &cancel)?;
+        if index_stamp != context.index_stamp {
             return Err(Error::Stale);
         }
         let mut input = Vec::new();
@@ -696,13 +706,18 @@ impl Git {
                 check.extend(["--check", "--", "-"].map(OsString::from));
                 let mut request = self.request(root, check, Lifetime::Read, 1024 * 1024);
                 request.input = input.clone();
+                let validation_elapsed = started.elapsed();
                 let checked = process::run(&request, &cancel, output.clone())?;
                 if !checked.success() {
+                    let reconciling = Instant::now();
+                    let updated = self.refresh_working_copy(reviewed, &cancel);
                     return Ok(Completed {
                         command: checked,
                         commit: None,
-                        updated: self.working_copy(root, &cancel),
+                        updated,
                         needs_full_scan: false,
+                        validation_elapsed,
+                        reconciliation_elapsed: reconciling.elapsed(),
                     });
                 }
                 if !self.current_index_target(reviewed, &cancel)?
@@ -817,7 +832,9 @@ impl Git {
         request
             .environment
             .insert("GIT_EDITOR".into(), Some("false".into()));
+        let validation_elapsed = started.elapsed();
         let command = process::run(&request, &cancel, output)?;
+        let reconciling = Instant::now();
         let commit = if matches!(action, Action::Commit { .. }) {
             created_commit(&command)
         } else {
@@ -836,19 +853,15 @@ impl Git {
         let needs_full_scan = partial.is_some();
         let updated = match partial {
             Some(partial) => Ok(partial),
-            None => self.working_copy(root, &cancel).and_then(|updated| {
-                if updated.repository.identity == reviewed.identity {
-                    Ok(updated)
-                } else {
-                    Err(Error::Stale)
-                }
-            }),
+            None => self.refresh_working_copy(reviewed, &cancel),
         };
         Ok(Completed {
             command,
             commit,
             updated,
             needs_full_scan,
+            validation_elapsed,
+            reconciliation_elapsed: reconciling.elapsed(),
         })
     }
     fn reconcile_index_paths(
@@ -873,9 +886,7 @@ impl Git {
         if actual
             .iter()
             .any(|entry| !ordinary_modification(entry) || !targets.contains(entry.path.as_str()))
-            || self.semantic_index(reviewed, cancel)? != after
-            || self.config_stamp(root, cancel)? != context.config_stamp
-            || !self.current_index_target(reviewed, cancel)?
+            || self.validated_index(context, &BTreeSet::new(), cancel)?.0 != after
         {
             return Ok(None);
         }
@@ -889,6 +900,40 @@ impl Git {
             .sort_by(|a, b| a.group.cmp(&b.group).then(a.path.cmp(&b.path)));
         updated.index_stamp = after;
         Ok(Some(updated))
+    }
+    fn validated_index(
+        &self,
+        context: &Context,
+        targets: &BTreeSet<&str>,
+        cancel: &Cancellation,
+    ) -> Result<(String, Option<String>), Error> {
+        let reviewed = &context.repository;
+        let root = &reviewed.worktree;
+        if identity::read(root)? != reviewed.identity {
+            return Err(Error::Stale);
+        }
+        // These reads are independent. Both use normal process admission, and
+        // the mutation gate stays on the owning thread until they have joined.
+        std::thread::scope(|scope| {
+            let head = std::thread::Builder::new()
+                .spawn_scoped(scope, || self.current_index_target(reviewed, cancel))?;
+            let index = self
+                .index_stamps(reviewed, targets, cancel)
+                .and_then(|index| {
+                    if self.config_stamp(root, cancel)? == context.config_stamp {
+                        Ok(index)
+                    } else {
+                        Err(Error::Stale)
+                    }
+                });
+            let matches = head
+                .join()
+                .map_err(|_| std::io::Error::other("repository validation worker stopped"))??;
+            if !matches || identity::read(root)? != reviewed.identity {
+                return Err(Error::Stale);
+            }
+            index
+        })
     }
     pub fn working_diff(
         &self,
