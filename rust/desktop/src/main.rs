@@ -1029,7 +1029,7 @@ impl Workspace {
             if editor.poll(ctx) {
                 changed.push(editor.path.clone());
             }
-            if let Some(context) = &editor.context {
+            if let Some(context) = editor.current_context() {
                 // Commit can finish its independent scan before history. Bind
                 // waiting requests now, before its controls can submit mutations.
                 self.operations.bind_initialization(

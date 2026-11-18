@@ -2,12 +2,7 @@ use super::*;
 use shovel_core::{operation, patches};
 impl Editor {
     pub(super) fn begin_patch(&mut self, selected: file_menu::Selection, ctx: &egui::Context) {
-        if self.action_busy()
-            || !self
-                .context
-                .as_ref()
-                .is_some_and(|c| Arc::ptr_eq(c, &selected.context))
-        {
+        if self.action_busy() || !self.file_selection_current(&selected) {
             self.status = Some(text("FileMenuStale"));
             return;
         }
@@ -32,12 +27,7 @@ impl Editor {
             self.status = Some(text("RustPatchNotSaved"));
             return;
         };
-        if !self
-            .context
-            .as_ref()
-            .is_some_and(|c| Arc::ptr_eq(c, &selected.context))
-            || self.action_busy()
-        {
+        if !self.file_selection_current(&selected) || self.action_busy() {
             self.status = Some(text("FileMenuStale"));
             return;
         }

@@ -79,6 +79,7 @@ pub struct Editor {
     receiver: Receiver<Event>,
     initialized: bool,
     loading: bool,
+    snapshot_error: Option<String>,
     refresh_pending: bool,
     generation: u64,
     diff_generation: u64,
@@ -157,6 +158,7 @@ impl Editor {
             receiver,
             initialized: false,
             loading: false,
+            snapshot_error: None,
             refresh_pending: false,
             generation: 0,
             diff_generation: 0,
@@ -201,6 +203,11 @@ impl Editor {
             && (!self.initialized || self.draft_loaded)
             && self.draft_error.is_none()
             && !self.inspector.as_ref().is_some_and(|v| v.open || v.busy)
+    }
+    pub fn current_context(&self) -> Option<&Context> {
+        self.context
+            .as_deref()
+            .filter(|_| self.snapshot_error.is_none())
     }
     pub fn activate(&mut self) {
         self.open = true;
@@ -338,7 +345,7 @@ impl Editor {
         }
     }
     fn open_conflict(&mut self) {
-        if self.action_busy() || self.loading {
+        if self.action_busy() || self.loading || self.snapshot_error.is_some() {
             return;
         }
         let Some(context) = self.context.clone() else {
@@ -521,7 +528,7 @@ impl Editor {
                     self.loading = false;
                     match *result {
                         Ok(context) => self.apply(context, ctx),
-                        Err(error) => self.status = Some(error_text(error)),
+                        Err(error) => self.snapshot_error = Some(error_text(error)),
                     }
                 }
                 Event::Diff(generation, result) if generation == self.diff_generation => {
@@ -604,12 +611,7 @@ impl Editor {
             if let Some(result) = refresh.context {
                 match result {
                     Ok(context) => self.apply(context, ctx),
-                    Err(error) => {
-                        self.status = Some(format!(
-                            "{}\n{error}",
-                            self.status.as_deref().unwrap_or_default()
-                        ))
-                    }
+                    Err(error) => self.failed_reinspection(error),
                 }
             }
         }
@@ -640,7 +642,15 @@ impl Editor {
         }
         std::mem::take(&mut self.refresh_history)
     }
+    fn failed_reinspection(&mut self, detail: String) {
+        self.status = Some(match self.status.take() {
+            Some(outcome) => format!("{outcome}\n{detail}"),
+            None => detail.clone(),
+        });
+        self.snapshot_error = Some(detail);
+    }
     fn apply(&mut self, context: Context, ctx: &egui::Context) {
+        self.snapshot_error = None;
         let resolved_path = self
             .conflict
             .as_ref()
@@ -902,6 +912,19 @@ impl Editor {
                     ui.label(status);
                 }
             });
+            if let Some(error) = &self.snapshot_error {
+                let message = if self.context.is_some() {
+                    "CommitPreviousStatus"
+                } else {
+                    "CommitStatusUnavailable"
+                };
+                let title = egui::RichText::new(text(message)).color(ui.visuals().error_fg_color);
+                egui::CollapsingHeader::new(title).show(ui, |ui| {
+                    egui::ScrollArea::vertical().max_height(100.).show(ui, |ui| {
+                        ui.add(egui::Label::new(error).selectable(true).wrap());
+                    });
+                });
+            }
         });
         let message = egui::Panel::bottom(if self.inline {
             "inline_commit_message"
@@ -1146,7 +1169,8 @@ impl Editor {
         self.files_width = files.response.rect.width();
         egui::CentralPanel::default().show(ui, |ui| {
             if let Some(pane) = &mut self.conflict {
-                ui.add_enabled_ui(!self.busy && !self.loading, |ui| pane.show(ui));
+                let ready = !self.busy && !self.loading && self.snapshot_error.is_none();
+                ui.add_enabled_ui(ready, |ui| pane.show(ui));
                 return;
             }
             if let Some(entry) = &self.focused {
@@ -1154,7 +1178,7 @@ impl Editor {
                 if entry.group == Group::Conflicted
                     && ui
                         .add_enabled(
-                            !self.action_busy() && !self.loading,
+                            !self.action_busy() && !self.loading && self.snapshot_error.is_none(),
                             egui::Button::new(text("ConflictOpen")),
                         )
                         .clicked()
@@ -1181,7 +1205,8 @@ impl Editor {
             if let Some(error) = &self.diff_error {
                 ui.colored_label(ui.visuals().error_fg_color, error);
             } else if let Some(diff) = &self.diff {
-                if let Some(ids) = self.diff_view.show(ui, diff, !self.busy && !self.loading)
+                let ready = !self.busy && !self.loading && self.snapshot_error.is_none();
+                if let Some(ids) = self.diff_view.show(ui, diff, ready)
                     && let Some(preview) = diff.hunks.clone()
                 {
                     self.submit(Action::Hunks { preview, ids }, &ctx);
@@ -1279,12 +1304,7 @@ mod queue_tests;
 #[path = "commit_shell.rs"]
 mod shell;
 fn error_text(error: working::Error) -> String {
-    match error {
-        working::Error::Git(shovel_core::git::Error::Command { output, .. }) => {
-            format!("{}\n{output}", text("ActionReadFailed"))
-        }
-        other => text(&other.to_string()),
-    }
+    crate::operations::error_log(&error.into())
 }
 
 #[cfg(test)]

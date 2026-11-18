@@ -7,12 +7,7 @@ impl Editor {
         explorer: bool,
         ctx: &egui::Context,
     ) {
-        if self.action_busy()
-            || !self
-                .context
-                .as_ref()
-                .is_some_and(|c| Arc::ptr_eq(c, &selection.context))
-        {
+        if self.action_busy() || !self.file_selection_current(&selection) {
             self.status = Some(text("FileMenuStale"));
             return;
         }

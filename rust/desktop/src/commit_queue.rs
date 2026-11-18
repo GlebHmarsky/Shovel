@@ -148,7 +148,7 @@ impl Editor {
             || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
     }
     pub(super) fn working_ready(&self) -> bool {
-        self.context.is_some()
+        self.current_context().is_some()
             && !self.working_blocked()
             && (!self.loading || self.has_working_queue())
     }
@@ -340,16 +340,13 @@ impl Editor {
                 }
                 match result.updated {
                     Ok(context) => self.apply(context, ctx),
-                    Err(error) => {
-                        self.status = Some(format!(
-                            "{}\n{}",
-                            self.status.as_deref().unwrap_or_default(),
-                            crate::operations::error_log(&error.into())
-                        ))
-                    }
+                    Err(error) => self.failed_reinspection(error_text(error)),
                 }
             }
             Err(error) => {
+                if matches!(error, working::Error::Stale) {
+                    self.snapshot_error = Some(text("CommitStale"));
+                }
                 self.status = Some(error_text(error));
                 self.failed_commit |= submitted.is_some();
             }

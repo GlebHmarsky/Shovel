@@ -64,6 +64,58 @@ struct Harness {
 }
 
 #[test]
+fn failed_status_read_keeps_rows_and_copy_but_requires_refresh_before_writing() {
+    let mut h = Harness::new();
+    h.click("Unstaged · Modified · file.txt");
+    let reviewed = h.editor.context.clone().unwrap();
+    let index = fs::read(h.editor.path.join(".git/index")).unwrap();
+    let good = h.editor.git.clone();
+    let mut missing = (*good).clone();
+    missing.executable = h._temp.path().join("missing-git.exe");
+    h.editor.git = Arc::new(missing);
+    h.key(egui::Key::F5, egui::Modifiers::NONE);
+    h.until(|editor| !editor.loading && editor.snapshot_error.is_some());
+    assert!(Arc::ptr_eq(&reviewed, h.editor.context.as_ref().unwrap()));
+    assert!(h.editor.current_context().is_none() && !h.editor.working_ready());
+    let out = h.render(vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    for key in ["CommitStage", "CommitStageAll", "Commit"] {
+        assert!(nodes.iter().any(|(_, n)| n.label() == Some(text(key).as_str()) && n.is_disabled()));
+    }
+    assert!(nodes.iter().any(|(_, n)| n.label().or(n.value()) == Some(text("CommitPreviousStatus").as_str())));
+    out.drop_without_applying_deltas();
+    h.render(vec![egui::Event::Copy]).drop_without_applying_deltas();
+    assert_eq!(h.copied, ["file.txt"]);
+    h.key(egui::Key::Delete, egui::Modifiers::NONE);
+    assert!(h.editor.file_confirmation.is_none());
+    h.editor.stage(false, true, &h.ctx);
+    assert!(!h.editor.scheduler.has_accepted_work());
+    assert_eq!(fs::read(h.editor.path.join(".git/index")).unwrap(), index);
+    h.editor.git = good;
+    h.key(egui::Key::F5, egui::Modifiers::NONE);
+    h.until(|editor| editor.working_ready());
+    assert!(!Arc::ptr_eq(&reviewed, h.editor.context.as_ref().unwrap()));
+    assert!(h.editor.snapshot_error.is_none());
+    h.click(&text("CommitStage"));
+    h.until(|editor| !editor.busy && editor.working_ready());
+    assert!(h.editor.current_context().unwrap().change(Group::Unstaged, "file.txt").is_none());
+    assert!(h.editor.current_context().unwrap().change(Group::Staged, "file.txt").is_some());
+}
+
+#[test]
+fn local_read_errors_bound_and_redact_the_original_git_output() {
+    let error = working::Error::Git(shovel_core::git::Error::Command {
+        outcome: process::Outcome::Exited,
+        code: 1,
+        output: format!("fatal: https://fixture:sample@host.invalid/r?q=sample\n{}", "x".repeat(40_000)),
+    });
+    let message = error_text(error);
+    assert!(message.contains("fatal: https://[redacted]@host.invalid/r?[redacted]"));
+    assert!(!message.contains("sample"));
+    assert!(message.chars().count() <= 32769 + text("ActionReadFailed").chars().count());
+}
+
+#[test]
 fn native_copy_event_and_full_path_shortcut_follow_the_focused_file_list() {
     let mut h = Harness::new();
     h.click("Unstaged · Modified · file.txt");

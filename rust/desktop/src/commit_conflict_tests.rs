@@ -145,17 +145,7 @@ impl Harness {
     }
     fn open(&mut self) {
         self.until(|e| e.draft_loaded && e.context.is_some() && !e.loading);
-        let change = self
-            .editor
-            .context
-            .as_ref()
-            .unwrap()
-            .entries
-            .iter()
-            .find(|e| e.path == "conflict.txt")
-            .unwrap()
-            .clone();
-        self.click(&format!("{}  {}", change.code, change.path));
+        self.click("Conflicted · Unmerged · conflict.txt");
         self.click(&text("ConflictOpen"));
         assert!(self.editor.conflict.is_some());
         self.until(|e| {
@@ -237,17 +227,7 @@ fn typed_text_survives_cancelled_navigation_failed_stage_and_exit_confirmation()
     let mut h = Harness::new();
     h.open();
     h.edit("resolved by editor\n");
-    let change = h
-        .editor
-        .context
-        .as_ref()
-        .unwrap()
-        .entries
-        .iter()
-        .find(|e| e.path == "other.txt")
-        .unwrap()
-        .clone();
-    h.click(&format!("{}  {}", change.code, change.path));
+    h.click("Unstaged · Modified · other.txt");
     assert!(h.editor.leave.is_some());
     h.click(&text("ActionCancel"));
     assert!(h.editor.unsaved_conflict());

@@ -82,10 +82,9 @@ impl Editor {
             .filter_map(|(group, path)| context.change(*group, path).cloned())
             .collect()
     }
-    fn file_selection_current(&self, selection: &Selection) -> bool {
-        self.context
-            .as_ref()
-            .is_some_and(|c| Arc::ptr_eq(c, &selection.context))
+    pub(super) fn file_selection_current(&self, selection: &Selection) -> bool {
+        self.snapshot_error.is_none()
+            && self.context.as_ref().is_some_and(|c| Arc::ptr_eq(c, &selection.context))
     }
     pub(super) fn begin_file_menu(&mut self, menu: Menu) {
         if self
@@ -671,13 +670,7 @@ impl Editor {
                 self.operation_output = self.output.clone();
                 match result.updated {
                     Ok(context) => self.apply(context, ctx),
-                    Err(error) => {
-                        self.status = Some(format!(
-                            "{}\n{}",
-                            self.status.as_deref().unwrap_or_default(),
-                            error_text(error)
-                        ))
-                    }
+                    Err(error) => self.failed_reinspection(error_text(error)),
                 }
             }
             Err(error) => {
@@ -755,6 +748,9 @@ impl Editor {
             context: context.clone(),
             entries,
         };
+        if self.snapshot_error.is_some() && !matches!(shortcut, Shortcut::Copy(_)) {
+            return;
+        }
         match shortcut {
             Shortcut::Open => self.begin_shell(selection, false, ctx),
             Shortcut::Discard if files::supported(&selection.entries) => {
