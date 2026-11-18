@@ -403,7 +403,7 @@ fn refreshed_history_waits_for_the_context_menu_and_keeps_the_visible_commit_anc
         .iter()
         .find_map(|(_, node)| {
             node.label()
-                .filter(|label| label.starts_with("Commit 605  "))
+                .filter(|label| node.role() == egui::Role::Button && label.contains(&selected))
                 .map(str::to_owned)
         })
         .unwrap();

@@ -438,10 +438,7 @@ impl View {
                                                     &[
                                                         &entry.selector,
                                                         &entry.message,
-                                                        &entry
-                                                            .date
-                                                            .format("%Y-%m-%d %H:%M UTC")
-                                                            .to_string(),
+                                                        &crate::dates::local(ui.ctx(), &entry.date),
                                                     ],
                                                 ),
                                             )

@@ -477,9 +477,10 @@ pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit) {
                     ui.horizontal_wrapped(|ui| {
                         ui.strong(&commit.author);
                         ui.label(
-                            RichText::new(commit.authored.format("%Y-%m-%d %H:%M %:z").to_string())
+                            RichText::new(crate::dates::local(ui.ctx(), &commit.committed))
                                 .color(p.muted),
-                        );
+                        )
+                        .on_hover_text(commit.committed.to_rfc3339());
                     });
                     ui.horizontal_wrapped(|ui| {
                         ui.monospace(&commit.hash);
@@ -491,29 +492,16 @@ pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit) {
                         egui::Label::new(RichText::new(&commit.message).strong()).selectable(true),
                     );
                     egui::CollapsingHeader::new(text("CommitMetadata")).show(ui, |ui| {
-                        ui.label(format!(
-                            "{}: {} <{}> · {}",
-                            text("HistoryAuthor"),
-                            commit.author,
-                            commit.email,
-                            commit.authored.to_rfc3339()
-                        ));
-                        ui.label(format!(
-                            "{}: {} <{}> · {}",
-                            text("Committer"),
-                            commit.committer,
-                            commit.committer_email,
-                            commit.committed.to_rfc3339()
-                        ));
-                        ui.label(format!(
-                            "{}: {}",
-                            text("CommitParents"),
-                            if commit.parents.is_empty() {
-                                text("RootCommit")
-                            } else {
-                                commit.parents.join(", ")
-                            }
-                        ));
+                        ui.label(crate::history_row::author_details(ui.ctx(), commit))
+                            .on_hover_text(commit.authored.to_rfc3339());
+                        ui.label(crate::history_row::committer_details(ui.ctx(), commit))
+                            .on_hover_text(commit.committed.to_rfc3339());
+                        let parents = if commit.parents.is_empty() {
+                            text("RootCommit")
+                        } else {
+                            commit.parents.join(", ")
+                        };
+                        ui.label(crate::strings::format("RustCommitParentDetails", &[&parents]));
                     });
                 });
             });

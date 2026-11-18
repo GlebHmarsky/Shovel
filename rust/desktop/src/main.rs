@@ -5,6 +5,7 @@ mod caption;
 mod commit;
 mod comparison;
 mod conflict;
+mod dates;
 mod diff_view;
 mod divergence;
 mod file_history;
@@ -1743,7 +1744,7 @@ impl eframe::App for Workspace {
                         let unavailable = self
                             .tabs
                             .get(self.selected)
-                            .map(|t| t.history_notice())
+                            .map(|t| t.history_notice(&ctx))
                             .unwrap_or_else(|| strings::text("HistoryNotLoaded"));
                         if ui
                             .add_enabled(
@@ -1803,7 +1804,7 @@ impl eframe::App for Workspace {
                                     ],
                                 ));
                             }
-                            ui.label(tab.history_notice());
+                            ui.label(tab.history_notice(&ctx));
                         }
                     });
                     ui.menu_button(strings::text("RepositoryMenu"), |ui| {
@@ -2864,7 +2865,7 @@ impl eframe::App for Workspace {
                     return;
                 };
                 if tab.view.preview.is_some() {
-                    ui.label(tab.history_notice());
+                    ui.label(tab.history_notice(&ctx));
                 }
                 if let Some(error) = &tab.error {
                     ui.colored_label(palette.diff_removed_text, error);

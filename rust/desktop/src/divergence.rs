@@ -93,7 +93,7 @@ impl Counter {
         self.stale = false;
         self.busy = true;
         self.upstream = snapshot.upstream.clone().unwrap_or_default();
-        self.observed = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        self.observed = crate::dates::local(ctx, &chrono::Utc::now());
         self.cancel = Cancellation::default();
         let cancel = self.cancel.clone();
         let snapshot = snapshot.clone();

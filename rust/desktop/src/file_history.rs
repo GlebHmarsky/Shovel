@@ -264,7 +264,8 @@ impl Inspector {
                                 .on_hover_text(&commit.email);
                                 ui.add_sized(
                                     [170., 22.],
-                                    egui::Label::new(commit.committed.to_rfc3339()).truncate(),
+                                    egui::Label::new(crate::dates::local(ui.ctx(), &commit.committed))
+                                        .truncate(),
                                 )
                                 .on_hover_text(commit.committed.to_rfc3339());
                                 ui.add_sized([85., 22.], egui::Label::new(&commit.hash[..8]))
@@ -343,8 +344,9 @@ impl Inspector {
                     ui.add_sized([140., 23.], egui::Label::new(&line.author).truncate());
                     ui.add_sized(
                         [170., 23.],
-                        egui::Label::new(line.date.to_rfc3339()).truncate(),
-                    );
+                        egui::Label::new(crate::dates::local(ui.ctx(), &line.date)).truncate(),
+                    )
+                    .on_hover_text(line.date.to_rfc3339());
                     ui.monospace(line.text.replace('\r', "␍").replace('\t', "    "));
                 })
                 .response

@@ -296,7 +296,7 @@ impl Tab {
         self.loading = false;
         self.view.published();
     }
-    pub(super) fn history_notice(&self) -> String {
+    pub(super) fn history_notice(&self, ctx: &egui::Context) -> String {
         if let Some((_, saved_at)) = &self.view.preview {
             return strings::format(
                 if self.loading {
@@ -304,10 +304,7 @@ impl Tab {
                 } else {
                     "RustHistoryStartupRetained"
                 },
-                &[&saved_at
-                    .with_timezone(&chrono::Local)
-                    .format("%Y-%m-%d %H:%M:%S")
-                    .to_string()],
+                &[&crate::dates::local(ctx, saved_at)],
             );
         }
         if self.loading {

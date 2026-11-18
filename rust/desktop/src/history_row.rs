@@ -1,9 +1,9 @@
 //! The history list has a single focusable target per row. Text columns share
 //! their page geometry, including when a ref or subject is unusually long.
-use crate::workspace_style::Palette;
+use crate::{strings, workspace_style::Palette};
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, Ui};
 use sha2::{Digest, Sha256};
-use shovel_core::git::Entry;
+use shovel_core::git::{Commit, Entry};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color32) {
@@ -22,6 +22,28 @@ pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color3
 }
 
 pub(super) const HEIGHT: f32 = 23.;
+
+pub(super) fn author_details(ctx: &egui::Context, commit: &Commit) -> String {
+    strings::format(
+        "RustCommitAuthorDetails",
+        &[
+            &commit.author,
+            &commit.email,
+            &crate::dates::original(ctx, &commit.authored),
+        ],
+    )
+}
+
+pub(super) fn committer_details(ctx: &egui::Context, commit: &Commit) -> String {
+    strings::format(
+        "RustCommitterDetails",
+        &[
+            &commit.committer,
+            &commit.committer_email,
+            &crate::dates::original(ctx, &commit.committed),
+        ],
+    )
+}
 
 pub(super) fn visible_ref(name: &str) -> bool {
     name != "HEAD"
@@ -99,9 +121,10 @@ pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette)
         refs_right,
     } = style;
     let graph_width = lanes as f32 * 16.;
-    let width = ui.available_width().max(graph_width + 535.);
+    let width = ui.available_width().max(graph_width + 599.);
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, HEIGHT), egui::Sense::click());
     let c = &entry.commit;
+    let committed = crate::dates::local(ui.ctx(), &c.committed);
     let refs = entry
         .references
         .iter()
@@ -109,21 +132,25 @@ pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette)
         .map(|r| r.name.as_str())
         .collect::<Vec<_>>()
         .join(", ");
-    let description = format!(
-        "{}  {}  {}  {}  {}",
-        c.subject(),
-        c.author,
-        c.authored,
-        c.hash,
-        refs
-    );
-    let ahead_label = ahead.then(|| crate::strings::text("HistoryAhead"));
-    let description = if let Some(label) = &ahead_label {
-        format!("{description} · {label}")
-    } else {
-        description
-    };
+    let empty_subject = c
+        .subject()
+        .is_empty()
+        .then(|| strings::text("EmptyCommitSubject"));
+    let subject_text = empty_subject.as_deref().unwrap_or_else(|| c.subject());
     response.widget_info(|| {
+        let mut description = strings::format(
+            "RustHistoryRowAccessible",
+            &[subject_text, &c.author, &committed, &c.hash],
+        );
+        if !refs.is_empty() {
+            description = strings::format("RustHistoryRowWithRefs", &[&description, &refs]);
+        }
+        if ahead {
+            description = strings::format("RustHistoryRowAhead", &[&description]);
+        }
+        if peer {
+            description = strings::format("SameAuthorAccessible", &[&description]);
+        }
         egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, &description)
     });
     let background = if selected {
@@ -156,7 +183,7 @@ pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette)
     };
     graph(ui, entry, column(rect.left(), graph_width), p);
     let hash = column(rect.right() - 76., 72.);
-    let date = column(hash.left() - 90., 86.);
+    let date = column(hash.left() - 154., 150.);
     let author = column(date.left() - 134., 130.);
     let font = FontId::proportional(13.);
     let secondary = if selected || response.hovered() {
@@ -171,13 +198,7 @@ pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette)
         FontId::monospace(12.),
         secondary,
     );
-    text(
-        ui,
-        date,
-        &c.authored.format("%Y-%m-%d").to_string(),
-        font.clone(),
-        secondary,
-    );
+    text(ui, date, &committed, font.clone(), secondary);
     let avatar = Rect::from_center_size(
         egui::pos2(author.left() + 10., author.center().y),
         egui::vec2(20., 20.),
@@ -254,17 +275,23 @@ pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette)
     } else {
         subject.min.x += used;
     }
-    text(ui, subject, c.subject(), font, fg);
-    response.on_hover_text(format!(
-        "{}\n{} <{}>\n{}\n{}\n{}{}",
-        c.message,
-        c.author,
-        c.email,
-        c.authored,
-        c.hash,
-        refs,
-        ahead_label.map_or_else(String::new, |label| format!("\n{label}"))
-    ))
+    text(ui, subject, subject_text, font, fg);
+    response.on_hover_ui(|ui| {
+        ui.label(if c.message.is_empty() {
+            subject_text
+        } else {
+            &c.message
+        });
+        ui.label(author_details(ui.ctx(), c));
+        ui.label(committer_details(ui.ctx(), c));
+        ui.monospace(&c.hash);
+        if !refs.is_empty() {
+            ui.label(refs);
+        }
+        if ahead {
+            ui.label(strings::text("HistoryAhead"));
+        }
+    })
 }
 
 pub fn paint_avatar(ui: &Ui, avatar: Rect, c: &shovel_core::git::Commit, p: &Palette) {
@@ -302,4 +329,87 @@ pub fn paint_avatar(ui: &Ui, avatar: Rect, c: &shovel_core::git::Commit, p: &Pal
             Color32::WHITE
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_paints_the_local_commit_time_and_exposes_the_original_identities() {
+        let hash = "a".repeat(40);
+        let entry = Entry {
+            commit: Commit {
+                hash: hash.clone(),
+                parents: vec![],
+                message: String::new(),
+                author: "First".into(),
+                email: "one@example.invalid".into(),
+                authored: "2023-05-05T22:17:00-08:00".parse().unwrap(),
+                committer: "Second".into(),
+                committer_email: "two@example.invalid".into(),
+                committed: "2026-11-18T22:59:33+14:00".parse().unwrap(),
+            },
+            graph: shovel_core::graph::Row {
+                node: 0,
+                color: 0,
+                width: 1,
+                is_merge: false,
+                is_stash: false,
+                lines: vec![],
+            },
+            references: vec![shovel_core::git::Reference {
+                name: "refs/heads/topic".into(),
+                hash,
+                upstream: None,
+            }],
+        };
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let local = crate::dates::local(&ctx, &entry.commit.committed);
+        let authored = crate::dates::local(&ctx, &entry.commit.authored);
+        assert_ne!(local, authored);
+        let author = author_details(&ctx, &entry.commit);
+        let committer = committer_details(&ctx, &entry.commit);
+        assert!(author.contains("First") && author.contains("-08:00"));
+        assert!(committer.contains("Second") && committer.contains("+14:00"));
+        for dark in [false, true] {
+            let out = ctx.run_ui(Default::default(), |ui| {
+                show(
+                    ui,
+                    &entry,
+                    1,
+                    Style {
+                        selected: false,
+                        peer: true,
+                        ahead: true,
+                        refs_right: false,
+                    },
+                    &Palette::for_mode(dark),
+                );
+            });
+            assert!(
+                out.shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == local))
+            );
+            let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+            let label = nodes
+                .iter()
+                .filter_map(|(_, n)| n.label())
+                .find(|label| label.contains(&entry.commit.hash))
+                .unwrap();
+            for expected in [
+                &local,
+                &strings::text("EmptyCommitSubject"),
+                "refs/heads/topic",
+                "Ahead of upstream",
+                "Same author",
+            ] {
+                assert!(label.contains(expected), "{label}");
+            }
+            assert!(!label.contains(&authored));
+            out.drop_without_applying_deltas();
+        }
+    }
 }
