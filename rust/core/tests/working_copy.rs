@@ -344,6 +344,74 @@ fn failed_native_hook_retains_index_and_reports_failure() {
 }
 
 #[test]
+#[ignore = "opt-in native commit-signing acceptance using Git for Windows OpenSSH"]
+fn commit_honors_configured_ssh_signing_and_preserves_the_index_on_failure() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    let cancel = Cancellation::default();
+    let signing = tempfile::tempdir().unwrap();
+    let key = signing.path().join("fixture signing key");
+    let ssh_keygen = git
+        .executable
+        .ancestors()
+        .map(|path| path.join("usr/bin/ssh-keygen.exe"))
+        .find(|path| path.is_file())
+        .expect("Git for Windows OpenSSH signer");
+    let keygen = process::Request::new(
+        ssh_keygen.clone(),
+        signing.path().into(),
+        ["-q", "-t", "ed25519", "-N", "", "-f", key.to_str().unwrap()],
+    );
+    assert!(process::run(&keygen, &cancel, None).unwrap().success());
+    let signers = signing.path().join("allowed signers");
+    let public_key = fs::read_to_string(key.with_extension("pub")).unwrap();
+    fs::write(&signers, format!("fixture@example.invalid {public_key}")).unwrap();
+    for (name, value) in [
+        ("commit.gpgSign", "true"),
+        ("gpg.format", "ssh"),
+        ("gpg.ssh.program", ssh_keygen.to_str().unwrap()),
+        ("gpg.ssh.allowedSignersFile", signers.to_str().unwrap()),
+        ("user.signingKey", key.to_str().unwrap()),
+    ] {
+        command(&git, root, &["config", "--local", name, value]);
+    }
+    let commit = |message: &str| {
+        let review = git.working_copy(root, &cancel).unwrap();
+        git.execute_working(
+            &review,
+            &Action::Commit {
+                message: message.into(),
+                amend: false,
+            },
+            None,
+        )
+        .unwrap()
+    };
+    fs::write(root.join("file"), "signed contents\n").unwrap();
+    command(&git, root, &["add", "--", "file"]);
+    let signed = commit("signed through Shovel");
+    assert!(signed.command.success(), "{:?}", signed.command);
+    let head = command(&git, root, &["rev-parse", "HEAD"]);
+    assert_eq!(signed.commit.as_deref(), Some(head.trim()));
+    command(&git, root, &["verify-commit", "HEAD"]);
+
+    command(
+        &git,
+        root,
+        &["config", "--local", "user.signingKey", "missing-fixture-key"],
+    );
+    fs::write(root.join("file"), "retain in index\n").unwrap();
+    command(&git, root, &["add", "--", "file"]);
+    let index = git.working_copy(root, &cancel).unwrap().index_stamp;
+    let failed = commit("signing failure");
+    assert!(!failed.command.success());
+    assert!(failed.commit.is_none());
+    assert_eq!(failed.updated.unwrap().index_stamp, index);
+    assert_eq!(command(&git, root, &["rev-parse", "HEAD"]), head);
+    assert_eq!(command(&git, root, &["show", ":file"]), "retain in index\n");
+}
+
+#[test]
 fn commit_reports_the_created_object_when_a_post_commit_hook_moves_head() {
     let (temp, git) = fixture();
     let root = temp.path();

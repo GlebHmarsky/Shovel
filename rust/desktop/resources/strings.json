@@ -862,6 +862,7 @@
   "RustHistoryStartupRetained": "Last-known view from {0}. Refresh history to load current repository data.",
   "HistoryStartupCached": "Last-known view from {0:g}. Loading current repository data…",
   "ActivityTitle": "Activity log",
+  "ActivityRunSummary": "{0} · {1} · {2}",
   "ActivityLocalStatus": "Local Changes status",
   "ActivitySidebar": "Branches, stashes and submodules",
   "ActivityCategories": "Activity categories",

@@ -1,4 +1,7 @@
-use crate::strings::{self, text};
+use crate::{
+    path_text::{self, PathText},
+    strings::{self, text},
+};
 use eframe::egui::{self, RichText};
 use sha2::{Digest, Sha256};
 use shovel_core::{
@@ -1560,12 +1563,23 @@ impl Controller {
             .rev()
         {
             ui.horizontal(|ui| {
-                ui.label(format!(
-                    "{} · {} · {}",
-                    run.path.file_name().unwrap_or_default().to_string_lossy(),
-                    text(run.label),
-                    run.status
-                ));
+                let path = run.path.to_string_lossy();
+                let name = run
+                    .path
+                    .file_name()
+                    .unwrap_or(run.path.as_os_str())
+                    .to_string_lossy();
+                let path = PathText::new(ui.ctx(), &path);
+                let name = PathText::new(ui.ctx(), &name);
+                let label = text(run.label);
+                let summary = |target| {
+                    strings::format("ActivityRunSummary", &[target, &label, &run.status])
+                };
+                let row = ui
+                    .add(egui::Label::new(summary(name.visual())).selectable(!name.reordered()))
+                    .on_hover_text(path.visual());
+                ui.ctx()
+                    .accesskit_node_builder(row.id, |node| node.set_value(summary(path.spoken())));
                 if !run.done
                     && records
                         .iter()
@@ -1607,10 +1621,15 @@ impl Controller {
             ui.set_max_width(600.);
             ui.heading(text("AuthTitle"));
             if let Some(run) = self.runs.iter().find(|r| r.sequence == question.run) {
-                ui.label(strings::format(
-                    "AuthContext",
-                    &[&run.path.to_string_lossy(), &text(run.label)],
-                ));
+                let path = run.path.to_string_lossy();
+                let path = PathText::new(ctx, &path);
+                let label = text(run.label);
+                let context = |target| strings::format("AuthContext", &[target, &label]);
+                path_text::label(
+                    ui,
+                    context(path.visual()),
+                    path.reordered().then(|| context(path.spoken())),
+                );
             }
             ui.label(text("AuthPromptSource"));
             egui::ScrollArea::vertical()
@@ -1709,7 +1728,16 @@ impl Controller {
             .default_width(580.)
             .show(ctx, |ui| {
                 ui.heading(text(run.label));
-                ui.add(egui::Label::new(run.path.to_string_lossy()).selectable(true));
+                let path = run.path.to_string_lossy();
+                let display = PathText::new(ctx, &path);
+                if display.reordered() {
+                    path_text::label(ui, display.visual().into(), Some(display.spoken().into()));
+                    if ui.button(text("FileMenuCopyFull")).clicked() {
+                        ctx.copy_text(path.into_owned());
+                    }
+                } else {
+                    ui.add(egui::Label::new(display.visual()).selectable(true));
+                }
                 ui.add(egui::Label::new(&run.status).selectable(true));
                 let output = run.output.trim();
                 if !output.is_empty() && output != run.status.trim() {
@@ -2279,6 +2307,62 @@ mod tests {
 mod activity_layout_test {
     use super::*;
     use crate::workspace_interaction_tests::{frame, workspace};
+
+    #[test]
+    fn activity_and_failure_show_bidi_paths_and_copy_the_exact_target() {
+        use crate::workspace_interaction_tests::sidebar_point;
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut app = workspace();
+        app.activity_open = true;
+        app.tabs.clear();
+        let root = r"C:\Git\לקוח\שלום";
+        let second = r"C:\Git\צוות\שלום";
+        for path in [root, second] {
+            app.operations
+                .record_local(path.into(), "fixture".into(), String::new(), None);
+        }
+        frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        let out = frame(&ctx, &mut app, vec![]);
+        let painted = |label: &str| {
+            out.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(t) if t.galley.text() == label)
+            })
+        };
+        assert!(painted("םולש · Commit · fixture"));
+        let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+        for path in [root, second] {
+            let expected = format!("\u{2066}{path}\u{2069} · Commit · fixture");
+            assert!(
+                nodes.iter().any(|(_, node)| node.value() == Some(expected.as_str()))
+            );
+        }
+        out.drop_without_applying_deltas();
+
+        app.operations.record_local(
+            root.into(),
+            text("ActionFailedShort"),
+            String::new(),
+            Some("Commit"),
+        );
+        frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        let (pos, disabled) = sidebar_point(&ctx, &mut app, &text("FileMenuCopyFull")).unwrap();
+        assert!(!disabled);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
+        let click = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(&ctx, &mut app, vec![click(true)]).drop_without_applying_deltas();
+        let out = frame(&ctx, &mut app, vec![click(false)]);
+        assert!(out.platform_output.commands.iter().any(|cmd| {
+            matches!(cmd, egui::OutputCommand::CopyText(path) if path == root)
+        }));
+        out.drop_without_applying_deltas();
+    }
+
     #[test]
     fn activity_filters_user_background_and_repository_independently() {
         use crate::workspace_interaction_tests::{frame, workspace};

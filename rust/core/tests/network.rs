@@ -28,6 +28,18 @@ fn command(git: &Git, root: &Path, args: &[&str]) -> String {
         .trim_end()
         .to_owned()
 }
+
+fn isolated_git(directory: &Path) -> Git {
+    let config = directory.join("isolated.gitconfig");
+    fs::write(&config, "[user]\nname = Fixture\nemail = fixture@example.invalid\n[commit]\ngpgsign = false\n[init]\ndefaultBranch = main\n[core]\nautocrlf = false\n").unwrap();
+    let mut git = Git::discover(None, &Cancellation::default()).unwrap();
+    git.environment
+        .insert("GIT_CONFIG_GLOBAL".into(), Some(config.into_os_string()));
+    git.environment
+        .insert("GIT_CONFIG_NOSYSTEM".into(), Some("1".into()));
+    git
+}
+
 struct Fixture {
     _temp: tempfile::TempDir,
     git: Git,
@@ -42,13 +54,7 @@ impl Fixture {
         let remote = temp.path().join("remote.git");
         let other = temp.path().join("other");
         fs::create_dir(&root).unwrap();
-        let config = temp.path().join("isolated.gitconfig");
-        fs::write(&config, "[user]\nname = Fixture\nemail = fixture@example.invalid\n[commit]\ngpgsign = false\n[init]\ndefaultBranch = main\n[core]\nautocrlf = false\n").unwrap();
-        let mut git = Git::discover(None, &Cancellation::default()).unwrap();
-        git.environment
-            .insert("GIT_CONFIG_GLOBAL".into(), Some(config.into_os_string()));
-        git.environment
-            .insert("GIT_CONFIG_NOSYSTEM".into(), Some("1".into()));
+        let git = isolated_git(temp.path());
         command(
             &git,
             temp.path(),
@@ -433,33 +439,43 @@ fn merge_choice_overrides_branch_merge_options_and_autostash_conflicts_are_not_s
 
 #[test]
 fn automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation() {
-    let f = Fixture::new();
-    let incoming = f.incoming("auto.txt", "incoming\n");
-    let head = command(&f.git, &f.root, &["rev-parse", "HEAD"]);
-    fs::write(f.root.join("a"), "local edit\n").unwrap();
-    let review = f
-        .git
-        .prepare_network(&f.root, &Cancellation::default())
+    let temp = tempfile::tempdir().unwrap();
+    let git = isolated_git(temp.path());
+    let remote = temp.path().join("source");
+    let root = temp.path().join("local");
+    fs::create_dir(&remote).unwrap();
+    command(&git, &remote, &["init"]);
+    fs::write(remote.join("a"), "base\n").unwrap();
+    command(&git, &remote, &["add", "--", "a"]);
+    command(&git, &remote, &["commit", "-m", "base"]);
+    let head = command(&git, &remote, &["rev-parse", "HEAD"]);
+    command(
+        &git,
+        temp.path(),
+        &["clone", remote.to_str().unwrap(), root.to_str().unwrap()],
+    );
+    fs::write(remote.join("auto.txt"), "incoming\n").unwrap();
+    command(&git, &remote, &["add", "--", "auto.txt"]);
+    command(&git, &remote, &["commit", "-m", "incoming"]);
+    let incoming = command(&git, &remote, &["rev-parse", "HEAD"]);
+    fs::write(root.join("a"), "local edit\n").unwrap();
+    let review = git
+        .prepare_network(&root, &Cancellation::default())
         .unwrap_or_else(|error| {
-            let paths = command(&f.git, &f.root, &["rev-parse", "--path-format=absolute", "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir", "--git-common-dir"]);
-            panic!("fixture inspection failed: {error:?}; fixture={:?}; Git paths={paths:?}", f.root);
+            let paths = command(&git, &root, &["rev-parse", "--path-format=absolute", "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir", "--git-common-dir"]);
+            panic!("fixture inspection failed: {error:?}; fixture={root:?}; Git paths={paths:?}");
         });
     let token = Cancellation::default();
     token.cancel();
-    assert!(f.git.automatic_fetch(&review, &token).is_err());
-    let result = f
-        .git
+    assert!(git.automatic_fetch(&review, &token).is_err());
+    let tracking = || command(&git, &root, &["rev-parse", "refs/remotes/origin/main"]);
+    assert_eq!(tracking(), head);
+    let result = git
         .automatic_fetch(&review, &Cancellation::default())
         .unwrap();
     assert!(result.succeeded(), "{}", result.output);
-    assert_eq!(
-        command(&f.git, &f.root, &["rev-parse", "refs/remotes/origin/main"]),
-        incoming
-    );
-    assert_eq!(command(&f.git, &f.root, &["rev-parse", "HEAD"]), head);
-    assert_eq!(
-        fs::read_to_string(f.root.join("a")).unwrap(),
-        "local edit\n"
-    );
-    assert!(!f.root.join("auto.txt").exists());
+    assert_eq!(tracking(), incoming);
+    assert_eq!(command(&git, &root, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read_to_string(root.join("a")).unwrap(), "local edit\n");
+    assert!(!root.join("auto.txt").exists());
 }

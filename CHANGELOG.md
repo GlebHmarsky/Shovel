@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.50.18 - 2026-11-18
+
+- If saving settings fails during an update restart, Shovel stays open with the update ready and explains how to retry.
+- Keep the verified update package readable and protected against replacement through restart handoff. A package in use gives a retryable cache error.
+- Keep earlier queued requests in order when a deferred action fails its preparation checks. Activity reports the failure at the request’s turn.
+- Show mixed-direction repository paths correctly in Activity, authentication prompts and failure details. Hover an Activity row for its full path and copy the exact path from mixed-direction failure details.
+
 ## Rust 0.50.17 - 2026-11-18
 
 - Settings keeps its categories on the left and groups related controls under section headings. Preview unified and side-by-side diffs at the selected font size before saving. Edit application paths together in Tools. Narrow windows stack labels above fields and keep Save and Cancel in reach.

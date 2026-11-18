@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Activity paths and native SSH signing
+
+Activity rows now show mixed-direction repository names in visual order and expose the full logical path to assistive technology. They also show the full path on hover. Authentication and failure details use the existing path formatter. Copy full path in a mixed-direction failure copies the original path. The headless fixture rendered two repositories both named שלום, distinguished them by accessible full paths and verified the clipboard text. Three Activity interaction and layout tests passed. A physical screen reader and whole-window RTL remain open.
+
+A native Git for Windows fixture configured SSH commit signing in a disposable repository and verified the resulting commit with `git verify-commit`. A missing signing key then caused the native Commit to fail. HEAD, the reviewed index stamp and staged content stayed unchanged. The fixture covers the configured SSH signer for Commit. Live SSH transport, GCM and other signing backends remain separate.
+
+For 0.50.18, the initial bounded smoke run hit the existing 30-second automatic-fetch limit. A standalone rerun took 15.49 seconds. The simplified fixture uses two real repositories and advances the local source directly. It still verifies cancellation, ref advancement and unchanged HEAD and working files. It also checks that the cancelled fetch leaves the tracking ref at its original commit. The revised fixture took 7.93 seconds alone and 16.52 seconds in the final smoke suite. Release policy, all-target Clippy, diff checks and all 18 smoke checks passed. The final suite took 62.94 seconds on source fingerprint `D7158EC6DAFC4FB8DAC3CEFD4E302CCD30731905E1BB85609E93750ED03DFD96`.
+
 ## Keep preparation failures in queue order
 
 A deferred New Branch request used to stop earlier waiting work immediately if repository initialization found an active merge. Rejections for a changed captured owner or an active Git sequence now use the reserved scheduler slot. They issue no Git command. A disposable repository and a linked worktree held the shared lane while Fetch options, New Branch and Push options queued. The original behavior discarded the Fetch options. After the fix, Fetch options opened first, the branch failure appeared after dismissal, and Push options stayed closed. Thirteen operations queue tests passed, including captured-owner replacement and tab closure.
