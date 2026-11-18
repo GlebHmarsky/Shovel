@@ -74,7 +74,7 @@ impl Dialog {
                     .resizable(false)
                     .frame(egui::Frame::new().fill(p.panel).inner_margin(9))
                     .show(ui, |ui| result = self.footer(ui));
-                egui::Panel::left("settings-categories")
+                let active_tab = egui::Panel::left("settings-categories")
                     .exact_size(nav_width)
                     .resizable(false)
                     .frame(egui::Frame::new().fill(p.sidebar).inner_margin(5))
@@ -83,16 +83,12 @@ impl Dialog {
                             ui.add_space(5.);
                             egui::ScrollArea::vertical()
                                 .id_salt("settings-navigation")
-                                .show(ui, |ui| {
-                                    for page in Page::ALL {
-                                        let tab = page.tab(ui, self.page == page, &p);
-                                        if tab.clicked() {
-                                            self.page = page;
-                                        }
-                                    }
-                                });
-                        });
-                    });
+                                .show(ui, |ui| self.category_tabs(ui, &p))
+                                .inner
+                        })
+                        .inner
+                    })
+                    .inner;
                 let margin = if ui.available_width() < 390. { 10 } else { 18 };
                 egui::CentralPanel::default()
                     .frame(egui::Frame::new().fill(p.panel).inner_margin(margin))
@@ -101,6 +97,14 @@ impl Dialog {
                             egui::ScrollArea::vertical()
                                 .id_salt(("settings-page", self.page))
                                 .show(ui, |ui| {
+                                    let panel = ui.unique_id();
+                                    ctx.accesskit_node_builder(panel, |node| {
+                                        node.set_role(egui::Role::TabPanel);
+                                        node.set_labelled_by(vec![active_tab.accesskit_id()]);
+                                    });
+                                    ctx.accesskit_node_builder(active_tab, |node| {
+                                        node.set_controls(vec![panel.accesskit_id()]);
+                                    });
                                     ui.set_min_width(ui.available_width());
                                     ui.spacing_mut().item_spacing.y = 6.;
                                     ui.heading(text(self.page.key()));
@@ -119,6 +123,66 @@ impl Dialog {
                     });
             });
         result
+    }
+
+    fn category_tabs(&mut self, ui: &mut egui::Ui, palette: &Palette) -> egui::Id {
+        let ctx = ui.ctx();
+        ctx.accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_role(egui::Role::TabList);
+            node.set_label(text("SettingsCategories"));
+            node.set_orientation(egui::accesskit::Orientation::Vertical);
+        });
+        let tabs = Page::ALL.map(|page| page.tab(ui, self.page == page, palette));
+        let clicked = tabs.iter().position(egui::Response::clicked);
+        let mut next = clicked;
+        if clicked.is_none()
+            && ui.is_enabled()
+            && let Some(focused) = tabs.iter().position(egui::Response::has_focus)
+        {
+            next = ui.input_mut(|input| {
+                use egui::Key;
+                let last = tabs.len() - 1;
+                if input.consume_key(egui::Modifiers::NONE, Key::ArrowUp) {
+                    Some(focused.checked_sub(1).unwrap_or(last))
+                } else if input.consume_key(egui::Modifiers::NONE, Key::ArrowDown) {
+                    Some((focused + 1) % tabs.len())
+                } else if input.consume_key(egui::Modifiers::NONE, Key::Home) {
+                    Some(0)
+                } else if input.consume_key(egui::Modifiers::NONE, Key::End) {
+                    Some(last)
+                } else {
+                    None
+                }
+            });
+            if next.is_some() {
+                // Replace egui's spatial focus move with movement within the tab list.
+                ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+            }
+        }
+        if let Some(index) = next {
+            self.page = Page::ALL[index];
+            tabs[index].request_focus();
+            tabs[index].scroll_to_me(None);
+            ui.ctx().request_repaint();
+        }
+        let active = Page::ALL
+            .iter()
+            .position(|page| *page == self.page)
+            .expect("every settings page has a tab");
+        for (index, tab) in tabs.iter().enumerate() {
+            let selected = index == active;
+            ui.ctx().accesskit_node_builder(tab.id, |node| {
+                node.set_role(egui::Role::Tab);
+                node.clear_toggled();
+                node.set_selected(selected);
+                if selected {
+                    node.add_action(egui::accesskit::Action::Focus);
+                } else {
+                    node.remove_action(egui::accesskit::Action::Focus);
+                }
+            });
+        }
+        tabs[active].id
     }
 
     fn footer(&mut self, ui: &mut egui::Ui) -> (bool, bool) {
@@ -200,7 +264,12 @@ impl Page {
         } else {
             button
         };
-        let tab = ui.add_sized([ui.available_width(), 30.], button);
+        let button = if current {
+            button
+        } else {
+            button.sense(egui::Sense::CLICK)
+        };
+        let tab = ui.add(button.min_size(egui::vec2(ui.available_width(), 30.)));
         if current {
             let edge = egui::Rect::from_min_size(
                 tab.rect.left_top() + egui::vec2(0., 4.),

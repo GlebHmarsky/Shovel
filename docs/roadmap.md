@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Make Settings categories keyboard accessible
+
+The seven left-hand Settings categories expose a named vertical tab list to Windows accessibility. The selected tab names its associated form and provides the keyboard stop for the list. Up and Down cycle between categories, and Home and End jump to the first and last. Tab moves from the selected category into its form. [Vertical tab interaction pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/)
+
+Headless input verified all seven tab roles, one selection, matching tab and panel IDs, focus during wraparound and entry into the Appearance form. Three existing Settings checks covered pointer input, the live diff preview, narrow Tools layout, the fixed footer and failed validation. Four profile checks, all-target Clippy and diff checks passed. All 18 smoke checks passed in 28.63 seconds on `963AADAAB700F9C84F6020464449976E738F192FA656E9104FF143A4E0DB6C06`. Physical Windows screen-reader and scaling acceptance remain open.
+
 ## Windows Rust Beta 0.50.21 release checks
 
 This Cargo and changelog cut includes scheduler worker launch recovery, retryable updater failures, and consistent linked-worktree identity reads. Nine scheduler checks, the pointer-change regression, ten native identity checks, three draft checks and 22 updater checks passed. Release policy, all-target Clippy and diff checks passed. All 18 bounded smoke checks took 34.47 seconds on local source fingerprint `5E4142B05B69DD448BE282076889C17BF29C7AA5CD4B71DE4931696359C1C79D`.
