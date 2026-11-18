@@ -237,7 +237,6 @@ struct Run {
     output: String,
     done: bool,
     dialog_open: bool,
-    changed: bool,
     reopen_commit: Option<Arc<crate::commit::FailedCommit>>,
     show_failure: bool,
 }
@@ -297,7 +296,7 @@ struct PendingNetwork {
 pub struct Controller {
     pub divergence: crate::divergence::Display,
     pending: Vec<PendingNetwork>,
-    related_changes: Vec<PathBuf>,
+    refresh_paths: Vec<PathBuf>,
     options: Option<(Options, Snapshot)>,
     ready_options: VecDeque<ReadyOptions>,
     options_hold: Option<DialogLease>,
@@ -315,7 +314,7 @@ impl Default for Controller {
         Self {
             divergence: Default::default(),
             pending: vec![],
-            related_changes: vec![],
+            refresh_paths: vec![],
             options: None,
             ready_options: VecDeque::new(),
             options_hold: None,
@@ -629,10 +628,10 @@ impl Controller {
             output: String::new(),
             done: false,
             dialog_open: false,
-            changed: false,
             reopen_commit: None,
             show_failure: false,
         });
+        self.trim_finished();
         Some((request, sequence))
     }
 
@@ -1211,11 +1210,11 @@ impl Controller {
                 output: String::new(),
                 done: false,
                 dialog_open: false,
-                changed: false,
                 reopen_commit: None,
                 show_failure: false,
             });
         }
+        self.trim_finished();
         accepted.then_some(request)
     }
     pub fn poll(&mut self, ctx: &egui::Context) -> Vec<PathBuf> {
@@ -1302,10 +1301,10 @@ impl Controller {
                 Event::Completed(id, result) => {
                     if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
                         run.done = true;
-                        run.changed = true;
+                        self.refresh_paths.push(run.path.clone());
                         match *result {
                             Ok(result) => {
-                                self.related_changes.extend(result.related.iter().cloned());
+                                self.refresh_paths.extend(result.related.iter().cloned());
                                 let pending = result
                                     .updated
                                     .as_ref()
@@ -1318,22 +1317,27 @@ impl Controller {
                                     && commands_succeeded;
                                 let succeeded = result.succeeded();
                                 run.show_failure = !succeeded && !awaiting_recovery;
-                                run.status = text(if succeeded && result.warning.is_some() {
-                                    "RustActionWarning"
-                                } else if succeeded {
-                                    "ActionCompletedShort"
-                                } else if result.has_conflicts {
-                                    "ActionConflictShort"
-                                } else if awaiting_recovery {
-                                    "RecoveryPending"
-                                } else if result.updated.is_err()
-                                    && result.message.is_none()
-                                    && commands_succeeded
-                                {
-                                    "ActionRefreshFailedShort"
-                                } else {
-                                    "ActionFailedShort"
-                                });
+                                run.status = text(
+                                    if succeeded
+                                        && (result.warning.is_some()
+                                            || has_git_warning(&result.output))
+                                    {
+                                        "RustActionWarning"
+                                    } else if succeeded {
+                                        "ActionCompletedShort"
+                                    } else if result.has_conflicts {
+                                        "ActionConflictShort"
+                                    } else if awaiting_recovery {
+                                        "RecoveryPending"
+                                    } else if result.updated.is_err()
+                                        && result.message.is_none()
+                                        && commands_succeeded
+                                    {
+                                        "ActionRefreshFailedShort"
+                                    } else {
+                                        "ActionFailedShort"
+                                    },
+                                );
                                 run.output = result.output;
                                 for message in
                                     [result.message, result.warning].into_iter().flatten()
@@ -1396,6 +1400,14 @@ impl Controller {
             }
         }
         self.prompts.retain(|q| !q.prompt.closed.is_cancelled());
+        self.trim_finished();
+        if !self.prompts.is_empty() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+        std::mem::take(&mut self.refresh_paths)
+    }
+
+    fn trim_finished(&mut self) {
         while self.runs.len() > 128 {
             if let Some(index) = self.runs.iter().position(|run| run.done) {
                 self.runs.remove(index);
@@ -1403,17 +1415,8 @@ impl Controller {
                 break;
             }
         }
-        if !self.prompts.is_empty() {
-            ctx.request_repaint_after(Duration::from_millis(100));
-        }
-        let mut changed: Vec<_> = self
-            .runs
-            .iter_mut()
-            .filter_map(|r| std::mem::take(&mut r.changed).then(|| r.path.clone()))
-            .collect();
-        changed.append(&mut self.related_changes);
-        changed
     }
+
     pub fn record_owned(&mut self, path: PathBuf, activity: crate::commit::OwnedActivity) {
         if let Some(run) = self.runs.iter_mut().find(|r| r.request == activity.request) {
             run.show_failure |= !run.done && activity.done && activity.failed;
@@ -1433,11 +1436,11 @@ impl Controller {
                 output: activity.output,
                 done: activity.done,
                 dialog_open: false,
-                changed: false,
                 reopen_commit: activity.reopen_commit,
                 show_failure: activity.done && activity.failed,
             });
         }
+        self.trim_finished();
     }
     pub fn record_local(
         &mut self,
@@ -1457,10 +1460,10 @@ impl Controller {
             output: network::redact(&output).chars().take(32768).collect(),
             done: true,
             dialog_open: false,
-            changed: false,
             reopen_commit: None,
             show_failure: failure.is_some(),
         });
+        self.trim_finished();
     }
     pub fn summary(&self, path: &std::path::Path) -> Option<String> {
         let mut runs = self
@@ -1645,7 +1648,24 @@ impl Controller {
             return;
         };
         let run = &mut self.runs[index];
-        self.active_failure = Some(run.sequence);
+        if self.active_failure != Some(run.sequence) {
+            let inactive = ctx.input(|i| {
+                !i.raw.focused
+                    && i.raw
+                        .viewports
+                        .iter()
+                        .all(|(id, info)| *id == i.raw.viewport_id || info.focused == Some(false))
+            });
+            if inactive {
+                ctx.send_viewport_cmd_to(
+                    egui::ViewportId::ROOT,
+                    egui::ViewportCommand::RequestUserAttention(
+                        egui::UserAttentionType::Informational,
+                    ),
+                );
+            }
+            self.active_failure = Some(run.sequence);
+        }
         let mut open = true;
         let mut dismiss = false;
         egui::Window::new(text("OperationAttentionTitle"))
@@ -1679,6 +1699,18 @@ impl Controller {
             ctx.request_repaint();
         }
     }
+}
+
+fn has_git_warning(output: &str) -> bool {
+    output.lines().any(|line| {
+        let line = line.trim_start().as_bytes();
+        [b"warning:".as_slice(), b"remote: warning:"]
+            .iter()
+            .any(|prefix| {
+                line.get(..prefix.len())
+                    .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+            })
+    })
 }
 
 pub(crate) fn authentication_error(failure: authentication::Failure) -> &'static str {
@@ -1991,7 +2023,7 @@ mod tests {
         });
         assert_eq!(
             controller.runs[0].status,
-            text("ActionCompletedShort"),
+            text("RustActionWarning"),
             "{}",
             controller.runs[0].output
         );
@@ -2048,6 +2080,119 @@ mod tests {
         );
         output.drop_without_applying_deltas();
     }
+    #[test]
+    fn a_failure_requests_taskbar_attention_once_only_if_every_window_is_inactive() {
+        let draw = |controller: &mut Controller, current: bool, child: Option<bool>| {
+            let ctx = egui::Context::default();
+            let mut raw = egui::RawInput {
+                focused: current,
+                ..Default::default()
+            };
+            raw.viewports
+                .get_mut(&egui::ViewportId::ROOT)
+                .unwrap()
+                .focused = Some(current);
+            let id = egui::ViewportId::from_hash_of("commit-editor");
+            raw.viewports.insert(
+                id,
+                egui::ViewportInfo {
+                    focused: child,
+                    ..Default::default()
+                },
+            );
+            let output = ctx.run_ui(raw, |_| controller.show_failure(&ctx));
+            let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
+            assert!(
+                !commands
+                    .iter()
+                    .any(|cmd| matches!(cmd, egui::ViewportCommand::Focus))
+            );
+            let requests = commands
+                .iter()
+                .filter(|cmd| {
+                    matches!(
+                        cmd,
+                        egui::ViewportCommand::RequestUserAttention(
+                            egui::UserAttentionType::Informational
+                        )
+                    )
+                })
+                .count();
+            output.drop_without_applying_deltas();
+            requests
+        };
+        for (root, child, expected) in [
+            (false, Some(false), 1),
+            (true, Some(false), 0),
+            (false, Some(true), 0),
+            (false, None, 0),
+        ] {
+            let mut controller = Controller::default();
+            controller.record_local(
+                "repo".into(),
+                "ok".into(),
+                "remote: warning: retained".into(),
+                None,
+            );
+            assert_eq!(draw(&mut controller, false, Some(false)), 0);
+            controller.record_local(
+                "repo".into(),
+                "failed".into(),
+                "original output".into(),
+                Some("Push"),
+            );
+            assert_eq!(draw(&mut controller, root, child), expected);
+            assert_eq!(draw(&mut controller, false, Some(false)), 0);
+        }
+        assert!(has_git_warning(
+            "To origin
+  REMOTE: Warning: message"
+        ));
+        assert!(!has_git_warning("commit subject contains warning: inside"));
+    }
+
+    #[test]
+    fn completed_activity_eviction_preserves_every_refresh_and_every_active_request() {
+        let mut controller = Controller::default();
+        let ctx = egui::Context::default();
+        for id in 1..=132 {
+            controller.record_owned(
+                PathBuf::from(format!("repo-{id}")),
+                crate::commit::OwnedActivity {
+                    request: id,
+                    label: "Push",
+                    status: "running".into(),
+                    output: String::new(),
+                    done: false,
+                    failed: false,
+                    reopen_commit: None,
+                },
+            );
+        }
+        assert_eq!(controller.runs.len(), 132);
+        for id in 1..=6 {
+            controller
+                .sender
+                .send(Event::Completed(id, Box::new(Err("fixture".into()))))
+                .unwrap();
+        }
+        let changed = controller.poll(&ctx);
+        assert_eq!(
+            changed,
+            (1..=6)
+                .map(|id| PathBuf::from(format!("repo-{id}")))
+                .collect::<Vec<_>>()
+        );
+        assert!(controller.poll(&ctx).is_empty());
+        assert_eq!(controller.runs.len(), 128);
+        assert_eq!(controller.runs.iter().filter(|r| !r.done).count(), 126);
+        for _ in 0..150 {
+            controller.record_local("newest".into(), "done".into(), String::new(), None);
+        }
+        assert_eq!(controller.runs.len(), 128);
+        assert_eq!(controller.runs.iter().filter(|r| !r.done).count(), 126);
+    }
+
     #[test]
     fn password_prompt_masks_accessibility_and_closes_when_broker_finishes() {
         let mut controller = Controller::default();
@@ -2137,7 +2282,6 @@ mod activity_layout_test {
                 output: "command output\n".repeat(20),
                 done: true,
                 dialog_open: false,
-                changed: false,
                 reopen_commit: None,
                 show_failure: false,
             });
