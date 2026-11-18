@@ -88,6 +88,77 @@ pub(crate) fn wait(app: &mut Workspace, ctx: &egui::Context) {
     }
 }
 
+// Run with --ignored --nocapture and SHOVEL_NAVIGATION_FIXTURES pointing to a
+// disposable parent containing Small and Merge-20k repositories and gitconfig.
+#[test]
+#[ignore = "requires disposable Windows navigation benchmark repositories"]
+fn measure_repository_navigation() {
+    let fixtures = PathBuf::from(std::env::var_os("SHOVEL_NAVIGATION_FIXTURES").unwrap());
+    let mut git = Git::discover(None, &Cancellation::default()).unwrap();
+    git.environment.insert(
+        "GIT_CONFIG_GLOBAL".into(),
+        Some(fixtures.join("gitconfig").into_os_string()),
+    );
+    git.environment
+        .insert("GIT_CONFIG_NOSYSTEM".into(), Some("1".into()));
+    let git = Arc::new(git);
+    let ctx = egui::Context::default();
+    let mut measurements = Vec::new();
+    for name in ["Small", "Merge-20k"] {
+        for sample in 0..7 {
+            let mut app = workspace();
+            app.tabs.clear();
+            app.git = Some(git.clone());
+            app.settings
+                .set("AutoFetchEnabled", serde_json::json!(false));
+            app.initialized = false;
+            let mut record = |event: &str, elapsed: Duration| {
+                measurements.push(serde_json::json!({
+                    "repository": name,
+                    "sample": sample,
+                    "event": event,
+                    "milliseconds": elapsed.as_secs_f64() * 1000.,
+                }));
+            };
+            let root = fixtures.join(name);
+            let start = Instant::now();
+            app.open(root.clone(), &ctx);
+            wait(&mut app, &ctx);
+            assert_eq!(app.tabs[0].page.as_ref().unwrap().entries.len(), 200);
+            paint(&mut app, &ctx, vec![]);
+            record("cold_history_frame", start.elapsed());
+
+            let start = Instant::now();
+            app.refresh(&ctx);
+            wait(&mut app, &ctx);
+            assert!(app.tabs[0].error.is_none());
+            record("unchanged_history_refresh", start.elapsed());
+
+            let other = app.ensure_tab(fixtures.join("Repository-C"));
+            app.select_tab(other, &ctx);
+            wait(&mut app, &ctx);
+            let start = Instant::now();
+            app.select_tab(0, &ctx);
+            assert!(app.tabs[0].page.is_some());
+            paint(&mut app, &ctx, vec![]);
+            record("cached_tab_frame", start.elapsed());
+            wait(&mut app, &ctx);
+            record("cached_tab_validated", start.elapsed());
+
+            let id = app.tabs[0].id;
+            app.close_tab(id, &ctx);
+            let start = Instant::now();
+            app.open(root, &ctx);
+            assert!(app.tabs[app.selected].page.is_some());
+            paint(&mut app, &ctx, vec![]);
+            record("closed_tab_reopen_frame", start.elapsed());
+            wait(&mut app, &ctx);
+            record("closed_tab_reopen_validated", start.elapsed());
+        }
+    }
+    println!("{}", serde_json::to_string(&measurements).unwrap());
+}
+
 #[test]
 fn interrupted_page_and_locate_keep_the_visible_history_available() {
     let fixture = Fixture::new();
@@ -399,9 +470,7 @@ fn obsolete_results_cannot_publish_or_invalidate_newer_history() {
         .send(Event::Loaded(
             id,
             old,
-            Box::new(history),
-            Box::new(page.clone()),
-            false,
+            Read::Page(Box::new(history), Box::new(page.clone())),
             false,
         ))
         .unwrap();
@@ -515,7 +584,10 @@ fn native_page_results_match_pinned_baseline_and_preserve_repository_bytes() {
             "indexExists": false, "status": fixture.command(&["status", "--porcelain", "-z"], &[]),
         }));
     };
-    let (history, first, _) = read(&fixture.git, &fixture.root, None, false).unwrap();
+    let Read::Page(mut history, first) = read(&fixture.git, &fixture.root, None, false).unwrap()
+    else {
+        panic!("first read must return a page");
+    };
     record("first", &first);
     let second = read_page(
         &fixture.git,
@@ -525,18 +597,15 @@ fn native_page_results_match_pinned_baseline_and_preserve_repository_bytes() {
     )
     .unwrap();
     record("older", &second);
-    let (fresh, refreshed, keep) = read(
-        &fixture.git,
-        &fixture.root,
-        Some((&history, &second.cursor)),
-        false,
-    )
-    .unwrap();
-    assert!(keep);
-    record("unchanged-refresh", &refreshed);
-    let mut last = refreshed;
+    let Read::Unchanged(snapshot) = read(&fixture.git, &fixture.root, Some(&history), false).unwrap()
+    else {
+        panic!("unchanged refs must retain the current page");
+    };
+    history.snapshot = *snapshot;
+    record("unchanged-refresh", &second);
+    let mut last = second.clone();
     while let Some(next) = &last.next {
-        last = read_page(&fixture.git, &fresh, next, &Cancellation::default()).unwrap();
+        last = read_page(&fixture.git, &history, next, &Cancellation::default()).unwrap();
     }
     record("end", &last);
     let newer = read_page(
@@ -565,14 +634,10 @@ fn native_page_results_match_pinned_baseline_and_preserve_repository_bytes() {
         )
         .is_err()
     );
-    let (_, changed, keep) = read(
-        &fixture.git,
-        &fixture.root,
-        Some((&history, &second.cursor)),
-        false,
-    )
-    .unwrap();
-    assert!(!keep);
+    let Read::Page(_, changed) = read(&fixture.git, &fixture.root, Some(&history), false).unwrap()
+    else {
+        panic!("changed refs must return a fresh page");
+    };
     record("changed-refresh", &changed);
     if let Some(output) = std::env::var_os("SHOVEL_HISTORY_PARITY_OUTPUT") {
         fs::write(output, serde_json::to_vec_pretty(&records).unwrap()).unwrap();

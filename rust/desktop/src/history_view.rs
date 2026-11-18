@@ -1,5 +1,6 @@
 //! Page presentation survives reads; no repository command is owned by this cache.
 use super::*;
+use shovel_core::{git::Snapshot, identity::Identity};
 use std::{collections::BTreeMap, time::Instant};
 
 const VIEW_LIMIT: usize = 128;
@@ -109,53 +110,63 @@ fn identity_failure(changed: bool) -> Failure {
         identity: true,
     }
 }
+
+pub(super) enum Read {
+    Unchanged(Box<Snapshot>),
+    Page(Box<History>, Box<Page>),
+}
+impl Read {
+    pub(super) fn snapshot(&self) -> &Snapshot {
+        match self {
+            Self::Unchanged(snapshot) => snapshot,
+            Self::Page(history, _) => &history.snapshot,
+        }
+    }
+}
+
 pub(super) fn read_expected(
     git: &Git,
     path: &std::path::Path,
-    previous: Option<(&History, &Cursor)>,
+    previous: Option<(&Identity, &str)>,
     first: bool,
     expected_identity: Option<&str>,
     cancel: &Cancellation,
-) -> Result<(History, Page, bool), Failure> {
+) -> Result<Read, Failure> {
     let identity = shovel_core::identity::read(path).map_err(|_| identity_failure(false))?;
     if expected_identity.is_some_and(|expected| !identity.matches_recorded_fingerprint(expected))
-        || previous.is_some_and(|(history, _)| history.snapshot.identity != identity)
+        || previous.is_some_and(|(previous, _)| previous != &identity)
     {
         return Err(identity_failure(true));
     }
-    let result: Result<_, shovel_core::git::Error> = (|| {
-        let history = git.history(git.inspect(path, cancel)?, cancel)?;
-        let keep = !first
-            && previous.is_some_and(|(old, _)| {
-                old.snapshot.fingerprint == history.snapshot.fingerprint
-                    && old.snapshot.head == history.snapshot.head
-            });
-        let cursor = if keep {
-            previous.unwrap().1.clone()
-        } else {
-            Cursor::default()
-        };
-        let page = git.page(&history, &cursor, cancel)?;
-        Ok((history, page, keep))
+    let result = (|| {
+        let snapshot = git.inspect(path, cancel)?;
+        if snapshot.identity != identity {
+            return Err(identity_failure(true));
+        }
+        if !first && previous.is_some_and(|(_, fingerprint)| fingerprint == snapshot.fingerprint) {
+            return Ok(Read::Unchanged(Box::new(snapshot)));
+        }
+        let (history, page) = git.history_and_first_page(snapshot, cancel)?;
+        Ok(Read::Page(Box::new(history), Box::new(page)))
     })();
     if shovel_core::identity::read(path).ok().as_ref() != Some(&identity) {
         return Err(identity_failure(true));
     }
-    result.map_err(Into::into)
+    result
 }
 #[cfg(test)]
 fn read(
     git: &Git,
     path: &std::path::Path,
-    previous: Option<(&History, &Cursor)>,
+    previous: Option<&History>,
     first: bool,
-) -> Result<(History, Page, bool), Failure> {
+) -> Result<Read, Failure> {
     read_expected(
         git,
         path,
-        previous,
+        previous.map(|h| (&h.snapshot.identity, h.snapshot.fingerprint.as_str())),
         first,
-        previous.map(|(h, _)| h.snapshot.identity.fingerprint.as_str()),
+        previous.map(|h| h.snapshot.identity.fingerprint.as_str()),
         &Cancellation::default(),
     )
 }
@@ -230,14 +241,20 @@ impl Workspace {
     }
 }
 impl Tab {
-    pub(super) fn publish_history(
-        &mut self,
-        history: History,
-        page: Page,
-        keep: bool,
-        first: bool,
-    ) {
-        let anchored_offset = (!keep && !first)
+    pub(super) fn publish_history(&mut self, read: Read, first: bool) {
+        self.owner_snapshot = Some(history_cache::metadata(read.snapshot()));
+        match read {
+            Read::Unchanged(snapshot) => self.history.as_mut().unwrap().snapshot = *snapshot,
+            Read::Page(history, page) => self.replace_history_page(*history, *page, first),
+        }
+        self.view.preview = None;
+        self.estimate_cache();
+        self.loading = false;
+        self.view.published();
+    }
+
+    fn replace_history_page(&mut self, history: History, page: Page, first: bool) {
+        let anchored_offset = (!first)
             .then(|| {
                 self.page
                     .as_ref()
@@ -260,36 +277,14 @@ impl Tab {
         if self.view.preview.is_none() {
             self.view.remember(self.page.as_ref(), &self.selected);
         }
-        if !keep {
-            self.previous.clear();
-            self.view.restore(&page, &mut self.selected);
-            if let Some(offset) = anchored_offset {
-                self.view.offset = offset;
-                self.view.restore_offset = Some(offset);
-            }
+        self.previous.clear();
+        self.view.restore(&page, &mut self.selected);
+        if let Some(offset) = anchored_offset {
+            self.view.offset = offset;
+            self.view.restore_offset = Some(offset);
         }
-        // Keep the actual allocation that the selected/focused rows use.
-        // Metadata is immutable for unchanged commits and ref fingerprints.
-        let same_rows = keep
-            && self.page.as_ref().is_some_and(|old| {
-                old.entries
-                    .iter()
-                    .map(|e| &e.commit.hash)
-                    .eq(page.entries.iter().map(|e| &e.commit.hash))
-            });
-        if same_rows {
-            let old = self.page.as_mut().unwrap();
-            old.cursor = page.cursor;
-            old.next = page.next;
-        } else {
-            self.page = Some(page);
-        }
-        self.owner_snapshot = Some(history_cache::metadata(&history.snapshot));
+        self.page = Some(page);
         self.history = Some(history);
-        self.view.preview = None;
-        self.estimate_cache();
-        self.loading = false;
-        self.view.published();
     }
     pub(super) fn publish_page(&mut self, page: Page, older: bool) {
         self.view.remember(self.page.as_ref(), &self.selected);

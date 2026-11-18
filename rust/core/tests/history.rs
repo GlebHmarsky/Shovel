@@ -112,6 +112,10 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
         git.page(&history, &Cursor::default(), &cancel),
         Err(git::Error::Changed)
     ));
+    assert!(matches!(
+        git.history_and_first_page(history.snapshot, &cancel),
+        Err(git::Error::Changed)
+    ));
 }
 
 #[test]

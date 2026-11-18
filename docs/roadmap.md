@@ -1,5 +1,24 @@
 # Roadmap and decision register
 
+## Repository navigation and responsiveness
+
+The desktop now reuses the snapshot from Git inspection to start the first history page. The page still validates refs and directory identity before publishing. When refs and history inputs match the current page, refresh updates repository metadata and retains the page, row allocation, scroll position and backward navigation without another log or graph read. Explicit First and changed-history refresh still read the first page. Ordinary paging keeps checks before and after its log.
+
+The 0.51.0 baseline (`005757c`) reproduced the opening delay. Seven headless samples per repository on Windows with Git for Windows `2.51.1.windows.1` used 301 linear commits and 20,001 commits with 1,000 merges and 19 branches. Each cold sample had an empty workspace with Git already discovered. The operating-system caches were warm. The first-frame timer stops after the actual workspace UI lays out the fresh 200-row page. Warm-tab and reopen timers start at tab activation. Git Trace2 showed three full ref enumerations before publication in the baseline.
+
+| Headless measurement | Small baseline | Small changed | Merge-heavy baseline | Merge-heavy changed |
+| --- | ---: | ---: | ---: | ---: |
+| Cold open to history frame | 1,706 ms | 1,253 ms | 1,734 ms | 1,191 ms |
+| Unchanged refresh to validated history | 1,473 ms | 682 ms | 1,598 ms | 714 ms |
+| Retained tab to history frame | 6 ms | 5 ms | 7 ms | 6 ms |
+| Reopened closed tab to history frame | 5 ms | 4 ms | 6 ms | 5 ms |
+
+Changed cold-open ranges were 957–1,486 ms and 1,018–1,847 ms. Retained tab and warm reopen identity checks finished in 8–17 ms. These are medians and ranges from the same headless development harness, with raw samples in `Build/navigation-baseline.log` and `Build/navigation-faster.log`. Workers for secondary data, native frame presentation and the 400 ms target remain separate. Repeat the timings with the ignored `measure_repository_navigation` test and the same disposable fixture directory.
+
+Command-line launches of the original optimized 0.51.0 executable opened a native Shovel window and reached the first selected-commit details read in 3,476 ms on the small repository and 3,201 ms on the merge-heavy repository. These are individual process-start samples that include Git discovery, window and renderer initialization, history read and the Git process launched from the details layout. They establish that the running application reached that layout, with no mouse or keyboard automation. The baseline traces are in `Build/navigation-fixture-7f38dcc3`.
+
+Nine focused desktop history checks and three native core history checks passed, including stale results, older-page selection and scroll retention, pinned traversal parity, stash ordering, and rejection of a ref change after inspection. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 43 seconds on source fingerprint `8E753F9924527E08F6F81F12E8478D92DD7F53231C4668BA4307B057007EB2F5`.
+
 ## Windows Rust 0.51.0 local build checks
 
 The 0.51.0 source includes fresh checks when opening Updates, a **Later** action that keeps verified downloads, native SSH and credential-manager preferences, and cancellation checks before Windows starts obsolete background Git work.

@@ -679,6 +679,29 @@ impl Git {
         if current.fingerprint != history.snapshot.fingerprint {
             return Err(Error::Changed);
         }
+        self.page_from_observed_refs(history, cursor, current, cancel)
+    }
+
+    /// Start the projection from a freshly inspected snapshot. The page read
+    /// checks the refs and directory identity again before it can publish.
+    pub fn history_and_first_page(
+        &self,
+        snapshot: Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<(History, Page), Error> {
+        let history = self.history(snapshot, cancel)?;
+        let current = history.snapshot.clone();
+        let page = self.page_from_observed_refs(&history, &Cursor::default(), current, cancel)?;
+        Ok((history, page))
+    }
+
+    fn page_from_observed_refs(
+        &self,
+        history: &History,
+        cursor: &Cursor,
+        mut current: Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<Page, Error> {
         let mut args = vec!["log".into(), "--topo-order".into()];
         args.extend(log_options());
         args.push(format!("--skip={}", cursor.raw_offset));

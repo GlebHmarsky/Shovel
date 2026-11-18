@@ -32,6 +32,12 @@ Current partial implementation includes selected submodule Open/Update/Sync with
 
 **2026-11-10 source reconciliation.** Each open R row below now distinguishes Missing, Partial, or Acceptance pending. References to existing tests describe inspected coverage, not a fresh run or full acceptance. Inventory routing was checked against all 194 pinned Git blobs; pending semantic reviews remain pending. New gaps are retained within their owning rows, including tab closure/owner retention (R09/R15), bounded waiting-removal history fixed in this batch (R09/R23), first-page refresh loss (R31, corrected below), initially absent startup caching and divergence (R19/R32, now verified below) and targeted reconciliation (R41). P0 acceptance and remaining functional gaps remain active; the verified 0.49.2 production update is still credited.
 
+#### Repository navigation and responsiveness
+
+- [ ] **Opening latency (R19, R31, R72).** Approach the observed 400 ms Fork reference on small and merge-heavy repositories. Measure initial usable history and completion of fresh reads separately. [First measurements](docs/roadmap.md#repository-navigation-and-responsiveness)
+- [ ] **Retained views (R15, R19, R31, R41).** Keep open tabs' history, page, selection, scroll, comparisons, changes and drafts across navigation. Verify warm reopening and retention beyond the three-page cache.
+- [ ] **Refresh and ownership (R09, R15, R31, R41).** Coalesce targeted refreshes for native and external changes, preserve repository-owned dialogs and operations through tab and window changes, and reject obsolete worker results. Exercise these in the Windows app with an isolated profile and disposable repositories.
+
 **Owner checkpoint (2026-11-10), completed:** delivered local-only Windows Rust 0.50.0 from 3e42466 and paused for testing without publication, installation or merge. The owner subsequently resumed the goal. The existing test payload remains unchanged; all unfinished R rows remain required.
 
 **Local checkpoint 0.50.1 (2026-11-10), completed:** source cc5f2a7, 18 smoke checks and all 19 payload hashes verified; separate local Windows payload delivered and goal paused. The owner subsequently resumed the goal. Preserve this test payload; no publication, installation or merge occurred.

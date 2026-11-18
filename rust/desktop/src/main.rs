@@ -87,7 +87,7 @@ enum Event {
     SubmoduleOpened(u64, PathBuf, Result<PathBuf, String>),
     Preview(u64, u64, Option<Box<shovel_core::history_cache::Preview>>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
-    Loaded(u64, u64, Box<History>, Box<Page>, bool, bool),
+    Loaded(u64, u64, history_view::Read, bool),
     Page(u64, u64, Box<Page>, bool),
     Located(u64, u64, String, Result<(Page, Vec<Cursor>), String>),
     Failed(u64, u64, history_view::Failure),
@@ -403,8 +403,14 @@ impl Workspace {
         let generation = tab.view.begin();
         let previous = tab
             .history
-            .clone()
-            .zip(tab.page.as_ref().map(|p| p.cursor.clone()));
+            .as_ref()
+            .filter(|_| tab.page.is_some())
+            .map(|history| {
+                (
+                    history.snapshot.identity.clone(),
+                    history.snapshot.fingerprint.clone(),
+                )
+            });
         let path = tab.path.clone();
         let id = tab.id;
         let cancel = Cancellation::default();
@@ -417,20 +423,15 @@ impl Workspace {
                 let result = history_view::read_expected(
                     &git,
                     &path,
-                    previous.as_ref().map(|(h, c)| (h, c)),
+                    previous
+                        .as_ref()
+                        .map(|(identity, fingerprint)| (identity, fingerprint.as_str())),
                     first,
                     known_identity.as_deref(),
                     &cancel,
                 );
                 match result {
-                    Ok((history, page, keep)) => Event::Loaded(
-                        id,
-                        generation,
-                        Box::new(history),
-                        Box::new(page),
-                        keep,
-                        first,
-                    ),
+                    Ok(read) => Event::Loaded(id, generation, read, first),
                     Err(error) => Event::Failed(id, generation, error),
                 }
             },
@@ -781,7 +782,7 @@ impl Workspace {
                         }
                     }
                 }
-                Event::Loaded(id, generation, history, page, keep, first) => {
+                Event::Loaded(id, generation, read, first) => {
                     let Some(owner_path) = self
                         .tabs
                         .iter()
@@ -791,13 +792,14 @@ impl Workspace {
                     else {
                         continue;
                     };
-                    self.remember_identity(&owner_path, &history.snapshot.identity.fingerprint);
+                    let snapshot = read.snapshot();
+                    self.remember_identity(&owner_path, &snapshot.identity.fingerprint);
                     let mut reopen_inline = false;
                     let mut reopen_failed = false;
                     for editor in &mut self.editors {
                         if (Self::same_path(&editor.path, &owner_path)
-                            || Self::same_path(&editor.path, &history.snapshot.worktree))
-                            && !editor.accept_identity(&history.snapshot.identity)
+                            || Self::same_path(&editor.path, &snapshot.worktree))
+                            && !editor.accept_identity(&snapshot.identity)
                         {
                             reopen_inline |= editor.inline && editor.open;
                             editor.detach_replaced();
@@ -806,7 +808,7 @@ impl Workspace {
                     if let Some(git) = &self.git {
                         self.operations.resolve_initialization(
                             &owner_path,
-                            Ok(&history.snapshot),
+                            Ok(snapshot),
                             git,
                             &self.scheduler,
                             ctx,
@@ -819,21 +821,19 @@ impl Workspace {
                         .find(|t| t.id == id)
                     {
                         for view in &mut self.stash_views {
-                            if view.path == history.snapshot.worktree {
-                                view.observe(&history.snapshot);
+                            if view.path == snapshot.worktree {
+                                view.observe(snapshot);
                             }
                         }
                         if let Some(expected) = tab.view.reopen_commit_owner.take() {
-                            reopen_failed = history
-                                .snapshot
-                                .identity
-                                .matches_recorded_fingerprint(&expected);
+                            reopen_failed =
+                                snapshot.identity.matches_recorded_fingerprint(&expected);
                             if !reopen_failed {
                                 reopen_inline = false;
                                 self.notice = Some(strings::text("FailedCommitOwnerUnavailable"));
                             }
                         }
-                        tab.publish_history(*history, *page, keep, first);
+                        tab.publish_history(read, first);
                         if !self.closing
                             && !self.pending_exit
                             && !self.confirm_exit_without_save
