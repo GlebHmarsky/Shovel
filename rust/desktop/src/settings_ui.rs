@@ -1,12 +1,13 @@
 use crate::strings::text;
 use eframe::egui;
 use serde_json::json;
-use shovel_core::{conflicts::ToolSettings, settings::Settings};
+use shovel_core::{conflicts::ToolSettings, settings::{AvatarPreferences,AvatarProvider,Settings}};
 pub const KEYS: &[&str] = &[
     "Appearance",
     "UiScale",
     "CommitInWorkspace",
     "HistoryRefsOnRight",
+    "Avatars",
     "DiffSideBySide",
     "DiffFontSize",
     "AutoFetchEnabled",
@@ -88,7 +89,10 @@ impl Dialog {
                                                 && p.to_ascii_lowercase().ends_with(".exe")
                                                 && !p.chars().any(char::is_control))
                                     });
-                                if !valid {
+                                if !AvatarPreferences::from_settings(&self.values).valid()
+                                {
+                                    self.error = Some(text("SettingsAvatarInvalid"));
+                                } else if !valid {
                                     self.error = Some(text("SettingsToolPathInvalid"));
                                 } else if let Err(e) = tool.validate() {
                                     self.error = Some(text(&e.to_string()));
@@ -178,7 +182,25 @@ impl Dialog {
                                         "HistoryRefsOnRight",
                                         "RustRefsRight",
                                     );
-                                    ui.label(text("RustInitialsHelp"));
+                                    let mut avatars =
+                                        AvatarPreferences::from_settings(&self.values);
+                                    ui.label(text("SettingsAvatarSource"));
+                                    for (provider, key) in [
+                                        (AvatarProvider::Repository,"SettingsAvatarRepository"),
+                                        (AvatarProvider::Gravatar,"SettingsAvatarGravatar"),
+                                        (AvatarProvider::Initials,"SettingsAvatarInitials"),
+                                    ] {
+                                        ui.radio_value(&mut avatars.provider, provider, text(key));
+                                    }
+                                    let label = ui.label(text("SettingsGiteaServer"));
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut avatars.site)
+                                            .desired_width(f32::INFINITY)
+                                            .char_limit(2048),
+                                    )
+                                    .labelled_by(label.id);
+                                    ui.label(text("SettingsAvatarHelp"));
+                                    avatars.save(&mut self.values);
                                 }
                                 2 => {
                                     ui.heading(text("SettingsPageDiff"));

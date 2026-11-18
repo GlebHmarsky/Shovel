@@ -1,5 +1,7 @@
 //! Compatible settings with independent Rust storage. Unknown baseline fields
 //! are retained so importing settings cannot silently discard existing choices.
+mod avatars;
+pub use avatars::{AvatarPreferences, AvatarProvider, avatar_website};
 use crate::updates::{Channel, PRODUCT};
 use serde_json::{Map, Value, json};
 use std::{
@@ -58,6 +60,7 @@ impl Settings {
     }
 
     pub fn normalize(&mut self) {
+        AvatarPreferences::normalize(self);
         self.set("SchemaVersion", json!(6));
         self.set("RustProfileVersion", json!(1));
         self.set("Product", json!(PRODUCT));

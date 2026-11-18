@@ -1020,7 +1020,7 @@
   "SettingsAvatarGravatar": "Gravatar",
   "SettingsAvatarInitials": "Colored initials only",
   "SettingsGiteaServer": "Gitea website address (optional)",
-  "SettingsAvatarHelp": "Enter the website base address, including any subpath, for example https://git.example.com. Matching repositories use that server; github.com repositories use GitHub. Pictures load in the background without Git credentials. Private, missing or unavailable accounts keep their initials. Gravatar uses a hash of the author email. Pictures are cached in memory for this session.",
+  "SettingsAvatarHelp": "GitHub and matching Gitea repositories look up public pictures in the background. Enter the Gitea website address, including any subpath. Gitea may search its public users by commit email. Gravatar receives a hash of the email. Pictures stay in memory for this session. Colored initials only makes no network requests.",
   "SettingsAvatarInvalid": "Enter a valid HTTP(S) website address without credentials, query parameters or a fragment.",
   "SettingsDiffDefault": "Open comparisons side by side by default",
   "SettingsDiffFont": "Diff font size",

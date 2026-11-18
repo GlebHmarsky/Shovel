@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod activity_output;
 mod auto_fetch;
+mod avatar_provider;
+mod avatars;
 mod branches;
 mod caption;
 mod commit;
@@ -178,6 +180,7 @@ impl Workspace {
         theme(&ctx, false);
         let font_ctx = ctx.clone();
         let read_workers = read_workers::Workers::default();
+        avatars::install(&ctx, read_workers.clone());
         let font_lease = read_workers.start_required();
         thread::spawn(move || {
             let _lease = font_lease;
@@ -584,6 +587,7 @@ impl Workspace {
             .get(self.selected)
             .filter(|_| !self.pending_exit && !self.closing && egui::Popup::is_any_open(ctx))
             .map(|tab| tab.id);
+        let mut avatar_sources_changed = false;
         let mut deferred = std::mem::take(&mut self.deferred_history);
         while let Some(event) = deferred
             .pop_front()
@@ -633,6 +637,7 @@ impl Workspace {
                 }
                 Event::Initialized(settings, store, git, notice) => {
                     self.settings = *settings;
+                    self.refresh_avatar_sources(ctx);
                     let local = std::env::var_os("LOCALAPPDATA")
                         .map(PathBuf::from)
                         .unwrap_or_default();
@@ -886,6 +891,7 @@ impl Workspace {
                     }
                 }
                 Event::Failed(id, generation, failure) => {
+                    avatar_sources_changed |= failure.identity;
                     if failure.identity
                         && self
                             .tabs
@@ -1077,10 +1083,14 @@ impl Workspace {
                 continue;
             }
             let remote_changed = tab.remotes.poll(ctx);
+            avatar_sources_changed |= remote_changed;
             let sidebar_changed = tab.sidebar.poll(ctx);
             if remote_changed || sidebar_changed {
                 tab.estimate_cache();
             }
+        }
+        if avatar_sources_changed {
+            self.refresh_avatar_sources(ctx);
         }
         for editor in &mut self.editors {
             if changed.iter().any(|path| {
@@ -1523,6 +1533,7 @@ impl Workspace {
         self.save_preferences(ctx);
     }
     fn apply_preferences(&mut self, ctx: &egui::Context) {
+        self.refresh_avatar_sources(ctx);
         ui_scale::set(ctx, self.settings.ui_scale() as f32);
         theme(
             ctx,
@@ -2915,7 +2926,7 @@ impl eframe::App for Workspace {
                         .map(|e| e.commit.clone())
                 {
                     if tab.view.preview.is_some() {
-                        comparison::metadata(ui, &commit);
+                        comparison::metadata(ui, &commit, &tab.path);
                         return;
                     }
                     if tab.comparison.is_none()
@@ -3062,6 +3073,7 @@ impl eframe::App for Workspace {
                                         ui, entry, lanes,
                                         history_row::Style {
                                             selected, peer, refs_right,
+                                            worktree: &tab.path,
                                             ahead: tab.divergence.is_ahead(&entry.commit.hash),
                                         },
                                         &palette,

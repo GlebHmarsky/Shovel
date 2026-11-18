@@ -53,7 +53,8 @@ pub(super) fn visible_ref(name: &str) -> bool {
             .is_some_and(|(_, branch)| branch == "HEAD")
 }
 
-pub(super) struct Style {
+pub(super) struct Style<'a> {
+    pub worktree: &'a std::path::Path,
     pub selected: bool,
     pub peer: bool,
     pub ahead: bool,
@@ -113,8 +114,15 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette) {
     }
 }
 
-pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette) -> egui::Response {
+pub fn show(
+    ui: &mut Ui,
+    entry: &Entry,
+    lanes: usize,
+    style: Style<'_>,
+    p: &Palette,
+) -> egui::Response {
     let Style {
+        worktree,
         selected,
         peer,
         ahead,
@@ -203,7 +211,7 @@ pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette)
         egui::pos2(author.left() + 10., author.center().y),
         egui::vec2(20., 20.),
     );
-    paint_avatar(ui, avatar, c, p);
+    paint_avatar(ui, avatar, c, p, worktree);
     text(
         ui,
         column(author.left() + 25., author.width() - 25.),
@@ -294,7 +302,22 @@ pub fn show(ui: &mut Ui, entry: &Entry, lanes: usize, style: Style, p: &Palette)
     })
 }
 
-pub fn paint_avatar(ui: &Ui, avatar: Rect, c: &shovel_core::git::Commit, p: &Palette) {
+pub fn paint_avatar(
+    ui: &Ui,
+    avatar: Rect,
+    c: &shovel_core::git::Commit,
+    p: &Palette,
+    worktree: &std::path::Path,
+) {
+    if let Some(texture) = crate::avatars::picture(ui.ctx(), worktree, c) {
+        let size = texture.size_vec2();
+        let uv = Rect::from_center_size(egui::pos2(0.5, 0.5), egui::Vec2::splat(size.min_elem()) / size);
+        egui::Image::new(&texture)
+            .uv(uv)
+            .corner_radius(4)
+            .paint_at(ui, avatar);
+        return;
+    }
     let email = c.email.trim().to_lowercase();
     let digest = Sha256::digest(if email.is_empty() {
         c.author.trim().as_bytes()
@@ -380,6 +403,7 @@ mod tests {
                     &entry,
                     1,
                     Style {
+                        worktree: std::path::Path::new(""),
                         selected: false,
                         peer: true,
                         ahead: true,

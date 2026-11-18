@@ -258,7 +258,7 @@ impl Pane {
             return;
         };
         if self.details_index == 0 {
-            metadata(ui, &commit);
+            metadata(ui, &commit, &self.path);
             ui.separator();
         }
         ui.horizontal(|ui| {
@@ -456,7 +456,7 @@ fn error_text(error: working::Error) -> String {
     crate::operations::error_log(&error.into())
 }
 
-pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit) {
+pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit, worktree: &std::path::Path) {
     let ctx = ui.ctx().clone();
     let p = crate::workspace_style::Palette::current(ui);
     egui::ScrollArea::vertical()
@@ -466,7 +466,7 @@ pub(super) fn metadata(ui: &mut egui::Ui, commit: &Commit) {
             ui.horizontal_top(|ui| {
                 let (avatar, avatar_response) =
                     ui.allocate_exact_size(egui::vec2(44., 44.), egui::Sense::hover());
-                crate::history_row::paint_avatar(ui, avatar, commit, &p);
+                crate::history_row::paint_avatar(ui, avatar, commit, &p, worktree);
                 avatar_response.on_hover_text(format!("{} <{}>", commit.author, commit.email));
                 ui.vertical(|ui| {
                     ui.horizontal_wrapped(|ui| {
