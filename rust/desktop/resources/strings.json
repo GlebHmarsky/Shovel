@@ -1154,6 +1154,7 @@
   "RustUpdateFloorUnavailable": "Shovel could not read or save the latest trusted version for this channel. Check access to the update data folder and retry.",
   "RustUpdateCacheUnavailable": "Shovel could not access the downloaded package. Finish any other update and check access to the installation folder, then retry.",
   "RustUpdateDownloadAgain": "The downloaded package is missing or damaged. Download the update again.",
+  "RustUpdateHelperFailed": "Shovel could not start the Windows update helper. The downloaded update is still ready. Try Restart again or rerun the Shovel installer to repair the helper.",
   "RustUpdateCurrent": "This installation is up to date on the selected Rust channel.",
   "RustUpdateProgress": "Downloading update · {0}%",
   "RustUpdateCancelling": "Cancelling…",

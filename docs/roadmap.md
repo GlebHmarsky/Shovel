@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Recover when Windows rejects the update helper
+
+An update handoff now distinguishes a missing package from a failed helper launch. A missing file returns to Download. When Windows cannot start the helper, Shovel stays open, retains the ready package and displays an installer repair message. The pinned native Velopack launcher exercised both errors in a disposable installation layout. Windows rejected a deliberately malformed helper. The fixture kept the package bytes intact and the controller cleared the restart request. Twenty updater tests and both process guard tests passed. No real installer apply or repair was performed.
+
+All-target Clippy and diff checks passed. All 18 smoke checks passed in 38.87 seconds on source fingerprint `2F5E1E6C1140D292172BA230114EB2CED4224670370ABE9B4B8C9E76871735DF`.
+
 ## Restore the verified update after reopening Shovel
 
 After signed discovery, the updater checks the existing installation manifest and hashes the exact package in its cache off-thread. This uses a read-only lookup so automatic checks use no Velopack write probe or fallback repair. A verified package restores Restart while the window stays closed. The user must still approve restart. A changed or damaged package clears readiness. A sharing error retains a previously verified retry for the same release.

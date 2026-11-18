@@ -6,6 +6,7 @@ use shovel_core::{
     updates::{self, Channel, VerifiedRelease},
 };
 use std::{
+    ffi::OsString,
     fs::{File, OpenOptions},
     io::{Read, Write},
     os::windows::fs::OpenOptionsExt,
@@ -493,6 +494,21 @@ fn confirm_published_offer(
         Err(CheckError::Unavailable(error)) => Err(ApplyError::Retry(error)),
     }
 }
+
+fn handoff_update(
+    manager: &UpdateManager,
+    offer: &Offer,
+    restart_args: impl IntoIterator<Item = OsString>,
+) -> Result<(), ApplyError> {
+    manager
+        .wait_exit_then_apply_updates(&offer.asset, false, true, restart_args)
+        .map_err(|error| match error {
+            // Velopack emits this variant when its selected package path is absent.
+            // Failure to start Update.exe is an IO error instead.
+            velopack::Error::FileNotFound(_) => ApplyError::DownloadAgain,
+            _ => ApplyError::Retry(text("RustUpdateHelperFailed")),
+        })
+}
 enum Event {
     Applied(Result<File, ApplyError>),
     Checked(u64, Result<Option<Discovered>, CheckError>),
@@ -920,14 +936,7 @@ impl Controller {
                     .join(offer.release.file_name());
                 let package = verify_for_restart(&target, &offer.release)?;
                 recheck_offer(&offer, &cancel)?;
-                manager(&offer, cancel)?
-                    .wait_exit_then_apply_updates(
-                        &offer.asset,
-                        false,
-                        true,
-                        std::env::args_os().skip(1),
-                    )
-                    .map_err(|error| ApplyError::Retry(failure(error)))?;
+                handoff_update(&manager(&offer, cancel)?, &offer, std::env::args_os().skip(1))?;
                 Ok(package)
             })();
             let _ = tx.send(Event::Applied(result));
@@ -1116,6 +1125,57 @@ mod tests {
         assert_eq!(std::fs::read(&marker).unwrap(), b"keep these bytes");
         assert_eq!(std::fs::read(&updater).unwrap(), b"fixture placeholder");
         assert!(!root.join("packages").exists());
+    }
+
+    #[test]
+    fn native_helper_launch_failure_keeps_the_package_ready_for_retry() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = velopack::locator::create_config_from_root_dir(directory.path());
+        std::fs::create_dir(&config.CurrentBinaryDir).unwrap();
+        std::fs::create_dir(&config.PackagesDir).unwrap();
+        std::fs::write(
+            &config.ManifestPath,
+            "<package><metadata><id>ShovelRust</id><version>0.50.3</version>+             <mainExe>Shovel.exe</mainExe></metadata></package>",
+        )
+        .unwrap();
+        // Windows rejects this file as a malformed executable, so no helper starts.
+        std::fs::write(&config.UpdateExePath, b"invalid executable").unwrap();
+        let offer = published_offer(
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json"),
+            include_bytes!("../../core/tests/fixtures/beta-0.50.14.json.sig"),
+        );
+        let package = config.PackagesDir.join(offer.release.file_name());
+        let manager = UpdateManager::new(
+            FrozenSource {
+                offer: offer.clone(),
+                cancel: Cancellation::default(),
+            },
+            None,
+            Some(config),
+        )
+        .unwrap();
+        assert!(matches!(
+            handoff_update(&manager, &offer, []),
+            Err(ApplyError::DownloadAgain)
+        ));
+        // Verification is covered by the public-package test. This fixture
+        // checks only the result of handing an existing path to the launcher.
+        std::fs::write(&package, b"package fixture").unwrap();
+        let result = handoff_update(&manager, &offer, []);
+        let error = result.unwrap_err();
+        let mut controller = Controller {
+            offer: Some(offer),
+            ready: true,
+            restart_requested: true,
+            phase: Phase::Applying,
+            ..Default::default()
+        };
+        controller.tx.send(Event::Applied(Err(error))).unwrap();
+        controller.tick(&egui::Context::default(), Channel::Beta, false);
+        assert_eq!(controller.status, text("RustUpdateHelperFailed"));
+        assert!(controller.open && controller.ready);
+        assert!(!controller.restart_requested && !controller.exit_ready());
+        assert_eq!(std::fs::read(package).unwrap(), b"package fixture");
     }
 
     #[test]
