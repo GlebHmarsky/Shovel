@@ -40,6 +40,12 @@ pub struct Record {
     pub running: bool,
     pub outcome: Option<Outcome>,
 }
+impl Record {
+    pub fn is_automatic_fetch(&self) -> bool {
+        self.lane == Lane::Fetch && self.key.starts_with("automatic-fetch:")
+    }
+}
+
 struct Work {
     record: Record,
     run: Option<Box<dyn FnOnce() -> Outcome + Send>>,
@@ -262,6 +268,13 @@ impl Scheduler {
     }
     pub fn active_records(&self) -> Vec<Record> {
         self.state.lock().unwrap().active().cloned().collect()
+    }
+    pub fn has_user_work(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap()
+            .active()
+            .any(|record| !record.is_automatic_fetch())
     }
     pub fn has_accepted_work(&self) -> bool {
         let state = self.state.lock().unwrap();

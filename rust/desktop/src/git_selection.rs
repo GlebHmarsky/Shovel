@@ -66,7 +66,7 @@ impl Workspace {
         self.initialized
             && !self.closing
             && !self.git_selection.busy()
-            && !self.scheduler.has_accepted_work()
+            && !self.scheduler.has_user_work()
             && !self.initialization.busy
             && self
                 .tabs
@@ -86,6 +86,10 @@ impl Workspace {
         self.git_selection.start(ctx);
     }
     pub(super) fn poll_git_selection(&mut self, ctx: &egui::Context) {
+        if self.git_selection.busy() && !self.auto_fetch.drained() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(25));
+            return;
+        }
         let Some(result) = self.git_selection.poll() else {
             return;
         };
@@ -222,6 +226,63 @@ mod tests {
             "../no-contact"
         );
     }
+    #[test]
+    fn selecting_git_preempts_only_automatic_fetch_and_waits_before_switching() {
+        let f = Fixture::new();
+        let remote = f._temp.path().join("origin.git");
+        f.command(&["clone", "--bare", ".", remote.to_str().unwrap()], &[]);
+        f.command(&["remote", "add", "origin", remote.to_str().unwrap()], &[]);
+        let marker = f._temp.path().join("fetch-started");
+        let script = f._temp.path().join("upload.sh");
+        let slash = |path: &std::path::Path| path.to_string_lossy().replace('\\', "/");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ntouch '{}'\nsleep 60\nexit 1\n", slash(&marker)),
+        )
+        .unwrap();
+        f.command(
+            &[
+                "config",
+                "remote.origin.uploadpack",
+                &format!("sh '{}'", slash(&script)),
+            ],
+            &[],
+        );
+        let ctx = egui::Context::default();
+        let mut app = f.app(&ctx);
+        let old = app.git.clone().unwrap();
+        app.settings
+            .set("AutoFetchEnabled", serde_json::json!(true));
+        app.auto_fetch.due_now(f.root.clone());
+        let start = Instant::now();
+        while !marker.is_file() {
+            app.receive(&ctx);
+            assert!(
+                start.elapsed() < Duration::from_secs(12),
+                "real automatic fetch did not start"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!app.auto_fetch.drained());
+        assert!(app.scheduler.has_accepted_work());
+        assert!(!app.scheduler.has_user_work());
+        assert!(app.can_choose_git());
+        app.git_selection.test_choice = Some(Some(old.executable.clone()));
+        let selected = Instant::now();
+        app.choose_git(&ctx);
+        app.poll_git_selection(&ctx);
+        assert!(app.git_selection.busy());
+        assert!(Arc::ptr_eq(app.git.as_ref().unwrap(), &old));
+        finish(&mut app, &ctx);
+        assert!(selected.elapsed() < Duration::from_secs(8));
+        assert!(app.auto_fetch.drained());
+        assert_eq!(app.operations.background_count(), 1);
+        assert!(!Arc::ptr_eq(app.git.as_ref().unwrap(), &old));
+        assert_eq!(app.git.as_ref().unwrap().executable, old.executable);
+        assert!(app.operations.failure_path().is_none());
+        assert!(f.command(&["for-each-ref", "refs/remotes"], &[]).is_empty());
+    }
+
     #[test]
     fn cancel_and_invalid_selection_preserve_current_git_and_accepted_work_blocks_selection() {
         let f = Fixture::new();

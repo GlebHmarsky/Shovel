@@ -909,8 +909,16 @@ fn commit_layout_setting_switches_sidebar_view_and_preserves_the_commit_editor()
             .is_some()
         );
     }
-    let (tab, _) = sidebar_point(&ctx, &mut app, "repo").unwrap();
-    assert!(tab.y <= 108., "active toolbar pushed the tab strip to {tab:?}");
+    let full_path = repo.root.to_string_lossy();
+    let spoken = path_text::PathText::new(&ctx, &full_path);
+    let tab = find(&mut app, &|node| {
+        node.role() == egui::Role::Button && node.description() == Some(spoken.spoken())
+    })
+    .expect("the selected repository tab exposes its full path");
+    assert!(
+        tab.y <= 108.,
+        "active toolbar pushed the tab strip to {tab:?}"
+    );
     drop(release);
     until(&mut app, &ctx, |app| !app.editors[0].busy);
     assert!(app.inline_editor().is_some());

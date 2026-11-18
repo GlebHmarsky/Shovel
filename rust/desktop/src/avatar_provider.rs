@@ -443,6 +443,8 @@ mod tests {
                     }
                     Err(e) => panic!("fixture request missing: {e}"),
                 };
+                // Accepted Winsock connections inherit the listener's nonblocking mode.
+                stream.set_nonblocking(false).unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_secs(3)))
                     .unwrap();

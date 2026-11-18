@@ -29,5 +29,9 @@
   "NativeUpdaterProgressReached100": true,
   "NativeUpdaterSkippedCurrentVersion": true,
   "RustStableCommit": "9d75ec962d714646276f9c2ca25619767437fe5d",
-  "LegacyBetaTag": "39c9d1ced004a3aeb72e3612afc6517e2dfb4135"
+  "LegacyBetaTag": "39c9d1ced004a3aeb72e3612afc6517e2dfb4135",
+  "ReverifiedUTC": "2026-11-18T05:22:31.8193263+00:00",
+  "InstallerProductName": "Shovel",
+  "InstallerProductVersion": "0.50.16",
+  "InstallerAuthenticodeStatus": "NotSigned"
 }

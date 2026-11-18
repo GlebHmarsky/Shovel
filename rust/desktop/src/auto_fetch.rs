@@ -90,11 +90,7 @@ impl Controller {
         {
             self.due.clear();
         }
-        if scheduler
-            .active_records()
-            .iter()
-            .any(|r| !r.key.starts_with("automatic-fetch:"))
-        {
+        if scheduler.has_user_work() {
             self.cancel();
             return completed;
         }

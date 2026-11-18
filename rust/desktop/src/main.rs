@@ -1401,7 +1401,7 @@ impl Workspace {
         let work = self.scheduler.active_records();
         if work
             .iter()
-            .any(|record| !record.key.starts_with("automatic-fetch:"))
+            .any(|record| !record.is_automatic_fetch())
         {
             self.pending_exit = false;
             self.discard_settings_on_exit = false;
