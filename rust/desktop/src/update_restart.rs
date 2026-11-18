@@ -26,28 +26,9 @@ pub(super) fn check_repositories(
             return Err(blocked());
         }
         let git = git.ok_or_else(blocked)?;
-        let snapshot = git
-            .inspect(&repository.path, &cancel)
-            .map_err(|_| blocked())?;
-        if repository
-            .observed
-            .as_ref()
-            .is_some_and(|expected| *expected != snapshot.identity)
-            || !snapshot.operations.is_empty()
-        {
-            return Err(blocked());
-        }
-        let unmerged = git
-            .read(
-                &repository.path,
-                ["ls-files", "--unmerged", "-z"],
-                &cancel,
-                256 * 1024,
-            )
-            .map_err(|_| blocked())?;
-        if !unmerged.stdout.is_empty()
-            || shovel_core::identity::read(&repository.path).map_err(|_| blocked())?
-                != snapshot.identity
+        if !git
+            .worktree_allows_restart(&repository.path, repository.observed.as_ref(), &cancel)
+            .map_err(|_| blocked())?
         {
             return Err(blocked());
         }

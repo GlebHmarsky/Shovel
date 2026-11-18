@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Check worktree state directly before restart
+
+The updater now checks the native worktree directories, unfinished-operation markers and unresolved index entries without reading refs, stashes or remotes. It reads the operation markers again after the index and identity checks. An active bisect postpones restart alongside existing merge, rebase, cherry-pick and revert checks. [Git bisect lifecycle](https://git-scm.com/docs/git-bisect#_bisect_reset)
+
+A disposable native bisect reproduced the missing guard and verified that postponing restart preserved `BISECT_START`, HEAD and the index. A second worktree with 17,000 packed tags exceeded the History read limit and passed the restart probe with its refs and HEAD intact. Three restart checks and 22 updater checks passed, along with all-target Clippy and diff checks. All 18 smoke checks took 42.10 seconds on `D07774F8D2E5E8B640A6E62F7621F42E96D15B944095481B6A33661B5CCCEBBA`. Installed apply and physical cross-session checks remain open.
+
 ## Windows Rust Beta 0.50.21 published
 
 Run `44328870837` published master `e98c16c07723c1508747b7d48a64be69391ed902`. The independent verifier downloaded all seven immutable assets and matched the live feed and signature byte for byte. The 21,706,885-byte installer reports 0.50.21 and Windows reports `NotSigned` for Authenticode. The native updater discovered, verified and downloaded the exact package. GitHub Latest, C# Beta and Rust Stable retained the same release and asset IDs, digests and update timestamps. Installed apply remains open. [Release](https://github.com/GlebHmarsky/Shovel/releases/tag/rust-v0.50.21-win-rust-beta) · [Publication receipt](evidence/rust-beta-0.50.21-publication.json)

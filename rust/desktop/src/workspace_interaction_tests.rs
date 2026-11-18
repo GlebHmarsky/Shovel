@@ -1704,6 +1704,59 @@ fn update_restart_checks_known_identity_and_index_conflicts_without_touching_git
 }
 
 #[test]
+fn update_restart_blocks_an_active_bisect_and_preserves_its_state() {
+    use crate::update_restart::{Repository, check_repositories};
+    let repo = RepositoryFixture::new();
+    let target = Repository {
+        path: repo.root.clone(),
+        observed: Some(shovel_core::identity::read(&repo.root).unwrap()),
+        identity_blocked: false,
+    };
+    for content in ["middle\n", "tip\n"] {
+        std::fs::write(repo.root.join("file"), content).unwrap();
+        repo.command(&["commit", "-am", content.trim()]);
+    }
+    repo.command(&["bisect", "start", "HEAD", "HEAD~2"]);
+    let state = repo.root.join(".git/BISECT_START");
+    let before = std::fs::read(&state).unwrap();
+    let head = repo.command(&["rev-parse", "HEAD"]);
+    let index = std::fs::read(repo.root.join(".git/index")).unwrap();
+    let targets = std::slice::from_ref(&target);
+    assert!(check_repositories(Some(&repo.git), targets).is_err());
+    assert_eq!(std::fs::read(state).unwrap(), before);
+    assert_eq!(repo.command(&["rev-parse", "HEAD"]), head);
+    assert_eq!(std::fs::read(repo.root.join(".git/index")).unwrap(), index);
+    repo.command(&["bisect", "reset"]);
+    check_repositories(Some(&repo.git), targets).unwrap();
+}
+
+#[test]
+fn update_restart_checks_index_without_enumerating_large_reference_sets() {
+    use crate::update_restart::{Repository, check_repositories};
+    use std::fmt::Write;
+
+    let repo = RepositoryFixture::new();
+    let head = repo.command(&["rev-parse", "HEAD"]);
+    let oid = std::str::from_utf8(&head).unwrap().trim();
+    let suffix = "long-reference".repeat(15);
+    let mut packed = String::from("# pack-refs with: sorted\n");
+    for n in 0..17_000 {
+        writeln!(packed, "{oid} refs/tags/{n:05}-{suffix}").unwrap();
+    }
+    let refs = repo.root.join(".git/packed-refs");
+    std::fs::write(&refs, &packed).unwrap();
+    assert!(repo.git.inspect(&repo.root, &Cancellation::default()).is_err());
+    let target = Repository {
+        path: repo.root.clone(),
+        observed: Some(shovel_core::identity::read(&repo.root).unwrap()),
+        identity_blocked: false,
+    };
+    check_repositories(Some(&repo.git), &[target]).unwrap();
+    assert_eq!(std::fs::read_to_string(refs).unwrap(), packed);
+    assert_eq!(repo.command(&["rev-parse", "HEAD"]), head);
+}
+
+#[test]
 fn shutdown_refuses_open_repository_picker_and_keeps_single_picker() {
     let ctx = egui::Context::default();
     let mut app = workspace();

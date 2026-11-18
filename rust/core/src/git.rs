@@ -340,6 +340,25 @@ impl Git {
         }
         Ok(snapshot)
     }
+    /// Check the worktree for app restart without loading refs, stashes or remotes.
+    pub fn worktree_allows_restart(
+        &self,
+        root: &Path,
+        expected: Option<&crate::identity::Identity>,
+        cancel: &Cancellation,
+    ) -> Result<bool, Error> {
+        let snapshot = self.inspect_directories(root, cancel)?;
+        if expected.is_some_and(|identity| *identity != snapshot.identity)
+            || worktree_has_unfinished_operation(&snapshot.git_directory)?
+        {
+            return Ok(false);
+        }
+        let unmerged = self.read(root, ["ls-files", "--unmerged", "-z"], cancel, 256 * 1024)?;
+        Ok(unmerged.stdout.is_empty()
+            && crate::identity::read(root)? == snapshot.identity
+            && !worktree_has_unfinished_operation(&snapshot.git_directory)?)
+    }
+
     pub(crate) fn current_index_target(
         &self,
         expected: &Snapshot,
@@ -815,15 +834,28 @@ fn bounded_file(path: &Path, limit: usize) -> Result<Vec<u8>, Error> {
     }
     Ok(bytes)
 }
+const OPERATION_MARKERS: [(&str, &str); 6] = [
+    ("MERGE_HEAD", "merge"),
+    ("rebase-merge", "rebase"),
+    ("rebase-apply", "rebase-apply"),
+    ("CHERRY_PICK_HEAD", "cherry-pick"),
+    ("REVERT_HEAD", "revert"),
+    ("sequencer", "sequencer"),
+];
+
+fn worktree_has_unfinished_operation(root: &Path) -> std::io::Result<bool> {
+    for name in OPERATION_MARKERS.map(|(path, _)| path).into_iter().chain(["BISECT_START"]) {
+        match fs::symlink_metadata(root.join(name)) {
+            Ok(_) => return Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(false)
+}
+
 pub(crate) fn operation_markers(root: &Path) -> Vec<String> {
-    [
-        ("MERGE_HEAD", "merge"),
-        ("rebase-merge", "rebase"),
-        ("rebase-apply", "rebase-apply"),
-        ("CHERRY_PICK_HEAD", "cherry-pick"),
-        ("REVERT_HEAD", "revert"),
-        ("sequencer", "sequencer"),
-    ]
+    OPERATION_MARKERS
     .into_iter()
     .filter(|(path, _)| root.join(path).exists())
     .map(|(_, name)| name.to_owned())
