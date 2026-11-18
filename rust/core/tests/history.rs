@@ -35,6 +35,32 @@ fn fixture() -> (tempfile::TempDir, Git) {
 }
 
 #[test]
+fn history_waits_for_git_to_confirm_the_captured_worktree() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    command(&git, root, &["commit", "--allow-empty", "-m", "first"], b"");
+    let identity = shovel_core::identity::read(root).unwrap();
+    let other = root.join("alternate-worktree");
+    fs::create_dir(&other).unwrap();
+    command(
+        &git,
+        root,
+        &["config", "--local", "core.worktree", other.to_str().unwrap()],
+        b"",
+    );
+    let cancel = Cancellation::default();
+    // Git history itself still reads successfully with this configuration.
+    assert_eq!(
+        command(&git, root, &["log", "-1", "--format=%s"], b"").trim(),
+        "first"
+    );
+    assert!(matches!(
+        git.read_history(root, &identity, None, &cancel),
+        Err(git::Error::NotWorktree)
+    ));
+}
+
+#[test]
 fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     let (temp, git) = fixture();
     let root = temp.path();
@@ -81,8 +107,12 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     let cancel = Cancellation::default();
     let snapshot = git.inspect(root, &cancel).unwrap();
     assert_eq!(snapshot.branch.as_deref(), Some("main"));
-    let history = git.history(snapshot, &cancel).unwrap();
-    let first = git.page(&history, &Cursor::default(), &cancel).unwrap();
+    let git::HistoryRead::Page(history, first) =
+        git.read_history(root, &snapshot.identity, None, &cancel).unwrap()
+    else {
+        panic!("a cold read should return the first page");
+    };
+    assert_eq!(history.snapshot.fingerprint, snapshot.fingerprint);
     assert_eq!(first.entries.len(), 200);
     let second = git
         .page(&history, first.next.as_ref().unwrap(), &cancel)

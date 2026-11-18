@@ -64,6 +64,28 @@ Switching repositories suspends inline Local Changes and preserves its context, 
 
 In a two-repository headless workspace test, returning to unchanged Local Changes laid out in 76 ms. It reused the same working-copy context and diff generation, with the selected file and draft still in place. An external file created while the editor was suspended appeared 1.35 seconds after returning. All four Commit editor checks and the layout-switch regression passed. Clippy, `git diff --check` and all 18 smoke checks passed in the final run. Smoke took 32.91 seconds on source fingerprint `7F62896AD952C015C7190BAFB3B23AC89F650F6B56430B4E87F9E54264BCA091`.
 
+### Verify native navigation and overlap history reads
+
+History loading now overlaps Git's worktree-directory and remote inspection with ref enumeration and the first history page. The history reader starts from the captured filesystem identity. It publishes only after native Git confirms the same worktree, the log passes the final ref check, and the repository still has the same physical identity. An unchanged refresh can still reuse the existing page. A native fixture with an overridden `core.worktree` confirms that readable history alone cannot validate the captured worktree.
+
+The ignored `measure_native_repository_navigation` test runs the real Windows Shovel workspace and separate Commit viewport from the command line. It invokes the workspace's navigation methods directly and records timings after native UI layout. Five baseline launches with `913aaf1` behavior and five changed launches used the same disposable 301-commit linear and 20,001-commit merge-heavy repositories, a fresh profile per launch and isolated Git configuration. Cold means no Shovel history for that tab, with the app already initialized and OS caches warm. Times describe development-build layout and validation.
+
+| Native scenario | Baseline median (range) | Changed median (range) |
+| --- | ---: | ---: |
+| Small cold open to fresh history layout | 1,151 ms (1,106–1,872) | 835 ms (748–1,718) |
+| Merge-heavy cold open to fresh history layout | 1,455 ms (1,377–2,447) | 1,425 ms (1,107–1,723) |
+| Retained tab to first layout | 20 ms (13–28) | 22 ms (15–31) |
+| Warm reopen to first layout | 17 ms (13–24) | 19 ms (15–23) |
+| Commit window to first layout | 152 ms (116–164) | 161 ms (113–305) |
+| Commit window to fresh status | 1,701 ms (1,411–2,066) | 1,793 ms (1,752–3,092) |
+| Explicit unchanged refresh to validated layout | 593 ms (561–620) | 519 ms (439–909) |
+
+Each native run checked a nonzero history scroll offset and the same selected commit after switching, closing and reopening the tab, and refreshing it. The separate Commit window kept the original repository throughout, and an orderly exit saved the isolated history view. Raw timings and executable SHA-256 hashes are in `Build/navigation-native-{baseline,after}-paired.log` and `Build/navigation-native-{before,after}-binary.sha256`. To rerun, set `SHOVEL_NAVIGATION_FIXTURES` to a fixture directory with `Small`, `Merge-20k` and `gitconfig`, point `GIT_CONFIG_GLOBAL` at that file and set `GIT_CONFIG_NOSYSTEM=1`. Run `cargo test --locked -p shovel-desktop measure_native_repository_navigation -- --ignored --nocapture --test-threads=1` from the workspace. Physical input and visual acceptance, wider dialog coverage, and the 400 ms cold-open target remain open. The merge-heavy and Commit measurements vary enough that these samples do not establish an improvement in those paths.
+
+Git Trace2 recorded 36–43 ms inside the initial `git log --topo-order` on the small fixture and 92–101 ms on the merge-heavy fixture across the five changed launches. Those times leave process startup, admission waits, and the remaining reads as targets for further measurement.
+
+Four native core history checks, nine desktop history checks, eleven cache checks and the Windows DOS path alias regression passed. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 38.09 seconds on source fingerprint `9E4DD039BA99D4611EE1D86DA362C538CF78A1C0B9EB618C29C1E4076C017E17`.
+
 
 ## Windows Rust 0.51.0 local build checks
 

@@ -227,6 +227,11 @@ impl Editor {
             .as_deref()
             .filter(|_| self.snapshot_error.is_none())
     }
+
+    #[cfg(test)]
+    pub(super) fn presented(&self) -> bool {
+        self.initialized && self.open
+    }
     pub(super) fn matches_owner(&self, expected: Option<&str>) -> bool {
         expected.is_none_or(|expected| {
             self.owner_fingerprint

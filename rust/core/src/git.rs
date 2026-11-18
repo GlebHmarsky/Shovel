@@ -70,6 +70,31 @@ pub struct Snapshot {
     pub fingerprint: String,
     pub references: Vec<Reference>,
 }
+impl Snapshot {
+    fn with_directories(
+        identity: crate::identity::Identity,
+        worktree: PathBuf,
+        git_directory: PathBuf,
+        common_directory: PathBuf,
+    ) -> Self {
+        Self {
+            identity,
+            worktree,
+            git_directory,
+            common_directory,
+            branch: None,
+            head: None,
+            upstream: None,
+            upstream_target: None,
+            remotes: vec![],
+            operations: vec![],
+            recovery: None,
+            shallow: false,
+            fingerprint: String::new(),
+            references: vec![],
+        }
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Commit {
     pub hash: String,
@@ -112,6 +137,31 @@ pub struct Page {
     pub entries: Vec<Entry>,
     pub cursor: Cursor,
     pub next: Option<Cursor>,
+}
+
+pub enum HistoryRead {
+    Unchanged(Box<Snapshot>),
+    Page(Box<History>, Box<Page>),
+}
+
+impl HistoryRead {
+    pub fn snapshot(&self) -> &Snapshot {
+        match self {
+            Self::Unchanged(snapshot) => snapshot,
+            Self::Page(history, _) => &history.snapshot,
+        }
+    }
+
+    fn apply_directories(&mut self, native: Snapshot) {
+        let snapshot = match self {
+            Self::Unchanged(snapshot) => snapshot.as_mut(),
+            Self::Page(history, _) => &mut history.snapshot,
+        };
+        snapshot.worktree = native.worktree;
+        snapshot.git_directory = native.git_directory;
+        snapshot.common_directory = native.common_directory;
+        snapshot.remotes = native.remotes;
+    }
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -330,22 +380,12 @@ impl Git {
         {
             return Err(Error::NotWorktree);
         }
-        Ok(Snapshot {
+        Ok(Snapshot::with_directories(
             identity,
-            worktree: dirs[1].clone().into(),
-            git_directory: dirs[2].clone().into(),
-            common_directory: dirs[3].clone().into(),
-            branch: None,
-            head: None,
-            upstream: None,
-            upstream_target: None,
-            remotes: vec![],
-            operations: vec![],
-            recovery: None,
-            shallow: false,
-            fingerprint: String::new(),
-            references: vec![],
-        })
+            dirs[1].clone().into(),
+            dirs[2].clone().into(),
+            dirs[3].clone().into(),
+        ))
     }
     pub fn inspect(&self, root: &Path, cancel: &Cancellation) -> Result<Snapshot, Error> {
         self.inspect_metadata(root, self.inspect_directories(root, cancel)?, cancel)
@@ -357,11 +397,64 @@ impl Git {
         cancel: &Cancellation,
     ) -> Result<Snapshot, Error> {
         self.refresh_refs(&mut snapshot, cancel)?;
+        self.inspect_remotes(root, snapshot, cancel)
+    }
+
+    fn inspect_remotes(
+        &self,
+        root: &Path,
+        mut snapshot: Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<Snapshot, Error> {
         snapshot.remotes = lines(&self.read(root, ["remote"], cancel, 256 * 1024)?.stdout);
         if crate::identity::read(root)? != snapshot.identity {
             return Err(Error::Changed);
         }
         Ok(snapshot)
+    }
+
+    /// Load a history view while Git independently confirms the filesystem
+    /// identity's directories and remote configuration. Only the combined
+    /// result can be published or used as a repository snapshot.
+    pub fn read_history(
+        &self,
+        root: &Path,
+        identity: &crate::identity::Identity,
+        previous_fingerprint: Option<&str>,
+        cancel: &Cancellation,
+    ) -> Result<HistoryRead, Error> {
+        let mut snapshot = Snapshot::with_directories(
+            identity.clone(),
+            identity.root.clone(),
+            identity.git.clone(),
+            identity.common.clone(),
+        );
+        std::thread::scope(|scope| {
+            let directories = std::thread::Builder::new().spawn_scoped(scope, || {
+                let native = self.inspect_directories(root, cancel)?;
+                if native.identity != *identity {
+                    return Err(Error::Changed);
+                }
+                self.inspect_remotes(root, native, cancel)
+            })?;
+            let rows = (|| {
+                self.refresh_refs(&mut snapshot, cancel)?;
+                if previous_fingerprint == Some(snapshot.fingerprint.as_str()) {
+                    return Ok(HistoryRead::Unchanged(Box::new(snapshot)));
+                }
+                let (history, page) = self.history_and_first_page(snapshot, cancel)?;
+                Ok::<_, Error>(HistoryRead::Page(Box::new(history), Box::new(page)))
+            })();
+            let native = directories
+                .join()
+                .map_err(|_| std::io::Error::other("repository directory worker stopped"))??;
+            let mut read = rows?;
+            if crate::identity::read(root)? != *identity {
+                return Err(Error::Changed);
+            }
+            read.apply_directories(native);
+            Ok(read)
+        })
     }
     /// Check the worktree for app restart without loading refs, stashes or remotes.
     pub fn worktree_allows_restart(

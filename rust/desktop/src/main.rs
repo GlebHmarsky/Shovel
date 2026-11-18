@@ -40,11 +40,29 @@ mod workspace_split;
 mod workspace_style;
 mod workspace_tabs;
 
+#[cfg(test)]
+mod native_navigation_tests;
+
 fn main() -> eframe::Result {
     velopack::VelopackApp::build()
         .set_auto_apply_on_startup(false)
         .run();
-    let options = eframe::NativeOptions {
+    let profile = std::env::args_os()
+        .skip(1)
+        .collect::<Vec<_>>()
+        .windows(2)
+        .find(|a| a[0] == "--data-directory")
+        .map(|a| PathBuf::from(&a[1]))
+        .filter(|p| p.is_absolute());
+    eframe::run_native(
+        &strings::text("AppTitle"),
+        native_options(),
+        Box::new(move |context| Ok(Box::new(Workspace::new(context, profile)))),
+    )
+}
+
+fn native_options() -> eframe::NativeOptions {
+    eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_icon(
                 eframe::icon_data::from_png_bytes(include_bytes!(
@@ -55,12 +73,7 @@ fn main() -> eframe::Result {
             .with_inner_size([1200., 800.])
             .with_min_inner_size([900., 620.]),
         ..Default::default()
-    };
-    eframe::run_native(
-        &strings::text("AppTitle"),
-        options,
-        Box::new(|context| Ok(Box::new(Workspace::new(context)))),
-    )
+    }
 }
 
 use eframe::egui::{self, RichText};
@@ -173,7 +186,7 @@ struct Workspace {
     tab_markers: tab_markers::Controller,
 }
 impl Workspace {
-    fn new(context: &eframe::CreationContext<'_>) -> Self {
+    fn new(context: &eframe::CreationContext<'_>, profile: Option<PathBuf>) -> Self {
         caption::install(context);
         let (sender, receiver) = mpsc::channel();
         let output = sender.clone();
@@ -193,14 +206,7 @@ impl Workspace {
             let local = std::env::var_os("LOCALAPPDATA")
                 .map(PathBuf::from)
                 .unwrap_or_else(std::env::temp_dir);
-            let directory = std::env::args_os()
-                .skip(1)
-                .collect::<Vec<_>>()
-                .windows(2)
-                .find(|a| a[0] == "--data-directory")
-                .map(|a| PathBuf::from(&a[1]))
-                .filter(|p| p.is_absolute())
-                .unwrap_or_else(|| local.join("ShovelRust/Foundation"));
+            let directory = profile.unwrap_or_else(|| local.join("ShovelRust/Foundation"));
             let mut store = SettingsStore::new(directory);
             let (settings, notice) =
                 match store.load_or_import(&local.join("GitGui/Foundation/settings.json")) {

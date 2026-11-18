@@ -1,6 +1,7 @@
 //! Page presentation survives reads; no repository command is owned by this cache.
 use super::*;
-use shovel_core::{git::Snapshot, identity::Identity};
+pub(super) use shovel_core::git::HistoryRead as Read;
+use shovel_core::identity::Identity;
 use std::{collections::BTreeMap, time::Instant};
 
 const VIEW_LIMIT: usize = 128;
@@ -113,19 +114,6 @@ fn identity_failure(changed: bool) -> Failure {
     }
 }
 
-pub(super) enum Read {
-    Unchanged(Box<Snapshot>),
-    Page(Box<History>, Box<Page>),
-}
-impl Read {
-    pub(super) fn snapshot(&self) -> &Snapshot {
-        match self {
-            Self::Unchanged(snapshot) => snapshot,
-            Self::Page(history, _) => &history.snapshot,
-        }
-    }
-}
-
 pub(super) fn read_expected(
     git: &Git,
     path: &std::path::Path,
@@ -140,21 +128,14 @@ pub(super) fn read_expected(
     {
         return Err(identity_failure(true));
     }
-    let result = (|| {
-        let snapshot = git.inspect(path, cancel)?;
-        if snapshot.identity != identity {
-            return Err(identity_failure(true));
-        }
-        if !first && previous.is_some_and(|(_, fingerprint)| fingerprint == snapshot.fingerprint) {
-            return Ok(Read::Unchanged(Box::new(snapshot)));
-        }
-        let (history, page) = git.history_and_first_page(snapshot, cancel)?;
-        Ok(Read::Page(Box::new(history), Box::new(page)))
-    })();
+    let previous_fingerprint = previous
+        .filter(|_| !first)
+        .map(|(_, fingerprint)| fingerprint);
+    let result = git.read_history(path, &identity, previous_fingerprint, cancel);
     if shovel_core::identity::read(path).ok().as_ref() != Some(&identity) {
         return Err(identity_failure(true));
     }
-    result
+    result.map_err(Into::into)
 }
 #[cfg(test)]
 fn read(
