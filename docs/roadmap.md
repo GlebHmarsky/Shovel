@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Verify native Git identity locking and Cancel
+
+A headless Workspace used the selected Git and an isolated global config. It invoked Load and Apply through the actual Settings controls. An existing native lock produced the save failure, kept the typed fields and left the config and lock untouched. After Load and a successful Apply, Cancel discarded a pending diff-font preference and the verified global Git identity remained saved. A separate native fixture introduced the lock between the name and email writes. The completed name, original email, unrelated config and competing lock all survived, and Shovel reported partial failure.
+
+Five identity checks, four Settings checks, all-target Clippy and diff checks passed. All 18 smoke checks took 33.34 seconds on `87B8C90A660FE0D759374FF8EB05E320052BDD24D4FC0FF8F08E075DF150D2E8`. This completes R21. Physical Windows Settings and assistive-technology acceptance remain under R20 and R12.
+
 ## Validate both Git identity fields before writing
 
 Applying a valid name with an invalid email used to change the name before reporting the validation error. The editor now validates both values before starting the worker or writing Git configuration. It counts Unicode characters and keeps the reviewed values while the user corrects invalid input. A completed Apply re-reads both values before reporting success. A disconnected or interrupted worker clears the busy state, retains the typed fields and asks the user to load the current identity before applying again.
