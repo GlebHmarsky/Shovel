@@ -1,5 +1,9 @@
 # Roadmap and decision register
 
+## Windows development build in Rust 0.52.0
+
+All-target Clippy, `git diff --check`, and the 18 bounded smoke checks passed. Smoke took 56.37 seconds on fingerprint "1698443CCA9CCE39976317BF78BBC119E25C1B66C56A940AECB21DFB79DC5C9E". Live desktop appearance and installed updates remain unverified.
+
 ## Commit message guides and retained diffs in Rust 0.51.10
 
 The editor draws a guide at column 72 and shows the remaining character count for the subject and the description line at the caret. The keyboard fixture verified the counts, Enter focus transfer, and an actual Ctrl+Enter commit with a blank line before the description. Local Changes cleared the retained comparison after a conflict ended outside Shovel and after a verified deletion. The ordinary diff retention fixture still passed.

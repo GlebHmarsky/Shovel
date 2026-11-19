@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.52.0 - 2026-11-19
+
+- Development build with the commit message guides, direct conflict resolution, and stale diff cleanup.
+
 ## Rust 0.51.10 - 2026-11-19
 
 - Add column 72 guides and live character counts to the commit editor. Enter moves from the subject to the description, and Ctrl+Enter commits the current draft.
