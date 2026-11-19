@@ -291,11 +291,24 @@ impl Workspace {
                             }
                             markers.preview = Some((tab.id, rows));
                         }
+                        let retry = matches!(result.read, Read::Count(None) | Read::Marker(Status::Unavailable));
+                        let read = if retry {
+                            markers
+                                .observations
+                                .get(&scan.id)
+                                .and_then(|old| match old.read {
+                                    Read::Count(Some(count)) => Some(Read::Count(Some(count))),
+                                    _ => None,
+                                })
+                                .unwrap_or(result.read)
+                        } else {
+                            result.read
+                        };
                         markers.observations.insert(
                             scan.id,
                             Observation {
-                                read: result.read,
-                                due: marked(tab).then_some(now + INTERVAL),
+                                read,
+                                due: (marked(tab) || retry).then_some(now + INTERVAL),
                             },
                         );
                     }

@@ -48,7 +48,6 @@ impl Cache {
         let snapshot = crate::history_cache::metadata(snapshot);
         let (sender, receiver) = mpsc::channel();
         self.receiver = Some(receiver);
-        self.error = None;
         let ctx = ctx.clone();
         let lease = workers.start(cancel.clone());
         thread::spawn(move || {
@@ -69,6 +68,7 @@ impl Cache {
             match result {
                 Ok(value) => {
                     self.value = Some(value);
+                    self.error = None;
                     changed = true;
                 }
                 Err(error) => self.error = Some(error),

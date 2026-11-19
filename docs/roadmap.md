@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Refresh continuity and Local Changes in Rust 0.52.1
+
+The held upstream-read fixture kept the last badge and ahead marker visible until Git confirmed the new count. A read failure kept the previous counts and exposed the error in the tooltip. The commit editor fixture verified pointer typing, the subject-only count, and separate message and footer bounds. Native Git fixtures verified submodule labels through both open paths, the sidebar count confirmation, and rejection of a stale stash selection.
+
+Nineteen focused checks, all-target Clippy, and `git diff --check` passed. The 18 bounded smoke checks took 55.55 seconds on fingerprint "AFDE9A941D57B351D8B26E6B158EF62AC44FA36BB13E3D554EB8436B03EE6FCF". Live desktop appearance and installed updates remain unverified.
+
 ## Windows development build in Rust 0.52.0
 
 All-target Clippy, `git diff --check`, and the 18 bounded smoke checks passed. Smoke took 56.37 seconds on fingerprint "1698443CCA9CCE39976317BF78BBC119E25C1B66C56A940AECB21DFB79DC5C9E". Live desktop appearance and installed updates remain unverified.

@@ -192,6 +192,7 @@ enum Form {
         target: shovel_core::stashes::Target,
         message: String,
     },
+    StashesDrop(Vec<shovel_core::stashes::Target>),
     Recovery(recovery::Action),
     New {
         name: String,
@@ -268,6 +269,13 @@ impl Dialogs {
     }
     pub fn confirm_recovery(&mut self, snapshot: &Snapshot, action: recovery::Action) {
         self.set(snapshot, Form::Recovery(action));
+    }
+    pub fn confirm_stashes_drop(
+        &mut self,
+        snapshot: &Snapshot,
+        targets: Vec<shovel_core::stashes::Target>,
+    ) {
+        self.set(snapshot, Form::StashesDrop(targets));
     }
     pub fn reset(&mut self, snapshot: &Snapshot, target: &str, mode: Reset) {
         self.set(
@@ -447,7 +455,7 @@ impl Dialogs {
             review.poll();
         }
         let title = match &dialog.form {
-            Form::StashDrop { .. } => "ActionTitleStashDrop",
+            Form::StashDrop { .. } | Form::StashesDrop(_) => "ActionTitleStashDrop",
             Form::Recovery(action) => recovery_title(*action),
             Form::New { .. } => "ActionTitleNewBranch",
             Form::Manage { action, .. } => action.title(),
@@ -517,6 +525,20 @@ impl Dialogs {
                                         if ui.button(text("RustConfirmStashDrop")).clicked() {
                                             submitted_stash = Some(
                                                 shovel_core::stashes::Action::Drop(target.clone()),
+                                            );
+                                        }
+                                    }
+                                    Form::StashesDrop(targets) => {
+                                        let count = targets.len().to_string();
+                                        ui.label(strings::format("StashConfirmDropMany", &[&count]));
+                                        egui::ScrollArea::vertical().max_height(115.).show(ui, |ui| {
+                                            for target in targets.iter() {
+                                                ui.label(format!("{} · {}", target.selector, &target.hash[..target.hash.len().min(12)]));
+                                            }
+                                        });
+                                        if ui.button(strings::format("StashDropMany", &[&count])).clicked() {
+                                            submitted_stash = Some(
+                                                shovel_core::stashes::Action::DropMany(targets.clone()),
                                             );
                                         }
                                     }

@@ -137,6 +137,14 @@ fn sidebar_submodule_open_update_and_sync_use_actual_child_and_reconcile_both_ta
         thread::sleep(Duration::from_millis(5));
     }
     assert!(Workspace::same_path(&app.tabs[app.selected].path, &child));
+    assert_eq!(app.tabs[app.selected].name(), "history :: child");
+    let direct_ctx = egui::Context::default();
+    let mut direct = crate::workspace_interaction_tests::workspace();
+    direct.tabs.clear();
+    direct.git = Some(Arc::new(f.git.clone()));
+    direct.open(child.clone(), &direct_ctx);
+    settle_submodule(&mut direct, &direct_ctx);
+    assert_eq!(direct.tabs[0].name(), "history :: child");
     let child_owner = app.tabs[app.selected].id;
     app.select_tab(0, &ctx);
     f.command(
@@ -315,69 +323,18 @@ fn sidebar_submodule_accepted_update_survives_all_tabs_closing_and_retains_failu
         fs::read_to_string(child.join("file")).unwrap(),
         "local child\n"
     );
+    // Activity shows the selected command's output directly in its right pane.
+    app.receive(&ctx);
     app.activity_open = true;
     app.activity_all = true;
     frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
-    let out = frame(&ctx, &mut app, vec![]);
-    let labels = out
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .unwrap()
-        .nodes
-        .iter()
-        .filter_map(|(_, n)| n.label().or(n.value()).map(str::to_owned))
-        .collect::<Vec<_>>();
-    let point = out
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .unwrap()
-        .nodes
-        .iter()
-        .filter(|(_, n)| n.label() == Some(strings::text("ActionOutput").as_str()))
-        .filter_map(|(_, n)| n.bounds())
-        .min_by(|a, b| a.y0.total_cmp(&b.y0))
-        .map(|r| egui::pos2(((r.x0 + r.x1) / 2.) as f32, ((r.y0 + r.y1) / 2.) as f32));
-    out.drop_without_applying_deltas();
-    let point = point.expect("Activity has no retained Git output");
-    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(point)]).drop_without_applying_deltas();
-    for pressed in [true, false] {
-        frame(
-            &ctx,
-            &mut app,
-            vec![egui::Event::PointerButton {
-                pos: point,
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            }],
-        )
-        .drop_without_applying_deltas();
-    }
-    frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
     let output = frame(&ctx, &mut app, vec![]);
-    let retained = output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .unwrap()
-        .nodes
-        .iter()
-        .any(|(_, n)| {
-            n.label()
-                .or(n.value())
-                .is_some_and(|s| s.contains("overwritten") && s.contains("file"))
-        });
+    let visible = |needle: &str| {
+        output.shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text().contains(needle))
+        })
+    };
+    assert!(visible(&strings::text("ActivityTitle")));
+    assert!(visible("overwritten") && visible("file"), "Activity did not expose the native dirty-file failure");
     output.drop_without_applying_deltas();
-    assert!(
-        retained,
-        "Activity did not expose the native dirty-file failure"
-    );
-    assert!(
-        labels
-            .iter()
-            .any(|s| s.contains(&strings::text("ActionTitleSubmoduleUpdate"))),
-        "{labels:?}"
-    );
 }

@@ -25,24 +25,38 @@ struct Harness {
 }
 
 #[test]
-fn message_guide_counts_the_current_line_and_enter_moves_to_description() {
+fn commit_message_fields_accept_pointer_input_without_overlapping_the_footer() {
     let mut h = Harness::new();
     h.stage("one.txt");
     h.until(|e| !e.action_busy());
     let out = h.render(vec![]);
     let tree = out.platform_output.accesskit_update.as_ref().unwrap();
-    let (subject, _) = tree.nodes.iter()
-        .find(|(_, node)| node.role() == egui::Role::TextInput)
-        .unwrap();
-    let focus = egui::accesskit::ActionRequest {
-        action: egui::accesskit::Action::Focus,
-        target_tree: tree.tree_id,
-        target_node: *subject,
-        data: None,
+    let bounds = |role| {
+        tree.nodes
+            .iter()
+            .find_map(|(_, node)| (node.role() == role).then(|| node.bounds()).flatten())
+            .unwrap()
     };
+    let subject = bounds(egui::Role::TextInput);
+    let description = bounds(egui::Role::MultilineTextInput);
+    let amend = bounds(egui::Role::CheckBox);
+    assert!(subject.y1 <= description.y0 && description.y1 <= amend.y0);
+    let point = egui::pos2(
+        (subject.x0 + 15.) as f32,
+        ((subject.y0 + subject.y1) / 2.) as f32,
+    );
     out.drop_without_applying_deltas();
-    h.render(vec![egui::Event::AccessKitActionRequest(focus)])
+    h.render(vec![egui::Event::PointerMoved(point)])
         .drop_without_applying_deltas();
+    for pressed in [true, false] {
+        h.render(vec![egui::Event::PointerButton {
+            pos: point,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }])
+        .drop_without_applying_deltas();
+    }
     let title = "S".repeat(82);
     let out = h.render(vec![egui::Event::Text(title.clone())]);
     assert_eq!(h.editor.draft.subject, title);
@@ -66,14 +80,14 @@ fn message_guide_counts_the_current_line_and_enter_moves_to_description() {
     let first_line = "B".repeat(93);
     let out = h.render(vec![egui::Event::Text(first_line.clone())]);
     assert!(
-        out.shapes
+        !out.shapes
             .iter()
             .any(|shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "-21"))
     );
     out.drop_without_applying_deltas();
     let out = h.render(vec![egui::Event::Paste("\nTail".into())]);
     assert!(
-        out.shapes
+        !out.shapes
             .iter()
             .any(|shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "68"))
     );

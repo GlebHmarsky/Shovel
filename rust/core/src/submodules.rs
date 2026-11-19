@@ -55,6 +55,30 @@ pub fn path(root: &Path, relative: &str) -> Result<PathBuf, Error> {
     Ok(path)
 }
 impl Git {
+    pub fn superproject_worktree(
+        &self,
+        snapshot: &Snapshot,
+        cancel: &Cancellation,
+    ) -> Result<Option<PathBuf>, Error> {
+        let output = self.read(
+            &snapshot.worktree,
+            ["rev-parse", "--show-superproject-working-tree"],
+            cancel,
+            32768,
+        )?;
+        let root = std::str::from_utf8(&output.stdout)
+            .map_err(|_| Error::Code("GitErrorInvalidOutput"))?
+            .trim_end_matches(['\r', '\n']);
+        if root.is_empty() {
+            return Ok(None);
+        }
+        let root = PathBuf::from(root);
+        if !root.is_absolute() || identity::read(&snapshot.worktree)? != snapshot.identity {
+            return Err(Error::Code("ActionIdentityChanged"));
+        }
+        Ok(Some(root))
+    }
+
     pub fn open_submodule(
         &self,
         expected: &Snapshot,

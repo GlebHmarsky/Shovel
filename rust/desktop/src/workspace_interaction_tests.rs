@@ -898,14 +898,16 @@ fn commit_layout_setting_switches_sidebar_view_and_preserves_the_commit_editor()
         node.label().or_else(|| node.value()) == Some("Queued: Commit")
     }).is_some());
     for top in [true, false] {
-        assert!(
+        assert_eq!(
             find(&mut app, &|node| {
                 node.role() == egui::Role::ProgressIndicator
                     && node
                         .bounds()
                         .is_some_and(|r| if top { r.y0 < 100. } else { r.y0 > 350. })
             })
-            .is_some()
+            .is_some(),
+            top,
+            "progress belongs only in the top repository header"
         );
     }
     let full_path = repo.root.to_string_lossy();

@@ -118,8 +118,8 @@ impl View {
         if self.selected.as_ref() != Some(&hash) {
             self.selected = Some(hash);
             self.inspection_cancel.cancel();
-            self.inspection = None;
-            self.pane = None;
+            self.inspection_generation += 1;
+            self.inspecting = false;
         }
     }
     pub fn release_cache(&mut self) {
@@ -243,7 +243,14 @@ impl View {
                                 .or(list.entries.first())
                                 .map(|e| e.hash.clone());
                             self.list = Some(list);
-                            self.inspect(ctx);
+                            // An existing inspection is immutable. A fresh reflog list
+                            // does not reset the selected stash's comparison.
+                            let displayed = self.inspection.as_ref().map(|data| &data.worktree.hash);
+                            if displayed != self.selected.as_ref()
+                                || (self.selected.is_some() && self.pane.is_none())
+                            {
+                                self.inspect(ctx);
+                            }
                         }
                         Err(error) => {
                             self.list_failed = true;
@@ -258,8 +265,10 @@ impl View {
                     self.inspecting = false;
                     match *result {
                         Ok(data) => {
+                            if self.inspection.as_ref().is_none_or(|old| old.worktree.hash != data.worktree.hash) {
+                                self.comparison = 0;
+                            }
                             self.inspection = Some(data);
-                            self.comparison = 0;
                             self.select_comparison(ctx);
                         }
                         Err(error) => self.status = error,
@@ -489,7 +498,9 @@ impl View {
                             .enumerate()
                             {
                                 if index != 3 || data.untracked.is_some() {
-                                    ui.selectable_value(&mut self.comparison, index, text(key));
+                                    ui.add_enabled_ui(self.selected.as_ref() == Some(&data.worktree.hash), |ui| {
+                                        ui.selectable_value(&mut self.comparison, index, text(key));
+                                    });
                                 }
                             }
                         });
@@ -575,7 +586,7 @@ pub fn title(action: &Action) -> &'static str {
         Action::Create { .. } => "ActionTitleStashCreate",
         Action::Apply { pop: false, .. } => "ActionTitleStashApply",
         Action::Apply { pop: true, .. } => "ActionTitleStashPop",
-        Action::Drop(_) => "ActionTitleStashDrop",
+        Action::Drop(_) | Action::DropMany(_) => "ActionTitleStashDrop",
     }
 }
 impl Drop for View {
@@ -590,6 +601,86 @@ pub struct QuickTarget<'a> {
     pub reference: &'a shovel_core::git::Reference,
     pub message: &'a str,
 }
+
+#[derive(Default)]
+pub(super) struct SidebarSelection {
+    entries: std::collections::BTreeMap<String, String>,
+    anchor: Option<(String, String)>,
+}
+impl SidebarSelection {
+    fn key(reference: &shovel_core::git::Reference) -> (String, String) {
+        (reference.name.clone(), reference.hash.clone())
+    }
+    pub fn contains(&self, reference: &shovel_core::git::Reference) -> bool {
+        self.entries.get(&reference.name) == Some(&reference.hash)
+    }
+    pub fn retain(&mut self, references: &[shovel_core::git::Reference]) {
+        let still_present = |(name, hash): &(String, String)| {
+            references
+                .iter()
+                .any(|r| &r.name == name && &r.hash == hash)
+        };
+        self.entries.retain(|name, hash| {
+            references
+                .iter()
+                .any(|r| &r.name == name && &r.hash == hash)
+        });
+        if self.anchor.as_ref().is_some_and(|key| !still_present(key)) {
+            self.anchor = None;
+        }
+    }
+    pub fn select(
+        &mut self,
+        reference: &shovel_core::git::Reference,
+        references: &[shovel_core::git::Reference],
+        modifiers: egui::Modifiers,
+    ) {
+        let key = Self::key(reference);
+        if !modifiers.ctrl {
+            self.entries.clear();
+        }
+        if modifiers.shift
+            && let Some(anchor) = &self.anchor
+            && let Some(first) = references
+                .iter()
+                .position(|r| r.name == anchor.0 && r.hash == anchor.1)
+            && let Some(last) = references
+                .iter()
+                .position(|r| r.name == key.0 && r.hash == key.1)
+        {
+            self.entries.extend(
+                references[first.min(last)..=first.max(last)]
+                    .iter()
+                    .filter(|r| r.name.starts_with("stash@{"))
+                    .map(Self::key),
+            );
+            return;
+        }
+        if !modifiers.ctrl || self.entries.remove(&key.0).is_none() {
+            self.entries.insert(key.0.clone(), key.1.clone());
+        }
+        self.anchor = Some(key);
+    }
+    pub fn context_targets(
+        &mut self,
+        reference: &shovel_core::git::Reference,
+        references: &[shovel_core::git::Reference],
+    ) -> Vec<Target> {
+        if !self.contains(reference) {
+            self.select(reference, references, egui::Modifiers::NONE);
+        }
+        references
+            .iter()
+            .filter(|r| r.name.starts_with("stash@{") && self.contains(r))
+            .map(|r| Target {
+                selector: r.name.clone(),
+                hash: r.hash.clone(),
+                list_stamp: None,
+            })
+            .collect()
+    }
+}
+
 pub fn quick_actions(
     ui: &mut egui::Ui,
     target: QuickTarget<'_>,
@@ -680,6 +771,49 @@ mod tests {
         command(&git, &root, &["commit", "-m", "base"]);
         let snapshot = git.inspect(&root, &Cancellation::default()).unwrap();
         (temp, Arc::new(git), snapshot)
+    }
+    #[test]
+    fn sidebar_multiselect_confirms_the_count_and_drops_only_selected_stashes() {
+        use crate::workspace_interaction_tests::{frame, sidebar_click, sidebar_point, workspace};
+        let (_temp, git, snapshot) = fixture();
+        let path = &snapshot.worktree;
+        for message in ["one", "two", "three"] {
+            fs::write(path.join("file"), message).unwrap();
+            command(&git, path, &["stash", "push", "-m", message]);
+        }
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        ctx.set_embed_viewports(true);
+        let mut app = workspace();
+        app.tabs.clear();
+        app.git = Some(git.clone());
+        app.settings.set("AutoFetchEnabled", serde_json::json!(false));
+        app.open(path.clone(), &ctx);
+        crate::history_view::tests::wait(&mut app, &ctx);
+        let newest = "stash@{0}  On main: three";
+        let oldest = "stash@{2}  On main: one";
+        sidebar_click(&ctx, &mut app, newest, egui::PointerButton::Primary);
+        let (pos, _) = sidebar_point(&ctx, &mut app, oldest).unwrap();
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
+        for pressed in [true, false] {
+            frame(&ctx, &mut app, vec![
+                egui::Event::ModifiersChanged(egui::Modifiers::CTRL),
+                egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::CTRL },
+            ]).drop_without_applying_deltas();
+        }
+        frame(&ctx, &mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]).drop_without_applying_deltas();
+        sidebar_click(&ctx, &mut app, newest, egui::PointerButton::Secondary);
+        sidebar_click(&ctx, &mut app, "Delete 2 stashes…", egui::PointerButton::Primary);
+        assert!(app.branches.is_open() && !app.scheduler.has_accepted_work());
+        assert_eq!(command(&git, path, &["stash", "list"]).lines().count(), 3);
+        sidebar_click(&ctx, &mut app, "Delete 2 stashes", egui::PointerButton::Primary);
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while app.scheduler.has_accepted_work() || app.tabs[0].loading {
+            app.receive(&ctx);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(command(&git, path, &["stash", "list"]), "stash@{0}: On main: two");
     }
     struct Harness {
         ctx: egui::Context,

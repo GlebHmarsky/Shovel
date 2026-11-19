@@ -50,6 +50,7 @@ pub enum Action {
         pop: bool,
     },
     Drop(Target),
+    DropMany(Vec<Target>),
 }
 #[derive(Clone, Debug)]
 pub struct Inspection {
@@ -189,6 +190,9 @@ impl Git {
             return Err(Error::Code("ActionChanged"));
         }
         let root = &fresh.worktree;
+        if let Action::DropMany(targets) = action {
+            return self.drop_reviewed_stashes(expected, current, targets, &cancel, stage);
+        }
         if !matches!(action, Action::Drop(_)) {
             if !fresh.operations.is_empty() {
                 return Err(Error::Code("ActionSequence"));
@@ -253,11 +257,12 @@ impl Git {
                 }
                 args.extend(["drop".into(), target.selector.clone()]);
             }
+            Action::DropMany(_) => unreachable!(),
         }
         stage(match action {
             Action::Create { .. } => Stage::Stashing,
             Action::Apply { .. } => Stage::Reapplying,
-            Action::Drop(_) => Stage::DroppingStash,
+            Action::Drop(_) | Action::DropMany(_) => Stage::DroppingStash,
         });
         if matches!(action, Action::Drop(_))
             && self.stashes(expected, &cancel)?.stamp != current.stamp
@@ -312,6 +317,74 @@ impl Git {
         stage(Stage::Reconciling);
         let mut completed = log.finish(self, root, result)?;
         completed.preserves_worktree = matches!(action, Action::Drop(_));
+        Ok(completed)
+    }
+
+    fn drop_reviewed_stashes(
+        &self,
+        expected: &Snapshot,
+        current: List,
+        targets: &[Target],
+        cancel: &Cancellation,
+        stage: impl Fn(Stage),
+    ) -> Result<Completed, Error> {
+        let reviewed = expected
+            .references
+            .iter()
+            .filter(|reference| reference.name.starts_with("stash@{"))
+            .map(|reference| (&reference.name, &reference.hash));
+        if !reviewed.eq(current
+            .entries
+            .iter()
+            .map(|entry| (&entry.selector, &entry.hash)))
+        {
+            return Err(Error::Code("StashChanged"));
+        }
+        let indices: std::collections::BTreeSet<_> = targets
+            .iter()
+            .filter_map(|target| {
+                if target
+                    .list_stamp
+                    .as_ref()
+                    .is_some_and(|stamp| *stamp != current.stamp)
+                {
+                    return None;
+                }
+                current.entries.iter().position(|entry| {
+                    entry.selector == target.selector && entry.hash == target.hash
+                })
+            })
+            .collect();
+        if indices.is_empty() || indices.len() != targets.len() {
+            return Err(Error::Code("StashChanged"));
+        }
+        let root = &expected.worktree;
+        let mut remaining = current.entries;
+        let mut log = Transcript::default();
+        stage(Stage::DroppingStash);
+        let result = (|| {
+            // Older entries come first so removing one never shifts a pending selector.
+            for index in indices.into_iter().rev() {
+                if self.stashes(expected, cancel)?.entries != remaining {
+                    return Err(Error::Code("StashChanged"));
+                }
+                let entry = &remaining[index];
+                if !log.write(self, root, ["stash", "drop", &entry.selector])? {
+                    return Ok(None);
+                }
+                remaining.remove(index);
+                for (position, entry) in remaining.iter_mut().enumerate().skip(index) {
+                    entry.selector = format!("stash@{{{position}}}");
+                }
+            }
+            if self.stashes(expected, cancel)?.entries != remaining {
+                return Err(Error::Code("StashChanged"));
+            }
+            Ok(None)
+        })();
+        stage(Stage::Reconciling);
+        let mut completed = log.finish(self, root, result)?;
+        completed.preserves_worktree = true;
         Ok(completed)
     }
 }

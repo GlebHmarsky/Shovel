@@ -749,13 +749,22 @@ impl Editor {
                 Event::Diff(generation, result) if generation == self.diff_generation => {
                     match result {
                         Ok(diff) => {
-                            self.diff = Some(diff);
-                            self.displayed_file = self
+                            let file = self
                                 .focused
                                 .as_ref()
                                 .map(|entry| (entry.group, entry.path.clone()));
+                            let same_preview = self.displayed_file == file
+                                && self.diff.as_ref().is_some_and(|previous| {
+                                    previous.kind == diff.kind
+                                        && previous.availability == diff.availability
+                                        && previous.lines == diff.lines
+                                });
+                            self.diff = Some(diff);
+                            self.displayed_file = file;
                             self.diff_current = true;
-                            self.diff_view.reset();
+                            if !same_preview {
+                                self.diff_view.reset();
+                            }
                         }
                         Err(error) => self.diff_error = Some(error_text(error)),
                     }
@@ -1225,23 +1234,8 @@ impl Editor {
         {
             self.request_leave(Leave::Close, &ctx);
         }
-        egui::Panel::top("commit_controls").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.set_min_height(20.);
-                if let Some(branch) = self
-                    .context
-                    .as_ref()
-                    .and_then(|c| c.repository.branch.as_deref())
-                {
-                    ui.label(branch);
-                }
-                if self.progress().is_none()
-                    && let Some(status) = &self.status
-                {
-                    ui.label(status);
-                }
-            });
-            if let Some(error) = &self.snapshot_error {
+        if let Some(error) = &self.snapshot_error {
+            egui::Panel::top("commit-status-error").show(ui, |ui| {
                 let message = if self.context.is_some() {
                     "CommitPreviousStatus"
                 } else {
@@ -1253,8 +1247,8 @@ impl Editor {
                         ui.add(egui::Label::new(error).selectable(true).wrap());
                     });
                 });
-            }
-        });
+            });
+        }
         let message = egui::Panel::bottom(if self.inline {
             "inline_commit_message"
         } else {
@@ -1384,6 +1378,7 @@ impl Editor {
                     .fill(palette.panel)
                     .inner_margin(egui::Margin::symmetric(6, 3))
                     .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
                         ui.horizontal(|ui| {
                             ui.strong(strings::format(
                                 if staged {
@@ -1694,19 +1689,6 @@ impl Editor {
 mod conflict_tests;
 const MESSAGE_COLUMN: usize = 72;
 
-fn description_line_length(value: &str, mut cursor: usize) -> usize {
-    let mut length = 0;
-    for line in value.split('\n') {
-        let chars = line.chars().count();
-        length = chars - usize::from(line.ends_with('\r'));
-        if cursor <= chars {
-            break;
-        }
-        cursor -= chars + 1;
-    }
-    length
-}
-
 fn message_field(ui: &mut egui::Ui, value: &mut String, description: bool) -> egui::Response {
     let (label, count_rect) = ui
         .horizontal(|ui| {
@@ -1715,8 +1697,10 @@ fn message_field(ui: &mut egui::Ui, value: &mut String, description: bool) -> eg
             } else {
                 "CommitSubject"
             }));
-            let (_, rect) =
-                ui.allocate_space(egui::vec2(ui.available_width(), label.rect.height()));
+            let rect = (!description).then(|| {
+                ui.allocate_space(egui::vec2(ui.available_width(), label.rect.height()))
+                    .1
+            });
             (label.id, rect)
         })
         .inner;
@@ -1741,28 +1725,21 @@ fn message_field(ui: &mut egui::Ui, value: &mut String, description: bool) -> eg
             egui::Stroke::new(1., palette.border),
         );
     }
-    let length = if description {
-        let cursor = output
-            .state
-            .cursor
-            .char_range()
-            .map_or(0, |range| range.primary.index.into());
-        description_line_length(value, cursor)
-    } else {
-        value.chars().count()
-    };
-    let remaining = MESSAGE_COLUMN as i64 - length as i64;
-    let color = match remaining {
-        ..=-21 => palette.diff_removed_text,
-        -20..=-1 => crate::workspace_style::Palette::change_status('M', ui.visuals().dark_mode),
-        _ => palette.text,
-    };
-    ui.put(
-        count_rect,
-        egui::Label::new(egui::RichText::new(remaining.to_string()).color(color))
-            .halign(egui::Align::Max),
-    )
-    .on_hover_text(text("CommitCharactersRemaining"));
+    if let Some(count_rect) = count_rect {
+        let remaining = MESSAGE_COLUMN as i64 - value.chars().count() as i64;
+        let color = match remaining {
+            ..=-21 => palette.diff_removed_text,
+            -20..=-1 => crate::workspace_style::Palette::change_status('M', ui.visuals().dark_mode),
+            _ => palette.text,
+        };
+        // The count belongs to the label above the edit. Do not move the parent layout cursor.
+        ui.place(
+            count_rect,
+            egui::Label::new(egui::RichText::new(remaining.to_string()).color(color))
+                .halign(egui::Align::Max),
+        )
+        .on_hover_text(text("CommitCharactersRemaining"));
+    }
     output.response.response.labelled_by(label)
 }
 

@@ -35,7 +35,9 @@ pub struct Counter {
     state: State,
     generation: u64,
     stale: bool,
-    fingerprint: String,
+    owner: String,
+    branch: Option<String>,
+    target: Option<shovel_core::network::Target>,
     ahead_commits: HashSet<String>,
     busy: bool,
     upstream: String,
@@ -52,7 +54,9 @@ impl Default for Counter {
             state: State::Pending,
             generation: 0,
             stale: false,
-            fingerprint: String::new(),
+            owner: String::new(),
+            branch: None,
+            target: None,
             ahead_commits: HashSet::new(),
             busy: false,
             upstream: String::new(),
@@ -84,16 +88,21 @@ impl Counter {
         workers: &crate::read_workers::Workers,
     ) {
         self.invalidate();
-        if self.fingerprint != snapshot.fingerprint {
+        let upstream = snapshot.upstream.as_deref().unwrap_or_default();
+        if self.owner != snapshot.identity.fingerprint
+            || self.branch != snapshot.branch
+            || self.target != snapshot.upstream_target
+            || self.upstream != upstream
+        {
+            self.state = State::Pending;
             self.ahead_commits.clear();
-            self.fingerprint.clone_from(&snapshot.fingerprint);
+            self.owner.clone_from(&snapshot.identity.fingerprint);
+            self.branch.clone_from(&snapshot.branch);
+            self.target.clone_from(&snapshot.upstream_target);
+            upstream.clone_into(&mut self.upstream);
+            self.error = None;
         }
-        self.state = State::Pending;
-        self.error = None;
-        self.stale = false;
         self.busy = true;
-        self.upstream = snapshot.upstream.clone().unwrap_or_default();
-        self.observed = crate::dates::local(ctx, &chrono::Utc::now());
         self.cancel = Cancellation::default();
         let cancel = self.cancel.clone();
         let snapshot = snapshot.clone();
@@ -122,10 +131,15 @@ impl Counter {
                 Ok((state, ahead)) => {
                     self.state = state;
                     self.ahead_commits = ahead;
+                    self.observed = crate::dates::local(ctx, &chrono::Utc::now());
+                    self.stale = false;
+                    self.error = None;
                 }
                 Err(error) => {
-                    self.state = State::Failed;
-                    self.ahead_commits.clear();
+                    if !matches!(self.state, State::Available { .. }) {
+                        self.state = State::Failed;
+                    }
+                    self.stale = true;
                     self.error = Some(error);
                 }
             }
@@ -139,20 +153,25 @@ impl Counter {
     }
     pub fn display(&self) -> Display {
         if let State::Available { ahead, behind } = self.state {
+            let mut help = strings::format(
+                if self.stale {
+                    "DivergenceStale"
+                } else {
+                    "DivergenceAvailable"
+                },
+                &[
+                    &ahead.to_string(),
+                    &behind.to_string(),
+                    &self.upstream,
+                    &self.observed,
+                ],
+            );
+            if let Some(error) = &self.error {
+                help.push('\n');
+                help.push_str(error);
+            }
             return Display {
-                help: strings::format(
-                    if self.stale {
-                        "DivergenceStale"
-                    } else {
-                        "DivergenceAvailable"
-                    },
-                    &[
-                        &ahead.to_string(),
-                        &behind.to_string(),
-                        &self.upstream,
-                        &self.observed,
-                    ],
-                ),
+                help,
                 ahead: (ahead > 0).then(|| ahead.to_string()),
                 behind: (behind > 0).then(|| behind.to_string()),
             };
@@ -252,7 +271,7 @@ mod tests {
         app.tabs.clear();
         app.settings
             .set("AutoFetchEnabled", serde_json::json!(false));
-        app.git = Some(Arc::new(git));
+        app.git = Some(Arc::new(git.clone()));
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         app.open(root, &ctx);
@@ -330,6 +349,34 @@ mod tests {
                 .help
                 .contains("refs/remotes/team/topic")
         );
+        let previous = app.tabs[0].history.as_ref().unwrap().snapshot.clone();
+        cmd(
+            &previous.worktree,
+            &[
+                "update-ref",
+                "refs/remotes/team/topic",
+                previous.head.as_deref().unwrap(),
+            ],
+        );
+        let git = app.git.as_ref().unwrap().clone();
+        let updated = git
+            .inspect(&previous.worktree, &Cancellation::default())
+            .unwrap();
+        let (started, release) = crate::history_cache::tests::hold_read(updated.worktree.clone());
+        let counter = &mut app.tabs[0].divergence;
+        counter.start(git, &updated, &ctx, &app.read_workers);
+        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(counter.display().ahead.as_deref(), Some("1"));
+        assert!(counter.is_ahead(previous.head.as_deref().unwrap()));
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while counter.busy {
+            counter.poll(&ctx);
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(counter.display().ahead.is_none());
+        assert!(!counter.is_ahead(previous.head.as_deref().unwrap()));
     }
     #[test]
     fn stale_values_remain_labeled_and_obsolete_completions_cannot_replace_new_counts() {
@@ -389,9 +436,14 @@ mod tests {
             .send(Event(1, Err("fixture failure".into())))
             .unwrap();
         value.poll(&ctx);
-        assert!(value.display().ahead.is_none());
-        assert!(!value.is_ahead("ahead"));
-        assert!(value.display().behind.is_none());
+        assert_eq!(value.display().ahead.as_deref(), Some("3"));
+        assert_eq!(value.display().behind.as_deref(), Some("4"));
+        assert!(value.is_ahead("ahead"));
         assert!(value.display().help.contains("fixture failure"));
+        value.sender.send(Event(1, Ok((State::NoUpstream, HashSet::new())))).unwrap();
+        value.poll(&ctx);
+        assert!(value.display().ahead.is_none());
+        assert!(value.display().behind.is_none());
+        assert!(!value.is_ahead("ahead"));
     }
 }

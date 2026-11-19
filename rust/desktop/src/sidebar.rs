@@ -7,17 +7,24 @@ use shovel_core::{
     sidebar::Sidebar,
 };
 use std::{
+    path::{Path, PathBuf},
     sync::{
         Arc,
         mpsc::{self, Receiver},
     },
     thread,
 };
+struct Read {
+    sidebar: Result<Sidebar, String>,
+    superproject: Option<Option<PathBuf>>,
+}
 #[derive(Default)]
 pub struct Cache {
     pub value: Option<Sidebar>,
     pub error: Option<String>,
-    receiver: Option<Receiver<Result<Sidebar, String>>>,
+    pub submodule_name: Option<String>,
+    known_superproject: bool,
+    receiver: Option<Receiver<Read>>,
     cancel: Cancellation,
 }
 impl Drop for Cache {
@@ -26,6 +33,18 @@ impl Drop for Cache {
     }
 }
 impl Cache {
+    pub fn set_superproject(&mut self, child: &Path, parent: Option<&Path>) {
+        self.known_superproject = true;
+        self.submodule_name = parent.map(|parent| {
+            let project = parent.file_name().unwrap_or(parent.as_os_str());
+            let module = child.file_name().unwrap_or(child.as_os_str());
+            format!(
+                "{} :: {}",
+                project.to_string_lossy(),
+                module.to_string_lossy()
+            )
+        });
+    }
     pub fn invalidate(&mut self) {
         self.cancel.cancel();
         self.receiver = None;
@@ -39,9 +58,9 @@ impl Cache {
     ) {
         self.invalidate();
         self.cancel = Cancellation::default();
-        self.error = None;
         let cancel = self.cancel.clone();
         let snapshot = crate::history_cache::metadata(snapshot);
+        let discover_superproject = !self.known_superproject;
         let (sender, receiver) = mpsc::channel();
         self.receiver = Some(receiver);
         let ctx = ctx.clone();
@@ -50,18 +69,30 @@ impl Cache {
             let _lease = lease;
             #[cfg(test)]
             crate::history_cache::tests::wait_for_read(&snapshot.worktree);
-            let result = git.sidebar(&snapshot, &cancel).map_err(|e| text(&e.code()));
-            let _ = sender.send(result);
+            let sidebar = git.sidebar(&snapshot, &cancel).map_err(|e| text(&e.code()));
+            let superproject = if discover_superproject {
+                git.superproject_worktree(&snapshot, &cancel).ok()
+            } else {
+                None
+            };
+            let _ = sender.send(Read {
+                sidebar,
+                superproject,
+            });
             ctx.request_repaint();
         });
     }
-    pub fn poll(&mut self, ctx: &egui::Context) -> bool {
+    pub fn poll(&mut self, ctx: &egui::Context, path: &Path) -> bool {
         let mut changed = false;
         if let Some(result) = self.receiver.as_ref().and_then(|r| r.try_recv().ok()) {
             self.receiver = None;
-            match result {
+            if let Some(parent) = result.superproject {
+                self.set_superproject(path, parent.as_deref());
+            }
+            match result.sidebar {
                 Ok(value) => {
                     self.value = Some(value);
+                    self.error = None;
                     changed = true;
                 }
                 Err(error) => self.error = Some(error),
@@ -188,7 +219,7 @@ mod tests {
         cache.start(Arc::new(missing), &snapshot, &ctx, &Default::default());
         let end = Instant::now() + Duration::from_secs(5);
         while cache.pending() {
-            cache.poll(&ctx);
+            cache.poll(&ctx, &snapshot.worktree);
             assert!(Instant::now() < end);
             thread::sleep(Duration::from_millis(5));
         }
@@ -199,13 +230,16 @@ mod tests {
         cache.invalidate();
         assert!(
             sender
-                .send(Ok(Sidebar {
-                    branches: vec![],
-                    submodules: vec![]
-                }))
+                .send(Read {
+                    sidebar: Ok(Sidebar {
+                        branches: vec![],
+                        submodules: vec![]
+                    }),
+                    superproject: None,
+                })
                 .is_err()
         );
-        cache.poll(&ctx);
+        cache.poll(&ctx, &snapshot.worktree);
         assert_eq!(cache.value.as_ref().unwrap().branches.len(), 4);
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.52.1 - 2026-11-19
+
+- Retain Pull and Push counts while reading history and upstream state. Preserve cached Local Changes counts on temporary status errors and keep the selected stash comparison during list refresh.
+- Remove the Local Changes branch and status strip. Keep the commit controls below the description and show the character count on the subject only.
+- Label submodule tabs as `Project :: Submodule`.
+- Select multiple stashes in the sidebar and delete the reviewed selection after confirming its count.
+
 ## Rust 0.52.0 - 2026-11-19
 
 - Development build with the commit message guides, direct conflict resolution, and stale diff cleanup.

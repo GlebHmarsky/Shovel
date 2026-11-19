@@ -60,8 +60,9 @@ pub(super) enum TabAction {
 
 impl Tab {
     pub(super) fn name(&self) -> std::borrow::Cow<'_, str> {
-        self.qualified_name
+        self.sidebar.submodule_name
             .as_deref()
+            .or(self.qualified_name.as_deref())
             .map(std::borrow::Cow::Borrowed)
             .unwrap_or_else(|| {
                 self.path

@@ -269,6 +269,37 @@ fn stale_ordinals_and_new_entries_during_pop_never_remove_another_stash() {
     assert_eq!(list.entries[1].hash, second.hash);
     assert_eq!(fs::read_to_string(f.root.join("file")).unwrap(), "second\n");
 }
+
+#[test]
+fn bulk_drop_rejects_a_changed_reflog_and_drops_only_reviewed_ordinals() {
+    let f = Fixture::new();
+    let cancel = Cancellation::default();
+    for message in ["one", "two", "three"] {
+        fs::write(f.root.join("file"), message).unwrap();
+        command(&f.git, &f.root, &["stash", "push", "-m", message]);
+    }
+    let snapshot = f.snapshot();
+    let list = f.git.stashes(&snapshot, &cancel).unwrap();
+    let targets = [0, 2].map(|i| Target::reviewed(&list, &list.entries[i]));
+    let dropped = f
+        .git
+        .execute_stash(&snapshot, &Action::DropMany(targets.to_vec()), None)
+        .unwrap();
+    assert!(dropped.succeeded(), "{}", dropped.output);
+    let after = f.git.stashes(&snapshot, &cancel).unwrap();
+    assert_eq!(after.entries.len(), 1);
+    assert_eq!(after.entries[0].hash, list.entries[1].hash);
+    assert!(matches!(
+        f.git.execute_stash(&snapshot, &Action::DropMany(targets.to_vec()), None),
+        Err(error) if error.code() == "StashChanged"
+    ));
+    assert_eq!(
+        f.git.stashes(&snapshot, &cancel).unwrap().entries,
+        after.entries
+    );
+    assert_eq!(fs::read_to_string(f.root.join("file")).unwrap(), "base\n");
+}
+
 #[test]
 fn explicit_drop_removes_only_reviewed_saved_data_and_preserves_worktree() {
     let f = Fixture::new();

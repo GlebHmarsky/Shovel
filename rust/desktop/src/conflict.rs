@@ -255,8 +255,15 @@ impl Pane {
                                     .as_ref()
                                     .map(|c| c.text.clone())
                                     .unwrap_or_default();
-                                self.current = true;
-                                self.incoming = true;
+                                if self.preview.as_ref().is_none_or(|old| {
+                                    old.sides.iter().zip(&loaded.preview.sides).any(|(a, b)| {
+                                        a.as_ref().map(|side| &side.hash)
+                                            != b.as_ref().map(|side| &side.hash)
+                                    })
+                                }) {
+                                    self.current = true;
+                                    self.incoming = true;
+                                }
                             }
                             if !self.tool.is_empty()
                                 && self.tool != "@shovel"

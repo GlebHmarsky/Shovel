@@ -142,6 +142,7 @@ struct ReferenceMenu {
     owner: u64,
     snapshot: shovel_core::git::Snapshot,
     reference: shovel_core::git::Reference,
+    stash_targets: Vec<shovel_core::stashes::Target>,
 }
 struct Workspace {
     settings: Settings,
@@ -428,7 +429,6 @@ impl Workspace {
         tab.divergence.invalidate();
         tab.remotes.invalidate();
         tab.sidebar.invalidate();
-        tab.error = None;
         tab.view.external_history_change = false;
         let generation = tab.view.begin();
         let previous = tab
@@ -832,9 +832,11 @@ impl Workspace {
                                 || self.tabs.iter().any(|t| Self::same_path(&t.path, &path)) =>
                         {
                             if self.tabs.get(self.selected).is_some_and(|t| t.id == owner) {
-                                self.open(path, ctx);
+                                self.open(path.clone(), ctx);
+                                self.tabs[self.selected].sidebar.set_superproject(&path, Some(&parent));
                             } else {
-                                self.ensure_tab(path);
+                                let index = self.ensure_tab(path.clone());
+                                self.tabs[index].sidebar.set_superproject(&path, Some(&parent));
                                 self.remember_tabs();
                             }
                         }
@@ -1228,7 +1230,7 @@ impl Workspace {
             }
             let remote_changed = tab.remotes.poll(ctx);
             avatar_sources_changed |= remote_changed;
-            let sidebar_changed = tab.sidebar.poll(ctx);
+            let sidebar_changed = tab.sidebar.poll(ctx, &tab.path);
             if remote_changed || sidebar_changed {
                 tab.estimate_cache();
             }
@@ -2963,13 +2965,22 @@ impl eframe::App for Workspace {
                                             };
                                             let detail = if key == "Branches" { tab.sidebar.tracking(reference) } else { String::new() };
                                             let label = if detail.is_empty() { short } else { format!("{short}  {detail}") };
+                                            let stash = key == "Stashes";
                                             let response = workspace_style::reference_row(
                                                 ui,
-                                                tab.selected.as_deref() == Some(&reference.hash),
+                                                if stash {
+                                                    tab.view.stash_selection.contains(reference)
+                                                } else {
+                                                    tab.selected.as_deref() == Some(&reference.hash)
+                                                },
                                                 &label,
                                                 key,
                                             )
-                                            .on_hover_text(&reference.name);
+                                            .on_hover_text(if stash {
+                                                strings::text("StashSidebarSelect")
+                                            } else {
+                                                reference.name.clone()
+                                            });
                                             let activated = response.double_clicked()
                                                 || response.has_focus()
                                                     && ui.input_mut(|i| {
@@ -2978,6 +2989,11 @@ impl eframe::App for Workspace {
                                                             egui::Key::Enter,
                                                         )
                                                     });
+                                            let modifiers = ui.input(|i| i.modifiers);
+                                            if stash && response.clicked() {
+                                                tab.view.stash_selection.select(reference, &history.snapshot.references, modifiers);
+                                            }
+                                            let multiselect = stash && (modifiers.ctrl || modifiers.shift);
                                             if activated
                                                 && reference.name.starts_with("refs/heads/")
                                             {
@@ -2992,11 +3008,13 @@ impl eframe::App for Workspace {
                                                     self.notice =
                                                         Some(strings::text("ActionSequence"));
                                                 }
-                                            } else if response.clicked() || activated {
+                                            } else if !multiselect && (response.clicked() || activated) {
                                                 if reference.name.starts_with("stash@{")
                                                     && !history.stashes.iter().any(|commit| commit.hash == reference.hash)
                                                 {
-                                                    stash_request = Some(reference.hash.clone());
+                                                    if activated {
+                                                        stash_request = Some(reference.hash.clone());
+                                                    }
                                                 } else {
                                                     locate_request = Some(reference.hash.clone());
                                                 }
@@ -3009,13 +3027,27 @@ impl eframe::App for Workspace {
                                                         owner: tab.id,
                                                         snapshot: history.snapshot.clone(),
                                                         reference: reference.clone(),
+                                                        stash_targets: if stash {
+                                                            tab.view.stash_selection.context_targets(reference, &history.snapshot.references)
+                                                        } else {
+                                                            vec![]
+                                                        },
                                                     });
                                                 }
                                                 response.context_menu(|ui| {
                                                     if let Some(menu) = &self.reference_menu
                                                         && menu.owner == tab.id
                                                     {
-                                                        if menu
+                                                        if menu.stash_targets.len() > 1 {
+                                                            let count = menu.stash_targets.len().to_string();
+                                                            if ui.add_enabled(
+                                                                self.git.is_some(),
+                                                                egui::Button::new(strings::format("StashDropManyMenu", &[&count])),
+                                                            ).clicked() {
+                                                                self.branches.confirm_stashes_drop(&menu.snapshot, menu.stash_targets.clone());
+                                                                ui.close();
+                                                            }
+                                                        } else if menu
                                                             .reference
                                                             .name
                                                             .starts_with("stash@{")

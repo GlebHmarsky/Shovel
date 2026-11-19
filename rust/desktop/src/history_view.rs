@@ -26,6 +26,7 @@ pub(super) struct State {
     pub validated: Option<Instant>,
     pub watch: Option<repository_watch::Watch>,
     pub external_history_change: bool,
+    pub stash_selection: stashes::SidebarSelection,
     pub offset: egui::Vec2,
     pub restore_offset: Option<egui::Vec2>,
     views: BTreeMap<usize, SavedView>,
@@ -77,6 +78,7 @@ impl State {
     }
     pub fn clear_views(&mut self) {
         self.views.clear();
+        self.stash_selection = Default::default();
         self.offset = egui::Vec2::ZERO;
         self.restore_offset = Some(self.offset);
     }
@@ -283,8 +285,12 @@ impl Tab {
             Read::Unchanged(snapshot) => self.history.as_mut().unwrap().snapshot = *snapshot,
             Read::Page(history, page) => self.replace_history_page(*history, *page, first),
         }
+        if let Some(history) = &self.history {
+            self.view.stash_selection.retain(&history.snapshot.references);
+        }
         self.view.preview = None;
         self.view.initial_history = false;
+        self.error = None;
         self.estimate_cache();
         self.loading = false;
         self.view.published();
