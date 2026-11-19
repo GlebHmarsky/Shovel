@@ -227,7 +227,7 @@ fn file_stamp(file: &Path) -> std::io::Result<Option<(u64, u64)>> {
         Err(e) => Err(e),
     }
 }
-fn lfs_size(bytes: &[u8]) -> Option<u64> {
+pub(crate) fn lfs_size(bytes: &[u8]) -> Option<u64> {
     if bytes.is_empty() || bytes.len() >= 1024 {
         return None;
     }

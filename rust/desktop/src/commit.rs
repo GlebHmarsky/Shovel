@@ -342,8 +342,6 @@ impl Editor {
             Some(pane.status.clone())
         } else if self.loading {
             Some(text("CommitReadingChanges"))
-        } else if self.draft_saving {
-            Some(text("CommitDraftSaving"))
         } else {
             None
         }
@@ -436,7 +434,7 @@ impl Editor {
         }
     }
     fn open_conflict(&mut self) {
-        if self.action_busy() || self.loading || self.snapshot_error.is_some() {
+        if !self.working_ready() {
             return;
         }
         let Some(context) = self.context.clone() else {
@@ -617,11 +615,8 @@ impl Editor {
             return;
         }
         self.diff_deferred = false;
-        if self
-            .conflict
-            .as_ref()
-            .is_some_and(|p| p.path == entry.path && !p.resolved)
-        {
+        if entry.group == Group::Conflicted {
+            self.open_conflict();
             return;
         }
         let Some(context) = self.context.clone() else {
@@ -968,6 +963,13 @@ impl Editor {
         self.preview_rows = None;
         // Keep edited text even when an external operation removes this conflict.
         // The captured preview cannot execute against the changed index/state.
+        if self.conflict.as_ref().is_some_and(|pane| {
+            !pane.unsaved()
+                && !pane.mutating
+                && focus.as_ref().is_none_or(|entry| entry.group != Group::Conflicted)
+        }) {
+            self.conflict = None;
+        }
         if let Some(pane) = &mut self.conflict {
             pane.observe(self.context.as_ref().unwrap());
             return;
@@ -992,11 +994,14 @@ impl Editor {
         };
         let entries = if all {
             file_list::FileList::new(Some(context), unstage)
-                .entries()
+                .stageable(unstage)
                 .cloned()
                 .collect()
         } else {
             self.selected_entries(context, unstage)
+                .into_iter()
+                .filter(|entry| unstage || entry.group.can_stage())
+                .collect::<Vec<_>>()
         };
         if !entries.is_empty() {
             self.submit(
@@ -1328,11 +1333,6 @@ impl Editor {
                     ui.add(egui::Label::new(egui::RichText::new(&target).small()).truncate())
                         .on_hover_text(target);
                 }
-                if let Some(progress) = self.progress() {
-                    ui.add(egui::Spinner::new().size(14.));
-                    ui.add(egui::Label::new(egui::RichText::new(&progress).small()).truncate())
-                        .on_hover_text(progress);
-                }
             });
         });
         self.message_height = message.response.rect.height();
@@ -1388,10 +1388,13 @@ impl Editor {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    let selected = self
-                                        .selection
-                                        .iter()
-                                        .any(|(group, _)| (*group == Group::Staged) == staged);
+                                    let selected = self.selection.iter().any(|(group, _)| {
+                                        if staged {
+                                            *group == Group::Staged
+                                        } else {
+                                            group.can_stage()
+                                        }
+                                    });
                                     let all = ui.input(|i| i.modifiers.shift);
                                     let key = match (staged, all) {
                                         (false, false) => "CommitStage",
@@ -1402,7 +1405,11 @@ impl Editor {
                                     if ui
                                         .add_enabled(
                                             self.working_ready()
-                                                && if all { count > 0 } else { selected },
+                                                && if all {
+                                                    rows.stageable(staged).next().is_some()
+                                                } else {
+                                                    selected
+                                                },
                                             egui::Button::new(text(key))
                                                 .min_size(egui::vec2(88., 22.)),
                                         )
@@ -1493,7 +1500,7 @@ impl Editor {
                                             entry.group,
                                             entry.path.clone(),
                                         )]),
-                                        stage: true,
+                                        stage: staged || entry.group.can_stage(),
                                     });
                                 }
                                 if response.secondary_clicked() && !self.action_busy() {
@@ -1525,10 +1532,20 @@ impl Editor {
             }
         });
         self.files_width = files.response.rect.width();
+        self.open_conflict();
         egui::CentralPanel::default().show(ui, |ui| {
             if let Some(pane) = &mut self.conflict {
                 let ready = !self.busy && !self.loading && self.snapshot_error.is_none();
                 ui.add_enabled_ui(ready, |ui| pane.show(ui));
+                return;
+            }
+            if self.focused.as_ref().is_some_and(|entry| entry.group == Group::Conflicted) {
+                ui.heading(text("ConflictHeading"));
+                if let Some(error) = &self.snapshot_error {
+                    ui.colored_label(ui.visuals().error_fg_color, error);
+                } else {
+                    ui.weak(text("ConflictLoading"));
+                }
                 return;
             }
             let current = self.diff_current
@@ -1536,10 +1553,6 @@ impl Editor {
                 && !self.refresh_pending
                 && !self.action_busy()
                 && self.snapshot_error.is_none();
-            let conflict = self
-                .focused
-                .as_ref()
-                .is_some_and(|entry| entry.group == Group::Conflicted);
             let has_text = self
                 .diff
                 .as_ref()
@@ -1547,16 +1560,6 @@ impl Editor {
             let mut options_changed = false;
             ui.horizontal(|ui| {
                 ui.set_min_height(22.);
-                if conflict
-                    && ui
-                        .add_enabled(
-                            self.working_ready(),
-                            egui::Button::new(text("ConflictOpen")),
-                        )
-                        .clicked()
-                {
-                    self.open_conflict();
-                }
                 if has_text {
                     ui.add_enabled_ui(current, |ui| {
                         options_changed |= ui
@@ -1585,7 +1588,7 @@ impl Editor {
                     } else {
                         "CommitDiffPrevious"
                     }));
-                } else if self.diff.is_none() && self.focused.is_some() && !conflict {
+                } else if self.diff.is_none() && self.focused.is_some() {
                     ui.weak(text("DiffLoading"));
                 }
             });

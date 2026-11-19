@@ -303,7 +303,7 @@ fn size(summary: &Summary) -> String {
         .map(|n| n.to_string())
         .unwrap_or_else(|| text("CountUnavailable"))
 }
-fn binary_size(bytes: u64) -> String {
+pub(super) fn binary_size(bytes: u64) -> String {
     let units = [
         (1 << 40, "BinaryTiB"),
         (1 << 30, "BinaryGiB"),

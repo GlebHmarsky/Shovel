@@ -958,13 +958,7 @@ impl Controller {
                     Phase::Downloading(percent) => {
                         ui.add(egui::ProgressBar::new(f32::from(percent) / 100.).text(status));
                     }
-                    Phase::Checking | Phase::Applying => {
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label(status);
-                        });
-                    }
-                    Phase::Idle => {
+                    Phase::Checking | Phase::Applying | Phase::Idle => {
                         ui.label(status);
                     }
                 }

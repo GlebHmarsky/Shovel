@@ -1829,6 +1829,22 @@ fn prime_comparison(tab: &mut Tab, git: &Arc<Git>, settings: &Settings, workers:
     tab.comparison = Some(pane);
 }
 
+fn recovery_controls_visible(
+    snapshot: &shovel_core::git::Snapshot,
+    scheduler: &shovel_core::scheduler::Scheduler,
+) -> bool {
+    let rebase = snapshot.operations.iter().any(|name| name.starts_with("rebase"));
+    if !rebase {
+        return true;
+    }
+    snapshot.recovery.as_ref().is_some_and(|state| !state.current.is_empty())
+        && !scheduler.active_records().iter().any(|record| {
+            record.running
+                && record.lane == shovel_core::scheduler::Lane::Exclusive
+                && record.repository == snapshot.identity.fingerprint
+        })
+}
+
 impl eframe::App for Workspace {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.receive(ctx);
@@ -2396,69 +2412,10 @@ impl eframe::App for Workspace {
                 if self.initialization.busy
                     && let Some(summary) = &self.initialization.summary
                 {
-                    ui.horizontal(|ui| {
-                        ui.add(egui::Spinner::new().size(14.));
-                        ui.label(summary);
-                    });
+                    ui.label(summary);
                 }
                 if let Some(notice) = &self.notice {
                     ui.colored_label(palette.diff_removed_text, notice);
-                }
-                if let Some(tab) = self.tabs.get(self.selected)
-                    && let Some(history) = &tab.history
-                    && !history.snapshot.operations.is_empty()
-                {
-                    let snapshot = &history.snapshot;
-                    if let Some(state) = &snapshot.recovery {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(strings::format(
-                                "RecoveryHelp",
-                                &[&branches::recovery_name(state.kind)],
-                            ));
-                            if ui
-                                .button(strings::text("ActionTitleContinue"))
-                                .on_hover_text(strings::text("RecoveryContinueHelp"))
-                                .clicked()
-                                && let Some(git) = &self.git
-                            {
-                                self.operations.submit_recovery(
-                                    "ActionTitleContinue",
-                                    shovel_core::recovery::Action::Continue,
-                                    snapshot,
-                                    git.clone(),
-                                    &self.scheduler,
-                                    &ctx,
-                                );
-                            }
-                            if state.can_skip()
-                                && ui
-                                    .button(strings::text("ActionTitleSkip"))
-                                    .on_hover_text(strings::text("RecoverySkipHelp"))
-                                    .clicked()
-                            {
-                                self.branches.confirm_recovery(
-                                    snapshot,
-                                    shovel_core::recovery::Action::Skip,
-                                );
-                            }
-                            if ui
-                                .button(strings::text("ActionTitleAbort"))
-                                .on_hover_text(strings::text("RecoveryAbortHelp"))
-                                .clicked()
-                            {
-                                self.branches.confirm_recovery(
-                                    snapshot,
-                                    shovel_core::recovery::Action::Abort,
-                                );
-                            }
-                        });
-                    } else {
-                        ui.label(strings::text(if snapshot.operations == ["bisect"] {
-                            "RepositoryBisectActive"
-                        } else {
-                            "RecoveryUnavailable"
-                        }));
-                    }
                 }
             });
         if self.activity_open {
@@ -2682,6 +2639,69 @@ impl eframe::App for Workspace {
                     self.select_tab(index, &ctx);
                 }
             });
+        if let Some(tab) = self.tabs.get(self.selected)
+            && let Some(history) = &tab.history
+            && !history.snapshot.operations.is_empty()
+            && recovery_controls_visible(&history.snapshot, &self.scheduler)
+        {
+            let snapshot = &history.snapshot;
+            egui::Panel::top("repository-recovery")
+                .frame(workspace_style::pane(palette.chrome, 6, 3))
+                .show(ui, |ui| {
+                    ui.add_enabled_ui(!modal_open, |ui| {
+                        if let Some(state) = &snapshot.recovery {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(strings::format(
+                                    "RecoveryHelp",
+                                    &[&branches::recovery_name(state.kind)],
+                                ));
+                                if ui
+                                    .button(strings::text("ActionTitleContinue"))
+                                    .on_hover_text(strings::text("RecoveryContinueHelp"))
+                                    .clicked()
+                                    && let Some(git) = &self.git
+                                {
+                                    self.operations.submit_recovery(
+                                        "ActionTitleContinue",
+                                        shovel_core::recovery::Action::Continue,
+                                        snapshot,
+                                        git.clone(),
+                                        &self.scheduler,
+                                        &ctx,
+                                    );
+                                }
+                                if state.can_skip()
+                                    && ui
+                                        .button(strings::text("ActionTitleSkip"))
+                                        .on_hover_text(strings::text("RecoverySkipHelp"))
+                                        .clicked()
+                                {
+                                    self.branches.confirm_recovery(
+                                        snapshot,
+                                        shovel_core::recovery::Action::Skip,
+                                    );
+                                }
+                                if ui
+                                    .button(strings::text("ActionTitleAbort"))
+                                    .on_hover_text(strings::text("RecoveryAbortHelp"))
+                                    .clicked()
+                                {
+                                    self.branches.confirm_recovery(
+                                        snapshot,
+                                        shovel_core::recovery::Action::Abort,
+                                    );
+                                }
+                            });
+                        } else {
+                            ui.label(strings::text(if snapshot.operations == ["bisect"] {
+                                "RepositoryBisectActive"
+                            } else {
+                                "RecoveryUnavailable"
+                            }));
+                        }
+                    });
+                });
+        }
         use workspace_split::Divider;
         let width = ui.available_width();
         let mut locate_request = None;

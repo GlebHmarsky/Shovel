@@ -133,6 +133,13 @@ impl Editor {
             "CommitWaitForRead"
         });
         let staged = menu.entry.group == Group::Staged;
+        let can_stage = |entry: &Change| {
+            if staged {
+                entry.group == Group::Staged
+            } else {
+                entry.group.can_stage()
+            }
+        };
         let mut open = true;
         let mut action = None;
         egui::Popup::new(
@@ -176,7 +183,7 @@ impl Editor {
             ui.separator();
             if ui
                 .add_enabled(
-                    enabled && !menu.selected.entries.is_empty(),
+                    enabled && menu.selected.entries.iter().any(can_stage),
                     egui::Button::new(text(if staged {
                         "CommitUnstage"
                     } else {
@@ -190,7 +197,10 @@ impl Editor {
             }
             if ui
                 .add_enabled(
-                    enabled,
+                    enabled && super::file_list::FileList::new(Some(&menu.selected.context), staged)
+                        .stageable(staged)
+                        .next()
+                        .is_some(),
                     egui::Button::new(text(if staged {
                         "CommitUnstageAll"
                     } else {
@@ -380,10 +390,10 @@ impl Editor {
             match action {
                 0 | 1 => {
                     let entries = if action == 0 {
-                        menu.selected.entries.clone()
+                        menu.selected.entries.iter().filter(|entry| can_stage(entry)).cloned().collect()
                     } else {
                         super::file_list::FileList::new(Some(&menu.selected.context), staged)
-                            .entries()
+                            .stageable(staged)
                             .cloned()
                             .collect()
                     };

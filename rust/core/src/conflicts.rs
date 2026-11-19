@@ -26,6 +26,8 @@ pub struct Side {
     pub hash: String,
     pub mode: String,
     pub content: Option<Content>,
+    pub bytes: u64,
+    pub lfs: bool,
 }
 #[derive(Clone, Debug)]
 pub struct Preview {
@@ -94,6 +96,7 @@ pub enum Tool {
 }
 #[derive(Clone, Debug)]
 pub enum Choice {
+    Base,
     Current,
     Incoming,
     Edited(String),
@@ -210,20 +213,25 @@ impl Git {
                 .trim()
                 .parse::<u64>()
                 .map_err(|_| Error::Code("GitErrorInvalidOutput"))?;
-            let content = if size <= MAX_BYTES as u64 {
-                conflict_text::decode(
-                    &self
-                        .read(root, ["cat-file", "blob", fields[1]], cancel, MAX_BYTES)?
-                        .stdout,
-                )
+            let (content, lfs_bytes) = if size <= MAX_BYTES as u64 {
+                let blob = self.read(root, ["cat-file", "blob", fields[1]], cancel, MAX_BYTES)?;
+                let lfs_bytes = diff::lfs_size(&blob.stdout);
+                let content = if lfs_bytes.is_none() {
+                    conflict_text::decode(&blob.stdout)
+                } else {
+                    None
+                };
+                (content, lfs_bytes)
             } else {
-                None
+                (None, None)
             };
             sides[stage - 1] = Some(Side {
                 stage,
                 hash: fields[1].into(),
                 mode: fields[0].into(),
                 content,
+                bytes: lfs_bytes.unwrap_or(size),
+                lfs: lfs_bytes.is_some(),
             });
         }
         if sides.iter().all(Option::is_none) {
@@ -514,10 +522,11 @@ impl Git {
                         .persist(&file)
                         .map_err(|e| e.error)?;
                 } else {
-                    let index = if matches!(choice, Choice::Current) {
-                        1
-                    } else {
-                        2
+                    let (index, args): (usize, &[&str]) = match choice {
+                        Choice::Base => (0, &["checkout-index", "--force", "--stage=1", "--"]),
+                        Choice::Current => (1, &["restore", "--worktree", "--no-recurse-submodules", "--ours", "--"]),
+                        Choice::Incoming => (2, &["restore", "--worktree", "--no-recurse-submodules", "--theirs", "--"]),
+                        Choice::Edited(_) | Choice::External(_) => unreachable!(),
                     };
                     if preview.sides[index].is_none() {
                         match crate::files::remove_file(&file) {
@@ -526,16 +535,7 @@ impl Git {
                             Err(_) => return Err(Error::Code("RustFileDeleteFailed")),
                         }
                     } else if !write(
-                        [
-                            "restore",
-                            "--worktree",
-                            "--no-recurse-submodules",
-                            if index == 1 { "--ours" } else { "--theirs" },
-                            "--",
-                            &preview.change.path,
-                        ]
-                        .map(OsString::from)
-                        .to_vec(),
+                        args.iter().copied().chain([preview.change.path.as_str()]).map(OsString::from).collect(),
                         None,
                     )? {
                         return Ok(None);

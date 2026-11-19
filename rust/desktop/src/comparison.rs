@@ -258,7 +258,6 @@ impl Pane {
                 )
                 .on_hover_text(error);
             } else if self.loading {
-                ui.add(egui::Spinner::new().size(14.));
                 ui.add(
                     egui::Label::new(text(if self.diff.is_some() {
                         "DiffRetainedLoading"

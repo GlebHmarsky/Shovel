@@ -63,6 +63,9 @@ impl<'a> FileList<'a> {
     pub fn entries(&self) -> impl Iterator<Item = &'a Change> {
         self.groups.into_iter().flatten()
     }
+    pub fn stageable(&self, staged: bool) -> impl Iterator<Item = &'a Change> {
+        self.entries().filter(move |entry| staged || entry.group.can_stage())
+    }
 }
 fn group_name(group: Group) -> String {
     text(match group {
@@ -132,13 +135,16 @@ pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egu
     let status_color = if p.high_contrast {
         fg
     } else {
-        Palette::change_status(entry.code, ui.visuals().dark_mode || highlighted)
+        Palette::change_status(
+            if entry.group == Group::Conflicted { 'M' } else { entry.code },
+            ui.visuals().dark_mode || highlighted,
+        )
     };
     let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
     painter.text(
         rect.left_center() + egui::vec2(8., 0.),
         egui::Align2::LEFT_CENTER,
-        entry.code,
+        if entry.group == Group::Conflicted { '!' } else { entry.code },
         egui::FontId::monospace(12.),
         status_color,
     );

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Rebase recovery and conflict resolution in Rust 0.51.9
+
+The paused rebase banner appears below the tabs. The offscreen fixture held a repository job active, verified the banner stayed hidden, then confirmed that Continue appeared below the tabs. Local Changes opens the resolver on selection. Stage All staged the ordinary file and preserved every unmerged entry. The LFS fixture verified logical sizes and restored the exact common-base pointer into the worktree and index.
+
+Thirty-five focused checks, all-target Clippy, and `git diff --check` passed. The 18 bounded smoke checks passed in 46.87 seconds on fingerprint "B6B9B3285705918597AAEBF2A4A486CF0743D0970BEBFC8233898553F34E214F". Live desktop appearance and an installed update remain unverified.
+
 ## Compact window header in Rust 0.51.8
 
 The restored window paints the menu area up to the top edge. The top edge continues to resize the window. The menu and toolbar rows are shorter.

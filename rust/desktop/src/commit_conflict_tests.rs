@@ -146,7 +146,6 @@ impl Harness {
     fn open(&mut self) {
         self.until(|e| e.draft_loaded && e.context.is_some() && !e.loading);
         self.click("Conflicted · Unmerged · conflict.txt");
-        self.click(&text("ConflictOpen"));
         assert!(self.editor.conflict.is_some());
         self.until(|e| {
             e.conflict
@@ -190,7 +189,7 @@ fn checkboxes_only_preview_then_explicit_resolution_stages_and_reconciles() {
     h.open();
     let before = fs::read(h.editor.path.join("conflict.txt")).unwrap();
     let index = h.editor.context.as_ref().unwrap().index_stamp.clone();
-    h.click(&strings::format("ConflictCurrentSide", &["main"]));
+    h.click(&text("ConflictCurrentSide"));
     assert_eq!(
         fs::read(h.editor.path.join("conflict.txt")).unwrap(),
         before
@@ -223,6 +222,75 @@ fn checkboxes_only_preview_then_explicit_resolution_stages_and_reconciles() {
 }
 
 #[test]
+fn stage_all_skips_conflicted_file_and_unchecking_both_sides_restores_base() {
+    let mut h = Harness::new();
+    h.open();
+    let original_index = command(&h.editor.git, &h.editor.path, &["ls-files", "--unmerged"]).stdout;
+    h.editor.stage(false, false, &h.ctx);
+    assert!(!h.editor.scheduler.has_accepted_work());
+    h.editor.stage(false, true, &h.ctx);
+    h.until(|e| {
+        e.current_context().is_some_and(|context| context.change(Group::Staged, "other.txt").is_some())
+            && !e.loading
+            && !e.action_busy()
+            && e.conflict.as_ref().is_some_and(|p| !p.busy && p.status == text("ConflictChoose"))
+    });
+    assert_eq!(
+        command(&h.editor.git, &h.editor.path, &["ls-files", "--unmerged"]).stdout,
+        original_index
+    );
+    h.click(&text("ConflictCurrentSide"));
+    h.click(&text("ConflictIncomingSide"));
+    h.click(&text("ConflictBaseAction"));
+    h.until(|e| e.conflict.is_none());
+    assert_eq!(fs::read_to_string(h.editor.path.join("conflict.txt")).unwrap(), "base\n");
+}
+
+#[test]
+fn recovery_controls_appear_below_tabs_after_rebase_pauses() {
+    use crate::workspace_interaction_tests::{sidebar_point, workspace};
+    let h = Harness::new();
+    let git = &h.editor.git;
+    let path = &h.editor.path;
+    ok(git, path, &["merge", "--abort"]);
+    ok(git, path, &["restore", "other.txt"]);
+    assert!(!command(git, path, &["rebase", "side"]).success());
+    let mut app = workspace();
+    app.tabs.clear();
+    app.git = Some(git.clone());
+    app.open(path.clone(), &h.ctx);
+    crate::history_view::tests::wait(&mut app, &h.ctx);
+    let snapshot = &app.tabs[0].history.as_ref().unwrap().snapshot;
+    let (release, held) = mpsc::channel();
+    let (started, running) = mpsc::channel();
+    app.scheduler.submit(
+        snapshot.identity.fingerprint.clone(),
+        shovel_core::case::path_key(&snapshot.common_directory),
+        "fixture-rebase".into(),
+        Lane::Exclusive,
+        move || {
+            let _ = started.send(());
+            let _ = held.recv();
+            Outcome::Succeeded
+        },
+        |_| {},
+    );
+    running.recv_timeout(Duration::from_secs(5)).unwrap();
+    let label = text("ActionTitleContinue");
+    assert!(sidebar_point(&h.ctx, &mut app, &label).is_none());
+    release.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.scheduler.has_accepted_work() {
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    let (banner, _) = sidebar_point(&h.ctx, &mut app, &label).unwrap();
+    let name = app.tabs[0].name().into_owned();
+    let (tab, _) = sidebar_point(&h.ctx, &mut app, &name).unwrap();
+    assert!(banner.y > tab.y);
+}
+
+#[test]
 fn typed_text_survives_cancelled_navigation_failed_stage_and_exit_confirmation() {
     let mut h = Harness::new();
     h.open();
@@ -237,7 +305,7 @@ fn typed_text_survives_cancelled_navigation_failed_stage_and_exit_confirmation()
         "external fixture lock",
     )
     .unwrap();
-    h.click(&text("ConflictResolveStage"));
+    h.click(&text("ConflictMergeAction"));
     h.until(|e| !e.action_busy());
     assert!(h.editor.unsaved_conflict());
     assert!(h.editor.output.contains("index.lock"));

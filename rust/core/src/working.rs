@@ -26,6 +26,11 @@ pub enum Group {
     Untracked,
     Ignored,
 }
+impl Group {
+    pub fn can_stage(self) -> bool {
+        matches!(self, Self::Unstaged | Self::Untracked)
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Change {
     pub group: Group,
@@ -897,13 +902,23 @@ impl Git {
             }
             Action::Stage(entries) | Action::Unstage(entries) => {
                 let unstage = matches!(action, Action::Unstage(_));
+                if !unstage && entries.iter().any(|entry| {
+                    entry.group == Group::Conflicted
+                        || context.change(Group::Conflicted, &entry.path).is_some()
+                        || (entry.code == 'R'
+                            && entry.original.as_deref().is_some_and(|path| {
+                                context.change(Group::Conflicted, path).is_some()
+                            }))
+                }) {
+                    return Err(Error::Unresolved);
+                }
                 if entries.is_empty()
                     || entries.iter().any(|e| {
                         context.change(e.group, &e.path) != Some(e)
                             || if unstage {
                                 e.group != Group::Staged
                             } else {
-                                matches!(e.group, Group::Staged | Group::Ignored)
+                                !e.group.can_stage()
                             }
                     })
                 {

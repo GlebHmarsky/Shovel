@@ -143,6 +143,9 @@ impl Pane {
             self.generation += 1;
             self.busy = false;
             self.can_submit = false;
+            if !self.dirty {
+                self.started = false;
+            }
             self.status = text("ConflictReloadRequired");
         }
     }
@@ -208,18 +211,32 @@ impl Pane {
             ctx.request_repaint();
         });
     }
+    fn selected_side(&self) -> Option<usize> {
+        match (self.current, self.incoming) {
+            (true, true) => None,
+            (true, false) => Some(1),
+            (false, true) => Some(2),
+            (false, false) => Some(0),
+        }
+    }
     fn choose(&mut self) {
-        self.value = if self.current && self.incoming {
-            self.combined.clone()
-        } else {
-            self.preview
+        self.value = match self.selected_side() {
+            None => self.combined.clone(),
+            Some(index) => self
+                .preview
                 .as_ref()
-                .and_then(|p| p.sides[if self.current { 1 } else { 2 }].as_ref())
-                .filter(|_| self.current || self.incoming)
+                .and_then(|p| p.sides[index].as_ref())
                 .and_then(|s| s.content.as_ref())
                 .map(|c| c.text.clone())
-                .unwrap_or_default()
+                .unwrap_or_default(),
         };
+    }
+    fn merge_tool(&self) -> Tool {
+        match self.tool.as_str() {
+            "@shovel" => Tool::Saved(self.saved_tool.clone()),
+            "" => Tool::Configured,
+            name => Tool::Named(name.to_owned()),
+        }
     }
     pub fn poll(&mut self, _ctx: &egui::Context) -> Option<Refresh> {
         let mut refresh = None;
@@ -381,17 +398,10 @@ impl Pane {
         }
     }
     fn result_label(&self) -> String {
-        let encoding = self.preview.as_ref().and_then(|p| {
-            if self.current && self.incoming {
-                p.working.as_ref().map(|c| c.encoding)
-            } else {
-                p.sides[if self.current { 1 } else { 2 }]
-                    .as_ref()
-                    .filter(|_| self.current || self.incoming)
-                    .and_then(|s| s.content.as_ref())
-                    .map(|c| c.encoding)
-            }
-        });
+        let encoding = self
+            .preview
+            .as_ref()
+            .and_then(|p| p.working.as_ref().map(|content| content.encoding));
         encoding
             .map(|value| {
                 strings::format(
@@ -412,37 +422,107 @@ impl Pane {
         let mut reload = false;
         let preview = self.preview.clone();
         let editable = preview.as_ref().is_some_and(|p| p.can_edit);
-        ui.strong(&self.path);
+        ui.heading(egui::RichText::new(text("ConflictHeading")).color(
+            crate::workspace_style::Palette::change_status('M', ui.visuals().dark_mode),
+        ));
+        ui.add(egui::Label::new(&self.path).truncate())
+            .on_hover_text(&self.path);
+        if let Some(preview) = &preview {
+            let rebase = preview
+                .context
+                .repository
+                .recovery
+                .as_ref()
+                .is_some_and(|r| r.kind == Kind::Rebase);
+            let old = (self.current, self.incoming);
+            ui.columns(2, |columns| {
+                for (index, column) in columns.iter_mut().enumerate() {
+                    egui::Frame::group(column.style()).show(column, |ui| {
+                        ui.set_width(ui.available_width());
+                        let (checked, label, source) = if index == 0 {
+                            (
+                                &mut self.current,
+                                if rebase {
+                                    "ConflictRebasedSide"
+                                } else {
+                                    "ConflictCurrentSide"
+                                },
+                                &preview.current_source,
+                            )
+                        } else {
+                            (
+                                &mut self.incoming,
+                                if rebase {
+                                    "ConflictReplayedSide"
+                                } else {
+                                    "ConflictIncomingSide"
+                                },
+                                &preview.incoming_source,
+                            )
+                        };
+                        ui.add_enabled(!self.busy, egui::Checkbox::new(checked, text(label)));
+                        if !source.is_empty() {
+                            ui.add(egui::Label::new(source).truncate())
+                                .on_hover_text(source);
+                        }
+                        if let Some(side) = &preview.sides[index + 1] {
+                            ui.horizontal_wrapped(|ui| {
+                                if let Some(ext) = std::path::Path::new(&self.path)
+                                    .extension()
+                                    .and_then(|ext| ext.to_str())
+                                {
+                                    ui.monospace(format!(".{ext}"));
+                                }
+                                if side.lfs {
+                                    let palette = crate::workspace_style::Palette::current(ui);
+                                    ui.label(
+                                        egui::RichText::new(text("BinaryLfs"))
+                                            .strong()
+                                            .color(palette.selection_text)
+                                            .background_color(palette.selected),
+                                    );
+                                }
+                                ui.label(crate::diff_view::binary_size(side.bytes));
+                            });
+                        } else {
+                            ui.weak(text("ConflictDeletedSide"));
+                        }
+                    });
+                }
+            });
+            if old != (self.current, self.incoming) {
+                self.choose();
+            }
+        }
+        let side = self.selected_side();
+        let action = match side {
+            None => "ConflictMergeAction",
+            Some(0) => "ConflictBaseAction",
+            Some(_) => "ConflictResolveStage",
+        };
+        let absent =
+            side.is_some_and(|index| preview.as_ref().is_some_and(|p| p.sides[index].is_none()));
         ui.horizontal_wrapped(|ui| {
-            let reason = if self.busy {
-                "ConflictLoading"
-            } else if !self.can_submit {
-                "ConflictReloadRequired"
-            } else if !self.current && !self.incoming {
-                "ConflictChoose"
-            } else if self.current && self.incoming && !editable {
-                "ConflictBinaryHelp"
-            } else {
-                "ConflictResolveHelp"
-            };
             if ui
                 .add_enabled(
-                    !self.busy
-                        && self.can_submit
-                        && (self.current || self.incoming)
-                        && (!(self.current && self.incoming) || editable),
-                    egui::Button::new(text("ConflictResolveStage")),
+                    !self.busy && self.can_submit,
+                    egui::Button::new(text(action)),
                 )
-                .on_disabled_hover_text(text(reason))
-                .on_hover_text(text("ConflictResolveHelp"))
+                .on_hover_text(text(if absent {
+                    "ConflictDeletedSide"
+                } else if side.is_none() && !editable {
+                    "ConflictExternal"
+                } else {
+                    "ConflictResolveHelp"
+                }))
                 .clicked()
             {
-                submit = Some(if self.current && self.incoming {
-                    Choice::Edited(self.value.clone())
-                } else if self.current {
-                    Choice::Current
-                } else {
-                    Choice::Incoming
+                submit = Some(match side {
+                    None if editable => Choice::Edited(self.value.clone()),
+                    None => Choice::External(self.merge_tool()),
+                    Some(0) => Choice::Base,
+                    Some(1) => Choice::Current,
+                    Some(_) => Choice::Incoming,
                 });
             }
             if ui
@@ -466,18 +546,12 @@ impl Pane {
             }
             if ui
                 .add_enabled(
-                    !self.busy && self.can_submit,
+                    !self.busy && self.can_submit && (editable || side.is_some()),
                     egui::Button::new(text("ConflictExternal")),
                 )
                 .clicked()
             {
-                submit = Some(Choice::External(if self.tool == "@shovel" {
-                    Tool::Saved(self.saved_tool.clone())
-                } else if self.tool.is_empty() {
-                    Tool::Configured
-                } else {
-                    Tool::Named(self.tool.clone())
-                }));
+                submit = Some(Choice::External(self.merge_tool()));
             }
             ui.add_enabled_ui(!self.busy, |ui| {
                 egui::ComboBox::from_id_salt(("conflict-tool", &self.path))
@@ -512,104 +586,56 @@ impl Pane {
                     .on_hover_text(text("ConflictToolHelp"));
             });
         });
-        ui.label(text(if editable {
-            "ConflictEditorHelp"
-        } else if preview.is_some() {
-            "ConflictBinaryHelp"
+        if absent {
+            ui.label(text("ConflictDeletedSide"));
+        }
+        if self.can_submit && editable && side.is_none() && self.status == text("ConflictChoose") {
+            ui.label(text("ConflictEditorHelp"));
         } else {
-            "ConflictLoading"
-        }));
-        ui.label(&self.status);
-        if let Some(preview) = &preview {
-            let rebase = preview
-                .context
-                .repository
-                .recovery
-                .as_ref()
-                .is_some_and(|r| r.kind == Kind::Rebase);
-            let labels = [
-                strings::format(
-                    if rebase {
-                        "ConflictRebasedSide"
-                    } else {
-                        "ConflictCurrentSide"
-                    },
-                    &[&preview.current_source],
-                ),
-                if rebase {
-                    strings::format("ConflictReplayedSide", &[&preview.incoming_source])
-                } else if preview.incoming_source.is_empty() {
-                    text("ConflictIncomingUnknown")
-                } else {
-                    strings::format("ConflictIncomingSide", &[&preview.incoming_source])
-                },
-            ];
-            let old = (self.current, self.incoming);
+            ui.label(&self.status);
+        }
+        if editable && side.is_none() {
             egui::Panel::top("conflict-sources")
                 .resizable(true)
-                .default_size((ui.available_height() * 0.55).max(70.))
-                .min_size(70.)
+                .default_size((ui.available_height() * 0.45).max(70.))
+                .min_size(60.)
                 .show(ui, |ui| {
                     ui.columns(2, |columns| {
-                        for index in 0..2 {
-                            let column = &mut columns[index];
-                            column.add_enabled_ui(!self.busy, |ui| {
-                                ui.checkbox(
-                                    if index == 0 {
-                                        &mut self.current
-                                    } else {
-                                        &mut self.incoming
-                                    },
-                                    &labels[index],
-                                );
-                            });
-                            if editable {
-                                egui::ScrollArea::both()
-                                    .id_salt(("conflict-source", index))
-                                    .show_rows(column, 21., self.rows[index].len(), |ui, range| {
-                                        for row in range {
-                                            ui.horizontal(|ui| {
-                                                ui.monospace(format!("{:>5}", row + 1));
-                                                ui.monospace(&self.rows[index][row]);
-                                            });
-                                        }
-                                    });
-                            } else {
-                                column.label(text(if preview.sides[index + 1].is_none() {
-                                    "ConflictDeletedSide"
-                                } else {
-                                    "ConflictBinarySide"
-                                }));
-                            }
+                        for (index, column) in columns.iter_mut().enumerate() {
+                            egui::ScrollArea::both()
+                                .id_salt(("conflict-source", index))
+                                .show_rows(column, 21., self.rows[index].len(), |ui, range| {
+                                    for row in range {
+                                        ui.horizontal(|ui| {
+                                            ui.monospace(format!("{:>5}", row + 1));
+                                            ui.monospace(&self.rows[index][row]);
+                                        });
+                                    }
+                                });
                         }
                     });
                 });
-            if old != (self.current, self.incoming) {
-                self.choose();
-            }
-            if editable {
-                ui.strong(self.result_label());
-                egui::ScrollArea::both()
-                    .id_salt("conflict-result")
-                    .show(ui, |ui| {
-                        if ui
-                            .add_enabled(
-                                !self.busy,
-                                egui::TextEdit::multiline(&mut self.value)
-                                    .code_editor()
-                                    .char_limit(524288)
-                                    .desired_rows(8)
-                                    .desired_width(f32::INFINITY),
-                            )
-                            .changed()
-                        {
-                            self.combined = self.value.clone();
-                            self.dirty = true;
-                            self.current = true;
-                            self.incoming = true;
-                        }
-                    });
-            }
+            ui.strong(self.result_label());
+            egui::ScrollArea::both()
+                .id_salt("conflict-result")
+                .show(ui, |ui| {
+                    if ui
+                        .add_enabled(
+                            !self.busy,
+                            egui::TextEdit::multiline(&mut self.value)
+                                .code_editor()
+                                .char_limit(524288)
+                                .desired_rows(8)
+                                .desired_width(f32::INFINITY),
+                        )
+                        .changed()
+                    {
+                        self.combined = self.value.clone();
+                        self.dirty = true;
+                        self.current = true;
+                        self.incoming = true;
+                    }
+                });
         }
         if let Some(choice) = submit {
             self.submit(choice, &ctx);

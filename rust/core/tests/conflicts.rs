@@ -4,7 +4,7 @@ use shovel_core::{
     conflicts::{Choice, Preview, Tool, ToolSettings},
     git::Git,
     process::{self, Cancellation, Lifetime},
-    working::Group,
+    working::{Action, Error, Group},
 };
 use std::{
     fs,
@@ -121,6 +121,13 @@ fn binary_conflicts_reject_text_editing_but_native_side_selection_remains_availa
 }
 impl Fixture {
     fn conflict(encoding: Encoding, deletion: bool) -> Self {
+        Self::conflict_blobs(
+            ["base\r\n", "incoming\r\n", "current\r\n"]
+                .map(|value| conflict_text::encode(value, encoding).unwrap()),
+            deletion,
+        )
+    }
+    fn conflict_blobs([base, incoming, current]: [Vec<u8>; 3], deletion: bool) -> Self {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("repo");
         fs::create_dir(&root).unwrap();
@@ -132,30 +139,18 @@ impl Fixture {
         git.environment
             .insert("GIT_CONFIG_NOSYSTEM".into(), Some("1".into()));
         command(&git, &root, &["init", "--initial-branch=main"]);
-        fs::write(
-            root.join("conflict.txt"),
-            conflict_text::encode("base\r\n", encoding).unwrap(),
-        )
-        .unwrap();
+        fs::write(root.join("conflict.txt"), base).unwrap();
         fs::write(root.join("unrelated.txt"), "keep\n").unwrap();
         command(&git, &root, &["add", "conflict.txt", "unrelated.txt"]);
         command(&git, &root, &["commit", "-m", "base"]);
         command(&git, &root, &["switch", "--create", "side"]);
-        fs::write(
-            root.join("conflict.txt"),
-            conflict_text::encode("incoming\r\n", encoding).unwrap(),
-        )
-        .unwrap();
+        fs::write(root.join("conflict.txt"), incoming).unwrap();
         command(&git, &root, &["commit", "-am", "incoming"]);
         command(&git, &root, &["switch", "main"]);
         if deletion {
             fs::remove_file(root.join("conflict.txt")).unwrap();
         } else {
-            fs::write(
-                root.join("conflict.txt"),
-                conflict_text::encode("current\r\n", encoding).unwrap(),
-            )
-            .unwrap();
+            fs::write(root.join("conflict.txt"), current).unwrap();
         }
         command(&git, &root, &["commit", "-am", "current"]);
         let merge = raw(&git, &root, &["merge", "--no-edit", "side"]);
@@ -180,6 +175,50 @@ impl Fixture {
     fn cmd(&self, args: &[&str]) -> String {
         command(&self.git, &self.root, args)
     }
+}
+#[test]
+fn stage_rejects_lfs_conflicts_and_base_restores_the_original_pointer() {
+    let pointer = |hash: char, bytes: u64| {
+        format!(
+            "version https://git-lfs.github.com/spec/v1\noid sha256:{}\nsize {bytes}\n",
+            hash.to_string().repeat(64)
+        )
+        .into_bytes()
+    };
+    let base = pointer('a', 120_000);
+    let f = Fixture::conflict_blobs(
+        [base.clone(), pointer('b', 140_000), pointer('c', 130_000)],
+        false,
+    );
+    let preview = f.preview();
+    let before = f.cmd(&["ls-files", "--unmerged"]);
+    let file = f.root.join("conflict.txt");
+    let worktree = fs::read(&file).unwrap();
+    assert!(matches!(
+        f.git.execute_working(
+            &preview.context,
+            &Action::Stage(vec![preview.change.clone()]),
+            None
+        ),
+        Err(Error::Unresolved)
+    ));
+    assert_eq!(f.cmd(&["ls-files", "--unmerged"]), before);
+    assert_eq!(fs::read(&file).unwrap(), worktree);
+    assert!(!preview.can_edit);
+    for (side, expected) in preview.sides.iter().zip([120_000, 130_000, 140_000]) {
+        let side = side.as_ref().unwrap();
+        assert!(side.lfs);
+        assert_eq!(side.bytes, expected);
+    }
+    let result = f.git.resolve_conflict(&preview, &Choice::Base).unwrap();
+    assert!(result.resolved, "{}", result.operation.output);
+    assert_eq!(fs::read(&file).unwrap(), base);
+    assert_eq!(
+        f.cmd(&["ls-files", "--stage", "conflict.txt"])
+            .split_whitespace()
+            .nth(1),
+        Some(preview.sides[0].as_ref().unwrap().hash.as_str())
+    );
 }
 #[test]
 fn native_side_selection_runs_hooks_stages_one_file_and_keeps_merge_pending() {

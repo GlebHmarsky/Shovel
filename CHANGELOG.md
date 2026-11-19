@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.51.9 - 2026-11-19
+
+- Show paused rebase controls below repository tabs and hide them while Shovel runs the rebase.
+- Open the resolver when selecting a conflicted file. Choose both sides to merge, one side to resolve, or neither to restore the common base.
+- Show conflict markers and Git LFS sizes, and keep unresolved files out of ordinary staging.
+- Show progress animation only in the top repository header and save commit drafts quietly.
+
 ## Rust 0.51.8 - 2026-11-19
 
 - Remove the strip above the menus in restored windows and reduce the height of the menu and toolbar rows.

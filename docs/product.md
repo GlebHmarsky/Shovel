@@ -22,6 +22,8 @@ The selected repository's latest status scan supplies file rows immediately when
 
 The previous diff stays visible during a selection or refresh. Hunk operations become available again when the new diff is ready. If a file becomes clean, its last diff stays visible. A verified removal can clear it. Binary cards show each side's extension, size and LFS status. Text options appear with text comparisons.
 
+In 0.51.9, selecting a conflicted file opens its resolver. Check one side to keep it, both to merge, or neither to restore the common base. Resolving applies and stages that file. Stage and Stage All skip unresolved files. During rebase, Ours is the rebased result so far and Theirs is the commit being replayed. Recovery controls appear below the repository tabs when the rebase pauses.
+
 ## Network toolbar and remembered options (0.51.7)
 
 Fetch, Pull and Push each open their options the first time you use the main button in a repository. Click the named action in the dialog to run Git and confirm the saved options. Later clicks run directly with those choices. Use the arrow or Repository menu to reopen options. Closing the dialog saves edits, and the first-use prompt stays active until you submit the action.
