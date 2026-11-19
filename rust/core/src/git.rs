@@ -117,13 +117,10 @@ impl Commit {
 pub struct History {
     pub snapshot: Snapshot,
     pub stashes: Vec<Commit>,
-    hidden: HashSet<String>,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Cursor {
     pub offset: usize,
-    pub raw_offset: usize,
-    pub inserted_offset: usize,
     pub expected: Option<String>,
     pub graph: graph::Cursor,
 }
@@ -752,9 +749,7 @@ impl Git {
                         .read(&snapshot.worktree, args, cancel, MAX_HISTORY)?
                         .stdout,
                     chunk.len(),
-                )?
-                .into_iter()
-                .filter(|c| (2..=3).contains(&c.parents.len())),
+                )?,
             );
         }
         // Preserve stash order from reflog, not hash-set iteration order.
@@ -765,45 +760,7 @@ impl Git {
                 .position(|r| r.name.starts_with("stash@{") && r.hash == c.hash)
                 .unwrap_or(usize::MAX)
         });
-        let candidates = stashes
-            .iter()
-            .flat_map(|c| c.parents.iter().skip(1).cloned())
-            .collect::<HashSet<_>>();
-        let candidate_list = candidates.iter().cloned().collect::<Vec<_>>();
-        let mut hidden = HashSet::new();
-        for chunk in candidate_list.chunks(64) {
-            let mut args = vec!["rev-list".into(), "--max-count=513".into()];
-            args.extend(chunk.iter().cloned());
-            args.extend(["--not", "--branches", "--remotes", "--tags"].map(str::to_owned));
-            args.extend(snapshot.head.iter().cloned());
-            args.extend(stashes.iter().map(|c| c.parents[0].clone()));
-            args.push("--".into());
-            let hashes = lines(
-                &self
-                    .read(&snapshot.worktree, args, cancel, MAX_HISTORY)?
-                    .stdout,
-            );
-            if hashes.len() > 512 {
-                return Err(Error::Limit);
-            }
-            for hash in hashes {
-                if !oid(&hash) {
-                    return Err(Error::Invalid);
-                }
-                if candidates.contains(&hash) {
-                    hidden.insert(hash);
-                }
-            }
-        }
-        for tip in tips {
-            hidden.remove(&tip);
-        }
-        hidden.extend(stashes.iter().map(|c| c.hash.clone()));
-        Ok(History {
-            snapshot,
-            stashes,
-            hidden,
-        })
+        Ok(History { snapshot, stashes })
     }
     pub fn page(
         &self,
@@ -842,17 +799,12 @@ impl Git {
     ) -> Result<Page, Error> {
         let mut args = vec!["log".into(), "--topo-order".into()];
         args.extend(log_options());
-        args.push(format!("--skip={}", cursor.raw_offset));
-        args.push(format!(
-            "--max-count={}",
-            PAGE_SIZE + 1 + history.hidden.len()
-        ));
+        args.push(format!("--skip={}", cursor.offset));
+        args.push(format!("--max-count={}", PAGE_SIZE + 1));
         args.extend(["--branches", "--remotes", "--tags"].map(str::to_owned));
         args.extend(history.snapshot.head.iter().cloned());
-        args.extend(history.stashes.iter().map(|c| c.parents[0].clone()));
         args.push("--".into());
         let have_roots = history.snapshot.head.is_some()
-            || !history.stashes.is_empty()
             || history.snapshot.references.iter().any(|reference| {
                 ["refs/heads/", "refs/remotes/", "refs/tags/"]
                     .iter()
@@ -865,7 +817,7 @@ impl Git {
                 &self
                     .read(&history.snapshot.worktree, args, cancel, MAX_HISTORY)?
                     .stdout,
-                PAGE_SIZE + 1 + history.hidden.len(),
+                PAGE_SIZE + 1,
             )?
         };
         let page = Self::project_page(history, cursor, &raw)?;
@@ -880,68 +832,32 @@ impl Git {
     }
 
     fn project_page(history: &History, cursor: &Cursor, raw: &[Commit]) -> Result<Page, Error> {
-        let mut projected = Vec::new();
-        for (raw_index, commit) in raw.iter().enumerate() {
-            if history.hidden.contains(&commit.hash) {
-                continue;
-            }
-            let stashes = history
-                .stashes
-                .iter()
-                .filter(|s| s.parents[0] == commit.hash)
-                .collect::<Vec<_>>();
-            let stash_count = stashes.len();
-            for (inserted_index, item) in stashes.into_iter().chain([commit]).enumerate() {
-                if raw_index == 0 && inserted_index < cursor.inserted_offset {
-                    continue;
-                }
-                projected.push((item, raw_index, inserted_index, stash_count));
-            }
-        }
         if cursor
             .expected
             .as_ref()
-            .is_some_and(|expected| projected.first().is_none_or(|(c, ..)| c.hash != *expected))
+            .is_some_and(|expected| raw.first().is_none_or(|commit| commit.hash != *expected))
         {
             return Err(Error::Changed);
         }
-        let graph_commits = projected
+        let commits = raw
             .iter()
             .take(PAGE_SIZE)
-            .map(|&(commit, _, index, count)| {
-                if index == count {
-                    (
-                        commit.hash.as_str(),
-                        commit.parents.as_slice(),
-                        graph::Placement::Commit { stashes: count },
-                    )
-                } else {
-                    (
-                        commit.hash.as_str(),
-                        &commit.parents[..1],
-                        graph::Placement::Stash { index, count },
-                    )
-                }
-            });
-        let (graph, next_graph) = graph::build(graph_commits, &cursor.graph)?;
-        let next = projected
-            .get(PAGE_SIZE)
-            .map(|(commit, raw, inserted, ..)| Cursor {
-                offset: cursor.offset + graph.len(),
-                raw_offset: cursor.raw_offset + raw,
-                inserted_offset: *inserted,
-                expected: Some(commit.hash.clone()),
-                graph: next_graph,
-            });
-        let entries = projected
-            .into_iter()
+            .map(|commit| (commit.hash.as_str(), commit.parents.as_slice()));
+        let (graph, next_graph) = graph::build(commits, &cursor.graph)?;
+        let next = raw.get(PAGE_SIZE).map(|commit| Cursor {
+            offset: cursor.offset + graph.len(),
+            expected: Some(commit.hash.clone()),
+            graph: next_graph,
+        });
+        let entries = raw
+            .iter()
             .zip(graph)
-            .map(|((commit, ..), graph)| {
+            .map(|(commit, graph)| {
                 let references = history
                     .snapshot
                     .references
                     .iter()
-                    .filter(|r| r.hash == commit.hash)
+                    .filter(|r| r.hash == commit.hash && !r.name.starts_with("stash@{"))
                     .cloned()
                     .collect();
                 Entry {

@@ -80,7 +80,9 @@ Returning to inline Local Changes keeps the last file list, selection, diff and 
 
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
-**Rust 0.51.4.** Saved stashes use full-size gray commit markers immediately above and to the side of their first parent. Stashes on the same commit share a gray connector that ends at that commit. Regular commits keep their Git topological order and branch lanes. Unusual entries without the expected stash parent shape can be selected in the Stashes sidebar. A commit independently reachable from regular history still appears there.
+**Rust 0.52.2.** Saved stashes are listed in the sidebar. Their rows use branch spacing and gray branch icons. Double-click a stash to inspect it. History follows branches, remote-tracking branches, tags and HEAD. A commit independently reachable through those roots appears as a regular commit.
+
+Scroll past the top or bottom of the history page to move to the adjacent page. Right-click any repository tab to open its folder in File Explorer or the console.
 
 Checkout opens a confirmation immediately and checks local changes after display. Clean trees show the target and confirmation only. Dirty trees offer **Don’t change**, **Stash and reapply**, or **Discard tracked changes**. Keep uses native Git overwrite protection. Stash and reapply includes untracked files and attempts to restore staged state; failure/conflicts retain the saved stash for recovery. Discard removes tracked edits while keeping untracked/ignored files and submodule worktrees. Native checkout hooks and filters remain enabled. Approval waits for the local scan; no mutation runs on opening the confirmation.
 

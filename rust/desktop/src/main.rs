@@ -104,7 +104,7 @@ enum Event {
     InitialHistory(u64, u64, Box<Page>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
     Loaded(u64, u64, history_view::Read, bool),
-    Page(u64, u64, Box<Page>, bool),
+    Page(u64, u64, Box<Page>, bool, Option<f32>),
     Located(u64, u64, String, Result<(Page, Vec<Cursor>), String>),
     Failed(u64, u64, history_view::Failure),
     Saved(Box<SettingsStore>, Result<(), String>),
@@ -491,6 +491,14 @@ impl Workspace {
         );
     }
     fn page(&mut self, older: bool, ctx: &egui::Context) {
+        self.read_history_page(older, None, ctx);
+    }
+    fn read_history_page(
+        &mut self,
+        older: bool,
+        viewport_height: Option<f32>,
+        ctx: &egui::Context,
+    ) {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
             return;
         }
@@ -501,7 +509,16 @@ impl Workspace {
         let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
-        if tab.loading || tab.view.stale || tab.view.identity_blocked {
+        if tab.loading || tab.view.identity_blocked {
+            return;
+        }
+        if !older && tab.page.as_ref().is_some_and(|page| page.cursor.offset > 0)
+            && (tab.view.stale || tab.previous.is_empty())
+        {
+            self.first_page(ctx);
+            return;
+        }
+        if tab.view.stale {
             return;
         }
         let (Some(history), Some(page)) = (&tab.history, &tab.page) else {
@@ -533,7 +550,7 @@ impl Workspace {
                 history_cache::tests::wait_for_read(&history.snapshot.worktree);
                 let git = git.as_ref().clone().with_foreground_reads(true);
                 match history_view::read_page(&git, &history, &cursor, &cancel) {
-                    Ok(page) => Event::Page(id, generation, Box::new(page), older),
+                    Ok(page) => Event::Page(id, generation, Box::new(page), older, viewport_height),
                     Err(error) => Event::Failed(id, generation, error),
                 }
             },
@@ -967,7 +984,7 @@ impl Workspace {
                         self.open_commit();
                     }
                 }
-                Event::Page(id, generation, page, older) => {
+                Event::Page(id, generation, page, older, viewport_height) => {
                     if let Some(tab) = self
                         .tabs
                         .iter_mut()
@@ -977,7 +994,7 @@ impl Workspace {
                         if tab.view.external_history_change {
                             tab.loading = false;
                         } else {
-                            tab.publish_page(*page, older);
+                            tab.publish_page(*page, older, viewport_height);
                         }
                     }
                 }
@@ -2085,11 +2102,10 @@ impl eframe::App for Workspace {
                                 .tabs
                                 .get(self.selected)
                                 .is_some_and(|t| t.page.as_ref().is_some_and(|p| p.next.is_some()));
-                        let newer = ready
-                            && self
-                                .tabs
-                                .get(self.selected)
-                                .is_some_and(|t| !t.previous.is_empty());
+                        let newer = self.tabs.get(self.selected).is_some_and(|tab| {
+                            !tab.loading && !tab.view.identity_blocked
+                                && tab.page.as_ref().is_some_and(|page| page.cursor.offset > 0)
+                        });
                         let unavailable = self
                             .tabs
                             .get(self.selected)
@@ -2558,6 +2574,8 @@ impl eframe::App for Workspace {
                         response.context_menu(|ui| {
                             use workspace_tabs::TabAction;
                             for (key, command, enabled) in [
+                                ("RepositoryOpenExplorer", TabAction::OpenTool(tab.id, "Explorer"), true),
+                                ("RepositoryOpenConsole", TabAction::OpenTool(tab.id, "Bash"), true),
                                 ("RefreshRepository", TabAction::Refresh(tab.id), true),
                                 ("MoveLeft", TabAction::Move(tab.id, -1), index > 0),
                                 ("MoveRight", TabAction::Move(tab.id, 1), index + 1 < count),
@@ -3009,9 +3027,7 @@ impl eframe::App for Workspace {
                                                         Some(strings::text("ActionSequence"));
                                                 }
                                             } else if !multiselect && (response.clicked() || activated) {
-                                                if reference.name.starts_with("stash@{")
-                                                    && !history.stashes.iter().any(|commit| commit.hash == reference.hash)
-                                                {
+                                                if stash {
                                                     if activated {
                                                         stash_request = Some(reference.hash.clone());
                                                     }
@@ -3200,6 +3216,7 @@ impl eframe::App for Workspace {
             self.preferences_dirty |=
                 Divider::Details.handle(ui, details.response.rect, height, &mut self.settings);
         }
+        let mut history_edge = None;
         egui::CentralPanel::default()
             .frame(workspace_style::pane(palette.canvas, 0, 0))
             .show(ui, |ui| {
@@ -3255,6 +3272,7 @@ impl eframe::App for Workspace {
                     .unwrap_or(false);
                 ui.spacing_mut().item_spacing.y = 0.;
                 let mut scroll = egui::ScrollArea::both().id_salt(tab.id);
+                let restoring = tab.view.restore_offset.is_some() || tab.scroll_selected;
                 if let Some(offset) = tab.view.restore_offset.take() {
                     scroll = scroll.scroll_offset(offset);
                 }
@@ -3306,141 +3324,121 @@ impl eframe::App for Workspace {
                                 if let Some(menu) = &self.history_menu
                                     && menu.owner == tab.id
                                 {
-                                    if let Some(reference) =
-                                        menu.snapshot.references.iter().find(|r| {
-                                            r.name.starts_with("stash@{")
-                                                && r.hash == menu.commit.hash
-                                        })
-                                    {
-                                        stashes::quick_actions(
-                                            ui,
-                                            stashes::QuickTarget {
-                                                snapshot: &menu.snapshot,
-                                                reference,
-                                                message: menu.commit.subject(),
-                                            },
-                                            self.git.as_ref(),
-                                            &mut self.operations,
-                                            &mut self.branches,
-                                            &self.scheduler,
-                                        );
-                                    } else {
-                                        ui.add_enabled_ui(
-                                            menu.snapshot.operations.is_empty(),
-                                            |ui| {
-                                                if ui
-                                                    .button(strings::text(
-                                                        "HistoryMenuCheckoutCommit",
-                                                    ))
-                                                    .clicked()
-                                                {
-                                                    self.branches.checkout(
-                                                        &menu.snapshot,
-                                                        shovel_core::branches::Checkout::Detached(
-                                                            menu.commit.hash.clone(),
-                                                        ),
-                                                    );
-                                                    ui.close();
-                                                }
+                                    ui.add_enabled_ui(
+                                        menu.snapshot.operations.is_empty(),
+                                        |ui| {
+                                            if ui
+                                                .button(strings::text(
+                                                    "HistoryMenuCheckoutCommit",
+                                                ))
+                                                .clicked()
+                                            {
+                                                self.branches.checkout(
+                                                    &menu.snapshot,
+                                                    shovel_core::branches::Checkout::Detached(
+                                                        menu.commit.hash.clone(),
+                                                    ),
+                                                );
+                                                ui.close();
+                                            }
+                                            ui.menu_button(
+                                                strings::text("HistoryResetMenu"),
+                                                |ui| {
+                                                    use shovel_core::history_actions::Reset;
+                                                    for (mode, label) in [
+                                                        (Reset::Soft, "HistoryMenuResetSoft"),
+                                                        (Reset::Mixed, "HistoryMenuResetMixed"),
+                                                        (Reset::Hard, "HistoryMenuResetHard"),
+                                                    ] {
+                                                        if ui
+                                                            .add_enabled(
+                                                                menu.snapshot.branch.is_some()
+                                                                    && menu
+                                                                        .snapshot
+                                                                        .head
+                                                                        .is_some(),
+                                                                egui::Button::new(
+                                                                    strings::text(label),
+                                                                ),
+                                                            )
+                                                            .on_disabled_hover_text(
+                                                                strings::text(
+                                                                    "HistoryResetNeedsBranch",
+                                                                ),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            self.branches.reset(
+                                                                &menu.snapshot,
+                                                                &menu.commit.hash,
+                                                                mode,
+                                                            );
+                                                            ui.close();
+                                                        }
+                                                    }
+                                                },
+                                            );
+                                            let mut revert_mainline = None;
+                                            if menu.commit.parents.len() > 1 {
                                                 ui.menu_button(
-                                                    strings::text("HistoryResetMenu"),
+                                                    strings::text("HistoryMenuRevertCommit"),
                                                     |ui| {
-                                                        use shovel_core::history_actions::Reset;
-                                                        for (mode, label) in [
-                                                            (Reset::Soft, "HistoryMenuResetSoft"),
-                                                            (Reset::Mixed, "HistoryMenuResetMixed"),
-                                                            (Reset::Hard, "HistoryMenuResetHard"),
-                                                        ] {
+                                                        for (index, parent) in menu
+                                                            .commit
+                                                            .parents
+                                                            .iter()
+                                                            .enumerate()
+                                                        {
                                                             if ui
-                                                                .add_enabled(
-                                                                    menu.snapshot.branch.is_some()
-                                                                        && menu
-                                                                            .snapshot
-                                                                            .head
-                                                                            .is_some(),
-                                                                    egui::Button::new(
-                                                                        strings::text(label),
-                                                                    ),
-                                                                )
-                                                                .on_disabled_hover_text(
-                                                                    strings::text(
-                                                                        "HistoryResetNeedsBranch",
-                                                                    ),
-                                                                )
+                                                                .button(strings::format(
+                                                                    "HistoryRevertParent",
+                                                                    &[
+                                                                        &(index + 1)
+                                                                            .to_string(),
+                                                                        parent,
+                                                                    ],
+                                                                ))
                                                                 .clicked()
                                                             {
-                                                                self.branches.reset(
-                                                                    &menu.snapshot,
-                                                                    &menu.commit.hash,
-                                                                    mode,
-                                                                );
+                                                                revert_mainline =
+                                                                    Some(index + 1);
                                                                 ui.close();
                                                             }
                                                         }
                                                     },
+                                                )
+                                                .response
+                                                .on_hover_text(strings::text(
+                                                    "HistoryRevertParentHelp",
+                                                ));
+                                            } else if ui
+                                                .button(strings::text(
+                                                    "HistoryMenuRevertCommit",
+                                                ))
+                                                .clicked()
+                                            {
+                                                revert_mainline = Some(0);
+                                                ui.close();
+                                            }
+                                            if let Some(mainline) = revert_mainline
+                                                && let Some(git) = &self.git
+                                            {
+                                                self.operations.submit_history(
+                                                    "ActionTitleRevertCommit",
+                                                    shovel_core::history_actions::Action::Revert {
+                                                        target: menu.commit.hash.clone(),
+                                                        mainline,
+                                                    },
+                                                    &menu.snapshot,
+                                                    git.clone(),
+                                                    &self.scheduler,
+                                                    &ctx,
                                                 );
-                                                let mut revert_mainline = None;
-                                                if menu.commit.parents.len() > 1 {
-                                                    ui.menu_button(
-                                                        strings::text("HistoryMenuRevertCommit"),
-                                                        |ui| {
-                                                            for (index, parent) in menu
-                                                                .commit
-                                                                .parents
-                                                                .iter()
-                                                                .enumerate()
-                                                            {
-                                                                if ui
-                                                                    .button(strings::format(
-                                                                        "HistoryRevertParent",
-                                                                        &[
-                                                                            &(index + 1)
-                                                                                .to_string(),
-                                                                            parent,
-                                                                        ],
-                                                                    ))
-                                                                    .clicked()
-                                                                {
-                                                                    revert_mainline =
-                                                                        Some(index + 1);
-                                                                    ui.close();
-                                                                }
-                                                            }
-                                                        },
-                                                    )
-                                                    .response
-                                                    .on_hover_text(strings::text(
-                                                        "HistoryRevertParentHelp",
-                                                    ));
-                                                } else if ui
-                                                    .button(strings::text(
-                                                        "HistoryMenuRevertCommit",
-                                                    ))
-                                                    .clicked()
-                                                {
-                                                    revert_mainline = Some(0);
-                                                    ui.close();
-                                                }
-                                                if let Some(mainline) = revert_mainline
-                                                    && let Some(git) = &self.git
-                                                {
-                                                    self.operations.submit_history(
-                                                "ActionTitleRevertCommit",
-                                                shovel_core::history_actions::Action::Revert {
-                                                    target: menu.commit.hash.clone(),
-                                                    mainline,
-                                                },
-                                                &menu.snapshot,
-                                                git.clone(),
-                                                &self.scheduler,
-                                                &ctx,
-                                            );
-                                                }
-                                            },
-                                        )
-                                        .response
-                                        .on_disabled_hover_text(strings::text("ActionSequence"));
-                                    }
+                                            }
+                                        },
+                                    )
+                                    .response
+                                    .on_disabled_hover_text(strings::text("ActionSequence"));
                                     if ui.button(strings::text("HistoryCopySha")).clicked() {
                                         ctx.copy_text(menu.commit.hash.clone());
                                         ui.close();
@@ -3451,28 +3449,35 @@ impl eframe::App for Workspace {
                     }
                 });
                 tab.view.offset = scroll_output.state.clamped_offset();
+                if !modal_open && !restoring && !tab.loading && !tab.view.identity_blocked
+                    && ctx.pointer_hover_pos().is_some_and(|point| {
+                        scroll_output.inner_rect.contains(point)
+                            && ctx.layer_id_at(point) == Some(ui.layer_id())
+                    })
+                {
+                    let wheel = ctx.input(history_view::vertical_wheel);
+                    let height = scroll_output.inner_rect.height();
+                    let bottom = (scroll_output.content_size.y - height).max(0.);
+                    if wheel > 0. && tab.view.offset.y <= 0.5 && page.cursor.offset > 0 {
+                        history_edge = Some((false, height));
+                    } else if wheel < 0.
+                        && tab.view.offset.y >= bottom - 0.5
+                        && page.next.is_some()
+                    {
+                        history_edge = Some((true, height));
+                    }
+                }
             });
+        if let Some((older, height)) = history_edge {
+            self.read_history_page(older, Some(height), &ctx);
+        }
         let stash_input = !self.closing
             && !self.operations.modal_open()
             && !self.branches.is_open()
             && !self.remotes.is_open();
         self.sync_inspector_layouts(false);
-        let mut stash_navigation = None;
         for view in &mut self.stash_views {
             view.show(&ctx, &mut self.operations, &self.scheduler, stash_input);
-            if let Some(hash) = view.take_navigation() {
-                stash_navigation = Some((view.path.clone(), hash));
-            }
-        }
-        if let Some((path, hash)) = stash_navigation
-            && self.tabs.get(self.selected).is_some_and(|tab| {
-                tab.path == path
-                    && tab.history.as_ref().is_some_and(|history| {
-                        history.stashes.iter().any(|commit| commit.hash == hash)
-                    })
-            })
-        {
-            self.locate(hash, &ctx);
         }
         let failure_editor = self.operations.failure_path().and_then(|path| {
             self.editors.iter().position(|editor| {

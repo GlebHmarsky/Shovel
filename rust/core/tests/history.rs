@@ -1,7 +1,6 @@
 #![cfg(windows)]
 use shovel_core::{
     git::{self, Cursor, Git},
-    graph::StashLink,
     process::{self, Cancellation, Lifetime},
 };
 use std::{fs, path::Path};
@@ -131,11 +130,12 @@ fn unusual_stash_stays_available_without_adding_a_history_root() {
     };
     assert_eq!(recovered.entries.len(), 1);
     assert_eq!(recovered.entries[0].commit.hash, unusual);
-    assert!(!recovered.entries[0].graph.is_stash());
+    assert_eq!(recovered.entries[0].references.len(), 1);
+    assert_eq!(recovered.entries[0].references[0].name, "refs/tags/recovered");
 }
 
 #[test]
-fn real_git_history_pages_include_old_base_stash_without_duplicates() {
+fn real_git_history_pages_keep_saved_stashes_out_of_the_commit_walk() {
     let (temp, git) = fixture();
     let root = temp.path();
     let mut stream = String::new();
@@ -195,34 +195,19 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
     let second = git
         .page(&history, first.next.as_ref().unwrap(), &cancel)
         .unwrap();
-    assert_eq!(second.entries.len(), 7);
+    assert_eq!(second.entries.len(), 5);
+    assert_eq!(second.cursor.offset, 200);
     assert!(second.next.is_none());
-    let boundary_stash = first.entries.last().unwrap();
-    let boundary_base = &second.entries[0];
-    assert!(boundary_stash.graph.is_stash());
-    assert_eq!(boundary_stash.commit.parents[0], boundary_base.commit.hash);
-    assert_eq!(boundary_stash.graph.node, boundary_base.graph.node);
+    assert_eq!(history.stashes.len(), 2);
+    let entries = first.entries.iter().chain(&second.entries).collect::<Vec<_>>();
     assert_eq!(
-        boundary_base.graph.stash_link,
-        Some(StashLink::Base { shared: false })
+        entries.iter().map(|entry| entry.commit.hash.clone()).collect::<Vec<_>>(),
+        baseline
     );
-    let entries = first
-        .entries
-        .iter()
-        .chain(&second.entries)
-        .collect::<Vec<_>>();
-    let ordinary = entries
-        .iter()
-        .filter(|e| !e.graph.is_stash())
-        .map(|e| e.commit.hash.clone())
-        .collect::<Vec<_>>();
-    assert_eq!(ordinary, baseline);
-    assert!(entries[205].graph.is_stash());
-    assert_eq!(entries[205].commit.parents[0], entries[206].commit.hash);
-    assert_eq!(entries[205].commit.parents.len(), 2);
-    assert_eq!(entries[205].graph.node, entries[206].graph.node);
-    assert_eq!(entries[204].graph.node, entries[206].graph.node);
-    assert_eq!(entries[204].graph.color, entries[206].graph.color);
+    for stash in &history.stashes {
+        assert!(!entries.iter().any(|entry| entry.commit.hash == stash.hash));
+        assert!(!entries.iter().any(|entry| entry.commit.hash == stash.parents[1]));
+    }
     assert!(entries[0].commit.message.contains("complete body שלום"));
     command(&git, root, &["branch", "new-reference", "HEAD~3"], b"");
     assert!(matches!(
@@ -236,7 +221,7 @@ fn real_git_history_pages_include_old_base_stash_without_duplicates() {
 }
 
 #[test]
-fn detached_autostash_touches_only_its_first_parent() {
+fn detached_autostash_does_not_pull_its_detached_ancestry_into_history() {
     let (temp, mut git) = fixture();
     let root = temp.path();
     fs::write(root.join("tracked.txt"), "base\n").unwrap();
@@ -273,41 +258,17 @@ fn detached_autostash_touches_only_its_first_parent() {
     let snapshot = git.inspect(root, &cancel).unwrap();
     let history = git.history(snapshot, &cancel).unwrap();
     let page = git.page(&history, &Cursor::default(), &cancel).unwrap();
-    let [tip, stash, base, ancestor, common] = page.entries.as_slice() else {
-        panic!("expected five history rows");
+    let [tip, common] = page.entries.as_slice() else {
+        panic!("expected only the two commits reachable from main");
     };
-    assert!(stash.graph.is_stash());
-    assert_eq!(stash.commit.parents[0], base.commit.hash);
-    let common_parent = std::slice::from_ref(&common.commit.hash);
-    assert_eq!(tip.commit.parents, common_parent);
-    assert_eq!(
-        base.commit.parents,
-        std::slice::from_ref(&ancestor.commit.hash)
-    );
-    assert_eq!(ancestor.commit.parents, common_parent);
-    assert_eq!(stash.graph.node, base.graph.node);
-    assert_ne!(stash.graph.node, tip.graph.node);
-    assert_eq!(
-        base.graph.stash_link,
-        Some(StashLink::Base { shared: false })
-    );
-    assert_eq!(base.graph.node, ancestor.graph.node);
-    assert_eq!(base.graph.color, ancestor.graph.color);
-    assert!(ancestor.graph.stash_link.is_none());
-    assert!(common.graph.stash_link.is_none());
-    assert_ne!(tip.graph.node, base.graph.node);
+    assert_eq!(tip.commit.subject(), "Current tip");
+    assert_eq!(common.commit.subject(), "Common base");
+    assert_eq!(tip.commit.parents, std::slice::from_ref(&common.commit.hash));
+    assert_eq!(history.stashes.len(), 1);
+    assert!(history.stashes[0].subject().contains("Pull autostash"));
     assert_eq!(tip.graph.node, common.graph.node);
     assert_eq!(tip.graph.color, common.graph.color);
-    assert_eq!(stash.graph.lines.len(), 1);
-    for row in [stash, base, ancestor] {
-        assert!(row.graph.lines.iter().any(|line| {
-            line.from == tip.graph.node
-                && line.to == tip.graph.node
-                && line.from_y == 0.
-                && line.to_y == 1.
-                && line.color == tip.graph.color
-        }));
-    }
+
 }
 
 #[test]

@@ -390,6 +390,42 @@ pub(crate) fn click_label(app: &mut Workspace, ctx: &egui::Context, label: &str)
 }
 
 #[test]
+fn scrolling_across_page_edges_returns_to_the_first_history_page() {
+    let fixture = Fixture::new();
+    let ctx = egui::Context::default();
+    let mut app = fixture.app(&ctx);
+    let wheel = |delta| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0., delta),
+        modifiers: egui::Modifiers::NONE,
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    position(&mut app, &ctx, 199, egui::vec2(0., 4600.));
+    paint(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(600., 260.))]);
+    paint(&mut app, &ctx, vec![wheel(-1.)]);
+    assert!(app.tabs[0].loading, "scrolling past the last row requests an older page");
+    wait(&mut app, &ctx);
+    paint(&mut app, &ctx, vec![]);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().cursor.offset, 200);
+    assert!(app.tabs[0].view.offset.y < 40., "the next page opens near its first row");
+
+    paint(&mut app, &ctx, vec![wheel(4.)]);
+    assert!(app.tabs[0].loading, "scrolling above row 201 requests the first page");
+    wait(&mut app, &ctx);
+    paint(&mut app, &ctx, vec![]);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().cursor.offset, 0);
+    assert!(app.tabs[0].view.offset.y > 3000.);
+
+    page(&mut app, &ctx, true);
+    position(&mut app, &ctx, 0, egui::Vec2::ZERO);
+    app.tabs[0].view.stale = true;
+    paint(&mut app, &ctx, vec![wheel(1.)]);
+    wait(&mut app, &ctx);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().cursor.offset, 0);
+}
+
+#[test]
 fn refresh_and_keyboard_pages_preserve_real_selection_scroll_and_row_allocation() {
     let fixture = Fixture::new();
     let ctx = egui::Context::default();
@@ -644,7 +680,7 @@ fn obsolete_results_cannot_publish_or_invalidate_newer_history() {
         ))
         .unwrap();
     app.sender
-        .send(Event::Page(id, old, Box::new(page), true))
+        .send(Event::Page(id, old, Box::new(page), true, None))
         .unwrap();
     app.receive(&ctx);
     assert_eq!(

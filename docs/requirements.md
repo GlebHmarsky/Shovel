@@ -8,7 +8,7 @@ Use one direct question, the actual affected targets, and a verb for the action 
 
 ## Checkout and workspace-state acceptance (0.47.0)
 
-Old-base stashes must stay adjacent to their base regardless of timestamp, retain ordinary branch lanes and paginate/navigate without duplicates or gaps. Many same-base stashes must not exhaust lane capacity. Verify native stash metadata and separately reachable internal objects.
+Stashes belong in the sidebar and must not add history rows or traversal roots. A commit reachable through a branch, remote-tracking branch, tag or HEAD remains a normal history entry. Verify native stash metadata and both directions of history page-edge scrolling.
 
 Checkout confirms the immutable commit or named branch target; hide dirty choices for a clean tree. Keep preserves Git’s overwrite protection; stash/reapply restores staged, unstaged and untracked state or retains explicit recovery data on failure. Discard preserves unrelated untracked/ignored paths and submodule worktrees. Reject newly staged work after review. Unrelated fetched refs must not invalidate an otherwise unchanged checkout target. Configured checkout hooks and LFS behavior remain native.
 

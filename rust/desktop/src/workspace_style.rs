@@ -465,7 +465,9 @@ pub fn reference_row(ui: &mut egui::Ui, selected: bool, label: &str, kind: &str)
     }
     let center = egui::pos2(rect.left() + 9., rect.center().y);
     let fg = if selected { p.selection_text } else { p.text };
-    let stroke = Stroke::new(1.2, if selected { fg } else { p.muted });
+    let stroke = Stroke::new(1.2, if kind == "Stashes" && !p.high_contrast {
+        Color32::from_gray(if ui.visuals().dark_mode { 168 } else { 102 })
+    } else if selected { fg } else { p.muted });
     if kind == "Tags" {
         let points = vec![
             center + egui::vec2(-5., -4.),
@@ -475,13 +477,6 @@ pub fn reference_row(ui: &mut egui::Ui, selected: bool, label: &str, kind: &str)
             center + egui::vec2(-5., 4.),
         ];
         ui.painter().add(egui::Shape::closed_line(points, stroke));
-    } else if kind == "Stashes" {
-        ui.painter().rect_stroke(
-            egui::Rect::from_center_size(center, egui::vec2(10., 8.)),
-            2.,
-            stroke,
-            egui::StrokeKind::Inside,
-        );
     } else {
         ui.painter().line_segment(
             [center + egui::vec2(0., -5.), center + egui::vec2(0., 5.)],

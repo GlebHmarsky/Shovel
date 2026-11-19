@@ -1,5 +1,12 @@
 # Changelog
 
+## Rust 0.52.2 - 2026-11-19
+
+- Keep saved stashes in the sidebar. Give them the same row and icon geometry as branches, with gray markers.
+- Scroll across history page boundaries in either direction.
+- Open any repository tab in File Explorer or the console from its context menu.
+- Show up to two initials on brighter author tiles with a subtle gradient.
+
 ## Rust 0.52.1 - 2026-11-19
 
 - Retain Pull and Push counts while reading history and upstream state. Preserve cached Local Changes counts on temporary status errors and keep the selected stash comparison during list refresh.

@@ -178,6 +178,15 @@ pub(super) fn read_page(
     }
     result.map_err(Into::into)
 }
+pub(super) fn vertical_wheel(input: &egui::InputState) -> f32 {
+    input.events.iter().filter_map(|event| match event {
+        egui::Event::MouseWheel { delta, modifiers, source, .. }
+            if *source != egui::MouseWheelSource::Momentum
+                && !modifiers.shift && !modifiers.ctrl && !modifiers.command
+                && delta.y.abs() > delta.x.abs() => Some(delta.y),
+        _ => None,
+    }).sum()
+}
 impl Workspace {
     pub(super) fn warm_restored_tabs(&mut self, ctx: &egui::Context) {
         if self.closing || self.pending_exit || self.confirm_exit_without_save
@@ -329,7 +338,8 @@ impl Tab {
         self.page = Some(page);
         self.history = Some(history);
     }
-    pub(super) fn publish_page(&mut self, page: Page, older: bool) {
+    pub(super) fn publish_page(&mut self, page: Page, older: bool, viewport_height: Option<f32>) {
+        let horizontal = self.view.offset.x;
         self.view.remember(self.page.as_ref(), &self.selected);
         if older {
             if let Some(current) = &self.page {
@@ -339,6 +349,13 @@ impl Tab {
             self.previous.pop();
         }
         self.view.restore(&page, &mut self.selected);
+        if let Some(height) = viewport_height {
+            let edge = if older { 0. } else {
+                (page.entries.len() as f32 * history_row::HEIGHT - height).max(0.)
+            };
+            self.view.offset = egui::vec2(horizontal, edge);
+            self.view.restore_offset = Some(self.view.offset);
+        }
         self.page = Some(page);
         self.estimate_cache();
         self.loading = false;

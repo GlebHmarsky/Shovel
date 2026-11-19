@@ -4,7 +4,6 @@ use crate::{strings, workspace_style::Palette};
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, Ui};
 use sha2::{Digest, Sha256};
 use shovel_core::git::{Commit, Entry};
-use shovel_core::graph::StashLink;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color32) {
@@ -96,35 +95,6 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
         }
     };
     let center = point(entry.graph.node, 0.5);
-    let stash_color = if p.high_contrast {
-        foreground
-    } else {
-        Color32::from_gray(if ui.visuals().dark_mode { 168 } else { 102 })
-    };
-    let stash_stroke = Stroke::new(1.3, stash_color);
-    let stash_point = |y| point(entry.graph.node, y) + egui::vec2(9., 0.);
-    let rail = |y, shared| stash_point(y) - egui::vec2(if shared { 5. } else { 0. }, 0.);
-    match entry.graph.stash_link {
-        Some(StashLink::Leaf { first, shared }) => {
-            let marker = stash_point(0.5);
-            if shared {
-                painter.line_segment(
-                    [rail(0.5, shared), marker - egui::vec2(3., 0.)],
-                    stash_stroke,
-                );
-            }
-            let start = if !first {
-                rail(0., shared)
-            } else if shared {
-                rail(0.5, shared)
-            } else {
-                marker + egui::vec2(0., 3.)
-            };
-            painter.line_segment([start, rail(1., shared)], stash_stroke);
-        }
-        Some(StashLink::Base { shared }) => curve(rail(0., shared), center, stash_stroke),
-        None => {}
-    }
     for line in &entry.graph.lines {
         curve(
             point(line.from, line.from_y),
@@ -133,9 +103,7 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
         );
     }
     let color = lane_color(entry.graph.color);
-    if entry.graph.is_stash() {
-        painter.circle_filled(stash_point(0.5), 3.3, stash_color);
-    } else if entry.graph.is_merge {
+    if entry.graph.is_merge {
         painter.circle_stroke(center, 4., Stroke::new(1.5, color));
         painter.circle_filled(center, 1.3, color);
     } else {
@@ -276,8 +244,6 @@ pub fn show(
         }
         let (badge_fg, badge_bg) = if p.high_contrast {
             (fg, None)
-        } else if r.name.starts_with("stash@{") {
-            (secondary, None)
         } else if r.name.starts_with("refs/heads/") {
             (p.diff_added_text, Some(p.diff_added_background))
         } else if r.name.starts_with("refs/remotes/") {
@@ -359,34 +325,69 @@ pub fn paint_avatar(
     } else {
         email.as_bytes()
     });
-    let color = if p.high_contrast {
-        p.active_selection
+    let ink = if p.high_contrast {
+        ui.painter().rect_filled(avatar, 4., p.active_selection);
+        p.selection_text
     } else {
-        Color32::from_rgb(
-            45 + digest[0] % 65,
-            45 + digest[1] % 65,
-            45 + digest[2] % 65,
-        )
+        let hue = f32::from(u16::from_be_bytes([digest[0], digest[1]])) / 65_536.;
+        let top: Color32 = egui::ecolor::Hsva::new(hue, 0.83, 0.86, 1.).into();
+        let bottom = top.lerp_to_gamma(Color32::BLACK, 0.13);
+        paint_avatar_gradient(ui, avatar, top, bottom);
+        let luminance = |color| {
+            let linear = egui::Rgba::from(color);
+            0.2126 * linear.r() + 0.7152 * linear.g() + 0.0722 * linear.b()
+        };
+        if (luminance(bottom) + 0.05) / 0.05 > 1.05 / (luminance(top) + 0.05) {
+            Color32::BLACK
+        } else {
+            Color32::WHITE
+        }
     };
-    ui.painter().rect_filled(avatar, 4., color);
-    let initial = c
-        .author
-        .trim()
-        .graphemes(true)
-        .next()
-        .unwrap_or("?")
-        .to_uppercase();
     ui.painter().text(
         avatar.center(),
         Align2::CENTER_CENTER,
-        initial,
-        FontId::proportional(avatar.height() * 0.49),
-        if p.high_contrast {
-            p.selection_text
-        } else {
-            Color32::WHITE
-        },
+        initials(&c.author),
+        FontId::proportional(avatar.height() * 0.45),
+        ink,
     );
+}
+
+fn initials(author: &str) -> String {
+    let mut initials = String::new();
+    for word in author.split_whitespace().take(2) {
+        if let Some(initial) = word.graphemes(true).next()
+            && let Some(upper) = initial.to_uppercase().graphemes(true).next()
+        {
+            initials.push_str(upper);
+        }
+    }
+    if initials.is_empty() { "?".into() } else { initials }
+}
+
+fn paint_avatar_gradient(ui: &Ui, rect: Rect, top: Color32, bottom: Color32) {
+    use std::f32::consts::{FRAC_PI_2, PI};
+    let radius = 4.0_f32.min(rect.width().min(rect.height()) / 2.);
+    let corners = [
+        (rect.left_top() + egui::vec2(radius, radius), PI),
+        (rect.right_top() + egui::vec2(-radius, radius), PI + FRAC_PI_2),
+        (rect.right_bottom() - egui::vec2(radius, radius), 0.),
+        (rect.left_bottom() + egui::vec2(radius, -radius), FRAC_PI_2),
+    ];
+    let mut mesh = egui::epaint::Mesh::default();
+    mesh.colored_vertex(rect.center(), top.lerp_to_gamma(bottom, 0.5));
+    for (center, start) in corners {
+        for step in 0..=3 {
+            let angle = start + FRAC_PI_2 * step as f32 / 3.;
+            let point = center + egui::vec2(angle.cos(), angle.sin()) * radius;
+            let tint = (point.y - rect.top()) / rect.height();
+            mesh.colored_vertex(point, top.lerp_to_gamma(bottom, tint));
+        }
+    }
+    let edge_count = mesh.vertices.len() as u32 - 1;
+    for edge in 0..edge_count {
+        mesh.add_triangle(0, 1 + edge, 1 + (edge + 1) % edge_count);
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
 }
 
 #[cfg(test)]
@@ -412,7 +413,6 @@ mod tests {
                 color: 0,
                 width: 1,
                 is_merge: false,
-                stash_link: None,
                 lines: vec![],
             },
             references: vec![shovel_core::git::Reference {
@@ -424,32 +424,26 @@ mod tests {
     }
 
     #[test]
-    fn stash_uses_a_full_size_gray_commit_marker_in_both_themes() {
+    fn fallback_avatar_uses_the_first_two_words_and_a_color_gradient() {
+        assert_eq!(initials("Gleb"), "G");
+        assert_eq!(initials("Konstantinos Xenitidis"), "KX");
+        assert_eq!(initials("  alice  bob  charlie "), "AB");
+        assert_eq!(initials("éva 研究"), "É研");
+        assert_eq!(initials(" "), "?");
+        let mut entry = entry();
+        entry.commit.author = "Alice Bob Charlie".into();
         let ctx = egui::Context::default();
-        let rect = Rect::from_min_size(egui::pos2(16., 16.), egui::vec2(48., HEIGHT));
-        let mut stash = entry();
-        stash.graph.node = 1;
-        stash.graph.width = 3;
-        stash.graph.stash_link = Some(StashLink::Leaf {
-            first: false,
-            shared: true,
+        let out = ctx.run_ui(Default::default(), |ui| {
+            let (avatar, _) = ui.allocate_exact_size(egui::vec2(24., 24.), egui::Sense::hover());
+            paint_avatar(ui, avatar, &entry.commit, &Palette::current(ui), std::path::Path::new(""));
         });
-        for (visuals, expected) in [(egui::Visuals::dark(), 168), (egui::Visuals::light(), 102)] {
-            let p = Palette::for_mode(visuals.dark_mode);
-            ctx.set_visuals(visuals);
-            let out = ctx.run_ui(Default::default(), |ui| graph(ui, &stash, rect, &p, p.history_text));
-            let color = Color32::from_gray(expected);
-            let center = egui::pos2(rect.left() + 33., rect.center().y);
-            assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
-                egui::Shape::Circle(marker) if marker.center == center
-                    && (marker.radius - 3.3).abs() < 0.01 && marker.fill == color
-            )));
-            assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
-                egui::Shape::LineSegment { points, stroke } if points[0].x == center.x - 5.
-                    && points[1].x == center.x - 5. && stroke.color == color
-            )));
-            out.drop_without_applying_deltas();
-        }
+        assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::Shape::Mesh(mesh) if mesh.vertices.iter().any(|vertex| vertex.color != mesh.vertices[0].color)
+        )));
+        assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::Shape::Text(text) if text.galley.text() == "AB"
+        )));
+        out.drop_without_applying_deltas();
     }
 
     #[test]

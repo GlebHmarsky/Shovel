@@ -37,7 +37,6 @@ pub struct View {
     pub(super) layout: crate::window_geometry::InspectorLayout,
     list: Option<List>,
     selected: Option<String>,
-    navigation: Option<String>,
     message: String,
     include_untracked: bool,
     restore_index: bool,
@@ -68,10 +67,6 @@ impl View {
         !self.open && !self.reading && !self.inspecting && self.pending.is_empty()
     }
 
-    pub fn take_navigation(&mut self) -> Option<String> {
-        self.navigation.take()
-    }
-
     pub fn new(snapshot: Snapshot, git: Arc<Git>) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
@@ -87,7 +82,6 @@ impl View {
             ),
             list: None,
             selected: None,
-            navigation: None,
             message: String::new(),
             include_untracked: false,
             restore_index: false,
@@ -465,7 +459,6 @@ impl View {
                                             .clicked()
                                         {
                                             self.selected = Some(entry.hash.clone());
-                                            self.navigation = Some(entry.hash.clone());
                                             inspect = true;
                                         }
                                     }

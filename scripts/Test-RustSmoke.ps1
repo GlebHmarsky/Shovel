@@ -22,7 +22,7 @@ try{
         @('shovel-core','--test=network','automatic_fetch_updates_refs_without_touching_worktree_and_honors_cancellation'),
         @('shovel-desktop','--bin=Shovel','workspace_interaction_tests::tab_drag_preserves_selection_restores_on_escape_and_saves_on_drop'),
         @('shovel-desktop','--bin=Shovel','workspace_interaction_tests::details_splitter_reserves_history_and_saves_drag_proportion'),
-        @('shovel-desktop','--bin=Shovel','workspace_interaction_tests::reference_navigation_finds_old_tags_and_stashes_beyond_first_page'),
+        @('shovel-desktop','--bin=Shovel','workspace_interaction_tests::reference_navigation_finds_old_tags_and_inspects_stashes_from_the_sidebar'),
         @('shovel-desktop','--bin=Shovel','operations::tests::network_options_are_modal_persist_on_close_and_do_not_execute'),
         @('shovel-desktop','--bin=Shovel','operations::activity_layout_test::retained_operation_output_does_not_push_down_repository_tabs'),
         @('shovel-desktop','--bin=Shovel','git_identity::tests::global_identity_preserves_other_config_and_rejects_stale_review'),

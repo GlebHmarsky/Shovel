@@ -309,7 +309,28 @@ fn details_splitter_reserves_history_and_saves_drag_proportion() {
 }
 
 #[test]
-fn reference_navigation_finds_old_tags_and_stashes_beyond_first_page() {
+fn inactive_tab_menu_targets_its_own_repository_without_activating_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = workspace();
+    app.tabs.truncate(2);
+    app.selected = 0;
+    app.tabs[0].path = temp.path().join("active");
+    app.tabs[1].path = temp.path().join("inactive");
+    std::fs::create_dir(&app.tabs[0].path).unwrap();
+    app.settings.set("BashExecutable", serde_json::json!(temp.path().join("absent-bash.exe")));
+    sidebar_click(&ctx, &mut app, "inactive", egui::PointerButton::Secondary);
+    assert!(sidebar_point(&ctx, &mut app, &strings::text("RepositoryOpenExplorer"))
+        .is_some_and(|(_, disabled)| !disabled));
+    sidebar_click(&ctx, &mut app, &strings::text("RepositoryOpenConsole"), egui::PointerButton::Primary);
+    until(&mut app, &ctx, |app| app.notice.is_some());
+    assert_eq!(app.notice.as_deref(), Some(strings::text("RepositoryUnavailable").as_str()));
+    assert_eq!(app.selected, 0);
+}
+
+#[test]
+fn reference_navigation_finds_old_tags_and_inspects_stashes_from_the_sidebar() {
     use shovel_core::process::{self, Lifetime};
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().to_owned();
@@ -385,27 +406,35 @@ fn reference_navigation_finds_old_tags_and_stashes_beyond_first_page() {
     app.settings
         .set("AutoFetchEnabled", serde_json::json!(false));
     let ctx = egui::Context::default();
-    for hash in [base, stash] {
-        app.locate(hash.clone(), &ctx);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-        while app.tabs[0].locating.is_some() {
-            assert!(std::time::Instant::now() < deadline);
-            app.receive(&ctx);
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        assert_eq!(app.tabs[0].selected.as_ref(), Some(&hash));
-        assert!(
-            app.tabs[0]
-                .page
-                .as_ref()
-                .unwrap()
-                .entries
-                .iter()
-                .any(|e| e.commit.hash == hash)
-        );
-        assert!(!app.tabs[0].previous.is_empty());
-        assert!(app.tabs[0].scroll_selected);
+    ctx.enable_accesskit();
+    ctx.set_embed_viewports(true);
+    app.locate(base.clone(), &ctx);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app.tabs[0].locating.is_some() {
+        assert!(std::time::Instant::now() < deadline);
+        app.receive(&ctx);
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
+    assert_eq!(app.tabs[0].selected.as_ref(), Some(&base));
+    assert!(!app.tabs[0].previous.is_empty());
+    assert!(app.tabs[0].scroll_selected);
+    assert!(!app.tabs[0].page.as_ref().unwrap().entries.iter().any(|e| e.commit.hash == stash));
+    let label = "stash@{0}  On main: old stash";
+    sidebar_click(&ctx, &mut app, label, egui::PointerButton::Primary);
+    assert_eq!(app.tabs[0].selected.as_ref(), Some(&base));
+    assert!(app.stash_views.is_empty());
+    let (point, _) = sidebar_point(&ctx, &mut app, label).unwrap();
+    // A single sidebar click leaves the stash row focused for keyboard inspection.
+    assert!(point.y > 0.);
+    frame(&ctx, &mut app, vec![egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: Some(egui::Key::Enter),
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]).drop_without_applying_deltas();
+    assert!(app.stash_views.iter().any(|view| view.open));
+    assert_eq!(app.tabs[0].selected.as_ref(), Some(&base));
 }
 
 struct RepositoryFixture {

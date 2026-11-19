@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Sidebar stashes and history paging in Rust 0.52.2
+
+CatChess stash@{1} was 99085275a0a8f28c79e17f57b4aad1b8a8c01a12 and absent from the normal Git commit walk. Native fixtures verified sidebar-only stash entries, independently tagged commits, and clean page boundaries. Offscreen wheel input crossed in both directions and recovered from a stale cursor. The inactive-tab menu resolved its own target without activating it. Avatar checks covered first-two-word initials, gradient vertices, and existing photo handling.
+
+Twenty-five focused checks, all-target Clippy, and `git diff --check` passed. The 18 bounded smoke checks took 39.22 seconds on fingerprint "86C1BCC537B29C96D1E4F90F29B54BA7F3AD098363F767768DB639300E10BF9D". Live desktop appearance and external application launches remain unverified.
+
 ## Refresh continuity and Local Changes in Rust 0.52.1
 
 The held upstream-read fixture kept the last badge and ahead marker visible until Git confirmed the new count. A read failure kept the previous counts and exposed the error in the tooltip. The commit editor fixture verified pointer typing, the subject-only count, and separate message and footer bounds. Native Git fixtures verified submodule labels through both open paths, the sidebar count confirmation, and rejection of a stale stash selection.

@@ -51,6 +51,7 @@ pub(super) fn paint_drag(
 
 #[derive(Clone, Copy)]
 pub(super) enum TabAction {
+    OpenTool(u64, &'static str),
     Refresh(u64),
     Close(u64),
     CloseOthers(u64),
@@ -235,6 +236,15 @@ impl Workspace {
     pub(super) fn tab_action(&mut self, action: workspace_tabs::TabAction, ctx: &egui::Context) {
         use workspace_tabs::TabAction;
         match action {
+            TabAction::OpenTool(id, kind) => {
+                if let Some(tab) = self.tabs.iter().find(|tab| tab.id == id) {
+                    let path = tab.path.clone();
+                    let settings = self.settings.clone();
+                    self.begin_tool_handoff(ctx, move || {
+                        repository_tools::launch(kind, &path, &settings)
+                    });
+                }
+            }
             TabAction::Marker(id, marker) => self.set_tab_marker(id, marker, ctx),
             TabAction::Refresh(id) => {
                 if let Some(index) = self.tabs.iter().position(|t| t.id == id) {
