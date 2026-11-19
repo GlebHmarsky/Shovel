@@ -2,7 +2,8 @@
 //! is replaced by one same-directory move only after complete validation.
 use crate::{
     diff, files,
-    git::Git,
+    git::{Git, Snapshot},
+    identity,
     operation::Error,
     process::{self, Cancellation, Lifetime},
     working::{self, Change, Context, Group},
@@ -43,7 +44,7 @@ fn spelling(path: &Path) -> String {
     crate::case::path_key(path)
 }
 fn destination(
-    context: &Context,
+    repository: &Snapshot,
     entries: &[Change],
     destination: &Path,
 ) -> Result<PathBuf, Error> {
@@ -66,21 +67,18 @@ fn destination(
         .ok_or(Error::Code("FilePatchDestination"))?;
     let destination = parent.join(name);
     let normalized = spelling(&destination);
-    for root in [
-        &context.repository.git_directory,
-        &context.repository.common_directory,
-    ] {
+    for root in [&repository.git_directory, &repository.common_directory] {
         let root = spelling(&root.canonicalize()?);
         if normalized == root || normalized.starts_with(&(root + "\\")) {
             return Err(Error::Code("FilePatchDestination"));
         }
     }
     for source in files::paths(entries) {
-        let file = working::path(&context.repository.worktree, &source)?;
+        let file = working::path(&repository.worktree, &source)?;
         let file = match file.canonicalize() {
             Ok(p) => p,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                context.repository.worktree.canonicalize()?.join(source)
+                repository.worktree.canonicalize()?.join(source)
             }
             Err(e) => return Err(e.into()),
         };
@@ -194,13 +192,49 @@ impl Git {
         entries: &[Change],
         target: &Path,
     ) -> Result<usize, Error> {
-        let target = destination(context, entries, target)?;
+        let target = destination(&context.repository, entries, target)?;
         let bytes = self.selected_patch(context, entries)?;
         self.write_patch(&target, &bytes)
             .map_err(|error| match error {
                 Error::Io(_) => Error::Code("RustPatchWriteFailed"),
                 other => other,
             })?;
+        Ok(bytes.len())
+    }
+    pub(crate) fn export_commit_patch(
+        &self,
+        snapshot: &Snapshot,
+        commit: &str,
+        parent: Option<&str>,
+        target: &Path,
+    ) -> Result<usize, Error> {
+        let cancel = Cancellation::default();
+        let root = &snapshot.worktree;
+        if identity::read(root)? != snapshot.identity {
+            return Err(Error::Code("IdentityChanged"));
+        }
+        let files = self.commit_files(root, commit, parent, &cancel)?;
+        let target = destination(snapshot, &files.entries, target)?;
+        let mut args = vec![
+            "diff-tree",
+            "--root",
+            "--no-commit-id",
+            "-r",
+            "--patch",
+            "--find-renames",
+        ];
+        args.extend(FLAGS);
+        args.extend(parent);
+        args.extend([commit, "--"]);
+        let bytes = self.read(root, args, &cancel, MAX_BYTES)?.stdout;
+        if bytes.is_empty() {
+            return Err(Error::Code("HistoryPatchEmpty"));
+        }
+        if identity::read(root)? != snapshot.identity {
+            return Err(Error::Code("IdentityChanged"));
+        }
+        self.write_patch(&target, &bytes)
+            .map_err(|_| Error::Code("RustPatchWriteFailed"))?;
         Ok(bytes.len())
     }
     fn write_patch(&self, target: &Path, bytes: &[u8]) -> Result<(), Error> {

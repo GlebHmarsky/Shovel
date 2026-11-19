@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.52.3 - 2026-11-19
+
+- Right-click a commit to create a branch or tag, merge or rebase the current branch, reset, check out the commit, cherry-pick, or revert.
+- Save a commit as a patch, compare it with tracked Local Changes, or copy its details. Branch submenus provide pull, push, fast-forward, rename, and copy as applicable.
+- Dim incoming commits, their graph rows, and their ref labels while keeping local outgoing commits in their usual colors.
+
 ## Rust 0.52.2 - 2026-11-19
 
 - Keep saved stashes in the sidebar. Give them the same row and icon geometry as branches, with gray markers.

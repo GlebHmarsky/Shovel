@@ -13,6 +13,7 @@ pub(super) enum Item {
     Tag,
     Worktree,
     Patch,
+    ExportPatch,
     Bisect,
     FlowInit,
     Feature(bool),
@@ -36,6 +37,7 @@ impl Item {
             Self::Tag => "RepositoryNewTag",
             Self::Worktree => "RepositoryNewWorktree",
             Self::Patch => "RepositoryApplyPatch",
+            Self::ExportPatch => "HistoryExportPatch",
             Self::Bisect => "RepositoryBisect",
             Self::FlowInit => "RepositoryFlowInit",
             Self::Feature(false) => "RepositoryFlowStart",
@@ -371,11 +373,30 @@ pub(super) struct Dialog {
     detail: String,
     destination: String,
     target: String,
+    fixed_target: bool,
+    patch_parent: Option<String>,
     include_untracked: bool,
     picker: Option<mpsc::Receiver<Option<PathBuf>>>,
 }
 
 impl Dialog {
+    pub(super) fn at_commit(snapshot: Snapshot, hash: &str, branch: bool) -> Self {
+        let mut dialog = Self::new(if branch { Item::Branch } else { Item::Tag }, snapshot, Some(hash));
+        dialog.fixed_target = true;
+        dialog
+    }
+    pub(super) fn export_patch(
+        snapshot: Snapshot,
+        hash: &str,
+        parent: Option<String>,
+        ctx: &egui::Context,
+        workers: &read_workers::Workers,
+    ) -> Self {
+        let mut dialog = Self::new(Item::ExportPatch, snapshot, Some(hash));
+        dialog.patch_parent = parent;
+        dialog.browse(ctx, workers);
+        dialog
+    }
     fn new(item: Item, snapshot: Snapshot, selection: Option<&str>) -> Self {
         let target = selection
             .or(snapshot.head.as_deref())
@@ -402,6 +423,8 @@ impl Dialog {
             item,
             snapshot,
             target,
+            fixed_target: false,
+            patch_parent: None,
             open: true,
             name,
             detail,
@@ -416,21 +439,21 @@ impl Dialog {
     }
 
     fn browse(&mut self, ctx: &egui::Context, workers: &read_workers::Workers) {
-        let patch = matches!(self.item, Item::Patch);
+        let item = self.item;
         let (sender, receiver) = mpsc::channel();
         let lease = workers.start_required();
         let ctx = ctx.clone();
         let root = self.snapshot.worktree.clone();
+        let filename = format!("{}.patch", self.target.chars().take(12).collect::<String>());
         self.picker = Some(receiver);
         thread::spawn(move || {
             let _lease = lease;
             let picker = rfd::FileDialog::new().set_directory(root);
-            let result = if patch {
-                picker
-                    .add_filter("Git patch", &["patch", "diff"])
-                    .pick_file()
-            } else {
-                picker.pick_folder()
+            let result = match item {
+                Item::Patch => picker.add_filter("Git patch", &["patch", "diff"]).pick_file(),
+                Item::ExportPatch => picker.add_filter("Git patch", &["patch"])
+                    .set_file_name(filename).save_file(),
+                _ => picker.pick_folder(),
             };
             let _ = sender.send(result);
             ctx.request_repaint();
@@ -443,6 +466,20 @@ impl Dialog {
         workers: &read_workers::Workers,
         enabled: bool,
     ) -> Option<Submission> {
+        if matches!(self.item, Item::ExportPatch) {
+            let result = self.picker.as_ref()?.try_recv();
+            if matches!(result, Err(mpsc::TryRecvError::Empty)) {
+                return None;
+            }
+            self.picker = None;
+            self.open = false;
+            let path = result.ok().flatten()?;
+            return Some(Submission::Repository(Action::ExportPatch {
+                commit: self.target.clone(),
+                parent: self.patch_parent.take(),
+                destination: path,
+            }));
+        }
         if let Some(picker) = &self.picker {
             match picker.try_recv() {
                 Ok(result) => {
@@ -475,9 +512,17 @@ impl Dialog {
                             strings::text("RepositoryIncludeUntracked"),
                         );
                     }
+                    Item::Branch => {
+                        field(ui, "RepositoryBranchName", &mut self.name);
+                        ui.monospace(&self.target);
+                    }
                     Item::Tag => {
                         field(ui, "RepositoryTagName", &mut self.name);
-                        field(ui, "RepositoryRevision", &mut self.target);
+                        if self.fixed_target {
+                            ui.monospace(&self.target);
+                        } else {
+                            field(ui, "RepositoryRevision", &mut self.target);
+                        }
                         field(ui, "RepositoryTagMessage", &mut self.detail);
                     }
                     Item::Worktree => {
@@ -534,7 +579,7 @@ impl Dialog {
     fn submit_label(&self) -> &'static str {
         match self.item {
             Item::Stash => "ActionTitleStashCreate",
-            Item::Tag | Item::Worktree => "RepositoryCreate",
+            Item::Branch | Item::Tag | Item::Worktree => "RepositoryCreate",
             Item::Patch => "RepositoryApply",
             Item::Bisect | Item::Feature(false) => "RepositoryStart",
             Item::Feature(true) => "RepositoryMergeFeature",
@@ -551,7 +596,7 @@ impl Dialog {
         let path = PathBuf::from(self.destination.trim()).is_absolute();
         match self.item {
             Item::Stash => true,
-            Item::Tag | Item::Bisect => named && target,
+            Item::Branch | Item::Tag | Item::Bisect => named && target,
             Item::Worktree => named && target && path,
             Item::Patch => path,
             Item::FlowInit => {
@@ -573,6 +618,7 @@ impl Dialog {
                     include_untracked: self.include_untracked,
                 }));
             }
+            Item::Branch => Action::BranchAt { name, target },
             Item::Tag => Action::Tag {
                 name,
                 target,

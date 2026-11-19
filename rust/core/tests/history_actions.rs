@@ -480,3 +480,153 @@ fn recovery_rejects_changed_state_before_native_mutation_and_aborts_cherry_pick(
     assert_eq!(f.cmd(&["rev-parse", "HEAD"]), expected.head.unwrap());
     assert_eq!(fs::read_to_string(f.root.join("file")).unwrap(), "side\n");
 }
+
+#[test]
+fn history_menu_integrates_the_captured_commit_with_native_git() {
+    let f = Fixture::new();
+    f.cmd(&["switch", "--create", "incoming", &f.base]);
+    fs::write(f.root.join("incoming"), "their change\n").unwrap();
+    f.cmd(&["add", "incoming"]);
+    f.cmd(&["commit", "-m", "incoming"]);
+    let incoming = f.cmd(&["rev-parse", "HEAD"]);
+    f.cmd(&["switch", "main"]);
+
+    let refused = f
+        .run(Action::Merge {
+            target: incoming.clone(),
+            fast_forward: true,
+        })
+        .unwrap();
+    assert!(!refused.succeeded());
+    assert_eq!(f.cmd(&["rev-parse", "HEAD"]), f.tip);
+    let merged = f
+        .run(Action::Merge {
+            target: incoming.clone(),
+            fast_forward: false,
+        })
+        .unwrap();
+    assert!(merged.succeeded(), "{}", merged.output);
+    assert_eq!(f.cmd(&["rev-parse", "HEAD^1"]), f.tip);
+    assert_eq!(f.cmd(&["rev-parse", "HEAD^2"]), incoming);
+
+    f.cmd(&["switch", "--create", "moving", &f.tip]);
+    f.cmd(&["config", "rebase.updateRefs", "true"]);
+    f.cmd(&["branch", "keep", &f.tip]);
+    let rebased = f
+        .run(Action::Rebase {
+            target: incoming.clone(),
+        })
+        .unwrap();
+    assert!(rebased.succeeded(), "{}", rebased.output);
+    assert_eq!(f.cmd(&["branch", "--show-current"]), "moving");
+    assert_eq!(f.cmd(&["rev-parse", "HEAD^"]), incoming);
+    assert_eq!(f.cmd(&["rev-parse", "keep"]), f.tip);
+    assert_eq!(f.cmd(&["show", "HEAD:file"]), "second");
+
+    f.cmd(&["switch", "--create", "pick", &f.base]);
+    let picked = f
+        .run(Action::CherryPick {
+            target: incoming.clone(),
+            mainline: 0,
+        })
+        .unwrap();
+    assert!(picked.succeeded(), "{}", picked.output);
+    assert_eq!(f.cmd(&["show", "HEAD:incoming"]), "their change");
+
+    f.cmd(&["switch", "--create", "fast", &f.base]);
+    let fast = f
+        .run(Action::Merge {
+            target: incoming.clone(),
+            fast_forward: true,
+        })
+        .unwrap();
+    assert!(fast.succeeded(), "{}", fast.output);
+    assert_eq!(f.cmd(&["rev-parse", "HEAD"]), incoming);
+}
+
+#[test]
+fn history_menu_creates_refs_and_exports_and_compares_without_touching_the_index() {
+    use shovel_core::branches::{Action as BranchAction, Manage};
+    use shovel_core::repository_actions::Action as RepositoryAction;
+
+    let f = Fixture::new();
+    let execute = |action| {
+        let result = f
+            .git
+            .execute_repository_action(&f.snapshot(), &action, None, None)
+            .unwrap();
+        assert!(result.succeeded(), "{}", result.output);
+    };
+    execute(RepositoryAction::BranchAt {
+        name: "review".into(),
+        target: f.base.clone(),
+    });
+    execute(RepositoryAction::Tag {
+        name: "review-tag".into(),
+        target: f.base.clone(),
+        message: "reviewed".into(),
+    });
+    assert_eq!(f.cmd(&["rev-parse", "review"]), f.base);
+    assert_eq!(f.cmd(&["rev-parse", "review-tag^{commit}"]), f.base);
+    let snapshot = f.snapshot();
+    let reference = snapshot
+        .references
+        .iter()
+        .find(|r| r.name == "refs/heads/review")
+        .unwrap()
+        .clone();
+    let cancel = Cancellation::default();
+    let context = f.git.prepare_local(&snapshot, true, &cancel).unwrap();
+    let renamed = f
+        .git
+        .execute_branch(
+            &context,
+            &BranchAction::Manage {
+                branch: reference,
+                action: Manage::Rename("renamed-review".into()),
+            },
+            None,
+        )
+        .unwrap();
+    assert!(renamed.succeeded(), "{}", renamed.output);
+    assert_eq!(f.cmd(&["rev-parse", "renamed-review"]), f.base);
+
+    fs::write(f.root.join("file"), "staged\n").unwrap();
+    f.cmd(&["add", "file"]);
+    fs::write(f.root.join("file"), "working\n").unwrap();
+    fs::write(f.root.join("untracked"), "untouched\n").unwrap();
+    let index = fs::read(f.root.join(".git/index")).unwrap();
+    let snapshot = f.snapshot();
+    let files = f.git.worktree_files(&snapshot, &f.base, &cancel).unwrap();
+    assert_eq!(files.entries.len(), 1);
+    let diff = f
+        .git
+        .worktree_file_diff(&snapshot, &files, &files.entries[0], &cancel)
+        .unwrap();
+    assert!(
+        diff.lines
+            .iter()
+            .any(|line| line.kind == shovel_core::diff::LineKind::Removed && line.text == "base")
+    );
+    assert!(
+        diff.lines
+            .iter()
+            .any(|line| line.kind == shovel_core::diff::LineKind::Added && line.text == "working")
+    );
+
+    let destination = f._temp.path().join("commit.patch");
+    execute(RepositoryAction::ExportPatch {
+        commit: f.tip.clone(),
+        parent: Some(f.base.clone()),
+        destination: destination.clone(),
+    });
+    let patch = fs::read_to_string(destination).unwrap();
+    assert!(patch.contains("-base\n") && patch.contains("+second\n"));
+    assert!(!patch.contains("working"));
+    assert_eq!(fs::read(f.root.join(".git/index")).unwrap(), index);
+    assert_eq!(
+        fs::read_to_string(f.root.join("file")).unwrap(),
+        "working\n"
+    );
+    assert_eq!(f.cmd(&["rev-parse", "HEAD"]), f.tip);
+}

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Commit actions and incoming history in Rust 0.52.3
+
+The history context menu targets the selected commit and repository. Branch creation, tagging, merge, noninteractive rebase, reset, checkout, cherry-pick and revert use native Git. Commit patches support binary changes. Local comparison uses tracked index and working-directory changes. Upstream-only commits use gray commit text, ref labels and graph strokes while divergence refresh retains the last known result.
+
+Seventeen native Git checks, seven headless desktop checks, all-target Clippy, release-policy fixtures and diff checks passed. The 18-check smoke suite passed in 43.99 seconds on fingerprint `C54A14ADDFE94B606B50403CB12D722B93DFDCFCF7B9C14CF3219B70F5ECF1DB`. Native window interaction and installed update behavior remain unverified.
+
 ## Sidebar stashes and history paging in Rust 0.52.2
 
 CatChess stash@{1} was 99085275a0a8f28c79e17f57b4aad1b8a8c01a12 and absent from the normal Git commit walk. Native fixtures verified sidebar-only stash entries, independently tagged commits, and clean page boundaries. Offscreen wheel input crossed in both directions and recovered from a stale cursor. The inactive-tab menu resolved its own target without activating it. Avatar checks covered first-two-word initials, gradient vertices, and existing photo handling.

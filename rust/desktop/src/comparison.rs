@@ -10,7 +10,7 @@ use crate::{
 use eframe::egui::{self, RichText};
 use shovel_core::{
     diff::{CommitFiles, FileDiff},
-    git::{Commit, Git},
+    git::{Commit, Git, Snapshot},
     process::Cancellation,
     settings::Settings,
     working,
@@ -33,6 +33,8 @@ pub struct Pane {
     git: Arc<Git>,
     selected: Option<Commit>,
     parent: usize,
+    worktree: Option<Arc<Snapshot>>,
+    comparison_is_worktree: bool,
     comparison: Option<Arc<CommitFiles>>,
     selected_file: Option<String>,
     diff: Option<FileDiff>,
@@ -61,6 +63,8 @@ impl Pane {
             git,
             selected: None,
             parent: 0,
+            worktree: None,
+            comparison_is_worktree: false,
             comparison: None,
             selected_file: None,
             diff: None,
@@ -89,6 +93,13 @@ impl Pane {
         }
         self.selected = Some(commit.clone());
         self.parent = 0;
+        self.worktree = None;
+        self.load_files(ctx);
+    }
+    pub(super) fn select_worktree(&mut self, commit: &Commit, snapshot: Snapshot, ctx: &egui::Context) {
+        self.selected = Some(commit.clone());
+        self.worktree = Some(Arc::new(snapshot));
+        self.details_index = 1;
         self.load_files(ctx);
     }
     pub fn select_file(&mut self, commit: &Commit, path: &str, ctx: &egui::Context) {
@@ -134,6 +145,7 @@ impl Pane {
             return;
         };
         let parent = commit.parents.get(self.parent).cloned();
+        let worktree = self.worktree.clone();
         let (generation, cancel) = self.begin();
         let git = self.git.clone();
         let path = self.path.clone();
@@ -144,7 +156,11 @@ impl Pane {
             let _lease = lease;
             #[cfg(test)]
             crate::history_cache::tests::wait_for_read(&path);
-            let result = git.commit_files(&path, &commit.hash, parent.as_deref(), &cancel);
+            let result = if let Some(snapshot) = worktree {
+                git.worktree_files(&snapshot, &commit.hash, &cancel)
+            } else {
+                git.commit_files(&path, &commit.hash, parent.as_deref(), &cancel)
+            };
             let _ = tx.send(Event::Files(generation, result));
             ctx.request_repaint();
         });
@@ -160,6 +176,7 @@ impl Pane {
             return;
         };
         self.selected_file = Some(entry.path.clone());
+        let worktree = self.worktree.clone();
         let (generation, cancel) = self.begin();
         let git = self.git.clone();
         let root = self.path.clone();
@@ -170,7 +187,11 @@ impl Pane {
             let _lease = lease;
             #[cfg(test)]
             crate::history_cache::tests::wait_for_read(&root);
-            let result = git.commit_file_diff(&root, &comparison, &entry, &cancel);
+            let result = if let Some(snapshot) = worktree {
+                git.worktree_file_diff(&snapshot, &comparison, &entry, &cancel)
+            } else {
+                git.commit_file_diff(&root, &comparison, &entry, &cancel)
+            };
             let _ = tx.send(Event::Diff(
                 generation,
                 comparison.commit.clone(),
@@ -197,6 +218,7 @@ impl Pane {
                                 })
                                 .or_else(|| comparison.entries.first())
                                 .map(|e| e.path.clone());
+                            self.comparison_is_worktree = self.worktree.is_some();
                             self.comparison = Some(Arc::new(comparison));
                             if let Some(path) = selected {
                                 self.load_diff(&path, ctx);
@@ -284,6 +306,14 @@ impl Pane {
             ui.separator();
         }
         ui.horizontal(|ui| {
+            if self.worktree.is_some() {
+                ui.label(text("HistoryComparingWorktree"));
+                if ui.button(text("HistoryCompareParent")).clicked() {
+                    self.worktree = None;
+                    self.load_files(&ctx);
+                }
+                return;
+            }
             ui.label(text("CommitFilesCompare"));
             let old = self.parent;
             egui::ComboBox::from_id_salt("parent")
@@ -336,7 +366,10 @@ impl Pane {
             };
             let files = panel.show(ui, |ui| {
                 if let Some(comparison) = &self.comparison {
-                    if comparison.commit != commit.hash {
+                    let ready = comparison.commit == commit.hash
+                        && self.comparison_is_worktree == self.worktree.is_some()
+                        && (self.comparison_is_worktree || comparison.parent == commit.parents.get(self.parent).cloned());
+                    if !ready {
                         ui.label(text("DiffRetainedLoading"));
                     }
                     ui.scope(|ui| {
@@ -355,7 +388,7 @@ impl Pane {
                                             self.selected_file.as_deref() == Some(&entry.path);
                                         let kind = RowKind::Diff {
                                             selected,
-                                            enabled: !self.loading,
+                                            enabled: ready && !self.loading,
                                         };
                                         if file_row(ui, entry, kind) {
                                             chosen = Some(entry.path.clone());

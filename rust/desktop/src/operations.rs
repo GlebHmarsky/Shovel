@@ -57,6 +57,7 @@ struct Options {
     all_tags: bool,
     set_upstream: bool,
     explicit: bool,
+    remember: bool,
 }
 impl Options {
     fn saved<'a>(settings: &'a Settings, path: &Path, kind: Kind) -> Option<&'a serde_json::Value> {
@@ -121,6 +122,7 @@ impl Options {
             all_tags: false,
             set_upstream: false,
             explicit: false,
+            remember: true,
         };
         let saved = Self::saved(settings, &snapshot.worktree, kind);
         if let Some(saved) = saved {
@@ -539,6 +541,50 @@ impl Controller {
             self.defer(RequestKind::Options(kind), path, settings, scheduler, ctx);
         }
     }
+    pub fn open_branch_push(
+        &mut self,
+        snapshot: &Snapshot,
+        reference: &shovel_core::git::Reference,
+    ) {
+        if self.active_modal_open() {
+            return;
+        }
+        let Some(branch) = reference.name.strip_prefix("refs/heads/") else {
+            return;
+        };
+        let mut options = Options::load(&Settings::default(), snapshot, Kind::Push);
+        if snapshot.branch.as_deref() != Some(branch) {
+            options.branch = branch.to_owned();
+            options.remote = snapshot
+                .remotes
+                .iter()
+                .find(|remote| *remote == "origin")
+                .or(snapshot.remotes.first())
+                .cloned()
+                .unwrap_or_default();
+        }
+        options.source = branch.to_owned();
+        if let Some(upstream) = reference
+            .upstream
+            .as_deref()
+            .and_then(|name| name.strip_prefix("refs/remotes/"))
+            && let Some((remote, destination)) = snapshot
+                .remotes
+                .iter()
+                .filter_map(|remote| {
+                    upstream
+                        .strip_prefix(&format!("{remote}/"))
+                        .map(|name| (remote, name))
+                })
+                .max_by_key(|(remote, _)| remote.len())
+        {
+            options.remote.clone_from(remote);
+            options.branch = destination.to_owned();
+        }
+        options.explicit = true;
+        options.remember = false;
+        self.options = Some((options, snapshot.clone()));
+    }
     pub fn options_dialog(
         &mut self,
         ctx: &egui::Context,
@@ -573,7 +619,7 @@ impl Controller {
             .default_width(480.)
             .show(ctx, |ui| {
                 ui.label(snapshot.worktree.display().to_string());
-                if !already_confirmed {
+                if options.remember && !already_confirmed {
                     ui.label(text("NetworkConfirmOptions"));
                 }
                 ui.label(text(if options.explicit {
@@ -601,21 +647,25 @@ impl Controller {
                     ui.checkbox(&mut options.all_tags, text("ActionAllTags"));
                     ui.checkbox(&mut options.set_upstream, text("ActionSetUpstream"));
                     ui.label(text("ActionBranchLabel"));
-                    let old = options.source.clone();
-                    egui::ComboBox::from_id_salt("source")
-                        .selected_text(&options.source)
-                        .show_ui(ui, |ui| {
-                            for reference in &snapshot.references {
-                                if let Some(branch) = reference.name.strip_prefix("refs/heads/") {
-                                    ui.selectable_value(
-                                        &mut options.source,
-                                        branch.to_owned(),
-                                        branch,
-                                    );
+                    if options.remember {
+                        let old = options.source.clone();
+                        egui::ComboBox::from_id_salt("source")
+                            .selected_text(&options.source)
+                            .show_ui(ui, |ui| {
+                                for reference in &snapshot.references {
+                                    if let Some(branch) = reference.name.strip_prefix("refs/heads/") {
+                                        ui.selectable_value(
+                                            &mut options.source,
+                                            branch.to_owned(),
+                                            branch,
+                                        );
+                                    }
                                 }
-                            }
-                        });
-                    options.explicit |= options.source != old;
+                            });
+                        options.explicit |= options.source != old;
+                    } else {
+                        ui.monospace(&options.source);
+                    }
                 }
                 ui.label(text("ActionRemote"));
                 let old = options.remote.clone();
@@ -633,7 +683,10 @@ impl Controller {
                         .add(egui::TextEdit::singleline(&mut options.branch).char_limit(1024))
                         .changed();
                 }
-                if options.explicit && ui.button(text("RustNetworkUseConfigured")).clicked() {
+                if options.remember
+                    && options.explicit
+                    && ui.button(text("RustNetworkUseConfigured")).clicked()
+                {
                     options.explicit = false;
                 }
 
@@ -662,7 +715,8 @@ impl Controller {
                     }
                 });
             });
-        let changed = options != before || (confirmed_now && !already_confirmed);
+        let changed =
+            options.remember && (options != before || (confirmed_now && !already_confirmed));
         if changed {
             options.save(settings, &snapshot, confirmed_now);
         }

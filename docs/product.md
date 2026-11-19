@@ -80,6 +80,8 @@ Returning to inline Local Changes keeps the last file list, selection, diff and 
 
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
+**Rust 0.52.3.** Right-click a commit for Git actions, patch export, and a comparison with tracked Local Changes. Incoming commits and their refs use muted gray.
+
 **Rust 0.52.2.** Saved stashes are listed in the sidebar. Their rows use branch spacing and gray branch icons. Double-click a stash to inspect it. History follows branches, remote-tracking branches, tags and HEAD. A commit independently reachable through those roots appears as a regular commit.
 
 Scroll past the top or bottom of the history page to move to the adjacent page. Right-click any repository tab to open its folder in File Explorer or the console.

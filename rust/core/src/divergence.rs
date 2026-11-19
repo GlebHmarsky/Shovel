@@ -50,7 +50,7 @@ impl Git {
             .map(|(state, _)| state)
     }
 
-    pub fn divergence_with_ahead(
+    pub fn divergence_with_incoming(
         &self,
         snapshot: &Snapshot,
         cancel: &Cancellation,
@@ -62,7 +62,7 @@ impl Git {
         &self,
         snapshot: &Snapshot,
         cancel: &Cancellation,
-        include_ahead: bool,
+        include_incoming: bool,
     ) -> Result<(State, HashSet<String>), Error> {
         let unavailable = |state| Ok((state, HashSet::new()));
         let Some(head) = &snapshot.head else {
@@ -97,11 +97,12 @@ impl Git {
             4096,
         )?;
         let state = parse(&output.stdout)?;
-        let ahead = if include_ahead && matches!(state, State::Available { ahead: 1.., .. }) {
+        let incoming = if include_incoming && matches!(state, State::Available { behind: 1.., .. })
+        {
             // Counts remain useful if the bounded optional walk cannot publish its full result.
             self.read(
                 &snapshot.worktree,
-                ["rev-list", "--left-only", &range, "--"],
+                ["rev-list", "--right-only", &range, "--"],
                 cancel,
                 4 * 1024 * 1024,
             )
@@ -109,10 +110,10 @@ impl Git {
             .and_then(|result| {
                 let text = std::str::from_utf8(&result.stdout).ok()?;
                 let hashes = text.lines().map(str::to_owned).collect::<HashSet<_>>();
-                let State::Available { ahead, .. } = state else {
+                let State::Available { behind, .. } = state else {
                     return None;
                 };
-                (hashes.len() as u64 == ahead
+                (hashes.len() as u64 == behind
                     && hashes.iter().all(|hash| {
                         hash.len() == head.len()
                             && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -126,7 +127,7 @@ impl Git {
         if identity::read(&snapshot.worktree)? != snapshot.identity {
             return Err(Error::Changed);
         }
-        Ok((state, ahead))
+        Ok((state, incoming))
     }
 }
 #[cfg(test)]

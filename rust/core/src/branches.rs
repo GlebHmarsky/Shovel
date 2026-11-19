@@ -30,6 +30,7 @@ pub enum Checkout {
 #[derive(Clone, Debug)]
 pub enum Manage {
     Delete,
+    Rename(String),
     SetUpstream(Reference),
     UnsetUpstream,
 }
@@ -324,6 +325,12 @@ impl Git {
                             self.branch_occupied(root, branch, &cancel)?;
                             vec!["branch".into(), "--delete".into(), "--".into(), name.into()]
                         }
+                        Manage::Rename(new_name) => {
+                            self.branch_name(root, new_name, &cancel)?;
+                            ["branch", "--move", "--", name, new_name]
+                                .map(str::to_owned)
+                                .to_vec()
+                        }
                         Manage::SetUpstream(upstream) => {
                             if !upstream.name.starts_with("refs/remotes/")
                                 || !has_ref(&context.repository, upstream)
@@ -350,7 +357,9 @@ impl Git {
                     if let Manage::SetUpstream(upstream) = action {
                         self.direct_ref(root, upstream, &cancel)?;
                     }
-                    if matches!(action, Manage::Delete) {
+                    if matches!(action, Manage::Delete | Manage::Rename(_))
+                        && fresh.branch.as_deref() != Some(name)
+                    {
                         self.branch_occupied(root, branch, &cancel)?;
                     }
                     stage(Stage::UpdatingBranch);

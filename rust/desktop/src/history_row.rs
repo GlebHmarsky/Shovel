@@ -57,11 +57,11 @@ pub(super) struct Style<'a> {
     pub worktree: &'a std::path::Path,
     pub selected: bool,
     pub peer: bool,
-    pub ahead: bool,
+    pub incoming: bool,
     pub refs_right: bool,
 }
 
-fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
+fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32, incoming: bool) {
     let colors = if ui.visuals().dark_mode {
         [0xdba24a, 0xd78279, 0x82b787, 0x7eabe0, 0xb398d5]
     } else {
@@ -69,7 +69,7 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32) {
     };
     let lane_color = |i: usize| {
         let value = colors[i % colors.len()];
-        if p.high_contrast {
+        if p.high_contrast || incoming {
             foreground
         } else {
             Color32::from_rgb((value >> 16) as u8, (value >> 8) as u8, value as u8)
@@ -122,7 +122,7 @@ pub fn show(
         worktree,
         selected,
         peer,
-        ahead,
+        incoming,
         refs_right,
     } = style;
     let graph_width = lanes as f32 * 16.;
@@ -150,8 +150,8 @@ pub fn show(
         if !refs.is_empty() {
             description = strings::format("RustHistoryRowWithRefs", &[&description, &refs]);
         }
-        if ahead {
-            description = strings::format("RustHistoryRowAhead", &[&description]);
+        if incoming {
+            description = strings::format("RustHistoryRowIncoming", &[&description]);
         }
         if peer {
             description = strings::format("SameAuthorAccessible", &[&description]);
@@ -173,7 +173,7 @@ pub fn show(
     };
     let fg = if selected || response.hovered() {
         p.selection_text
-    } else if ahead && !p.high_contrast {
+    } else if incoming && !p.high_contrast {
         p.muted
     } else {
         p.history_text
@@ -190,7 +190,7 @@ pub fn show(
     let column = |x: f32, w: f32| {
         Rect::from_min_size(egui::pos2(x, rect.top()), egui::vec2(w, rect.height()))
     };
-    graph(ui, entry, column(rect.left(), graph_width), p, fg);
+    graph(ui, entry, column(rect.left(), graph_width), p, fg, incoming);
     let hash = column(rect.right() - 76., 72.);
     let date = column(hash.left() - 154., 150.);
     let author = column(date.left() - 134., 130.);
@@ -242,7 +242,7 @@ pub fn show(
         if width < 24. {
             break;
         }
-        let (badge_fg, badge_bg) = if p.high_contrast {
+        let (badge_fg, badge_bg) = if p.high_contrast || incoming {
             (fg, None)
         } else if r.name.starts_with("refs/heads/") {
             (p.diff_added_text, Some(p.diff_added_background))
@@ -297,8 +297,8 @@ pub fn show(
         if !refs.is_empty() {
             ui.label(refs);
         }
-        if ahead {
-            ui.label(strings::text("HistoryAhead"));
+        if incoming {
+            ui.label(strings::text("HistoryIncoming"));
         }
     })
 }
@@ -467,7 +467,7 @@ mod tests {
                         worktree: std::path::Path::new(""),
                         selected,
                         peer: false,
-                        ahead: false,
+                        incoming: false,
                         refs_right: false,
                     },
                     &palette,
@@ -500,7 +500,7 @@ mod tests {
                         worktree: std::path::Path::new(""),
                         selected: false,
                         peer: true,
-                        ahead: true,
+                        incoming: true,
                         refs_right: false,
                     },
                     &Palette::for_mode(dark),
@@ -521,7 +521,7 @@ mod tests {
                 &local,
                 &strings::text("EmptyCommitSubject"),
                 "refs/heads/topic",
-                "Ahead of upstream",
+                "Waiting to pull",
                 "Same author",
             ] {
                 assert!(label.contains(expected), "{label}");

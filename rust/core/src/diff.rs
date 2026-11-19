@@ -306,61 +306,98 @@ impl Git {
         args.push(commit.into());
         args.push("--".into());
         let bytes = self.read(root, args, cancel, 4 * 1024 * 1024)?.stdout;
-        let text = std::str::from_utf8(&bytes).map_err(|_| Error::Invalid)?;
-        if !text.is_empty() && !text.ends_with('\0') {
-            return Err(Error::Invalid);
-        }
-        let records = text.split_terminator('\0').collect::<Vec<_>>();
-        let mut i = 0;
-        let mut entries = vec![];
-        while i < records.len() {
-            let fields = records[i].split(' ').collect::<Vec<_>>();
-            if fields.len() != 5
-                || !fields[0].starts_with(':')
-                || fields[0].len() != 7
-                || fields[1].len() != 6
-                || !object_id(fields[2])
-                || !object_id(fields[3])
-            {
-                return Err(Error::Invalid);
-            }
-            let code = fields[4]
-                .chars()
-                .next()
-                .filter(|c| "MADRCT".contains(*c))
-                .ok_or(Error::Invalid)?;
-            i += 1;
-            let mut name = *records.get(i).ok_or(Error::Invalid)?;
-            i += 1;
-            let original = if matches!(code, 'R' | 'C') {
-                let old = Some(name.into());
-                name = *records.get(i).ok_or(Error::Invalid)?;
-                i += 1;
-                old
-            } else {
-                None
-            };
-            if name.is_empty() || entries.len() >= 20000 {
-                return Err(Error::Limit);
-            }
-            entries.push(Change {
-                group: Group::Staged,
-                path: name.into(),
-                original,
-                code,
-                submodule: "N...".into(),
-                head_object: fields[2].into(),
-                index_object: fields[3].into(),
-                head_mode: fields[0][1..].into(),
-                index_mode: fields[1].into(),
-                worktree_mode: String::new(),
-            });
-        }
+        let entries = raw_changes(&bytes)?;
         Ok(CommitFiles {
             commit: commit.into(),
             parent: parent.map(str::to_owned),
             entries,
         })
+    }
+    pub fn worktree_files(
+        &self,
+        snapshot: &git::Snapshot,
+        commit: &str,
+        cancel: &Cancellation,
+    ) -> Result<CommitFiles, Error> {
+        let root = &snapshot.worktree;
+        if !object_id(commit) || crate::identity::read(root)? != snapshot.identity {
+            return Err(Error::Stale);
+        }
+        let mut args = vec!["diff".into()];
+        args.extend(common_args());
+        args.extend(["--raw", "-z", "--no-abbrev", commit, "--"].map(OsString::from));
+        let bytes = self.read(root, args, cancel, 4 * 1024 * 1024)?.stdout;
+        if crate::identity::read(root)? != snapshot.identity {
+            return Err(Error::Stale);
+        }
+        let entries = raw_changes(&bytes)?;
+        Ok(CommitFiles {
+            commit: commit.into(),
+            parent: None,
+            entries,
+        })
+    }
+
+    pub fn worktree_file_diff(
+        &self,
+        snapshot: &git::Snapshot,
+        comparison: &CommitFiles,
+        entry: &Change,
+        cancel: &Cancellation,
+    ) -> Result<FileDiff, Error> {
+        let root = &snapshot.worktree;
+        if !object_id(&comparison.commit)
+            || !comparison.entries.contains(entry)
+            || crate::identity::read(root)? != snapshot.identity
+        {
+            return Err(Error::Stale);
+        }
+        let file = path(root, &entry.path)?;
+        let submodule = entry.head_mode == "160000" || entry.index_mode == "160000";
+        let deleted = entry.index_mode == "000000";
+        if !submodule && !deleted && has_reparse(root, &file)? {
+            return Err(Error::InvalidPath);
+        }
+        let before = file_stamp(&file)?;
+        let (old, mut new) = if submodule {
+            (Summary::default(), Summary::default())
+        } else {
+            let new = if deleted {
+                Summary {
+                    bytes: Some(0),
+                    absent: true,
+                    ..Summary::default()
+                }
+            } else {
+                worktree_summary(&file)?
+            };
+            (self.blob_summary(root, &entry.head_object, cancel)?, new)
+        };
+        if old.lfs && !new.absent {
+            new.lfs = true;
+        }
+        let mut args = ["--literal-pathspecs", "-c", "core.quotepath=false", "diff"]
+            .map(OsString::from)
+            .to_vec();
+        args.extend(common_args());
+        args.push(comparison.commit.clone().into());
+        let mut paths = vec![entry.path.clone()];
+        paths.extend(entry.original.iter().cloned());
+        let diff = self.read_comparison(
+            root,
+            args,
+            paths,
+            old,
+            new,
+            submodule,
+            Options::default(),
+            false,
+            cancel,
+        )?;
+        if crate::identity::read(root)? != snapshot.identity || file_stamp(&file)? != before {
+            return Err(Error::Stale);
+        }
+        Ok(diff.with_file_extensions(entry))
     }
     pub fn commit_file_diff(
         &self,
@@ -708,6 +745,59 @@ impl Git {
         }
         Ok(diff)
     }
+}
+fn raw_changes(bytes: &[u8]) -> Result<Vec<Change>, Error> {
+    let text = std::str::from_utf8(bytes).map_err(|_| Error::Invalid)?;
+    if !text.is_empty() && !text.ends_with('\0') {
+        return Err(Error::Invalid);
+    }
+    let records = text.split_terminator('\0').collect::<Vec<_>>();
+    let mut i = 0;
+    let mut entries = vec![];
+    while i < records.len() {
+        let fields = records[i].split(' ').collect::<Vec<_>>();
+        if fields.len() != 5
+            || !fields[0].starts_with(':')
+            || fields[0].len() != 7
+            || fields[1].len() != 6
+            || !object_id(fields[2])
+            || !object_id(fields[3])
+        {
+            return Err(Error::Invalid);
+        }
+        let code = fields[4]
+            .chars()
+            .next()
+            .filter(|c| "MADRCT".contains(*c))
+            .ok_or(Error::Invalid)?;
+        i += 1;
+        let mut name = *records.get(i).ok_or(Error::Invalid)?;
+        i += 1;
+        let original = if matches!(code, 'R' | 'C') {
+            let old = Some(name.into());
+            name = *records.get(i).ok_or(Error::Invalid)?;
+            i += 1;
+            old
+        } else {
+            None
+        };
+        if name.is_empty() || entries.len() >= 20000 {
+            return Err(Error::Limit);
+        }
+        entries.push(Change {
+            group: Group::Staged,
+            path: name.into(),
+            original,
+            code,
+            submodule: "N...".into(),
+            head_object: fields[2].into(),
+            index_object: fields[3].into(),
+            head_mode: fields[0][1..].into(),
+            index_mode: fields[1].into(),
+            worktree_mode: String::new(),
+        });
+    }
+    Ok(entries)
 }
 fn diff_require(result: process::Result, allow_one: bool) -> Result<process::Result, Error> {
     if result.success()

@@ -96,14 +96,13 @@ fn native_counts_follow_captured_pull_upstream_and_preserve_repository_state() {
         );
         let value = git.divergence(&snapshot, &cancel).unwrap();
         assert_eq!(value, State::Available { ahead, behind });
-        let (state, hashes) = git.divergence_with_ahead(&snapshot, &cancel).unwrap();
+        let (state, hashes) = git.divergence_with_incoming(&snapshot, &cancel).unwrap();
         assert_eq!(state, value);
-        assert_eq!(hashes.len(), ahead as usize);
-        if ahead != 0 {
-            assert!(hashes.contains(&tip) && hashes.contains(&left));
-        }
+        assert_eq!(hashes.len(), behind as usize);
+        assert_eq!(hashes.contains(&right), behind != 0);
+        assert!(!hashes.contains(&tip));
+        assert!(!hashes.contains(&left));
         assert!(!hashes.contains(&unrelated));
-        assert!(!hashes.contains(&right));
         assert_eq!(fs::read(root.join(".git/HEAD")).unwrap(), head_before);
         assert_eq!(fs::read(root.join(".git/config")).unwrap(), config);
         assert_eq!(

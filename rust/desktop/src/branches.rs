@@ -194,6 +194,11 @@ enum Form {
     },
     StashesDrop(Vec<shovel_core::stashes::Target>),
     Recovery(recovery::Action),
+    Integrate {
+        action: history_actions::Action,
+        title: &'static str,
+    },
+    Rename { branch: Reference, name: String },
     New {
         name: String,
         start: String,
@@ -226,6 +231,20 @@ pub struct Dialogs {
     active: Option<Dialog>,
 }
 impl Dialogs {
+    pub fn confirm_integration(
+        &mut self,
+        snapshot: &Snapshot,
+        action: history_actions::Action,
+        title: &'static str,
+    ) {
+        self.set(snapshot, Form::Integrate { action, title });
+    }
+    pub fn rename(&mut self, snapshot: &Snapshot, branch: &Reference) {
+        self.set(snapshot, Form::Rename {
+            branch: branch.clone(),
+            name: branch.name.trim_start_matches("refs/heads/").to_owned(),
+        });
+    }
     pub fn is_open(&self) -> bool {
         self.active.is_some()
     }
@@ -455,6 +474,8 @@ impl Dialogs {
             review.poll();
         }
         let title = match &dialog.form {
+            Form::Integrate { title, .. } => title,
+            Form::Rename { .. } => "HistoryRenameBranch",
             Form::StashDrop { .. } | Form::StashesDrop(_) => "ActionTitleStashDrop",
             Form::Recovery(action) => recovery_title(*action),
             Form::New { .. } => "ActionTitleNewBranch",
@@ -512,6 +533,33 @@ impl Dialogs {
                             .max_height((ui.available_height() - 36.).max(120.))
                             .show(ui, |ui| {
                                 match &mut dialog.form {
+                                    Form::Integrate { action, title } => {
+                                        let branch = snapshot.branch.as_deref().unwrap_or_default();
+                                        let prompt = match action {
+                                            history_actions::Action::Merge { fast_forward: true, .. } => "HistoryConfirmFastForward",
+                                            history_actions::Action::Merge { .. } => "HistoryConfirmMerge",
+                                            _ => "HistoryConfirmRebase",
+                                        };
+                                        ui.label(strings::format(prompt, &[branch, action.target()]));
+                                        if ui.button(text(title)).clicked() {
+                                            submitted_history = Some(action.clone());
+                                        }
+                                    }
+                                    Form::Rename { branch, name } => {
+                                        ui.label(branch.name.trim_start_matches("refs/heads/"));
+                                        let label = ui.label(text("RepositoryBranchName"));
+                                        ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY))
+                                            .labelled_by(label.id);
+                                        if ui.add_enabled(!name.trim().is_empty()
+                                            && name.trim() != branch.name.trim_start_matches("refs/heads/"),
+                                            egui::Button::new(text("HistoryRename"))).clicked()
+                                        {
+                                            submitted = Some(Action::Manage {
+                                                branch: branch.clone(),
+                                                action: Manage::Rename(name.trim().to_owned()),
+                                            });
+                                        }
+                                    }
                                     Form::StashDrop { target, message } => {
                                         ui.label(strings::format(
                                             "StashConfirmDrop",

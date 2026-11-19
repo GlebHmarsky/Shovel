@@ -12,6 +12,10 @@ use std::{ffi::OsString, path::PathBuf, sync::Arc};
 
 #[derive(Debug)]
 pub enum Action {
+    BranchAt {
+        name: String,
+        target: String,
+    },
     Tag {
         name: String,
         target: String,
@@ -23,6 +27,11 @@ pub enum Action {
         target: String,
     },
     Patch(PathBuf),
+    ExportPatch {
+        commit: String,
+        parent: Option<String>,
+        destination: PathBuf,
+    },
     BisectStart {
         good: String,
         bad: String,
@@ -70,6 +79,28 @@ impl Git {
         let _gate = MutationGate::acquire(&reviewed.common_directory, false)?;
         let cancel = Cancellation::default();
         let root = &reviewed.worktree;
+        if let Action::ExportPatch {
+            commit,
+            parent,
+            destination,
+        } = action
+        {
+            let bytes =
+                self.export_commit_patch(reviewed, commit, parent.as_deref(), destination)?;
+            return Ok(Completed {
+                commands: Vec::new(),
+                output: format!("{} ({} B)", destination.display(), bytes),
+                output_truncated: false,
+                message: None,
+                warning: None,
+                has_conflicts: false,
+                preserves_worktree: true,
+                unchanged: true,
+                updated: self.inspect(root, &cancel).map_err(Error::from),
+                related: Vec::new(),
+                authentication_failure: None,
+            });
+        }
         if matches!(action, Action::Bisect(_)) {
             let actual = self.inspect(root, &cancel)?;
             if actual.identity != reviewed.identity
@@ -108,6 +139,15 @@ impl Git {
         let mut transcript = Transcript::default();
         let mut steps: Vec<Vec<OsString>> = Vec::new();
         let args: Vec<OsString> = match action {
+            Action::BranchAt {
+                name: branch,
+                target,
+            } => {
+                name(branch, "heads")?;
+                ["branch", "--no-track", "--", branch, &revision(target)?]
+                    .map(OsString::from)
+                    .to_vec()
+            }
             Action::Tag {
                 name: tag,
                 target,
@@ -136,6 +176,7 @@ impl Git {
                 args.extend([path.as_os_str().to_owned(), revision(target)?.into()]);
                 args
             }
+            Action::ExportPatch { .. } => unreachable!("patch export handled before Git mutations"),
             Action::Patch(path) => {
                 if !path.is_absolute() || !path.is_file() {
                     return Err(Error::Code("RepositoryPatchMissing"));

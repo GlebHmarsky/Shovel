@@ -17,11 +17,18 @@ pub enum Reset {
 pub enum Action {
     Reset { target: String, mode: Reset },
     Revert { target: String, mainline: usize },
+    CherryPick { target: String, mainline: usize },
+    Merge { target: String, fast_forward: bool },
+    Rebase { target: String },
 }
 impl Action {
     pub fn target(&self) -> &str {
         match self {
-            Self::Reset { target, .. } | Self::Revert { target, .. } => target,
+            Self::Reset { target, .. }
+            | Self::Revert { target, .. }
+            | Self::CherryPick { target, .. }
+            | Self::Merge { target, .. }
+            | Self::Rebase { target } => target,
         }
     }
 }
@@ -89,25 +96,63 @@ impl Git {
                     ["reset", mode, "--no-recurse-submodules", target, "--"].map(str::to_owned),
                 );
             }
-            Action::Revert { mainline, .. } => {
+            Action::Revert { mainline, .. } | Action::CherryPick { mainline, .. } => {
                 if if parents > 1 {
                     *mainline == 0 || *mainline > parents
                 } else {
                     *mainline != 0
                 } {
-                    return Err(Error::Code("HistoryRevertMainlineRequired"));
+                    return Err(Error::Code(if matches!(action, Action::Revert { .. }) {
+                        "HistoryRevertMainlineRequired"
+                    } else {
+                        "HistoryMainlineRequired"
+                    }));
                 }
-                args.extend(["revert".into(), "--no-edit".into()]);
+                let verb = if matches!(action, Action::Revert { .. }) {
+                    "revert"
+                } else {
+                    "cherry-pick"
+                };
+                args.extend([verb.into(), "--no-edit".into()]);
                 if *mainline != 0 {
                     args.extend(["--mainline".into(), mainline.to_string()]);
                 }
                 args.push(target.into());
+            }
+            Action::Merge { fast_forward, .. } => {
+                if fresh.branch.is_none() || fresh.head.is_none() {
+                    return Err(Error::Code("HistoryIntegrationNeedsBranch"));
+                }
+                args.extend(["merge", "--no-edit", "--no-autostash"].map(str::to_owned));
+                if *fast_forward {
+                    args.push("--ff-only".into());
+                }
+                args.extend(["--".into(), target.into()]);
+            }
+            Action::Rebase { .. } => {
+                if fresh.branch.is_none() || fresh.head.is_none() {
+                    return Err(Error::Code("HistoryIntegrationNeedsBranch"));
+                }
+                args.extend(
+                    [
+                        "rebase",
+                        "--no-autostash",
+                        "--no-update-refs",
+                        "--no-rebase-merges",
+                        "--",
+                        target,
+                    ]
+                    .map(str::to_owned),
+                );
             }
         }
         self.validate_local(context, true, &cancel)?;
         stage(match action {
             Action::Reset { .. } => Stage::Resetting,
             Action::Revert { .. } => Stage::Reverting,
+            Action::CherryPick { .. } | Action::Merge { .. } | Action::Rebase { .. } => {
+                Stage::RepositoryCommand
+            }
         });
         let mut log = Transcript::default();
         let result = log.write(self, root, args).map(|_| None);

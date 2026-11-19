@@ -17,6 +17,8 @@ mod file_shell;
 mod git_identity;
 mod git_selection;
 mod history_cache;
+mod history_menu;
+use history_menu::HistoryMenu;
 mod history_row;
 mod history_view;
 mod numbers;
@@ -132,11 +134,6 @@ struct Tab {
     scroll_selected: bool,
     error: Option<String>,
     comparison: Option<comparison::Pane>,
-}
-struct HistoryMenu {
-    owner: u64,
-    snapshot: shovel_core::git::Snapshot,
-    commit: shovel_core::git::Commit,
 }
 struct ReferenceMenu {
     owner: u64,
@@ -3217,6 +3214,7 @@ impl eframe::App for Workspace {
                 Divider::Details.handle(ui, details.response.rect, height, &mut self.settings);
         }
         let mut history_edge = None;
+        let mut history_action = None;
         egui::CentralPanel::default()
             .frame(workspace_style::pane(palette.canvas, 0, 0))
             .show(ui, |ui| {
@@ -3302,7 +3300,7 @@ impl eframe::App for Workspace {
                                         history_row::Style {
                                             selected, peer, refs_right,
                                             worktree: &tab.path,
-                                            ahead: tab.divergence.is_ahead(&entry.commit.hash),
+                                            incoming: tab.divergence.is_incoming(&entry.commit.hash),
                                         },
                                         &palette,
                                     )
@@ -3323,126 +3321,13 @@ impl eframe::App for Workspace {
                             response.context_menu(|ui| {
                                 if let Some(menu) = &self.history_menu
                                     && menu.owner == tab.id
-                                {
-                                    ui.add_enabled_ui(
-                                        menu.snapshot.operations.is_empty(),
-                                        |ui| {
-                                            if ui
-                                                .button(strings::text(
-                                                    "HistoryMenuCheckoutCommit",
-                                                ))
-                                                .clicked()
-                                            {
-                                                self.branches.checkout(
-                                                    &menu.snapshot,
-                                                    shovel_core::branches::Checkout::Detached(
-                                                        menu.commit.hash.clone(),
-                                                    ),
-                                                );
-                                                ui.close();
-                                            }
-                                            ui.menu_button(
-                                                strings::text("HistoryResetMenu"),
-                                                |ui| {
-                                                    use shovel_core::history_actions::Reset;
-                                                    for (mode, label) in [
-                                                        (Reset::Soft, "HistoryMenuResetSoft"),
-                                                        (Reset::Mixed, "HistoryMenuResetMixed"),
-                                                        (Reset::Hard, "HistoryMenuResetHard"),
-                                                    ] {
-                                                        if ui
-                                                            .add_enabled(
-                                                                menu.snapshot.branch.is_some()
-                                                                    && menu
-                                                                        .snapshot
-                                                                        .head
-                                                                        .is_some(),
-                                                                egui::Button::new(
-                                                                    strings::text(label),
-                                                                ),
-                                                            )
-                                                            .on_disabled_hover_text(
-                                                                strings::text(
-                                                                    "HistoryResetNeedsBranch",
-                                                                ),
-                                                            )
-                                                            .clicked()
-                                                        {
-                                                            self.branches.reset(
-                                                                &menu.snapshot,
-                                                                &menu.commit.hash,
-                                                                mode,
-                                                            );
-                                                            ui.close();
-                                                        }
-                                                    }
-                                                },
-                                            );
-                                            let mut revert_mainline = None;
-                                            if menu.commit.parents.len() > 1 {
-                                                ui.menu_button(
-                                                    strings::text("HistoryMenuRevertCommit"),
-                                                    |ui| {
-                                                        for (index, parent) in menu
-                                                            .commit
-                                                            .parents
-                                                            .iter()
-                                                            .enumerate()
-                                                        {
-                                                            if ui
-                                                                .button(strings::format(
-                                                                    "HistoryRevertParent",
-                                                                    &[
-                                                                        &(index + 1)
-                                                                            .to_string(),
-                                                                        parent,
-                                                                    ],
-                                                                ))
-                                                                .clicked()
-                                                            {
-                                                                revert_mainline =
-                                                                    Some(index + 1);
-                                                                ui.close();
-                                                            }
-                                                        }
-                                                    },
-                                                )
-                                                .response
-                                                .on_hover_text(strings::text(
-                                                    "HistoryRevertParentHelp",
-                                                ));
-                                            } else if ui
-                                                .button(strings::text(
-                                                    "HistoryMenuRevertCommit",
-                                                ))
-                                                .clicked()
-                                            {
-                                                revert_mainline = Some(0);
-                                                ui.close();
-                                            }
-                                            if let Some(mainline) = revert_mainline
-                                                && let Some(git) = &self.git
-                                            {
-                                                self.operations.submit_history(
-                                                    "ActionTitleRevertCommit",
-                                                    shovel_core::history_actions::Action::Revert {
-                                                        target: menu.commit.hash.clone(),
-                                                        mainline,
-                                                    },
-                                                    &menu.snapshot,
-                                                    git.clone(),
-                                                    &self.scheduler,
-                                                    &ctx,
-                                                );
-                                            }
-                                        },
+                                    && menu.commit.hash == entry.commit.hash
+                                    && let Some(command) = menu.show(
+                                        ui,
+                                        self.git.is_some() && !tab.view.stale && !tab.view.identity_blocked,
                                     )
-                                    .response
-                                    .on_disabled_hover_text(strings::text("ActionSequence"));
-                                    if ui.button(strings::text("HistoryCopySha")).clicked() {
-                                        ctx.copy_text(menu.commit.hash.clone());
-                                        ui.close();
-                                    }
+                                {
+                                    history_action = Some((menu.clone(), command));
                                 }
                             });
                         }
@@ -3468,6 +3353,9 @@ impl eframe::App for Workspace {
                     }
                 }
             });
+        if let Some((menu, command)) = history_action {
+            self.invoke_history_menu(menu, command, &ctx);
+        }
         if let Some((older, height)) = history_edge {
             self.read_history_page(older, Some(height), &ctx);
         }
