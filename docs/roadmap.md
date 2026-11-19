@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## First-use network options in Rust 0.51.7
+
+The first main Fetch, Pull and Push each open the options for that worktree. Submitting the action records confirmation. Later main clicks use the saved choices directly. Existing options carry over and appear in the first dialog. The arrow and Repository menu reopen options. Requests made during startup stay with the original worktree.
+
+Twenty-nine focused checks passed across the suite and isolated rerun. The existing explicit-target Push check timed out during a concurrent run and passed in isolation. The Fetch fixture verified changes to actual remote-tracking refs with the saved flags. All-target Clippy and `git diff --check` passed. All 18 bounded smoke checks passed in 42.65 seconds on fingerprint `749D3CE49EA431720DD383EBD6DDBE3A3C027D33194448179C4F8CA347C56BA3`. Live desktop interaction and installed updates remain unverified.
+
 ## Repository menu and restored tabs in Rust 0.51.6
 
 Restored tabs warm after the selected repository has a live page and foreground reads settle. The held-read fixture verified that the second tab stayed in the background, then retained its history allocation and initial comparison during selection. One offscreen selection reached its first layout in 86.5 ms on the disposable 610-commit fixture. Cold opening and live timings on the owner's repositories remain unmeasured.

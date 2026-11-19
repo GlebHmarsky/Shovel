@@ -71,6 +71,10 @@ impl Options {
                         .is_some_and(|p| crate::Workspace::same_path(Path::new(p), path))
             })
     }
+    fn confirmed(settings: &Settings, path: &Path, kind: Kind) -> bool {
+        Self::saved(settings, path, kind)
+            .is_some_and(|entry| entry["Confirmed"].as_bool() == Some(true))
+    }
     fn queue_key(&self, snapshot: &Snapshot) -> String {
         use sha2::{Digest, Sha256};
         let bytes = serde_json::to_vec(&(&snapshot.branch, self.action()))
@@ -146,7 +150,8 @@ impl Options {
         }
         options
     }
-    fn save(&self, settings: &mut Settings, snapshot: &Snapshot) {
+    fn save(&self, settings: &mut Settings, snapshot: &Snapshot, confirmed_now: bool) {
+        let confirmed = confirmed_now || Self::confirmed(settings, &snapshot.worktree, self.kind);
         let mut entries = settings
             .get("NetworkActions")
             .and_then(serde_json::Value::as_array)
@@ -159,7 +164,24 @@ impl Options {
                     .as_str()
                     .is_some_and(|p| crate::Workspace::same_path(Path::new(p), &snapshot.worktree)))
         });
-        entries.insert(0, serde_json::json!({ "Path": path, "Action": self.kind.number(), "Branch": snapshot.branch.as_deref().unwrap_or_default(), "SourceBranch": self.source, "Remote": self.remote, "RemoteBranch": self.branch, "Strategy": if self.strategy == Strategy::Merge { 1 } else { 0 }, "AutoStash": self.auto_stash, "AllRemotes": self.all_remotes, "AllTags": self.all_tags, "SetUpstream": self.set_upstream, "ExplicitTarget": self.explicit }));
+        entries.insert(
+            0,
+            serde_json::json!({
+                "Path": path,
+                "Action": self.kind.number(),
+                "Branch": snapshot.branch.as_deref().unwrap_or_default(),
+                "SourceBranch": self.source,
+                "Remote": self.remote,
+                "RemoteBranch": self.branch,
+                "Strategy": if self.strategy == Strategy::Merge { 1 } else { 0 },
+                "AutoStash": self.auto_stash,
+                "AllRemotes": self.all_remotes,
+                "AllTags": self.all_tags,
+                "SetUpstream": self.set_upstream,
+                "ExplicitTarget": self.explicit,
+                "Confirmed": confirmed,
+            }),
+        );
         entries.truncate(60);
         settings.set("NetworkActions", serde_json::Value::Array(entries));
     }
@@ -272,14 +294,24 @@ struct Question {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RequestKind {
+    Toolbar(Kind),
     Network(Kind),
     Options(Kind),
     NewBranch,
 }
 impl RequestKind {
+    fn for_worktree(self, settings: &Settings, worktree: &Path) -> Self {
+        match self {
+            Self::Toolbar(kind) if Options::confirmed(settings, worktree, kind) => {
+                Self::Network(kind)
+            }
+            Self::Toolbar(kind) => Self::Options(kind),
+            action => action,
+        }
+    }
     fn label(self) -> &'static str {
         match self {
-            Self::Network(kind) => kind.key(),
+            Self::Toolbar(kind) | Self::Network(kind) => kind.key(),
             Self::Options(Kind::Fetch) => "RustFetchOptions",
             Self::Options(Kind::Pull) => "PullOptions",
             Self::Options(Kind::Push) => "PushOptions",
@@ -288,7 +320,9 @@ impl RequestKind {
     }
     fn lane(self) -> Lane {
         match self {
-            Self::Network(Kind::Fetch) | Self::Options(Kind::Fetch) => Lane::Fetch,
+            Self::Toolbar(Kind::Fetch)
+            | Self::Network(Kind::Fetch)
+            | Self::Options(Kind::Fetch) => Lane::Fetch,
             _ => Lane::Exclusive,
         }
     }
@@ -419,16 +453,15 @@ impl Controller {
     pub fn toolbar(
         &mut self,
         ui: &mut egui::Ui,
-        settings: &mut Settings,
+        settings: &Settings,
         path: Option<&PathBuf>,
         snapshot: Option<&Snapshot>,
         git: Option<&Arc<Git>>,
         scheduler: &Scheduler,
-    ) -> bool {
-        let changed = false;
+    ) {
+        let available = path.is_some() && git.is_some() && !self.active_modal_open();
         for kind in [Kind::Fetch, Kind::Pull, Kind::Push] {
             ui.push_id(kind.number(), |ui| {
-                let available = path.is_some() && git.is_some();
                 ui.spacing_mut().item_spacing.x = 0.;
                 let count = match kind {
                     Kind::Pull => self
@@ -444,40 +477,40 @@ impl Controller {
                 if kind != Kind::Fetch {
                     button.clone().on_hover_text(&self.divergence.help);
                 }
-                if !available {
+                if path.is_none() || git.is_none() {
                     button
                         .clone()
                         .on_disabled_hover_text(text("ActionInspectionNeeded"));
                 }
-                if button.clicked()
-                    && let (Some(path), Some(git)) = (path, git)
-                {
-                    if let Some(snapshot) = snapshot {
-                        self.submit(
-                            Options::load(settings, snapshot, kind),
-                            snapshot,
-                            git.clone(),
-                            scheduler,
-                            ui.ctx(),
-                        );
-                    } else {
-                        self.defer_network(kind, path, settings, scheduler, ui.ctx());
-                    }
-                }
-                if crate::workspace_style::options_button(
+                let main_clicked = button.clicked();
+                let options_clicked = crate::workspace_style::options_button(
                     ui,
                     strings::format("RustNetworkOptions", &[&text(kind.key())]),
                     available,
                 )
-                .clicked()
-                    && let Some(path) = path
+                .clicked();
+                if (main_clicked || options_clicked)
+                    && let (Some(path), Some(git)) = (path, git)
                 {
-                    if let Some(snapshot) = snapshot {
-                        self.options =
-                            Some((Options::load(settings, snapshot, kind), snapshot.clone()));
+                    if options_clicked {
+                        self.open_network_options(
+                            kind,
+                            path,
+                            snapshot,
+                            settings,
+                            scheduler,
+                            ui.ctx(),
+                        );
+                    } else if let Some(snapshot) = snapshot {
+                        let options = Options::load(settings, snapshot, kind);
+                        if Options::confirmed(settings, &snapshot.worktree, kind) {
+                            self.submit(options, snapshot, git.clone(), scheduler, ui.ctx());
+                        } else {
+                            self.options = Some((options, snapshot.clone()));
+                        }
                     } else {
                         self.defer(
-                            RequestKind::Options(kind),
+                            RequestKind::Toolbar(kind),
                             path,
                             settings,
                             scheduler,
@@ -487,7 +520,24 @@ impl Controller {
                 }
             });
         }
-        changed
+    }
+    pub fn open_network_options(
+        &mut self,
+        kind: Kind,
+        path: &Path,
+        snapshot: Option<&Snapshot>,
+        settings: &Settings,
+        scheduler: &Scheduler,
+        ctx: &egui::Context,
+    ) {
+        if self.active_modal_open() {
+            return;
+        }
+        if let Some(snapshot) = snapshot {
+            self.options = Some((Options::load(settings, snapshot, kind), snapshot.clone()));
+        } else {
+            self.defer(RequestKind::Options(kind), path, settings, scheduler, ctx);
+        }
     }
     pub fn options_dialog(
         &mut self,
@@ -511,6 +561,8 @@ impl Controller {
         };
         let before = options.clone();
         let kind = options.kind;
+        let already_confirmed = Options::confirmed(settings, &snapshot.worktree, kind);
+        let mut confirmed_now = false;
         let mut open = true;
         let mut close = false;
         egui::Window::new(strings::format("RustNetworkOptions", &[&text(kind.key())]))
@@ -521,7 +573,9 @@ impl Controller {
             .default_width(480.)
             .show(ctx, |ui| {
                 ui.label(snapshot.worktree.display().to_string());
-                ui.label(text("NetworkRememberOptions"));
+                if !already_confirmed {
+                    ui.label(text("NetworkConfirmOptions"));
+                }
                 ui.label(text(if options.explicit {
                     "ActionCachedTargets"
                 } else {
@@ -600,14 +654,17 @@ impl Controller {
                             if let Some(lease) = &self.options_hold {
                                 lease.continue_with(scheduler, command);
                             }
+                            // A matching command may already be queued. The user
+                            // still confirmed these choices for this worktree.
+                            confirmed_now = true;
                         }
                         close = true;
                     }
                 });
             });
-        let changed = options != before;
+        let changed = options != before || (confirmed_now && !already_confirmed);
         if changed {
-            options.save(settings, &snapshot);
+            options.save(settings, &snapshot, confirmed_now);
         }
         if open && !close && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.options = Some((options, snapshot));
@@ -665,6 +722,7 @@ impl Controller {
         Some((request, sequence))
     }
 
+    #[cfg(test)]
     pub fn defer_network(
         &mut self,
         kind: Kind,
@@ -696,11 +754,11 @@ impl Controller {
     ) {
         let owner = Self::pending_owner(path);
         let key = match action {
-            RequestKind::Network(kind) => {
+            RequestKind::Toolbar(kind) | RequestKind::Network(kind) => {
                 use sha2::{Digest, Sha256};
                 let saved = serde_json::to_vec(&Options::saved(settings, path, kind))
                     .expect("saved network preferences are JSON");
-                format!("network:{}:pending:{:x}", kind.key(), Sha256::digest(saved))
+                format!("{action:?}:pending:{:x}", Sha256::digest(saved))
             }
             _ => format!("dialog:{action:?}"),
         };
@@ -743,7 +801,7 @@ impl Controller {
                         || crate::Workspace::same_path(&p.path, &snapshot.worktree))
             })
             .map(|p| {
-                let key = match p.action {
+                let key = match p.action.for_worktree(&p.settings, &snapshot.worktree) {
                     RequestKind::Network(kind) => {
                         Options::load(&p.settings, snapshot, kind).queue_key(snapshot)
                     }
@@ -817,7 +875,10 @@ impl Controller {
                         });
                         continue;
                     }
-                    if let RequestKind::Network(kind) = request.action {
+                    let action = request
+                        .action
+                        .for_worktree(&request.settings, &snapshot.worktree);
+                    if let RequestKind::Network(kind) = action {
                         self.activate_network(
                             (request.request, request.sequence),
                             Options::load(&request.settings, snapshot, kind),
@@ -833,7 +894,7 @@ impl Controller {
                         scheduler.activate(request.request, move || {
                             let (release, held) = mpsc::channel();
                             let ready = ReadyOptions {
-                                options: if let RequestKind::Options(kind) = request.action {
+                                options: if let RequestKind::Options(kind) = action {
                                     Some(Options::load(&request.settings, &snapshot, kind))
                                 } else {
                                     None
@@ -2022,6 +2083,11 @@ mod tests {
             }
         }
         assert!(!controller.modal_open());
+        assert!(!Options::confirmed(
+            &settings,
+            &snapshot.worktree,
+            Kind::Pull
+        ));
         assert_eq!(
             Options::load(&settings, &snapshot, Kind::Pull).strategy,
             Strategy::Merge
@@ -2095,7 +2161,7 @@ mod tests {
         let mut options = Options::load(&settings, &snapshot, Kind::Pull);
         options.auto_stash = true;
         options.strategy = Strategy::Merge;
-        options.save(&mut settings, &snapshot);
+        options.save(&mut settings, &snapshot, true);
         assert!(matches!(
             Options::load(&settings, &snapshot, Kind::Pull).action(),
             Action::Pull {
@@ -2107,7 +2173,7 @@ mod tests {
         options.remote = "chosen".into();
         options.branch = "destination".into();
         options.explicit = true;
-        options.save(&mut settings, &snapshot);
+        options.save(&mut settings, &snapshot, false);
         let directory = temporary.path().join("profile");
         let mut store = shovel_core::settings::SettingsStore::new(directory.clone());
         store.load().unwrap();
@@ -2116,6 +2182,11 @@ mod tests {
             .load()
             .unwrap();
         assert_eq!(Options::load(&restored, &snapshot, Kind::Pull), options);
+        assert!(Options::confirmed(
+            &restored,
+            &snapshot.worktree,
+            Kind::Pull
+        ));
         let mut other_branch = snapshot.clone();
         other_branch.branch = Some("next".into());
         let other = Options::load(&restored, &other_branch, Kind::Pull);
@@ -2126,7 +2197,7 @@ mod tests {
         fetch.remote = "chosen".into();
         fetch.all_remotes = true;
         fetch.explicit = true;
-        fetch.save(&mut settings, &snapshot);
+        fetch.save(&mut settings, &snapshot, false);
         assert_eq!(Options::load(&settings, &other_branch, Kind::Fetch), fetch);
     }
     #[test]
@@ -2145,6 +2216,7 @@ mod tests {
         };
         let scheduler = Scheduler::default();
         let mut settings = Settings::default();
+        Options::load(&settings, &snapshot, Kind::Push).save(&mut settings, &snapshot, true);
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000., 400.));
@@ -2166,7 +2238,7 @@ mod tests {
                 ui.horizontal(|ui| {
                     controller.toolbar(
                         ui,
-                        &mut settings,
+                        &settings,
                         Some(&snapshot.worktree),
                         Some(&snapshot),
                         Some(&git),
@@ -2215,7 +2287,7 @@ mod tests {
                     ui.horizontal(|ui| {
                         controller.toolbar(
                             ui,
-                            &mut settings,
+                            &settings,
                             Some(&snapshot.worktree),
                             Some(&snapshot),
                             Some(&git),

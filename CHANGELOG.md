@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.51.7 - 2026-11-19
+
+- Open options on the first Fetch, Pull, and Push in each repository. Confirm the action once to use the saved choices on later toolbar clicks.
+
 ## Rust 0.51.6 - 2026-11-19
 
 - Use square, contiguous repository tabs on a dark strip with left-aligned markers and thin dividers.

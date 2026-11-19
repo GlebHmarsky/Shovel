@@ -1169,7 +1169,7 @@
   "CheckoutChanged": "The repository changed. Close this review and reopen it to check the current branch and files.",
   "CheckoutStashUnavailable": "Could not verify the saved checkout stash. Inspect Stashes and Local Changes before retrying.",
   "CheckoutStashRetained": "The checkout stash was retained. Inspect Local Changes and Stashes; resolve any conflicts before continuing.",
-  "NetworkRememberOptions": "Choices are remembered for the main button. Explicit destinations apply to this branch.",
+  "NetworkConfirmOptions": "Confirm the options to use for this repository.",
   "CheckoutStashMessage": "Shovel checkout",
   "RustExitWithoutSaving": "Exit without saving",
   "RustStayOpen": "Stay open",

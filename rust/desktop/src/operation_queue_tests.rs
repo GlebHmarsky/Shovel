@@ -98,7 +98,7 @@ fn explicit_push_targets_keep_distinct_requests_and_coalesce_the_matching_initia
     let mut first = Options::load(&settings, &snapshot, Kind::Push);
     first.explicit = true;
     first.branch = "review/alpha".into();
-    first.save(&mut settings, &snapshot);
+    first.save(&mut settings, &snapshot, false);
     let mut second = first.clone();
     second.branch = "review/beta".into();
     let (hold, _) = scheduler.reserve(
@@ -242,7 +242,7 @@ fn initializing_toolbar_push_coalesces_and_finishes_after_all_tabs_close() {
         .set("AutoFetchEnabled", serde_json::json!(false));
     let mut saved = Options::load(&app.settings, &snapshot, Kind::Push);
     saved.all_tags = true;
-    saved.save(&mut app.settings, &snapshot);
+    saved.save(&mut app.settings, &snapshot, true);
     let ctx = egui::Context::default();
     ctx.enable_accesskit();
     app.open(snapshot.worktree.clone(), &ctx);
@@ -537,6 +537,153 @@ fn click_label(ctx: &egui::Context, app: &mut crate::Workspace, label: &str) {
 }
 
 #[test]
+fn toolbar_network_actions_confirm_once_per_worktree_and_use_saved_edits() {
+    let (temp, git, snapshot) = fixture();
+    let (_other, _, other) = fixture();
+    let path = &snapshot.worktree;
+    let spare = path.join("spare.git");
+    command(&git, path, &["init", "--bare", spare.to_str().unwrap()]);
+    command(
+        &git,
+        path,
+        &["remote", "add", "spare", spare.to_str().unwrap()],
+    );
+    for remote in ["origin", "spare"] {
+        command(&git, path, &["push", remote, "HEAD:refs/heads/review"]);
+    }
+    let clear_tracking_refs = |git: &Git| {
+        for reference in ["refs/remotes/origin/review", "refs/remotes/spare/review"] {
+            command(git, path, &["update-ref", "-d", reference]);
+        }
+    };
+    let tracking_refs = |git: &Git| {
+        command(
+            git,
+            path,
+            &["for-each-ref", "--format=%(refname)", "refs/remotes"],
+        )
+    };
+    clear_tracking_refs(&git);
+    let mut app = workspace();
+    app.tabs.clear();
+    app.git = Some(git.clone());
+    app.operations = controller();
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    app.settings.set(
+        "NetworkActions",
+        serde_json::json!([
+            { "Path": path, "Action": Kind::Fetch.number(), "AllRemotes": true }
+        ]),
+    );
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    app.open(path.clone(), &ctx);
+    crate::history_view::tests::wait(&mut app, &ctx);
+
+    click_label(&ctx, &mut app, &text("Fetch"));
+    assert!(app.operations.options.as_ref().unwrap().0.all_remotes);
+    click_label(&ctx, &mut app, &text("ActionAllRemotes"));
+    click_label(&ctx, &mut app, &text("Close"));
+    assert!(!Options::confirmed(&app.settings, path, Kind::Fetch));
+    assert!(app.operations.runs.is_empty());
+
+    click_label(&ctx, &mut app, &text("Fetch"));
+    assert!(!app.operations.options.as_ref().unwrap().0.all_remotes);
+    click_label(&ctx, &mut app, &text("ActionAllRemotes"));
+    click_label(&ctx, &mut app, &text("Fetch"));
+    assert!(Options::confirmed(&app.settings, path, Kind::Fetch));
+    wait(|| {
+        app.receive(&ctx);
+        app.operations.runs[0].done
+    });
+    assert_eq!(
+        tracking_refs(&git),
+        "refs/remotes/origin/review\nrefs/remotes/spare/review",
+        "{}",
+        app.operations.runs[0].output
+    );
+    clear_tracking_refs(&git);
+
+    let profile = temp.path().join("profile");
+    let mut store = shovel_core::settings::SettingsStore::new(profile.clone());
+    store.load().unwrap();
+    store.save(&app.settings).unwrap();
+    app.settings = shovel_core::settings::SettingsStore::new(profile)
+        .load()
+        .unwrap();
+    click_label(&ctx, &mut app, &text("RustFetchOptions"));
+    assert!(app.operations.options.as_ref().unwrap().0.all_remotes);
+    click_label(&ctx, &mut app, &text("ActionAllRemotes"));
+    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("Fetch"));
+    assert!(!app.operations.modal_open());
+    wait(|| {
+        app.receive(&ctx);
+        app.operations.runs[1].done
+    });
+    assert_eq!(
+        tracking_refs(&git),
+        "refs/remotes/origin/review",
+        "{}",
+        app.operations.runs[1].output
+    );
+
+    for kind in [Kind::Pull, Kind::Push] {
+        click_label(&ctx, &mut app, &text(kind.key()));
+        assert_eq!(app.operations.options.as_ref().unwrap().0.kind, kind);
+        click_label(&ctx, &mut app, &text("Close"));
+    }
+    app.open(other.worktree.clone(), &ctx);
+    crate::history_view::tests::wait(&mut app, &ctx);
+    click_label(&ctx, &mut app, &text("Fetch"));
+    assert_eq!(
+        app.operations.options.as_ref().unwrap().1.worktree,
+        other.worktree
+    );
+    click_label(&ctx, &mut app, &text("Close"));
+    assert_eq!(app.operations.runs.len(), 2);
+}
+
+#[test]
+fn initializing_main_fetch_opens_options_and_keeps_the_original_worktree() {
+    let (_temp, git, snapshot) = fixture();
+    let mut app = workspace();
+    app.tabs.clear();
+    app.git = Some(git);
+    app.operations = controller();
+    app.settings
+        .set("AutoFetchEnabled", serde_json::json!(false));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    app.open(snapshot.worktree.clone(), &ctx);
+    let owner = app.tabs[0].id;
+    for _ in 0..2 {
+        click_label(&ctx, &mut app, &text("Fetch"));
+    }
+    assert_eq!(app.operations.pending.len(), 1);
+    app.close_tab(owner, &ctx);
+    wait(|| {
+        app.receive(&ctx);
+        !app.operations.ready_options.is_empty()
+    });
+    frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+    let (_, captured) = app.operations.options.as_ref().unwrap();
+    assert_eq!(captured.worktree, snapshot.worktree);
+    click_label(&ctx, &mut app, &text("Close"));
+    wait(|| {
+        app.receive(&ctx);
+        !app.scheduler.has_accepted_work()
+    });
+    assert!(!snapshot.git_directory.join("FETCH_HEAD").exists());
+    assert!(!Options::confirmed(
+        &app.settings,
+        &snapshot.worktree,
+        Kind::Fetch
+    ));
+}
+
+#[test]
 fn initializing_fetch_options_survive_closure_save_without_fetch_and_hold_queue_order() {
     let (_temp, git, snapshot) = fixture();
     // FETCH_HEAD does not exist until a real fetch runs.
@@ -663,6 +810,7 @@ fn initializing_pull_and_push_options_keep_their_order_and_original_repository()
         !app.scheduler.has_accepted_work()
     });
     assert!(Options::load(&app.settings, &snapshot, Kind::Push).all_tags);
+    assert!(Options::confirmed(&app.settings, &snapshot.worktree, Kind::Push));
     assert_eq!(
         command(&git, &remote, &["rev-parse", "main"]),
         snapshot.head.clone().unwrap()

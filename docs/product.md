@@ -22,9 +22,11 @@ The selected repository's latest status scan supplies file rows immediately when
 
 The previous diff stays visible during a selection or refresh. Hunk operations become available again when the new diff is ready. If a file becomes clean, its last diff stays visible. A verified removal can clear it. Binary cards show each side's extension, size and LFS status. Text options appear with text comparisons.
 
-## Network options during repository loading (2026-11-18)
+## Network toolbar and remembered options (0.51.7)
 
-The arrows beside Fetch, Pull and Push accept requests as soon as a repository tab starts loading. Each options dialog opens with the original repository's branch and remote choices when they are ready. Closing the tab keeps the request. Closing the dialog saves edited choices. Git runs when you click the named action.
+Fetch, Pull and Push each open their options the first time you use the main button in a repository. Click the named action in the dialog to run Git and confirm the saved options. Later clicks run directly with those choices. Use the arrow or Repository menu to reopen options. Closing the dialog saves edits, and the first-use prompt stays active until you submit the action.
+
+The toolbar accepts requests while a repository tab loads. Requests use the original repository's branch and remote choices when ready. Closing the tab keeps the request.
 
 ## Repository tab markers (0.50.12)
 

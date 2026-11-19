@@ -2181,9 +2181,9 @@ impl eframe::App for Workspace {
                             .get(self.selected)
                             .map(|t| t.divergence.display())
                             .unwrap_or_default();
-                        self.preferences_dirty |= self.operations.toolbar(
+                        self.operations.toolbar(
                             ui,
-                            &mut self.settings,
+                            &self.settings,
                             self.tabs.get(self.selected).map(|t| &t.path),
                             self.tabs
                                 .get(self.selected)

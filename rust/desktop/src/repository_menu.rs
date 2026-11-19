@@ -272,10 +272,14 @@ impl Workspace {
         let tab = &self.tabs[self.selected];
         match item {
             Item::Refresh => self.refresh(ctx),
-            Item::Network(kind) => {
-                self.operations
-                    .defer_network(kind, &tab.path, &self.settings, &self.scheduler, ctx)
-            }
+            Item::Network(kind) => self.operations.open_network_options(
+                kind,
+                &tab.path,
+                tab.history.as_ref().map(|history| &history.snapshot),
+                &self.settings,
+                &self.scheduler,
+                ctx,
+            ),
             Item::Branch => {
                 self.operations
                     .defer_new_branch(&tab.path, &self.settings, &self.scheduler, ctx)
