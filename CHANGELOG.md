@@ -1,5 +1,10 @@
 # Changelog
 
+## Rust 0.51.10 - 2026-11-19
+
+- Add column 72 guides and live character counts to the commit editor. Enter moves from the subject to the description, and Ctrl+Enter commits the current draft.
+- Clear a retained conflict diff when a fresh status scan confirms the conflict is gone.
+
 ## Rust 0.51.9 - 2026-11-19
 
 - Show paused rebase controls below repository tabs and hide them while Shovel runs the rebase.

@@ -25,6 +25,70 @@ struct Harness {
 }
 
 #[test]
+fn message_guide_counts_the_current_line_and_enter_moves_to_description() {
+    let mut h = Harness::new();
+    h.stage("one.txt");
+    h.until(|e| !e.action_busy());
+    let out = h.render(vec![]);
+    let tree = out.platform_output.accesskit_update.as_ref().unwrap();
+    let (subject, _) = tree.nodes.iter()
+        .find(|(_, node)| node.role() == egui::Role::TextInput)
+        .unwrap();
+    let focus = egui::accesskit::ActionRequest {
+        action: egui::accesskit::Action::Focus,
+        target_tree: tree.tree_id,
+        target_node: *subject,
+        data: None,
+    };
+    out.drop_without_applying_deltas();
+    h.render(vec![egui::Event::AccessKitActionRequest(focus)])
+        .drop_without_applying_deltas();
+    let title = "S".repeat(82);
+    let out = h.render(vec![egui::Event::Text(title.clone())]);
+    assert_eq!(h.editor.draft.subject, title);
+    assert!(
+        out.shapes
+            .iter()
+            .any(|shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "-10"))
+    );
+    out.drop_without_applying_deltas();
+    for pressed in [true, false] {
+        h.render(vec![egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: Some(egui::Key::Enter),
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }])
+        .drop_without_applying_deltas();
+    }
+    assert!(h.editor.draft.description.is_empty());
+    let first_line = "B".repeat(93);
+    let out = h.render(vec![egui::Event::Text(first_line.clone())]);
+    assert!(
+        out.shapes
+            .iter()
+            .any(|shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "-21"))
+    );
+    out.drop_without_applying_deltas();
+    let out = h.render(vec![egui::Event::Paste("\nTail".into())]);
+    assert!(
+        out.shapes
+            .iter()
+            .any(|shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "68"))
+    );
+    out.drop_without_applying_deltas();
+    assert_eq!(h.editor.draft.subject, title);
+    assert_eq!(h.editor.draft.description, format!("{first_line}\nTail"));
+    h.commit_shortcut(false, false);
+    h.until(|e| !e.busy && e.draft.is_empty());
+    assert_eq!(
+        h.git(&["log", "-1", "--format=%B"]),
+        format!("{title}\n\n{first_line}\nTail")
+    );
+}
+
+#[test]
 fn shift_replaces_each_staging_button_and_operates_on_the_whole_group() {
     let mut h = Harness::new();
     h.click("Unstaged · Modified · one.txt");

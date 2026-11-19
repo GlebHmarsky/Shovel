@@ -24,6 +24,8 @@ The previous diff stays visible during a selection or refresh. Hunk operations b
 
 In 0.51.9, selecting a conflicted file opens its resolver. Check one side to keep it, both to merge, or neither to restore the common base. Resolving applies and stages that file. Stage and Stage All skip unresolved files. During rebase, Ours is the rebased result so far and Theirs is the commit being replayed. Recovery controls appear below the repository tabs when the rebase pauses.
 
+The commit editor shows a guide at column 72. The right-hand counts track the subject and the description line at the caret. Enter moves from the subject to the description. Ctrl+Enter attempts the commit. Shovel separates a nonempty description from the subject with one blank line. When a refresh verifies that a conflict is gone, its old diff clears.
+
 ## Network toolbar and remembered options (0.51.7)
 
 Fetch, Pull and Push each open their options the first time you use the main button in a repository. Click the named action in the dialog to run Git and confirm the saved options. Later clicks run directly with those choices. Use the arrow or Repository menu to reopen options. Closing the dialog saves edits, and the first-use prompt stays active until you submit the action.

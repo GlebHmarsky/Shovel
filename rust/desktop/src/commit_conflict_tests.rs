@@ -247,6 +247,26 @@ fn stage_all_skips_conflicted_file_and_unchecking_both_sides_restores_base() {
 }
 
 #[test]
+fn refreshing_after_external_conflict_resolution_removes_the_retained_conflict_diff() {
+    let mut h = Harness::new();
+    h.until(|e| e.draft_loaded && e.context.is_some() && !e.loading);
+    h.click("Unstaged · Modified · other.txt");
+    h.until(|e| e.diff_current);
+    h.open();
+    assert!(
+        h.editor.diff.is_some(),
+        "the comparison behind the resolver is retained"
+    );
+    ok(&h.editor.git, &h.editor.path, &["merge", "--abort"]);
+    h.editor.refresh(&h.ctx);
+    h.until(|e| !e.loading && e.focused.is_none());
+    assert!(h.editor.conflict.is_none());
+    assert!(h.editor.diff.is_none());
+    assert!(h.editor.displayed_file.is_none());
+    assert!(h.editor.path.join("conflict.txt").is_file());
+}
+
+#[test]
 fn recovery_controls_appear_below_tabs_after_rebase_pauses() {
     use crate::workspace_interaction_tests::{sidebar_point, workspace};
     let h = Harness::new();

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Commit message guides and retained diffs in Rust 0.51.10
+
+The editor draws a guide at column 72 and shows the remaining character count for the subject and the description line at the caret. The keyboard fixture verified the counts, Enter focus transfer, and an actual Ctrl+Enter commit with a blank line before the description. Local Changes cleared the retained comparison after a conflict ended outside Shovel and after a verified deletion. The ordinary diff retention fixture still passed.
+
+Five focused checks, all-target Clippy, and `git diff --check` passed. The 18 bounded smoke checks passed in 50.03 seconds on fingerprint "2D3E448D0CAFD2AE81F7CE10BB113F119DD3CB6E430ECF467CF9B4E9E8DB3334". Live desktop appearance remains unverified.
+
 ## Rebase recovery and conflict resolution in Rust 0.51.9
 
 The paused rebase banner appears below the tabs. The offscreen fixture held a repository job active, verified the banner stayed hidden, then confirmed that Continue appeared below the tabs. Local Changes opens the resolver on selection. Stage All staged the ordinary file and preserved every unmerged entry. The LFS fixture verified logical sizes and restored the exact common-base pointer into the worktree and index.

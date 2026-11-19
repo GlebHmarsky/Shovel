@@ -97,7 +97,7 @@ pub struct Editor {
     selection: BTreeSet<(Group, String)>,
     focused: Option<Change>,
     diff: Option<shovel_core::diff::FileDiff>,
-    displayed_path: Option<String>,
+    displayed_file: Option<(Group, String)>,
     diff_current: bool,
     diff_view: crate::diff_view::View,
     diff_options: shovel_core::diff::Options,
@@ -185,7 +185,7 @@ impl Editor {
             selection: BTreeSet::new(),
             focused: None,
             diff: None,
-            displayed_path: None,
+            displayed_file: None,
             diff_current: false,
             diff_view: crate::diff_view::View::default(),
             diff_options: shovel_core::diff::Options::default(),
@@ -561,7 +561,7 @@ impl Editor {
         let generation = self.generation;
         let git = self.git.clone();
         let path = self.path.clone();
-        let displayed = self.displayed_path.clone();
+        let displayed = self.displayed_file.as_ref().map(|(_, path)| path.clone());
         let tx = self.sender.clone();
         let ctx = ctx.clone();
         let cancel = self.scan_cancel.clone();
@@ -734,13 +734,13 @@ impl Editor {
                     match *result {
                         Ok(context) => {
                             self.apply(context, ctx);
-                            if self.focused.is_none()
-                                && removed.is_some()
-                                && self.displayed_path == removed
+                            if self.displayed_file.as_ref().is_some_and(|(_, path)| {
+                                removed.as_ref() == Some(path)
+                            })
                                 && self.snapshot_error.is_none()
                             {
                                 self.diff = None;
-                                self.displayed_path = None;
+                                self.displayed_file = None;
                             }
                         }
                         Err(error) => self.snapshot_error = Some(error_text(error)),
@@ -750,8 +750,10 @@ impl Editor {
                     match result {
                         Ok(diff) => {
                             self.diff = Some(diff);
-                            self.displayed_path =
-                                self.focused.as_ref().map(|entry| entry.path.clone());
+                            self.displayed_file = self
+                                .focused
+                                .as_ref()
+                                .map(|entry| (entry.group, entry.path.clone()));
                             self.diff_current = true;
                             self.diff_view.reset();
                         }
@@ -959,6 +961,15 @@ impl Editor {
             .as_ref()
             .and_then(|old| matching_row(old.group, &old.path))
             .cloned();
+        // A resolved conflict must not reveal the previous comparison behind its resolver.
+        if self.focused.as_ref().is_some_and(|entry| {
+            entry.group == Group::Conflicted && context.change(Group::Conflicted, &entry.path).is_none()
+        }) || self.displayed_file.as_ref().is_some_and(|(group, path)| {
+            *group == Group::Conflicted && context.change(Group::Conflicted, path).is_none()
+        }) {
+            self.diff = None;
+            self.displayed_file = None;
+        }
         self.context = Some(Arc::new(context));
         self.preview_rows = None;
         // Keep edited text even when an external operation removes this conflict.
@@ -1189,10 +1200,8 @@ impl Editor {
         {
             self.request_refresh(&ctx);
         }
-        if enabled
-            && !self.has_prompt()
-            && self.file_menu.is_none()
-            && let Some(push) = ctx.input_mut(|input| {
+        let commit_shortcut = if enabled && !self.has_prompt() && self.file_menu.is_none() {
+            ctx.input_mut(|input| {
                 let index = input.events.iter().position(|event| {
                     matches!(event, egui::Event::Key {
                     key: egui::Key::Enter, pressed: true, modifiers, ..
@@ -1203,9 +1212,9 @@ impl Editor {
                     _ => None,
                 }
             })
-        {
-            self.request_commit(push, &ctx);
-        }
+        } else {
+            None
+        };
         if !self.inline
             && enabled
             && self.confirm_amend.is_none()
@@ -1268,23 +1277,22 @@ impl Editor {
                     self.begin_draft_copy(ui.ctx(), rfd::FileDialog::pick_folder);
                 }
             }
-            let subject_label = ui.label(text("CommitSubject"));
-            let subject = ui
-                .add(
-                    egui::TextEdit::singleline(&mut self.draft.subject)
-                        .desired_width(f32::INFINITY),
-                )
-                .labelled_by(subject_label.id);
-            let body_label = ui.label(text("CommitDescription"));
-            let body = ui
-                .add(
-                    egui::TextEdit::multiline(&mut self.draft.description)
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(3),
-                )
-                .labelled_by(body_label.id);
-            if subject.changed() || body.changed() {
+            let subject = message_field(ui, &mut self.draft.subject, false);
+            let description = message_field(ui, &mut self.draft.description, true);
+            if subject.lost_focus()
+                && ui.input(|i| {
+                    i.events.iter().any(|event| matches!(event, egui::Event::Key {
+                        key: egui::Key::Enter, pressed: true, repeat: false, modifiers, ..
+                    } if *modifiers == egui::Modifiers::NONE))
+                })
+            {
+                description.request_focus();
+            }
+            if subject.changed() || description.changed() {
                 self.edited();
+            }
+            if let Some(push) = commit_shortcut {
+                self.request_commit(push, &ctx);
             }
             ui.horizontal(|ui| {
                 let allow_amend = self.context.as_ref().is_some_and(|c| {
@@ -1597,7 +1605,7 @@ impl Editor {
             }
             if let Some(diff) = &self.diff
                 && let Some(ids) = ui
-                    .push_id(("local-diff", self.displayed_path.as_deref()), |ui| {
+                    .push_id(("local-diff", self.displayed_file.as_ref().map(|(_, path)| path.as_str())), |ui| {
                         let actions = if current && !options_changed {
                             crate::diff_view::HunkActions::Ready
                         } else {
@@ -1684,6 +1692,80 @@ impl Editor {
 #[cfg(test)]
 #[path = "commit_conflict_tests.rs"]
 mod conflict_tests;
+const MESSAGE_COLUMN: usize = 72;
+
+fn description_line_length(value: &str, mut cursor: usize) -> usize {
+    let mut length = 0;
+    for line in value.split('\n') {
+        let chars = line.chars().count();
+        length = chars - usize::from(line.ends_with('\r'));
+        if cursor <= chars {
+            break;
+        }
+        cursor -= chars + 1;
+    }
+    length
+}
+
+fn message_field(ui: &mut egui::Ui, value: &mut String, description: bool) -> egui::Response {
+    let (label, count_rect) = ui
+        .horizontal(|ui| {
+            let label = ui.label(text(if description {
+                "CommitDescription"
+            } else {
+                "CommitSubject"
+            }));
+            let (_, rect) =
+                ui.allocate_space(egui::vec2(ui.available_width(), label.rect.height()));
+            (label.id, rect)
+        })
+        .inner;
+    let font = egui::TextStyle::Monospace.resolve(ui.style());
+    let edit = if description {
+        egui::TextEdit::multiline(value).desired_rows(3)
+    } else {
+        egui::TextEdit::singleline(value)
+    };
+    let output = edit
+        .font(font.clone())
+        .desired_width(f32::INFINITY)
+        .show(ui);
+    let clip = output.text_clip_rect.intersect(output.response.rect);
+    let guide = output.galley_pos.x
+        + ui.fonts_mut(|fonts| fonts.glyph_width(&font, 'M')) * MESSAGE_COLUMN as f32;
+    let palette = crate::workspace_style::Palette::current(ui);
+    if clip.x_range().contains(guide) && clip.is_positive() {
+        ui.painter().with_clip_rect(clip).vline(
+            guide,
+            clip.y_range(),
+            egui::Stroke::new(1., palette.border),
+        );
+    }
+    let length = if description {
+        let cursor = output
+            .state
+            .cursor
+            .char_range()
+            .map_or(0, |range| range.primary.index.into());
+        description_line_length(value, cursor)
+    } else {
+        value.chars().count()
+    };
+    let remaining = MESSAGE_COLUMN as i64 - length as i64;
+    let color = match remaining {
+        ..=-21 => palette.diff_removed_text,
+        -20..=-1 => crate::workspace_style::Palette::change_status('M', ui.visuals().dark_mode),
+        _ => palette.text,
+    };
+    ui.put(
+        count_rect,
+        egui::Label::new(egui::RichText::new(remaining.to_string()).color(color))
+            .halign(egui::Align::Max),
+    )
+    .on_hover_text(text("CommitCharactersRemaining"));
+    output.response.response.labelled_by(label)
+}
+
 #[path = "commit_file_list.rs"]
 mod file_list;
 #[path = "commit_file_menu.rs"]
