@@ -1,5 +1,9 @@
 # Changelog
 
+## Rust 0.51.8 - 2026-11-19
+
+- Remove the strip above the menus in restored windows and reduce the height of the menu and toolbar rows.
+
 ## Rust 0.51.7 - 2026-11-19
 
 - Open options on the first Fetch, Pull, and Push in each repository. Confirm the action once to use the saved choices on later toolbar clicks.

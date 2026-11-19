@@ -257,6 +257,8 @@ pub fn lower_tab(ui: &mut egui::Ui, active: bool, label: String) -> egui::Respon
     response
 }
 
+pub const TOOLBAR_HEIGHT: f32 = 38.;
+
 /// A single keyboard/accessibility target for the icon and its caption.
 pub fn action(ui: &mut egui::Ui, key: &str, enabled: bool) -> egui::Response {
     action_with_count(ui, key, enabled, None)
@@ -282,7 +284,10 @@ pub fn action_with_count(
         });
         let count_width = count_galley.as_ref().map_or(0., |g| g.size().x + 16.);
         let (rect, response) = ui.allocate_exact_size(
-            egui::vec2((galley.size().x + 12.).max(43.).max(count_width), 44.),
+            egui::vec2(
+                (galley.size().x + 12.).max(43.).max(count_width),
+                TOOLBAR_HEIGHT,
+            ),
             egui::Sense::click(),
         );
         response
@@ -301,7 +306,7 @@ pub fn action_with_count(
             ui.painter()
                 .rect_stroke(rect, 4., Stroke::new(1., p.focus), egui::StrokeKind::Inside);
         }
-        let origin = egui::pos2(rect.center().x - 10., rect.top() + 3.);
+        let origin = egui::pos2(rect.center().x - 10., rect.top() + 1.);
         let paths: &[&[(f32, f32)]] = match key {
             "OpenRepository" => &[&[
                 (1., 4.),
@@ -370,7 +375,7 @@ pub fn action_with_count(
         ui.painter().galley_with_override_text_color(
             egui::pos2(
                 rect.center().x - galley.size().x / 2.,
-                rect.bottom() - galley.size().y - 3.,
+                rect.bottom() - galley.size().y - 1.,
             ),
             galley,
             color,
@@ -433,7 +438,7 @@ pub fn options_button(ui: &mut egui::Ui, label: String, enabled: bool) -> egui::
     let response = ui.add_enabled(
         enabled,
         egui::Button::new("")
-            .min_size(egui::vec2(16., 40.))
+            .min_size(egui::vec2(16., TOOLBAR_HEIGHT))
             .frame_when_inactive(false),
     );
     let p = Palette::current(ui);

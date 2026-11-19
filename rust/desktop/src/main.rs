@@ -1945,7 +1945,7 @@ impl eframe::App for Workspace {
         }
         let palette = workspace_style::Palette::current(ui);
         egui::Panel::top("toolbar")
-            .frame(workspace_style::pane(palette.chrome, 6, 2))
+            .frame(workspace_style::pane(palette.chrome, 6, 0))
             .show(ui, |ui| {
                 if modal_open {
                     ui.disable();
@@ -2169,7 +2169,7 @@ impl eframe::App for Workspace {
                     caption::controls(ui);
                 });
                 ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), 52.),
+                    egui::vec2(ui.available_width(), workspace_style::TOOLBAR_HEIGHT),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 2.;
@@ -2220,7 +2220,7 @@ impl eframe::App for Workspace {
                         ui.add_space((context_left - update_slot - left).max(0.));
                         let offer = self.updater.available_version(self.settings.channel());
                         let (update_rect, _) = ui.allocate_exact_size(
-                            egui::vec2(updater::UPDATE_CARD_WIDTH, 44.),
+                            egui::vec2(updater::UPDATE_CARD_WIDTH, workspace_style::TOOLBAR_HEIGHT),
                             egui::Sense::hover(),
                         );
                         if offer.is_some() {
@@ -2243,7 +2243,7 @@ impl eframe::App for Workspace {
                             .fill(palette.raised)
                             .stroke(egui::Stroke::new(1., palette.border))
                             .corner_radius(6)
-                            .inner_margin(egui::Margin::symmetric(10, 2))
+                            .inner_margin(egui::Margin::symmetric(10, 0))
                             .show(ui, |ui| {
                                 ui.set_width((context_width - 22.).max(1.));
                                 ui.spacing_mut().item_spacing.y = 1.;
@@ -2310,14 +2310,14 @@ impl eframe::App for Workspace {
                                             .x
                                             .min(width * 0.55);
                                         ui.allocate_ui_with_layout(
-                                            egui::vec2(width, 20.),
+                                            egui::vec2(width, 17.),
                                             egui::Layout::left_to_right(egui::Align::Center),
                                             |ui| {
                                                 ui.spacing_mut().item_spacing.x = 4.;
                                                 ui.add_space((width - branch_width) / 2.);
                                                 if !branch.is_empty() {
                                                     ui.add_sized(
-                                                        egui::vec2(branch_width, 18.),
+                                                        egui::vec2(branch_width, 17.),
                                                         egui::Label::new(
                                                             RichText::new(branch).size(14.),
                                                         )
@@ -2347,7 +2347,7 @@ impl eframe::App for Workspace {
                                                 .size(15.)
                                                 .strong(),
                                         );
-                                        ui.allocate_space(egui::vec2(0., 20.));
+                                        ui.allocate_space(egui::vec2(0., 17.));
                                     }
                                 });
                             });

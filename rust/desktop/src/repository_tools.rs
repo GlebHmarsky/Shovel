@@ -29,7 +29,7 @@ pub fn toolbar(ui: &mut egui::Ui, enabled: bool) -> Option<&'static str> {
                     .size()
                     .x;
                 egui::Button::new("")
-                    .min_size(egui::vec2(width + 12., 44.))
+                    .min_size(egui::vec2(width + 12., crate::workspace_style::TOOLBAR_HEIGHT))
                     .frame_when_inactive(false)
             };
             let console_button = button("ConsoleCaption");
@@ -91,7 +91,7 @@ fn icon(
     } else {
         Palette::current(ui).disabled
     };
-    let origin = egui::pos2(response.rect.center().x - 10., response.rect.top() + 3.);
+    let origin = egui::pos2(response.rect.center().x - 10., response.rect.top() + 1.);
     for path in paths {
         let points = path
             .iter()
@@ -101,7 +101,7 @@ fn icon(
             .add(egui::Shape::line(points, egui::Stroke::new(1.65, color)));
     }
     ui.painter().text(
-        egui::pos2(response.rect.center().x, response.rect.bottom() - 3.),
+        egui::pos2(response.rect.center().x, response.rect.bottom() - 1.),
         egui::Align2::CENTER_BOTTOM,
         text(caption),
         egui::FontId::proportional(12.),

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Compact window header in Rust 0.51.8
+
+The restored window paints the menu area up to the top edge. The top edge continues to resize the window. The menu and toolbar rows are shorter.
+
+Three focused checks, all-target Clippy, and git diff --check passed. All 18 bounded smoke checks passed in 60.59 seconds on fingerprint AB9F5383C99534A8E0AC1E7D8D58D46EBE48F332249DEDB4F71FE9428197BAB5. Live desktop appearance remains unverified.
+
 ## First-use network options in Rust 0.51.7
 
 The first main Fetch, Pull and Push each open the options for that worktree. Submitting the action records confirmation. Later main clicks use the saved choices directly. Existing options carry over and appear in the first dialog. The arrow and Repository menu reopen options. Requests made during startup stay with the original worktree.

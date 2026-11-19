@@ -13,6 +13,7 @@ use windows_sys::Win32::{
 };
 thread_local! {static REGION:Cell<Option<[i32;4]>>=const{Cell::new(None)};static ACTIVE:Cell<bool>=const{Cell::new(false)};}
 thread_local! {
+    static TOP_RESIZE: Cell<i32> = const { Cell::new(0) };
     static SYSTEM_CHANGED: Cell<bool> = const { Cell::new(false) };
     static REPAINT: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
 }
@@ -73,12 +74,16 @@ unsafe extern "system" fn proc(
             let r = l as *mut RECT;
             let old = *r;
             DefSubclassProc(hwnd, msg, w, l);
-            (*r).top = old.top + ((*r).left - old.left).max(0);
+            let resize = ((*r).left - old.left).max(0);
+            let maximized = IsZoomed(hwnd) != 0;
+            TOP_RESIZE.set(if maximized { 0 } else { resize });
+            (*r).top = if maximized { old.top + resize } else { old.top };
             return 0;
         }
         if msg == WM_NCDESTROY {
             ACTIVE.set(false);
             REGION.set(None);
+            TOP_RESIZE.set(0);
             SYSTEM_CHANGED.set(false);
             REPAINT.replace(None);
             RemoveWindowSubclass(hwnd, Some(proc), 1);
@@ -94,12 +99,15 @@ unsafe extern "system" fn proc(
                 x: l as i16 as i32,
                 y: (l >> 16) as i16 as i32,
             };
-            if ScreenToClient(hwnd, &mut point) != 0
-                && REGION.get().is_some_and(|[x, y, r, b]| {
+            if ScreenToClient(hwnd, &mut point) != 0 {
+                if (0..TOP_RESIZE.get()).contains(&point.y) {
+                    return HTTOP as isize;
+                }
+                if REGION.get().is_some_and(|[x, y, r, b]| {
                     point.x >= x && point.x < r && point.y >= y && point.y < b
-                })
-            {
-                return HTCAPTION as isize;
+                }) {
+                    return HTCAPTION as isize;
+                }
             }
             return HTCLIENT as isize;
         }
@@ -111,8 +119,9 @@ pub fn controls(ui: &mut egui::Ui) {
         return;
     }
     let ctx = ui.ctx().clone();
+    let height = 24.;
     let w = (ui.available_width() - 3. * 44. - 3. * ui.spacing().item_spacing.x).max(0.);
-    let (drag, _) = ui.allocate_exact_size(egui::vec2(w, 32.), egui::Sense::hover());
+    let (drag, _) = ui.allocate_exact_size(egui::vec2(w, height), egui::Sense::hover());
     let scale = ctx.pixels_per_point();
     REGION.set(ui.is_enabled().then(|| {
         [drag.left(), drag.top(), drag.right(), drag.bottom()].map(|x| (x * scale).round() as i32)
@@ -124,7 +133,7 @@ pub fn controls(ui: &mut egui::Ui) {
     {
         let label = crate::strings::text(key);
         let r = ui
-            .add_sized([44., 32.], egui::Button::new("").frame_when_inactive(false))
+            .add_sized([44., height], egui::Button::new("").frame_when_inactive(false))
             .on_hover_text(&label);
         r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &label));
         let c = r.rect.center();
@@ -231,9 +240,19 @@ mod tests {
             let mut after = RECT::default();
             GetClientRect(hwnd, &mut after);
             assert!(after.bottom > before.bottom && after.right == before.right);
-            REGION.set(Some([240, 0, 700, 32]));
-            for (x, expected) in [(350, HTCAPTION), (40, HTCLIENT), (800, HTCLIENT)] {
-                let mut pos = POINT { x, y: 16 };
+            let mut origin = POINT { x: 0, y: 0 };
+            assert_ne!(ClientToScreen(hwnd, &mut origin), 0);
+            let mut window = RECT::default();
+            assert_ne!(GetWindowRect(hwnd, &mut window), 0);
+            assert_eq!(origin.y, window.top);
+            REGION.set(Some([240, 0, 700, 24]));
+            for (x, y, expected) in [
+                (350, 1, HTTOP),
+                (350, 16, HTCAPTION),
+                (40, 16, HTCLIENT),
+                (800, 16, HTCLIENT),
+            ] {
+                let mut pos = POINT { x, y };
                 assert_ne!(ClientToScreen(hwnd, &mut pos), 0);
                 let packed = ((pos.y as u16 as usize) << 16) | (pos.x as u16 as usize);
                 assert_eq!(
