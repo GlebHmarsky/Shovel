@@ -111,8 +111,8 @@ fn measure_stage_unstage_rows_and_selected_diff() {
             context = result.updated.unwrap();
             let entry = context.change(after, target).unwrap();
             let rows_ms = started.elapsed().as_secs_f64() * 1000.0;
-            let diff = git.working_diff(&context, entry, &cancel).unwrap();
-            assert!(diff.contains(&format!("+changed {sample}")));
+            let diff = git.file_diff_preview(&context, entry, &cancel).unwrap();
+            assert!(diff.lines.iter().any(|line| line.text == format!("changed {sample}")));
             let diff_ms = started.elapsed().as_secs_f64() * 1000.0;
             let wider = Instant::now();
             let full = git.working_copy(root, &cancel).unwrap();
@@ -553,4 +553,25 @@ fn editor_stage_keeps_working_when_other_paths_change_or_a_selection_disappears(
         git.execute_working_for_editor(&before, &Action::Stage(vec![gone]), None),
         Err(Error::SelectionGone)
     ));
+}
+
+#[test]
+fn editor_stage_reconciles_a_split_index_through_git() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    fs::write(root.join("file"), b"base").unwrap();
+    command(&git, root, &["add", "--", "file"]);
+    command(&git, root, &["commit", "-m", "base"]);
+    command(&git, root, &["update-index", "--split-index"]);
+    fs::write(root.join("file"), b"updated").unwrap();
+    let cancel = Cancellation::default();
+    let before = git.working_copy(root, &cancel).unwrap();
+    let entry = before.change(Group::Unstaged, "file").unwrap().clone();
+    let result = git.execute_working_for_editor(&before, &Action::Stage(vec![entry]), None).unwrap();
+    assert!(result.succeeded());
+    let updated = result.updated.unwrap();
+    let full = git.working_copy(root, &cancel).unwrap();
+    assert_eq!(updated.index_stamp, full.index_stamp);
+    assert_eq!(updated.entries, full.entries);
+    assert_eq!(command(&git, root, &["show", ":file"]), "updated");
 }

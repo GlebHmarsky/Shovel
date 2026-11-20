@@ -135,8 +135,10 @@ fn ordinary_modification(entry: &Change) -> bool {
         && matches!(entry.group, Group::Staged | Group::Unstaged)
 }
 fn index_targets<'a>(context: &Context, action: &'a Action) -> BTreeSet<&'a str> {
-    let (Action::Stage(entries) | Action::Unstage(entries)) = action else {
-        return BTreeSet::new();
+    let entries = match action {
+        Action::Stage(entries) | Action::Unstage(entries) => entries.as_slice(),
+        Action::Hunks { preview, .. } => std::slice::from_ref(&preview.change),
+        Action::Commit { .. } => return BTreeSet::new(),
     };
     // status takes pathspecs on the Windows command line. Wide selections and
     // rename/copy partners use the complete native status/reconciliation path.
@@ -1082,20 +1084,38 @@ impl Git {
     ) -> Result<Option<Context>, Error> {
         let reviewed = &context.repository;
         let root = &reviewed.worktree;
-        let (after, outside) = self.index_stamps(reviewed, targets, cancel)?;
+        let ((after, outside, index_image), mut actual) = std::thread::scope(|scope| {
+            let index = std::thread::Builder::new().spawn_scoped(scope, || {
+                let image = self.regular_index_image(reviewed);
+                let (stamp, outside) = self.index_stamps(reviewed, targets, cancel)?;
+                let image = image.filter(|before| {
+                    self.regular_index_image(reviewed).as_ref() == Some(before)
+                });
+                Ok::<_, Error>((stamp, outside, image))
+            })?;
+            let status = self.read_worktree_status(root, &context.filters, true, targets, cancel);
+            let index = index.join()
+                .map_err(|_| std::io::Error::other("index reconciliation worker stopped"))??;
+            Ok::<_, Error>((index, status?))
+        })?;
         // A hook can stage another file. Only a full read may adopt that index.
         if outside.as_deref() != Some(prior_outside) {
             return Ok(None);
         }
-        let mut actual =
-            self.read_worktree_status(root, &context.filters, true, targets, cancel)?;
         if context.standard_lfs {
             crate::lfs::normalize(self, root, &mut actual, cancel)?;
         }
         if actual
             .iter()
             .any(|entry| !ordinary_modification(entry) || !targets.contains(entry.path.as_str()))
-            || self.validated_index(context, &BTreeSet::new(), cancel)?.0 != after
+            || !self.validate_index_state(context, cancel, || {
+                if let Some(before) = index_image
+                    && self.regular_index_image(reviewed).as_ref() == Some(&before)
+                {
+                    return Ok(true);
+                }
+                Ok(self.semantic_index(reviewed, cancel)? == after)
+            })?
         {
             return Ok(None);
         }
@@ -1110,12 +1130,44 @@ impl Git {
         updated.index_stamp = after;
         Ok(Some(updated))
     }
+    // Bound this fast check to an ordinary worktree index. Split and sparse
+    // index extensions and alternate index locations require Git's reader.
+    fn regular_index_image(&self, repository: &Snapshot) -> Option<Vec<u8>> {
+        const LIMIT: u64 = 4 * 1024 * 1024;
+        if self.environment.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("GIT_INDEX_FILE") && value.is_some()
+        }) {
+            return None;
+        }
+        let file = fs::File::open(repository.git_directory.join("index")).ok()?;
+        if file.metadata().ok()?.len() > LIMIT {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        file.take(LIMIT + 1).read_to_end(&mut bytes).ok()?;
+        (bytes.len() as u64 <= LIMIT
+            && bytes.starts_with(b"DIRC")
+            && !bytes.windows(4).any(|bytes| matches!(bytes, b"link" | b"sdir")))
+            .then_some(bytes)
+    }
+
     fn validated_index(
         &self,
         context: &Context,
         targets: &BTreeSet<&str>,
         cancel: &Cancellation,
     ) -> Result<(String, Option<String>), Error> {
+        self.validate_index_state(context, cancel, || {
+            self.index_stamps(&context.repository, targets, cancel)
+        })
+    }
+
+    fn validate_index_state<T>(
+        &self,
+        context: &Context,
+        cancel: &Cancellation,
+        read_index: impl FnOnce() -> Result<T, Error>,
+    ) -> Result<T, Error> {
         let reviewed = &context.repository;
         let root = &reviewed.worktree;
         if identity::read(root)? != reviewed.identity {
@@ -1126,15 +1178,13 @@ impl Git {
         std::thread::scope(|scope| {
             let head = std::thread::Builder::new()
                 .spawn_scoped(scope, || self.current_index_target(reviewed, cancel))?;
-            let index = self
-                .index_stamps(reviewed, targets, cancel)
-                .and_then(|index| {
-                    if self.config_stamp(root, cancel)? == context.config_stamp {
-                        Ok(index)
-                    } else {
-                        Err(Error::Stale)
-                    }
-                });
+            let index = read_index().and_then(|index| {
+                if self.config_stamp(root, cancel)? == context.config_stamp {
+                    Ok(index)
+                } else {
+                    Err(Error::Stale)
+                }
+            });
             let matches = head
                 .join()
                 .map_err(|_| std::io::Error::other("repository validation worker stopped"))??;

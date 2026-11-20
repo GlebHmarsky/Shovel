@@ -238,7 +238,6 @@ impl Pane {
                             self.diff = Some(diff);
                             self.displayed_commit = commit;
                             self.displayed_file = path;
-                            self.view.reset();
                         }
                         Err(error) => self.error = Some(error_text(error)),
                     }
@@ -420,7 +419,7 @@ impl Pane {
                         .on_hover_text(&self.displayed_file);
                         ui.monospace(&self.displayed_commit[..self.displayed_commit.len().min(8)]);
                     });
-                    self.view.show(ui, diff, diff_view::HunkActions::ReadOnly);
+                    self.view.show(ui, diff);
                 } else {
                     ui.label(text("DiffChooseFile"));
                 }

@@ -173,7 +173,9 @@ fn diff_remains_visible_during_selection_refresh_and_after_the_file_becomes_clea
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(assert_visible(&mut h, "two"), before_refresh);
     release.send(()).unwrap();
-    h.until(|editor| editor.diff_current);
+    h.until(|editor| editor.diff_current && editor.diff.as_ref().is_some_and(|diff| {
+        diff.lines.iter().any(|line| line.text == "updated")
+    }));
     assert_visible(&mut h, "updated");
 
     fs::write(h.editor.path.join("two.txt"), "base\n").unwrap();
@@ -1699,4 +1701,37 @@ fn whole_file_stage_remains_available_during_an_ordinary_status_refresh() {
     assert_eq!(h.git(&["show", ":one.txt"]), "one");
     release.send(()).unwrap();
     h.until(|e| !e.loading);
+}
+
+#[test]
+fn text_diff_opens_during_status_scan_and_paints_from_the_left() {
+    let mut h = Harness::new();
+    let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
+    h.editor.refresh(&h.ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    h.click("Unstaged · Modified · one.txt");
+    h.until(|editor| editor.diff_current);
+    assert!(h.editor.loading);
+    let output = h.render(vec![]);
+    let rows = output.shapes.iter().filter_map(|shape| match &shape.shape {
+        egui::Shape::Text(label)
+            if label.galley.text().ends_with(" - base") || label.galley.text().ends_with(" + one") =>
+        {
+            Some((label.pos.x, shape.clip_rect.left()))
+        }
+        _ => None,
+    }).collect::<Vec<_>>();
+    let controls = output.shapes.iter().filter_map(|shape| match &shape.shape {
+        egui::Shape::Text(label) => Some(label.galley.text()),
+        _ => None,
+    }).any(|label| ["DiffIgnoreWhitespace", "DiffWholeFile", "DiffSideBySide", "DiffPreviousHunk", "DiffNextHunk"]
+        .iter().any(|key| label == text(key)));
+    output.drop_without_applying_deltas();
+    assert_eq!(rows.len(), 2);
+    assert!(!controls);
+    for (x, left) in rows {
+        assert!((0. ..=6.).contains(&(x - left)), "diff row was offset from its left edge");
+    }
+    release.send(()).unwrap();
+    h.until(|editor| !editor.loading);
 }

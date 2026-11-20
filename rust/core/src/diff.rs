@@ -539,6 +539,26 @@ impl Git {
         options: Options,
         cancel: &Cancellation,
     ) -> Result<FileDiff, Error> {
+        self.file_diff_inner(context, entry, options, true, cancel)
+    }
+
+    pub fn file_diff_preview(
+        &self,
+        context: &Context,
+        entry: &Change,
+        cancel: &Cancellation,
+    ) -> Result<FileDiff, Error> {
+        self.file_diff_inner(context, entry, Options::default(), false, cancel)
+    }
+
+    fn file_diff_inner(
+        &self,
+        context: &Context,
+        entry: &Change,
+        options: Options,
+        prepare_hunks: bool,
+        cancel: &Cancellation,
+    ) -> Result<FileDiff, Error> {
         if !context.entries.contains(entry) {
             return Err(Error::Stale);
         }
@@ -561,7 +581,12 @@ impl Git {
                 Summary::default(),
             ));
         }
-        if self.semantic_index(&context.repository, cancel)? != context.index_stamp {
+        // A read-only preview can check the selected index entry. Hunk
+        // capabilities and complex paths still require the complete index stamp.
+        let scoped_preview = !prepare_hunks && candidate(entry);
+        if crate::identity::read(root)? != context.repository.identity
+            || !scoped_preview && self.semantic_index(&context.repository, cancel)? != context.index_stamp
+        {
             return Err(Error::Stale);
         }
         let before = file_stamp(&file)?;
@@ -594,7 +619,7 @@ impl Git {
         if !staged && old.lfs && !new_info.absent {
             new_info.lfs = true;
         }
-        let hunk_candidate = candidate(entry) && !options.ignore_whitespace && !options.whole_file;
+        let hunk_candidate = prepare_hunks && candidate(entry) && !options.ignore_whitespace && !options.whole_file;
         let content = if hunk_candidate {
             content_stamp(root, &entry.path, cancel)?
         } else {
@@ -629,7 +654,20 @@ impl Git {
                 root, args, paths, old, new_info, submodule, options, new, cancel,
             )?
         };
-        if self.semantic_index(&context.repository, cancel)? != context.index_stamp
+        let index_matches = if scoped_preview {
+            let output = self.read(
+                root,
+                ["--literal-pathspecs", "ls-files", "--stage", "-z", "--", &entry.path],
+                cancel,
+                128 * 1024,
+            )?;
+            let expected = format!("{} {} 0\t{}\0", entry.index_mode, entry.index_object, entry.path);
+            output.stdout == expected.as_bytes()
+        } else {
+            self.semantic_index(&context.repository, cancel)? == context.index_stamp
+        };
+        if !index_matches
+            || crate::identity::read(root)? != context.repository.identity
             || !staged && file_stamp(&file)? != before
         {
             return Err(Error::Stale);
@@ -684,16 +722,36 @@ impl Git {
         allow_one: bool,
         cancel: &Cancellation,
     ) -> Result<FileDiff, Error> {
-        let mut stat = args.clone();
-        stat.extend(["--numstat", "-z", "--"].map(OsString::from));
-        stat.extend(paths.iter().map(OsString::from));
-        let output = process::run(
-            &self.request(root, stat, Lifetime::Read, MAX_BYTES),
-            cancel,
-            None,
-        )?;
-        let stat = diff_require(output, allow_one)?;
-        let (binary, added, removed) = parse_stats(&stat.stdout)?;
+        let read = |args| {
+            process::run(&self.request(root, args, Lifetime::Read, MAX_BYTES), cancel, None)
+        };
+        let mut patch = args.clone();
+        patch.push("--patch".into());
+        patch.push(if options.whole_file { "--unified=20000" } else { "--unified=3" }.into());
+
+        let mut combined = patch.clone();
+        combined.extend(["--numstat", "-z", "--"].map(OsString::from));
+        combined.extend(paths.iter().map(OsString::from));
+        let output = read(combined)?;
+        let limited = output.outcome == process::Outcome::OutputLimit;
+        let combined = if limited {
+            None
+        } else {
+            let output = diff_require(output, allow_one)?;
+            split_comparison(output.stdout)
+        };
+        let (stats, patch_bytes) = if let Some((stats, patch)) = combined {
+            (stats, Some(patch))
+        } else {
+            // Preserve bounded summaries for large output and Git formats
+            // that do not combine the two sections with a NUL separator.
+            let mut stat = args;
+            stat.extend(["--numstat", "-z", "--"].map(OsString::from));
+            stat.extend(paths.iter().map(OsString::from));
+            let stat = diff_require(read(stat)?, allow_one)?;
+            (parse_stats(&stat.stdout)?, None)
+        };
+        let (binary, added, removed) = stats;
         let mut diff = FileDiff::empty(
             if binary || old.lfs || new.lfs {
                 Kind::Binary
@@ -710,29 +768,22 @@ impl Git {
         if diff.kind == Kind::Binary {
             return Ok(diff);
         }
-        let mut patch = args;
-        patch.push("--patch".into());
-        patch.push(
-            if options.whole_file {
-                "--unified=20000"
-            } else {
-                "--unified=3"
-            }
-            .into(),
-        );
-        patch.push("--".into());
-        patch.extend(paths.into_iter().map(OsString::from));
-        let output = process::run(
-            &self.request(root, patch, Lifetime::Read, MAX_BYTES),
-            cancel,
-            None,
-        )?;
-        if output.outcome == process::Outcome::OutputLimit {
+        let patch_bytes = if let Some(bytes) = patch_bytes {
+            bytes
+        } else if limited {
             diff.kind = Kind::TooLarge;
             return Ok(diff);
-        }
-        let output = diff_require(output, allow_one)?;
-        match String::from_utf8(output.stdout) {
+        } else {
+            patch.push("--".into());
+            patch.extend(paths.into_iter().map(OsString::from));
+            let output = read(patch)?;
+            if output.outcome == process::Outcome::OutputLimit {
+                diff.kind = Kind::TooLarge;
+                return Ok(diff);
+            }
+            diff_require(output, allow_one)?.stdout
+        };
+        match String::from_utf8(patch_bytes) {
             Ok(patch) => match parse_lines(&patch) {
                 Ok(lines) => {
                     diff.patch = patch;
@@ -854,7 +905,18 @@ fn worktree_summary(file: &Path) -> Result<Summary, Error> {
         absent: false,
     })
 }
-fn parse_stats(bytes: &[u8]) -> Result<(bool, u32, u32), Error> {
+type DiffStats = (bool, u32, u32);
+fn split_comparison(mut bytes: Vec<u8>) -> Option<(DiffStats, Vec<u8>)> {
+    if bytes.is_empty() {
+        return Some(((false, 0, 0), bytes));
+    }
+    let boundary = bytes.windows(2).position(|pair| pair == b"\0\0")?;
+    let stats = parse_stats(&bytes[..=boundary]).ok()?;
+    let patch = bytes.split_off(boundary + 2);
+    Some((stats, patch))
+}
+
+fn parse_stats(bytes: &[u8]) -> Result<DiffStats, Error> {
     let text = std::str::from_utf8(bytes).map_err(|_| Error::Invalid)?;
     if !text.is_empty() && !text.ends_with('\0') {
         return Err(Error::Invalid);

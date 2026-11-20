@@ -99,7 +99,6 @@ pub struct Editor {
     displayed_file: Option<(Group, String)>,
     diff_current: bool,
     diff_view: crate::diff_view::View,
-    diff_options: shovel_core::diff::Options,
     diff_error: Option<String>,
     draft: drafts::Text,
     pub(super) owner_fingerprint: Option<String>,
@@ -186,7 +185,6 @@ impl Editor {
             displayed_file: None,
             diff_current: false,
             diff_view: crate::diff_view::View::default(),
-            diff_options: shovel_core::diff::Options::default(),
             diff_error: None,
             draft: drafts::Text::default(),
             identity: None,
@@ -549,9 +547,6 @@ impl Editor {
         }
         self.refresh_pending = false;
         self.loading = true;
-        self.diff_current = false;
-        self.diff_cancel.cancel();
-        self.diff_generation += 1;
         self.scan_cancel.cancel();
         self.scan_cancel = Cancellation::default();
         self.generation += 1;
@@ -585,13 +580,6 @@ impl Editor {
     fn set_diff_target(&mut self, entry: Change) {
         self.diff_cancel.cancel();
         self.diff_generation += 1;
-        if self
-            .focused
-            .as_ref()
-            .is_none_or(|old| old.path != entry.path || old.group != entry.group)
-        {
-            self.diff_options = Default::default();
-        }
         self.focused = Some(entry);
         self.diff_current = false;
         self.diff_error = None;
@@ -606,7 +594,6 @@ impl Editor {
             || self.file_confirmation.is_some()
             || self.patch_picking
             || self.has_working_queue()
-            || self.loading
         {
             self.diff_deferred = true;
             return;
@@ -626,13 +613,13 @@ impl Editor {
         let git = self.git.clone();
         let tx = self.sender.clone();
         let ctx = ctx.clone();
-        let options = self.diff_options;
         let lease = self.read_workers.start(cancel.clone());
         thread::spawn(move || {
             let _lease = lease;
             #[cfg(test)]
             crate::history_cache::tests::wait_for_read(&context.repository.worktree);
-            let result = git.file_diff(&context, &entry, options, &cancel);
+            let git = git.as_ref().clone().with_foreground_reads(true);
+            let result = git.file_diff_preview(&context, &entry, &cancel);
             let _ = tx.send(Event::Diff(generation, result));
             ctx.request_repaint();
         });
@@ -750,18 +737,9 @@ impl Editor {
                                 .focused
                                 .as_ref()
                                 .map(|entry| (entry.group, entry.path.clone()));
-                            let same_preview = self.displayed_file == file
-                                && self.diff.as_ref().is_some_and(|previous| {
-                                    previous.kind == diff.kind
-                                        && previous.availability == diff.availability
-                                        && previous.lines == diff.lines
-                                });
                             self.diff = Some(diff);
                             self.displayed_file = file;
                             self.diff_current = true;
-                            if !same_preview {
-                                self.diff_view.reset();
-                            }
                         }
                         Err(error) => self.diff_error = Some(error_text(error)),
                     }
@@ -917,7 +895,6 @@ impl Editor {
             && self.file_confirmation.is_none()
             && self.leave.is_none()
             && !self.action_busy()
-            && !self.loading
             && self.current_context().is_some()
             && let Some(entry) = self.focused.clone()
         {
@@ -1547,31 +1524,8 @@ impl Editor {
                 }
                 return;
             }
-            let current = self.diff_current
-                && !self.loading
-                && !self.refresh_pending
-                && !self.action_busy()
-                && self.snapshot_error.is_none();
-            let has_text = self
-                .diff
-                .as_ref()
-                .is_some_and(|diff| diff.kind == shovel_core::diff::Kind::Text);
-            let mut options_changed = false;
             ui.horizontal(|ui| {
                 ui.set_min_height(22.);
-                if has_text {
-                    ui.add_enabled_ui(current, |ui| {
-                        options_changed |= ui
-                            .checkbox(
-                                &mut self.diff_options.ignore_whitespace,
-                                text("DiffIgnoreWhitespace"),
-                            )
-                            .changed();
-                        options_changed |= ui
-                            .checkbox(&mut self.diff_options.whole_file, text("DiffWholeFile"))
-                            .changed();
-                    });
-                }
                 if let Some(error) = &self.diff_error {
                     ui.add(
                         egui::Label::new(
@@ -1581,7 +1535,7 @@ impl Editor {
                         .truncate(),
                     )
                     .on_hover_text(error);
-                } else if self.diff.is_some() && !current {
+                } else if self.diff.is_some() && !self.diff_current {
                     ui.weak(text(if self.focused.is_none() {
                         "DiffNoLongerChanged"
                     } else {
@@ -1591,23 +1545,10 @@ impl Editor {
                     ui.weak(text("DiffLoading"));
                 }
             });
-            if options_changed && let Some(entry) = self.focused.clone() {
-                self.show_diff(entry, &ctx);
-            }
-            if let Some(diff) = &self.diff
-                && let Some(ids) = ui
-                    .push_id(("local-diff", self.displayed_file.as_ref().map(|(_, path)| path.as_str())), |ui| {
-                        let actions = if current && !options_changed {
-                            crate::diff_view::HunkActions::Ready
-                        } else {
-                            crate::diff_view::HunkActions::Waiting
-                        };
-                        self.diff_view.show(ui, diff, actions)
-                    })
-                    .inner
-                && let Some(preview) = diff.hunks.clone()
-            {
-                self.submit(Action::Hunks { preview, ids }, &ctx);
+            if let Some(diff) = &self.diff {
+                ui.push_id(("local-diff", self.displayed_file.as_ref().map(|(_, path)| path.as_str())), |ui| {
+                    self.diff_view.show(ui, diff);
+                });
             }
         });
         if let Some(review) = &self.confirm_amend {

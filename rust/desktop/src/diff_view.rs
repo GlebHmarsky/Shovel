@@ -1,33 +1,17 @@
-//! Shared virtualized unified/paired presentation. Row selection maps back to
-//! immutable native hunk IDs in either layout, including padded rows.
+//! Shared virtualized unified and paired diff presentation.
 use crate::strings::{self, text};
 use eframe::egui::{self, Color32, RichText};
-use shovel_core::diff::{FileDiff, HunkAvailability, Kind, Line, LineKind, Summary};
-use std::collections::BTreeSet;
+use shovel_core::diff::{FileDiff, Kind, Line, LineKind, Summary};
 
 pub struct View {
     pub side_by_side: bool,
     pub font_size: f32,
-    selected: BTreeSet<usize>,
-    anchor: Option<usize>,
-    scroll_to: Option<usize>,
-    navigation: Option<usize>,
-}
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum HunkActions {
-    ReadOnly,
-    Waiting,
-    Ready,
 }
 impl Default for View {
     fn default() -> Self {
         Self {
             side_by_side: false,
             font_size: 12.,
-            selected: BTreeSet::new(),
-            anchor: None,
-            scroll_to: None,
-            navigation: None,
         }
     }
 }
@@ -71,18 +55,7 @@ fn align(lines: &[Line]) -> Vec<Pair> {
     pairs
 }
 impl View {
-    pub fn reset(&mut self) {
-        self.selected.clear();
-        self.anchor = None;
-        self.scroll_to = None;
-        self.navigation = None;
-    }
-    pub fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        diff: &FileDiff,
-        actions: HunkActions,
-    ) -> Option<Vec<usize>> {
+    pub fn show(&self, ui: &mut egui::Ui, diff: &FileDiff) {
         if diff.kind == Kind::Binary {
             ui.columns(2, |columns| {
                 card(
@@ -98,63 +71,7 @@ impl View {
                     diff.new_extension.as_deref(),
                 );
             });
-            return None;
-        }
-        let mutations = actions == HunkActions::Ready;
-        let mut apply = None;
-        if diff.kind == Kind::Text {
-            ui.horizontal(|ui| {
-                ui.checkbox(&mut self.side_by_side, text("DiffSideBySide"));
-                if let Some(preview) = &diff.hunks {
-                    let label = if preview.staged() {
-                        "HunkUnstageMany"
-                    } else {
-                        "HunkStageMany"
-                    };
-                    if ui
-                        .add_enabled(
-                            mutations && !self.selected.is_empty(),
-                            egui::Button::new(strings::format(
-                                label,
-                                &[&self.selected.len().to_string()],
-                            )),
-                        )
-                        .on_disabled_hover_text(text("HunkSelectChange"))
-                        .clicked()
-                    {
-                        apply = Some(self.selected.iter().copied().collect());
-                    }
-                }
-                let hunks = diff
-                    .lines
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, l)| l.kind == LineKind::Hunk)
-                    .map(|(i, _)| i)
-                    .collect::<Vec<_>>();
-                for (next, key) in [(false, "DiffPreviousHunk"), (true, "DiffNextHunk")] {
-                    if ui
-                        .add_enabled(!hunks.is_empty(), egui::Button::new(text(key)))
-                        .clicked()
-                    {
-                        self.scroll_to = if next {
-                            hunks
-                                .iter()
-                                .copied()
-                                .find(|i| *i > self.navigation.unwrap_or(0))
-                                .or_else(|| hunks.first().copied())
-                        } else {
-                            hunks
-                                .iter()
-                                .copied()
-                                .rev()
-                                .find(|i| *i < self.navigation.unwrap_or(usize::MAX))
-                                .or_else(|| hunks.last().copied())
-                        };
-                        self.navigation = self.scroll_to;
-                    }
-                }
-            });
+            return;
         }
         let reason = match diff.kind {
             Kind::Directory => Some("DiffSummaryDirectory"),
@@ -180,78 +97,39 @@ impl View {
                     &diff.removed.to_string(),
                 ],
             ));
-            if actions != HunkActions::ReadOnly && diff.availability != HunkAvailability::Available {
-                ui.label(text(match diff.availability {
-                    HunkAvailability::ChangeType => "HunkUnavailableChangeType",
-                    HunkAvailability::PreviewOptions => "HunkUnavailablePreviewOptions",
-                    HunkAvailability::ContentType => "HunkUnavailableContentType",
-                    HunkAvailability::Filtered => "HunkUnavailableFiltered",
-                    _ => "HunkUnavailableNoChanges",
-                }));
-            }
         }
         if diff.lines.is_empty() {
             if diff.kind == Kind::Text {
                 ui.label(text("DiffNoTextChanges"));
             }
-            return apply;
+            return;
         }
         let font = self.font_size.clamp(9., 24.);
+        let spacing = ui.spacing().item_spacing;
         let height = font + 6.;
-        let pairs = if self.side_by_side {
-            align(&diff.lines)
-        } else {
-            (0..diff.lines.len())
-                .map(|i| Pair {
-                    old: Some(i),
-                    new: None,
-                    shared: true,
-                })
-                .collect()
-        };
-        let mut scroll = egui::ScrollArea::both().id_salt("diff_rows");
-        if let Some(target) = self.scroll_to {
-            if let Some(row) = pairs
-                .iter()
-                .position(|p| p.old == Some(target) || p.new == Some(target))
-            {
-                scroll = scroll.vertical_scroll_offset(row as f32 * height);
-            }
-            self.scroll_to = None;
-        }
         let width = ui.available_width().max(250.);
-        let mut clicked = None;
-        scroll.show_rows(ui, height, pairs.len(), |ui, range| {
+        let pairs = self.side_by_side.then(|| align(&diff.lines));
+        let half = if pairs.is_some() {
+            let chars = diff.lines.iter().map(|line| line.text.len()).max().unwrap_or(0) + 12;
+            let advance = ui.fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(font), '0'));
+            ((width - spacing.x) / 2.).max(chars as f32 * advance + 8.)
+        } else {
+            0.
+        };
+        let rows = pairs.as_ref().map_or(diff.lines.len(), Vec::len);
+        egui::ScrollArea::both().id_salt("diff_rows").show_rows(ui, height, rows, |ui, range| {
             for index in range {
-                let pair = &pairs[index];
-                let source = pair.old.or(pair.new).unwrap();
-                let hunk = diff
-                    .hunks
-                    .as_ref()
-                    .and_then(|p| {
-                        p.hunks()
-                            .iter()
-                            .find(|h| source >= h.start && source < h.start + h.count)
-                    })
-                    .map(|h| h.id);
-                let selected = hunk.is_some_and(|h| self.selected.contains(&h));
-                ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    let Some(pair) = pairs.as_ref().map(|pairs| &pairs[index]) else {
+                        row(ui, &diff.lines[index], None, font, width);
+                        return;
+                    };
                     if pair.shared {
-                        if let Some(i) = pair.old {
-                            let response = row(ui, &diff.lines[i], None, font, width, selected);
-                            if response.clicked() {
-                                clicked = hunk;
-                            }
-                        }
+                        row(ui, &diff.lines[pair.old.unwrap()], None, font, width);
                     } else {
-                        let half = (width - ui.spacing().item_spacing.x) / 2.;
                         for (side, line) in [(false, pair.old), (true, pair.new)] {
                             if let Some(i) = line {
-                                if row(ui, &diff.lines[i], Some(side), font, half, selected)
-                                    .clicked()
-                                {
-                                    clicked = hunk;
-                                }
+                                row(ui, &diff.lines[i], Some(side), font, half);
                             } else {
                                 ui.allocate_space(egui::vec2(half, height));
                             }
@@ -260,41 +138,6 @@ impl View {
                 });
             }
         });
-        if let Some(hunk) = clicked {
-            let modifiers = ui.input(|i| i.modifiers);
-            if modifiers.shift
-                && let Some(anchor) = self.anchor
-            {
-                self.selected.extend(anchor.min(hunk)..=anchor.max(hunk));
-            } else if modifiers.ctrl {
-                if !self.selected.remove(&hunk) {
-                    self.selected.insert(hunk);
-                }
-                self.anchor = Some(hunk);
-            } else {
-                self.selected.clear();
-                self.selected.insert(hunk);
-                self.anchor = Some(hunk);
-            }
-        }
-        if ui.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C))
-            && !self.selected.is_empty()
-            && let Some(preview) = &diff.hunks
-        {
-            let copied = preview
-                .hunks()
-                .iter()
-                .filter(|h| self.selected.contains(&h.id))
-                .flat_map(|h| {
-                    diff.lines[h.start..h.start + h.count]
-                        .iter()
-                        .map(|l| l.text.as_str())
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            ui.ctx().copy_text(copied);
-        }
-        apply
     }
 }
 fn size(summary: &Summary) -> String {
@@ -396,45 +239,31 @@ fn card(ui: &mut egui::Ui, old: bool, summary: &Summary, extension: Option<&str>
         }
     });
 }
-fn row(
-    ui: &mut egui::Ui,
-    line: &Line,
-    side: Option<bool>,
-    font: f32,
-    width: f32,
-    selected: bool,
-) -> egui::Response {
-    let (label, fill) = line_style(ui, line, side, font, selected, 6);
-    egui::Frame::new()
-        .fill(fill)
-        .show(ui, |ui| {
-            ui.add_sized(
-                [width, font + 6.],
-                egui::Label::new(label).extend().sense(egui::Sense::click()),
-            )
-        })
-        .inner
+fn row(ui: &mut egui::Ui, line: &Line, side: Option<bool>, font: f32, width: f32) {
+    let (label, color, fill) = line_style(ui, line, side, 6);
+    let galley = ui.painter().layout_no_wrap(label, egui::FontId::monospace(font), color);
+    let width = if side.is_none() { width.max(galley.size().x + 8.) } else { width };
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, font + 6.), egui::Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, galley.text()));
+    let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+    painter.rect_filled(rect, 0., fill);
+    let origin = egui::pos2(rect.left() + 4., rect.center().y - galley.size().y / 2.);
+    painter.galley(origin, galley, color);
 }
 
 fn line_style(
     ui: &egui::Ui,
     line: &Line,
     side: Option<bool>,
-    font: f32,
-    selected: bool,
     digits: usize,
-) -> (RichText, Color32) {
+) -> (String, Color32, Color32) {
     let p = crate::workspace_style::Palette::current(ui);
-    let (mut color, mut fill) = match line.kind {
+    let (color, fill) = match line.kind {
         LineKind::Added => (p.diff_added_text, p.diff_added_background),
         LineKind::Removed => (p.diff_removed_text, p.diff_removed_background),
         LineKind::Hunk => (p.focus, p.raised),
         _ => (p.text, Color32::TRANSPARENT),
     };
-    if selected {
-        color = p.selection_text;
-        fill = p.active_selection;
-    }
     let old = line.old.map(|n| n.to_string()).unwrap_or_default();
     let new = line.new.map(|n| n.to_string()).unwrap_or_default();
     let marker = match line.kind {
@@ -443,17 +272,14 @@ fn line_style(
         _ => ' ',
     };
     let label = match side {
-        None => format!("{old:>digits$} {new:>digits$} {marker} {}", line.text),
+        None => format!("{old:<digits$} {new:<digits$} {marker} {}", line.text),
         Some(new_side) => format!(
-            "{:>digits$} {marker} {}",
+            "{:<digits$} {marker} {}",
             if new_side { new } else { old },
             line.text
         ),
     };
-    (
-        RichText::new(label).monospace().size(font).color(color),
-        fill,
-    )
+    (label, color, fill)
 }
 
 /// A local example painted with the same line numbers, markers and colors as a real patch.
@@ -482,7 +308,8 @@ pub(super) fn settings_preview(ui: &mut egui::Ui, paired: bool, font: f32) {
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(4., 1.);
                     let cell = |ui: &mut egui::Ui, line: &Line, side, width| {
-                        let (label, fill) = line_style(ui, line, side, font, false, 1);
+                        let (label, color, fill) = line_style(ui, line, side, 1);
+                        let label = RichText::new(label).monospace().size(font).color(color);
                         egui::Frame::new().fill(fill).show(ui, |ui| {
                             ui.set_min_width(width);
                             ui.add(egui::Label::new(label).extend().selectable(false));

@@ -2,6 +2,10 @@
 
 Updated 2026-11-18. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
 
+## Diff follow-ups
+
+- [ ] Repair Previous Change and Next Change navigation before returning those controls to the diff pane. The reported issue is that they fail to move to the next or previous hunk.
+
 ## Current phase
 
 **2026-11-16 owner decision:** replace the C# tree on master with Rust and start GitHub Windows builds. This supersedes prior no-merge/checkpoint restrictions, not the unfinished parity criteria. Preserve old releases and update-feed isolation. C# source is archived at codex/csharp-archive-0.47.0.

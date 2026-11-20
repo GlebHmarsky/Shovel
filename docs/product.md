@@ -16,6 +16,10 @@ The current branch and operation progress share one line below the repository na
 
 Commit shows the author, subject, message body and changed paths across the pane. Changed Files shows a path list with change letters and a diff. Drag the divider to set the list width. Shovel saves it across sessions. Use Repository → Refresh or F5 to retry an inspector read.
 
+## Local Changes diff pane (0.52.5)
+
+Text and line numbers start at the left edge of each diff column. The pane omits whitespace, whole-file, side-by-side, hunk and change-navigation controls. File selection can open a diff during a background status scan, with the previous diff visible until the replacement is ready.
+
 ## Local Changes (0.51.5)
 
 The selected repository's latest status scan supplies file rows immediately when available. Shovel verifies the worktree in the background before accepting file changes. Files use one repository-relative path per line. The Unstaged and Staged sections have one action each. Hold Shift to act on the entire section. F5 retries status and draft reads.

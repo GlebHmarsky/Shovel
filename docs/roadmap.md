@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Diff layout and selected-file latency in Rust 0.52.5
+
+The shared diff pane left-aligns its line numbers and text. Whitespace, whole-file, side-by-side, hunk and change-navigation controls are hidden in the pane. The reported navigation failure is tracked in TODO. The Local Changes viewer can read a newly selected diff while a status scan is held. A common text preview requests Git's patch and line counts together, checks the selected index entry, and skips hunk preparation. Stage and Unstage overlap targeted status and index reads. A byte-for-byte match on an ordinary index can replace a second native index enumeration, while split, sparse and alternate indexes still use native verification.
+
+On the same disposable Windows fixture with 2,000 text files, 1,001 branches and 256 MiB of binary assets, the median of three samples per action changed from 1,895 to 1,467 ms for staged rows and from 3,627 to 3,089 ms for Stage plus the selected diff. Unstage changed from 1,642 to 1,130 ms for rows and from 2,986 to 1,729 ms including the diff. These samples cover the native service pipeline. Live desktop click-to-paint timing remains open.
+
+Twenty focused checks, all-target Clippy and diff checks passed. The 18-check smoke suite passed in 45.65 seconds on source fingerprint `BF327DD1B258AEE3502FCC61E84B2BAE234C269E45DE71D7AF1F82694C7D217C`.
+
 ## Refresh continuity, stash markers, and keyboard discard in Rust 0.52.4
 
 Read-only CatChess inspection found nine commits to pull. Stash bases for `stash@{1}` and `stash@{2}` were detached from all branch, remote and tag roots. `stash@{0}` and `stash@{3}` had reachable bases. The history projection adds markers only beside bases already in the native commit walk and retains the normal branch lanes.

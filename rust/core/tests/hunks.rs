@@ -59,10 +59,14 @@ fn selected_crlf_hunks_stage_and_unstage_without_touching_other_changes() {
         .file_diff(&context, entry, Options::default(), &cancel)
         .unwrap();
     assert_eq!(diff.availability, HunkAvailability::Available);
+    let read_only = git.file_diff_preview(&context, entry, &cancel).unwrap();
+    assert_eq!(read_only.lines, diff.lines);
+    assert_eq!((read_only.added, read_only.removed), (diff.added, diff.removed));
+    assert!(read_only.hunks.is_none());
     let preview = diff.hunks.unwrap();
     assert_eq!(preview.hunks().len(), 3);
     let result = git
-        .execute_working(
+        .execute_working_for_editor(
             &context,
             &Action::Hunks {
                 preview,
@@ -90,7 +94,7 @@ fn selected_crlf_hunks_stage_and_unstage_without_touching_other_changes() {
         .unwrap();
     assert_eq!(preview.hunks().len(), 2);
     let result = git
-        .execute_working(
+        .execute_working_for_editor(
             &context,
             &Action::Hunks {
                 preview,

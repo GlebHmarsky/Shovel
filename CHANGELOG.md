@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.52.5 - 2026-11-20
+
+- Left-align text diffs and their line numbers. Hide inline whitespace, layout, hunk and change-navigation controls.
+- Open selected diffs while Local Changes refreshes. Read the patch and line counts together and skip hunk preparation for previews.
+- Overlap scoped status and index reads after staging.
+
 ## Rust 0.52.4 - 2026-11-20
 
 - Focus Discard by default. Use Enter to confirm or Left and Enter to cancel.
