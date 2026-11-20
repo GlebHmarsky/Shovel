@@ -799,6 +799,12 @@ fn stale_confirmation_disables_discard_and_delete_does_not_allow_commit_shortcut
     );
     assert!(!h.editor.busy && h.editor.open);
     assert_eq!(h.editor.context.as_ref().unwrap().repository.head, head);
+    let result = process::run(
+        &h.editor.git.request(&h.editor.path, ["add", "--", "file.txt"], Lifetime::AcceptedCommand, 65536),
+        &Cancellation::default(),
+        None,
+    ).unwrap();
+    assert!(result.success());
     let updated = h
         .editor
         .git
@@ -1092,4 +1098,22 @@ fn lfs_submenu_applies_attribute_reset_and_tracked_ignore_is_disabled() {
             .iter()
             .any(|e| e.path == "file.txt" && e.group == Group::Staged)
     );
+}
+
+#[test]
+fn discard_starts_focused_and_left_enter_cancels() {
+    let mut h = Harness::new();
+    h.click("Unstaged · Modified · file.txt");
+    h.key(egui::Key::Delete, egui::Modifiers::NONE);
+    assert!(h.editor.file_confirmation.is_some());
+    h.key(egui::Key::ArrowLeft, egui::Modifiers::NONE);
+    h.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(h.editor.file_confirmation.is_none());
+    assert_eq!(fs::read(h.editor.path.join("file.txt")).unwrap(), b"worktree\n");
+
+
+    h.key(egui::Key::Delete, egui::Modifiers::NONE);
+    h.key(egui::Key::Enter, egui::Modifiers::NONE);
+    h.until(|editor| !editor.busy && editor.file_confirmation.is_none());
+    assert_eq!(fs::read(h.editor.path.join("file.txt")).unwrap(), b"staged\n");
 }

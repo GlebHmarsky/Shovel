@@ -185,7 +185,7 @@ impl super::Workspace {
                 tab.view.stale = true;
                 tab.view.external_history_change = true;
                 tab.refresh_again = true;
-                tab.divergence.invalidate();
+                tab.divergence.mark_stale();
                 tab.remotes.invalidate();
                 tab.sidebar.invalidate();
                 for view in &mut self.stash_views {

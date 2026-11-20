@@ -88,7 +88,6 @@ pub struct Editor {
     initialized: bool,
     loading: bool,
     scan_cancel: Cancellation,
-    target_rows_current: bool,
     snapshot_error: Option<String>,
     refresh_pending: bool,
     generation: u64,
@@ -176,7 +175,6 @@ impl Editor {
             initialized: false,
             loading: false,
             scan_cancel: Cancellation::default(),
-            target_rows_current: false,
             snapshot_error: None,
             refresh_pending: false,
             generation: 0,
@@ -276,7 +274,6 @@ impl Editor {
         self.preview_rows = None;
         self.loading = false;
         self.refresh_pending = false;
-        self.target_rows_current = false;
         self.diff_deferred = false;
         self.confirm_amend = None;
         self.file_confirmation = None;
@@ -940,7 +937,6 @@ impl Editor {
             return;
         }
         self.snapshot_error = None;
-        self.target_rows_current = false;
         let resolved_path = self
             .conflict
             .as_ref()
@@ -1538,7 +1534,7 @@ impl Editor {
         self.open_conflict();
         egui::CentralPanel::default().show(ui, |ui| {
             if let Some(pane) = &mut self.conflict {
-                let ready = !self.busy && !self.loading && self.snapshot_error.is_none();
+                let ready = !self.busy && self.snapshot_error.is_none();
                 ui.add_enabled_ui(ready, |ui| pane.show(ui));
                 return;
             }

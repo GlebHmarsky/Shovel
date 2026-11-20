@@ -444,6 +444,7 @@
   "CommitWaitForRead": "Wait for the local snapshot or current operation. Refresh to retry a failed read.",
   "CommitPreviousStatus": "Refresh failed. Showing previous changes. Refresh to enable file actions.",
   "CommitStatusUnavailable": "Could not read local changes. Refresh to retry.",
+  "CommitSelectionGone": "The selected changes are no longer available.",
   "CommitStale": "The repository or index changed. Refresh before retrying. Whole-file staging uses current on-disk contents.",
   "CommitInvalidPath": "This path cannot be used as a file within the current worktree.",
   "CommitMessageRequired": "Enter a commit subject.",

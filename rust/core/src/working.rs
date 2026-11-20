@@ -87,6 +87,8 @@ pub enum Action {
 pub enum Error {
     #[error("CommitStale")]
     Stale,
+    #[error("CommitSelectionGone")]
+    SelectionGone,
     #[error("CommitInvalidPath")]
     InvalidPath,
     #[error("CommitMessageRequired")]
@@ -809,7 +811,29 @@ impl Git {
         action: &Action,
         output: Option<OutputCallback>,
     ) -> Result<Completed, Error> {
-        self.execute_working_inner(context, action, output, true)
+        let result = self.execute_working_inner(context, action, output.clone(), true);
+        let (Action::Stage(entries) | Action::Unstage(entries)) = action else {
+            return result;
+        };
+        if !matches!(result, Err(Error::Stale)) {
+            return result;
+        }
+        let fresh = self.refresh_working_copy(&context.repository, &Cancellation::default())?;
+        if fresh.repository.head != context.repository.head
+            || fresh.repository.branch != context.repository.branch
+            || fresh.repository.operations != context.repository.operations
+            || fresh.config_stamp != context.config_stamp
+        {
+            return result;
+        }
+        // Carry only the original reviewed rows forward. A fresh scan may also
+        // contain new work, a newly conflicted path, or a changed staged blob.
+        let same = entries.iter().filter(|entry| fresh.change(entry.group, &entry.path) == Some(entry)).cloned().collect::<Vec<_>>();
+        if same.is_empty() {
+            return Err(Error::SelectionGone);
+        }
+        let refreshed = if matches!(action, Action::Stage(_)) { Action::Stage(same) } else { Action::Unstage(same) };
+        self.execute_working_inner(&fresh, &refreshed, output, true)
     }
     fn execute_working_inner(
         &self,
@@ -926,7 +950,12 @@ impl Git {
                 }
                 let mut targets = BTreeSet::new();
                 for entry in entries {
-                    path(root, &entry.path)?;
+                    let file = path(root, &entry.path)?;
+                    if targeted && !unstage && entry.code != 'D'
+                        && fs::symlink_metadata(file).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+                    {
+                        continue;
+                    }
                     targets.insert(entry.path.clone());
                     if let Some(old) = &entry.original
                         && (unstage || entry.code == 'R')
@@ -934,6 +963,9 @@ impl Git {
                         path(root, old)?;
                         targets.insert(old.clone());
                     }
+                }
+                if targets.is_empty() {
+                    return Err(Error::SelectionGone);
                 }
                 for target in targets {
                     input.extend_from_slice(target.as_bytes());

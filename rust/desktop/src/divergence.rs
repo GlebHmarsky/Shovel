@@ -41,6 +41,7 @@ pub struct Counter {
     incoming_commits: HashSet<String>,
     busy: bool,
     upstream: String,
+    fingerprint: String,
     observed: String,
     error: Option<String>,
     cancel: Cancellation,
@@ -60,6 +61,7 @@ impl Default for Counter {
             incoming_commits: HashSet::new(),
             busy: false,
             upstream: String::new(),
+            fingerprint: String::new(),
             observed: String::new(),
             error: None,
             cancel: Default::default(),
@@ -74,10 +76,14 @@ impl Drop for Counter {
     }
 }
 impl Counter {
+    pub fn mark_stale(&mut self) {
+        self.stale = true;
+    }
     pub fn invalidate(&mut self) {
         self.cancel.cancel();
         self.generation += 1;
         self.busy = false;
+        self.fingerprint.clear();
         self.stale = true;
     }
     pub fn start(
@@ -87,7 +93,14 @@ impl Counter {
         ctx: &egui::Context,
         workers: &crate::read_workers::Workers,
     ) {
+        if self.owner == snapshot.identity.fingerprint && self.fingerprint == snapshot.fingerprint
+            && (self.busy || self.error.is_none())
+        {
+            self.stale = false;
+            return;
+        }
         self.invalidate();
+        self.fingerprint.clone_from(&snapshot.fingerprint);
         let upstream = snapshot.upstream.as_deref().unwrap_or_default();
         if self.owner != snapshot.identity.fingerprint
             || self.branch != snapshot.branch
@@ -313,7 +326,7 @@ mod tests {
                 };
                 assert!(has_text_color("local", palette.history_text));
                 assert!(has_text_color("master", palette.diff_added_text));
-                assert!(has_text_color("team/topic", palette.muted));
+                assert!(has_text_color("team/topic", palette.muted.lerp_to_gamma(palette.canvas, 0.16)));
                 output.drop_without_applying_deltas();
                 assert!(app.tabs[0].history.is_some());
                 assert!(!app.tabs[0].loading);
@@ -402,8 +415,12 @@ mod tests {
             .unwrap();
         let (started, release) = crate::history_cache::tests::hold_read(updated.worktree.clone());
         let counter = &mut app.tabs[0].divergence;
-        counter.start(git, &updated, &ctx, &app.read_workers);
+        counter.start(git.clone(), &updated, &ctx, &app.read_workers);
         started.recv_timeout(Duration::from_secs(5)).unwrap();
+        let generation = counter.generation;
+        counter.mark_stale();
+        counter.start(git, &updated, &ctx, &app.read_workers);
+        assert_eq!(counter.generation, generation);
         assert_eq!(counter.display().ahead.as_deref(), Some("1"));
         assert!(counter.is_incoming(&incoming));
         release.send(()).unwrap();

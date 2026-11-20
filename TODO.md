@@ -273,6 +273,8 @@ Current partial implementation includes selected submodule Open/Update/Sync with
   **Audit Partial:** stash native tests cover exact Create/Pop state, conflicts/stale ordinals/drop and failed removal. Complete quick-action entry points, broad filters and desktop confirmation acceptance remain. Inventory routing: 6 baseline files.
 - [ ] **R60** History context menu captures immutable row SHA with zero preparation; full SHA copy, detached Checkout, confirmed Soft/Mixed/Hard Reset with correct index/worktree outcomes, Revert including explicit merge mainline and native signing/hooks/conflicts.
 
+  Rust 0.52.4 restores reachable stash markers and preserves the visible row on refresh. [Scope](docs/roadmap.md#refresh-continuity-stash-markers-and-keyboard-discard-in-rust-0524).
+
   Rust 0.52.3 adds commit-targeted branch/tag creation, merge, noninteractive rebase, cherry-pick, branch submenu, patch export, and tracked Local Changes comparison. [Scope](docs/roadmap.md#commit-actions-and-incoming-history-in-rust-0523).
   **Audit Partial:** history_actions.rs and native tests cover three resets, revert/mainline/hooks/stale refs; UI captures immutable rows. Native menu/keyboard and broader signing/filter/submodule cases remain. Inventory routing: 2 baseline files.
 - [ ] **R61** Sequence detection/banner/Resolve/Continue/Skip/Abort for supported merge/rebase/cherry-pick/revert states; exact reviewed target and destructive confirmation, unresolved guard, native message/exec behavior, reopen observes actual state. Stash conflicts never invent a sequence.

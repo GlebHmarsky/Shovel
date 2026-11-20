@@ -80,6 +80,8 @@ Returning to inline Local Changes keeps the last file list, selection, diff and 
 
 ## Checkout and remembered workspace state (0.47.0 Beta)
 
+**Rust 0.52.4.** Delete opens Discard with focus on the confirmation button. Enter confirms. Left moves focus to Cancel. History refresh follows the newest commits when the view is already at the top and keeps the visible commit in place when browsing older rows. Reachable stash bases have a gray marker in history. Detached stashes remain in the sidebar. Whole-file staging stays available during routine refresh.
+
 **Rust 0.52.3.** Right-click a commit for Git actions, patch export, and a comparison with tracked Local Changes. Incoming commits and their refs use muted gray.
 
 **Rust 0.52.2.** Saved stashes are listed in the sidebar. Their rows use branch spacing and gray branch icons. Double-click a stash to inspect it. History follows branches, remote-tracking branches, tags and HEAD. A commit independently reachable through those roots appears as a regular commit.

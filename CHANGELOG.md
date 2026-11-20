@@ -1,5 +1,13 @@
 # Changelog
 
+## Rust 0.52.4 - 2026-11-20
+
+- Focus Discard by default. Use Enter to confirm or Left and Enter to cancel.
+- Keep the reading position during history refreshes and reveal incoming commits when already at the top.
+- Restore gray stash markers at reachable bases. Keep detached-base stashes in the sidebar.
+- Retain Pull and Push counts while a refreshed comparison is pending. Dim incoming rows slightly and use subtle, lighter-bottom avatar gradients.
+- Keep whole-file staging and history actions available during routine reads. Skip selected changes that have disappeared.
+
 ## Rust 0.52.3 - 2026-11-19
 
 - Right-click a commit to create a branch or tag, merge or rebase the current branch, reset, check out the commit, cherry-pick, or revert.

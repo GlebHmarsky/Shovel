@@ -525,3 +525,32 @@ fn standard_lfs_status_hashes_hydrated_content_without_running_helpers() {
     assert!(review.entries.iter().any(|e| e.path == "art.asset"));
     assert!(!root.join("helper-ran").exists());
 }
+
+#[test]
+fn editor_stage_keeps_working_when_other_paths_change_or_a_selection_disappears() {
+    let (temp, git) = fixture();
+    let root = temp.path();
+    fs::write(root.join("one"), b"base").unwrap();
+    fs::write(root.join("other"), b"base").unwrap();
+    command(&git, root, &["add", "--", "one", "other"]);
+    command(&git, root, &["commit", "-m", "base"]);
+    fs::write(root.join("one"), b"original change").unwrap();
+    fs::write(root.join("vanishing"), b"untracked").unwrap();
+    let cancel = Cancellation::default();
+    let before = git.working_copy(root, &cancel).unwrap();
+    let one = before.change(Group::Unstaged, "one").unwrap().clone();
+    let gone = before.change(Group::Untracked, "vanishing").unwrap().clone();
+    fs::remove_file(root.join("vanishing")).unwrap();
+    fs::write(root.join("one"), b"latest change").unwrap();
+    fs::write(root.join("other"), b"external stage").unwrap();
+    command(&git, root, &["add", "--", "other"]);
+
+    let result = git.execute_working_for_editor(&before, &Action::Stage(vec![one, gone.clone()]), None).unwrap();
+    assert!(result.succeeded());
+    assert_eq!(command(&git, root, &["show", ":one"]), "latest change");
+    assert_eq!(command(&git, root, &["show", ":other"]), "external stage");
+    assert!(matches!(
+        git.execute_working_for_editor(&before, &Action::Stage(vec![gone]), None),
+        Err(Error::SelectionGone)
+    ));
+}

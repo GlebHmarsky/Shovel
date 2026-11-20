@@ -121,6 +121,9 @@ pub struct History {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Cursor {
     pub offset: usize,
+    pub raw_offset: usize,
+    pub inserted_offset: usize,
+    pub ordinary_stash_tips: Box<[String]>,
     pub expected: Option<String>,
     pub graph: graph::Cursor,
 }
@@ -799,7 +802,7 @@ impl Git {
     ) -> Result<Page, Error> {
         let mut args = vec!["log".into(), "--topo-order".into()];
         args.extend(log_options());
-        args.push(format!("--skip={}", cursor.offset));
+        args.push(format!("--skip={}", cursor.raw_offset));
         args.push(format!("--max-count={}", PAGE_SIZE + 1));
         args.extend(["--branches", "--remotes", "--tags"].map(str::to_owned));
         args.extend(history.snapshot.head.iter().cloned());
@@ -832,32 +835,77 @@ impl Git {
     }
 
     fn project_page(history: &History, cursor: &Cursor, raw: &[Commit]) -> Result<Page, Error> {
+        let mut projected = Vec::new();
+        let stash_tips = history.stashes.iter().map(|stash| stash.hash.as_str()).collect::<HashSet<_>>();
+        let mut ordinary_stash_tips = cursor.ordinary_stash_tips.iter().cloned().collect::<HashSet<_>>();
+        for (raw_index, commit) in raw.iter().enumerate() {
+            let stashes = history
+                .stashes
+                .iter()
+                .filter(|stash| (2..=3).contains(&stash.parents.len())
+                    && stash.parents.first() == Some(&commit.hash)
+                    && !ordinary_stash_tips.contains(&stash.hash))
+                .collect::<Vec<_>>();
+            let stash_count = stashes.len();
+            for (inserted_index, item) in stashes.into_iter().chain([commit]).enumerate() {
+                if raw_index == 0 && inserted_index < cursor.inserted_offset {
+                    continue;
+                }
+                projected.push((item, raw_index, inserted_index, stash_count));
+            }
+            if stash_tips.contains(commit.hash.as_str()) {
+                ordinary_stash_tips.insert(commit.hash.clone());
+            }
+        }
         if cursor
             .expected
             .as_ref()
-            .is_some_and(|expected| raw.first().is_none_or(|commit| commit.hash != *expected))
+            .is_some_and(|expected| projected.first().is_none_or(|(c, ..)| c.hash != *expected))
         {
             return Err(Error::Changed);
         }
-        let commits = raw
+        let graph_commits = projected
             .iter()
             .take(PAGE_SIZE)
-            .map(|commit| (commit.hash.as_str(), commit.parents.as_slice()));
-        let (graph, next_graph) = graph::build(commits, &cursor.graph)?;
-        let next = raw.get(PAGE_SIZE).map(|commit| Cursor {
-            offset: cursor.offset + graph.len(),
-            expected: Some(commit.hash.clone()),
-            graph: next_graph,
-        });
-        let entries = raw
-            .iter()
+            .map(|&(commit, _, index, count)| {
+                if index == count {
+                    (
+                        commit.hash.as_str(),
+                        commit.parents.as_slice(),
+                        graph::Placement::Commit { stashes: count },
+                    )
+                } else {
+                    (
+                        commit.hash.as_str(),
+                        &commit.parents[..1],
+                        graph::Placement::Stash { index, count },
+                    )
+                }
+            });
+        let (graph, next_graph) = graph::build(graph_commits, &cursor.graph)?;
+        let next = projected
+            .get(PAGE_SIZE)
+            .map(|(commit, raw, inserted, ..)| Cursor {
+                offset: cursor.offset + graph.len(),
+                raw_offset: cursor.raw_offset + raw,
+                inserted_offset: *inserted,
+                ordinary_stash_tips: cursor.ordinary_stash_tips.iter().cloned().chain(
+                    projected.iter().take(PAGE_SIZE).filter(|(item, _, index, count)|
+                        index == count && stash_tips.contains(item.hash.as_str()))
+                        .map(|(item, ..)| item.hash.clone())
+                ).collect(),
+                expected: Some(commit.hash.clone()),
+                graph: next_graph,
+            });
+        let entries = projected
+            .into_iter()
             .zip(graph)
-            .map(|(commit, graph)| {
+            .map(|((commit, _, index, count), graph)| {
                 let references = history
                     .snapshot
                     .references
                     .iter()
-                    .filter(|r| r.hash == commit.hash && !r.name.starts_with("stash@{"))
+                    .filter(|r| r.hash == commit.hash && r.name.starts_with("stash@{") == (index != count))
                     .cloned()
                     .collect();
                 Entry {

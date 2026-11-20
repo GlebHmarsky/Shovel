@@ -105,7 +105,7 @@ enum Event {
     Preview(u64, u64, Option<Box<shovel_core::history_cache::Preview>>),
     InitialHistory(u64, u64, Box<Page>),
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
-    Loaded(u64, u64, history_view::Read, bool),
+    Loaded(u64, u64, history_view::Read, bool, Vec<Cursor>),
     Page(u64, u64, Box<Page>, bool, Option<f32>),
     Located(u64, u64, String, Result<(Page, Vec<Cursor>), String>),
     Failed(u64, u64, history_view::Failure),
@@ -423,7 +423,7 @@ impl Workspace {
         }
         tab.locating = None;
         tab.loading = true;
-        tab.divergence.invalidate();
+        tab.divergence.mark_stale();
         tab.remotes.invalidate();
         tab.sidebar.invalidate();
         tab.view.external_history_change = false;
@@ -438,6 +438,15 @@ impl Workspace {
                     history.snapshot.fingerprint.clone(),
                 )
             });
+        let anchor = (!first).then(|| {
+            let page = tab.page.as_ref()?;
+            if page.cursor.offset == 0 && tab.view.offset.y <= 0.5 {
+                return None;
+            }
+            let index = (tab.view.offset.y / history_row::HEIGHT).floor() as usize;
+            let entry = page.entries.get(index)?;
+            Some((entry.commit.hash.clone(), page.cursor.offset))
+        }).flatten();
         let path = tab.path.clone();
         let id = tab.id;
         let watching = if open {
@@ -479,8 +488,8 @@ impl Workspace {
                     initial.as_ref().map(|_| &publish as &dyn Fn(&Page)),
                     &cancel,
                 );
-                match result {
-                    Ok(read) => Event::Loaded(id, generation, read, first),
+                match result.and_then(|read| history_view::anchor_refresh(&git, read, anchor, &cancel)) {
+                    Ok((read, previous)) => Event::Loaded(id, generation, read, first, previous),
                     Err(error) => Event::Failed(id, generation, error),
                 }
             },
@@ -868,18 +877,7 @@ impl Workspace {
                         }
                     }
                 }
-                Event::Loaded(id, generation, read, first) => {
-                    if let Some(tab) = self
-                        .tabs
-                        .iter_mut()
-                        .chain(self.retained_tabs.iter_mut())
-                        .find(|tab| tab.id == id && tab.view.generation == generation)
-                        && tab.view.external_history_change
-                        && tab.history.is_some()
-                    {
-                        tab.loading = false;
-                        continue;
-                    }
+                Event::Loaded(id, generation, read, first, previous) => {
                     let Some(owner_path) = self
                         .tabs
                         .iter()
@@ -936,7 +934,14 @@ impl Workspace {
                         let watch_mismatch = tab.view.watch.as_ref().is_some_and(|watch| {
                             !watch.covers(&snapshot.identity.fingerprint)
                         });
+                        let replaced_page = matches!(read, history_view::Read::Page(..));
                         tab.publish_history(read, first);
+                        if replaced_page {
+                            tab.previous = previous;
+                        }
+                        if tab.view.external_history_change {
+                            tab.view.stale = true;
+                        }
                         let prewarmed = std::mem::take(&mut tab.view.prewarm);
                         if watch_mismatch {
                             tab.view.watch = None;
@@ -1322,7 +1327,7 @@ impl Workspace {
                 } else {
                     self.tabs[index].refresh_again = true;
                     self.tabs[index].view.stale = true;
-                    self.tabs[index].divergence.invalidate();
+                    self.tabs[index].divergence.mark_stale();
                     self.tabs[index].remotes.invalidate();
                     self.tabs[index].sidebar.invalidate();
                 }
@@ -3324,7 +3329,7 @@ impl eframe::App for Workspace {
                                     && menu.commit.hash == entry.commit.hash
                                     && let Some(command) = menu.show(
                                         ui,
-                                        self.git.is_some() && !tab.view.stale && !tab.view.identity_blocked,
+                                        self.git.is_some() && !tab.view.identity_blocked,
                                     )
                                 {
                                     history_action = Some((menu.clone(), command));

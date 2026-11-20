@@ -178,6 +178,42 @@ pub(super) fn read_page(
     }
     result.map_err(Into::into)
 }
+// Seek only after a changed refresh. Each page keeps its verified cursor
+// chain, so scrolling back still works from the restored position.
+pub(super) fn anchor_refresh(
+    git: &Git,
+    read: Read,
+    anchor: Option<(String, usize)>,
+    cancel: &Cancellation,
+) -> Result<(Read, Vec<Cursor>), Failure> {
+    let (Read::Page(history, first), Some((hash, prior_offset))) = (&read, anchor) else {
+        return Ok((read, Vec::new()));
+    };
+    if first.entries.iter().any(|entry| entry.commit.hash == hash) {
+        return Ok((read, Vec::new()));
+    }
+    let mut previous = Vec::new();
+    let mut page = first.as_ref().clone();
+    let mut nearest = None;
+    while let Some(next) = page.next.clone() {
+        if next.offset > prior_offset.saturating_add(shovel_core::git::PAGE_SIZE * 2) {
+            break;
+        }
+        push_cursor(&mut previous, page.cursor);
+        page = read_page(git, history, &next, cancel)?;
+        if page.entries.iter().any(|entry| entry.commit.hash == hash) {
+            return Ok((Read::Page(history.clone(), Box::new(page)), previous));
+        }
+        if page.cursor.offset <= prior_offset {
+            nearest = Some((page.clone(), previous.clone()));
+        }
+    }
+    if let Some((page, previous)) = nearest {
+        return Ok((Read::Page(history.clone(), Box::new(page)), previous));
+    }
+    Ok((read, Vec::new()))
+}
+
 pub(super) fn vertical_wheel(input: &egui::InputState) -> f32 {
     input.events.iter().filter_map(|event| match event {
         egui::Event::MouseWheel { delta, modifiers, source, .. }
@@ -306,31 +342,30 @@ impl Tab {
     }
 
     fn replace_history_page(&mut self, history: History, page: Page, first: bool) {
-        let anchored_offset = (!first)
-            .then(|| {
-                self.page
-                    .as_ref()
-                    .filter(|old| old.cursor.offset == page.cursor.offset)
-            })
-            .flatten()
-            .and_then(|old| {
-                let offset = self.view.offset;
-                let top = (offset.y / history_row::HEIGHT).floor() as usize;
-                let anchor = old.entries.get(top)?;
-                let new_top = page
-                    .entries
-                    .iter()
-                    .position(|entry| entry.commit.hash == anchor.commit.hash)?;
-                Some(egui::vec2(
-                    offset.x,
-                    offset.y + (new_top as f32 - top as f32) * history_row::HEIGHT,
-                ))
-            });
+        let anchored_offset = (!first).then(|| {
+            let old = self.page.as_ref()?;
+            let offset = self.view.offset;
+            if old.cursor.offset == 0 && offset.y <= 0.5 {
+                return Some(egui::vec2(offset.x, 0.));
+            }
+            let top = (offset.y / history_row::HEIGHT).floor() as usize;
+            let closest = old.entries.iter().enumerate().filter_map(|(index, entry)| {
+                let new_index = page.entries.iter().position(|candidate| candidate.commit.hash == entry.commit.hash)?;
+                Some((index.abs_diff(top), new_index as f32 - index as f32))
+            }).min_by_key(|(distance, _)| *distance);
+            Some(egui::vec2(offset.x, closest.map_or(offset.y, |(_, delta)| {
+                (offset.y + delta * history_row::HEIGHT).max(0.)
+            })))
+        }).flatten();
+        let selected = self.selected.clone();
         if self.view.preview.is_none() {
             self.view.remember(self.page.as_ref(), &self.selected);
         }
         self.previous.clear();
         self.view.restore(&page, &mut self.selected);
+        if !first && page.entries.iter().any(|entry| Some(&entry.commit.hash) == selected.as_ref()) {
+            self.selected = selected;
+        }
         if let Some(offset) = anchored_offset {
             self.view.offset = offset;
             self.view.restore_offset = Some(offset);

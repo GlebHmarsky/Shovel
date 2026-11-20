@@ -388,7 +388,7 @@ impl Pane {
                                             self.selected_file.as_deref() == Some(&entry.path);
                                         let kind = RowKind::Diff {
                                             selected,
-                                            enabled: ready && !self.loading,
+                                            enabled: ready,
                                         };
                                         if file_row(ui, entry, kind) {
                                             chosen = Some(entry.path.clone());

@@ -135,7 +135,7 @@ fn unusual_stash_stays_available_without_adding_a_history_root() {
 }
 
 #[test]
-fn real_git_history_pages_keep_saved_stashes_out_of_the_commit_walk() {
+fn reachable_stashes_annotate_their_actual_base_across_history_pages() {
     let (temp, git) = fixture();
     let root = temp.path();
     let mut stream = String::new();
@@ -195,17 +195,20 @@ fn real_git_history_pages_keep_saved_stashes_out_of_the_commit_walk() {
     let second = git
         .page(&history, first.next.as_ref().unwrap(), &cancel)
         .unwrap();
-    assert_eq!(second.entries.len(), 5);
+    assert_eq!(second.entries.len(), 7);
     assert_eq!(second.cursor.offset, 200);
     assert!(second.next.is_none());
     assert_eq!(history.stashes.len(), 2);
     let entries = first.entries.iter().chain(&second.entries).collect::<Vec<_>>();
     assert_eq!(
-        entries.iter().map(|entry| entry.commit.hash.clone()).collect::<Vec<_>>(),
+        entries.iter().filter(|entry| !entry.graph.is_stash()).map(|entry| entry.commit.hash.clone()).collect::<Vec<_>>(),
         baseline
     );
     for stash in &history.stashes {
-        assert!(!entries.iter().any(|entry| entry.commit.hash == stash.hash));
+        let leaf = entries.iter().position(|entry| entry.commit.hash == stash.hash).unwrap();
+        assert!(entries[leaf].graph.is_stash());
+        assert_eq!(entries[leaf + 1].commit.hash, stash.parents[0]);
+        assert_eq!(entries[leaf].graph.node, entries[leaf + 1].graph.node);
         assert!(!entries.iter().any(|entry| entry.commit.hash == stash.parents[1]));
     }
     assert!(entries[0].commit.message.contains("complete body שלום"));

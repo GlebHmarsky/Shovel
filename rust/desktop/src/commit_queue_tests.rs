@@ -999,7 +999,7 @@ fn stage_and_unstage_keep_the_focused_file_while_an_older_full_read_is_held() {
     let mut h = Harness::new();
     let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
     h.stage("one.txt");
-    h.until(|e| !e.busy && e.target_rows_current && e.loading);
+    h.until(|e| !e.busy && e.loading);
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(h.editor.focused.as_ref().unwrap().group, Group::Staged);
     assert!(
@@ -1031,7 +1031,7 @@ fn stage_and_unstage_keep_the_focused_file_while_an_older_full_read_is_held() {
         .send(Event::Loaded(stale_generation, Box::new(Ok(stale)), None))
         .unwrap();
     release.send(()).unwrap();
-    h.until(|e| !e.loading && !e.target_rows_current);
+    h.until(|e| !e.loading);
     assert!(h.editor.snapshot_error.is_none());
     assert!(
         h.editor
@@ -1047,7 +1047,7 @@ fn failed_wider_scan_keeps_successful_target_rows_and_requires_a_fresh_read() {
     let mut h = Harness::new();
     let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
     h.stage("one.txt");
-    h.until(|e| !e.busy && e.target_rows_current && e.loading);
+    h.until(|e| !e.busy && e.loading);
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     let moved = h._temp.path().join("temporarily moved");
     fs::rename(&h.editor.path, &moved).unwrap();
@@ -1685,4 +1685,18 @@ fn shutdown_waits_for_required_draft_restore_and_saves_newer_typing_before_exit(
     assert_eq!(actual.text, expected);
     assert_eq!(h.git(&["rev-parse", "HEAD"]), head);
     assert_eq!(h.git(&["ls-files", "--stage"]), index);
+}
+
+#[test]
+fn whole_file_stage_remains_available_during_an_ordinary_status_refresh() {
+    let mut h = Harness::new();
+    let (started, release) = crate::history_cache::tests::hold_read(h.editor.path.clone());
+    h.editor.refresh(&h.ctx);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(h.editor.loading);
+    h.stage("one.txt");
+    h.until(|e| !e.busy && e.current_context().is_some_and(|c| c.change(Group::Staged, "one.txt").is_some()));
+    assert_eq!(h.git(&["show", ":one.txt"]), "one");
+    release.send(()).unwrap();
+    h.until(|e| !e.loading);
 }

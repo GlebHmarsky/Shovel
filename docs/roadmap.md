@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## Refresh continuity, stash markers, and keyboard discard in Rust 0.52.4
+
+Read-only CatChess inspection found nine commits to pull. Stash bases for `stash@{1}` and `stash@{2}` were detached from all branch, remote and tag roots. `stash@{0}` and `stash@{3}` had reachable bases. The history projection adds markers only beside bases already in the native commit walk and retains the normal branch lanes.
+
+History reads preserve the viewport anchor across page boundaries and keep a matching upstream comparison alive across repeated refreshes. Local Changes keeps the verified selection usable while scanning. Whole-file staging reconciles changed indexes against the original selected rows, leaves unrelated entries alone and skips disappeared paths.
+
+Thirty-four focused tests, all-target Clippy and diff checks passed. The 18-check smoke suite passed in 34.65 seconds on source fingerprint `55D0668C2CF0FD145D1C84C17ED1B930B5522A827B6181EC12D8CF016200128F`. The keyboard, styling and scroll checks used the headless harness. Live desktop interaction remains unverified.
+
 ## Commit actions and incoming history in Rust 0.52.3
 
 The history context menu targets the selected commit and repository. Branch creation, tagging, merge, noninteractive rebase, reset, checkout, cherry-pick and revert use native Git. Commit patches support binary changes. Local comparison uses tracked index and working-directory changes. Upstream-only commits use gray commit text, ref labels and graph strokes while divergence refresh retains the last known result.

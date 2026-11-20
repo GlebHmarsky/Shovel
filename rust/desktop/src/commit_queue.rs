@@ -207,9 +207,7 @@ impl Editor {
             || self.conflict.as_ref().is_some_and(|pane| pane.mutating)
     }
     pub(super) fn working_ready(&self) -> bool {
-        self.current_context().is_some()
-            && !self.working_blocked()
-            && (!self.loading || self.target_rows_current || self.has_working_queue())
+        self.current_context().is_some() && !self.working_blocked()
     }
     pub fn take_activity(&mut self) -> Vec<OwnedActivity> {
         let result = self
@@ -357,7 +355,7 @@ impl Editor {
                     .is_ok_and(|r| r.command.outcome == shovel_core::process::Outcome::Exited),
                 detail,
             );
-            let outcome = if result
+            let outcome = if matches!(result, Err(working::Error::SelectionGone)) || result
                 .as_ref()
                 .is_ok_and(|r| r.succeeded() && r.updated.is_ok())
                 && push.as_ref().is_none_or(|p| !p.failed)
@@ -436,9 +434,8 @@ impl Editor {
         self.refresh_history = true;
         if let Some(entry) = self.queue.entries.get_mut(&id) {
             entry.activity.failed = push.as_ref().is_some_and(|p| p.failed)
-                || !result
-                    .as_ref()
-                    .is_ok_and(|r| r.succeeded() && r.updated.is_ok());
+                || !(matches!(result, Err(working::Error::SelectionGone))
+                    || result.as_ref().is_ok_and(|r| r.succeeded() && r.updated.is_ok()));
             if !result.as_ref().is_ok_and(|r| r.succeeded())
                 && let Some((owner, draft)) = &submitted
             {
@@ -479,15 +476,14 @@ impl Editor {
                 match result.updated {
                     Ok(context) => {
                         self.apply(context, ctx);
-                        self.target_rows_current = result.needs_full_scan;
                         self.refresh_pending |= result.needs_full_scan;
                     }
                     Err(error) => self.failed_reinspection(error_text(error)),
                 }
             }
             Err(error) => {
-                if matches!(error, working::Error::Stale) {
-                    self.snapshot_error = Some(text("CommitStale"));
+                if matches!(error, working::Error::Stale | working::Error::SelectionGone) {
+                    self.refresh_pending = true;
                 }
                 self.status = Some(error_text(error));
                 self.failed_commit |= submitted.is_some();

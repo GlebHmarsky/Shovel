@@ -64,6 +64,7 @@ pub(super) struct Confirmation {
     pub selection: Selection,
     pub action: FileAction,
     pub message: String,
+    keyboard_focus: bool,
 }
 impl Confirmation {
     fn new(selection: Selection, action: FileAction) -> Self {
@@ -71,6 +72,7 @@ impl Confirmation {
             selection,
             action,
             message: String::new(),
+            keyboard_focus: true,
         }
     }
 }
@@ -84,7 +86,17 @@ impl Editor {
     }
     pub(super) fn file_selection_current(&self, selection: &Selection) -> bool {
         self.snapshot_error.is_none()
-            && self.context.as_ref().is_some_and(|c| Arc::ptr_eq(c, &selection.context))
+            && self.context.as_ref().is_some_and(|context| {
+                let reviewed = &selection.context;
+                Arc::ptr_eq(context, reviewed)
+                    || context.repository.identity == reviewed.repository.identity
+                        && context.repository.head == reviewed.repository.head
+                        && context.repository.branch == reviewed.repository.branch
+                        && context.repository.operations == reviewed.repository.operations
+                        && context.index_stamp == reviewed.index_stamp
+                        && context.config_stamp == reviewed.config_stamp
+                        && selection.entries.iter().all(|entry| context.change(entry.group, &entry.path) == Some(entry))
+            })
     }
     pub(super) fn begin_file_menu(&mut self, menu: Menu) {
         if self
@@ -126,7 +138,7 @@ impl Editor {
             return;
         };
         let current = self.file_selection_current(&menu.selected);
-        let enabled = current && !self.action_busy() && !self.loading;
+        let enabled = current && !self.action_busy();
         let reason = text(if !current {
             "FileMenuStale"
         } else {
@@ -183,7 +195,7 @@ impl Editor {
             ui.separator();
             if ui
                 .add_enabled(
-                    enabled && menu.selected.entries.iter().any(can_stage),
+                    self.working_ready() && menu.selected.entries.iter().any(can_stage),
                     egui::Button::new(text(if staged {
                         "CommitUnstage"
                     } else {
@@ -197,7 +209,7 @@ impl Editor {
             }
             if ui
                 .add_enabled(
-                    enabled && super::file_list::FileList::new(Some(&menu.selected.context), staged)
+                    self.working_ready() && super::file_list::FileList::new(Some(&menu.selected.context), staged)
                         .stageable(staged)
                         .next()
                         .is_some(),
@@ -397,12 +409,15 @@ impl Editor {
                             .cloned()
                             .collect()
                     };
-                    self.submit(
+                    self.submit_captured(
                         if staged {
                             Action::Unstage(entries)
                         } else {
                             Action::Stage(entries)
                         },
+                        menu.selected.context.clone(),
+                        None,
+                        None,
                         ctx,
                     );
                 }
@@ -551,28 +566,53 @@ impl Editor {
                     ui.label(text("StashMessageLimit"));
                 }
             }
+            let enabled = current
+                && !self.action_busy()
+                && (!stash || confirmation.message.len() <= 4096 && !confirmation.message.contains('\0'));
+            let (left, right, enter) = if stash {
+                (false, false, false)
+            } else {
+                ui.input_mut(|input| {
+                    let left = input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft);
+                    let right = input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight);
+                    let mut enter = false;
+                    input.events.retain(|event| {
+                        if let egui::Event::Key { key: egui::Key::Enter, pressed: true, repeat, modifiers, .. } = event {
+                            enter |= !repeat && modifiers.is_none();
+                            return false;
+                        }
+                        true
+                    });
+                    (left, right, enter)
+                })
+            };
             ui.horizontal(|ui| {
-                accept = ui
-                    .add_enabled(
-                        current
-                            && !self.action_busy()
-                            && !self.loading
-                            && (!stash
-                                || confirmation.message.len() <= 4096
-                                    && !confirmation.message.contains('\0')),
-                        egui::Button::new(text(if stash {
-                            "FileStashButton"
-                        } else {
-                            "FileDiscardButton"
-                        })),
-                    )
-                    .clicked();
-                cancel = ui.button(text("ActionCancel")).clicked();
+                let discard = ui.add_enabled(enabled, egui::Button::new(text(if stash {
+                    "FileStashButton"
+                } else {
+                    "FileDiscardButton"
+                })));
+                let dismiss = ui.button(text("ActionCancel"));
+                if !stash {
+                    if left || !enabled && (confirmation.keyboard_focus || discard.has_focus()) {
+                        dismiss.request_focus();
+                    } else if enabled && (right || confirmation.keyboard_focus) {
+                        discard.request_focus();
+                    }
+                    confirmation.keyboard_focus = false;
+                }
+                accept = discard.clicked() || enabled && enter && discard.has_focus();
+                cancel = dismiss.clicked() || enter && dismiss.has_focus();
             });
         });
-        if accept {
-            self.submit_file_action(confirmation, ctx);
-        } else if !cancel && !response.should_close() {
+        if accept || cancel || response.should_close() {
+            if !stash && let Some(id) = self.files_focus {
+                ctx.memory_mut(|memory| memory.request_focus(id));
+            }
+            if accept {
+                self.submit_file_action(confirmation, ctx);
+            }
+        } else {
             self.file_confirmation = Some(confirmation);
         }
     }
@@ -581,6 +621,7 @@ impl Editor {
             selection,
             action,
             message,
+            ..
         } = confirmation;
         if !self.file_selection_current(&selection) || self.action_busy() {
             self.status = Some(text("FileMenuStale"));
@@ -706,7 +747,6 @@ impl Editor {
     }
     pub(super) fn file_shortcuts(&mut self, ctx: &egui::Context) {
         if self.action_busy()
-            || self.loading
             || self.leave.is_some()
             || self.file_menu.is_some()
             || self.file_confirmation.is_some()

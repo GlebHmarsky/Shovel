@@ -3,7 +3,7 @@
 use crate::{strings, workspace_style::Palette};
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, Ui};
 use sha2::{Digest, Sha256};
-use shovel_core::git::{Commit, Entry};
+use shovel_core::{git::{Commit, Entry}, graph::StashLink};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) fn text(ui: &Ui, rect: Rect, label: &str, font: FontId, color: Color32) {
@@ -95,6 +95,35 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32, i
         }
     };
     let center = point(entry.graph.node, 0.5);
+    let stash_color = if p.high_contrast {
+        foreground
+    } else {
+        Color32::from_gray(if ui.visuals().dark_mode { 168 } else { 102 })
+    };
+    let stash_stroke = Stroke::new(1.3, stash_color);
+    let stash_point = |y| point(entry.graph.node, y) + egui::vec2(9., 0.);
+    let rail = |y, shared| stash_point(y) - egui::vec2(if shared { 5. } else { 0. }, 0.);
+    match entry.graph.stash_link {
+        Some(StashLink::Leaf { first, shared }) => {
+            let marker = stash_point(0.5);
+            if shared {
+                painter.line_segment(
+                    [rail(0.5, shared), marker - egui::vec2(3., 0.)],
+                    stash_stroke,
+                );
+            }
+            let start = if !first {
+                rail(0., shared)
+            } else if shared {
+                rail(0.5, shared)
+            } else {
+                marker + egui::vec2(0., 3.)
+            };
+            painter.line_segment([start, rail(1., shared)], stash_stroke);
+        }
+        Some(StashLink::Base { shared }) => curve(rail(0., shared), center, stash_stroke),
+        None => {}
+    }
     for line in &entry.graph.lines {
         curve(
             point(line.from, line.from_y),
@@ -103,7 +132,9 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32, i
         );
     }
     let color = lane_color(entry.graph.color);
-    if entry.graph.is_merge {
+    if entry.graph.is_stash() {
+        painter.circle_filled(stash_point(0.5), 3.3, stash_color);
+    } else if entry.graph.is_merge {
         painter.circle_stroke(center, 4., Stroke::new(1.5, color));
         painter.circle_filled(center, 1.3, color);
     } else {
@@ -174,7 +205,7 @@ pub fn show(
     let fg = if selected || response.hovered() {
         p.selection_text
     } else if incoming && !p.high_contrast {
-        p.muted
+        p.muted.lerp_to_gamma(p.canvas, 0.16)
     } else {
         p.history_text
     };
@@ -195,7 +226,7 @@ pub fn show(
     let date = column(hash.left() - 154., 150.);
     let author = column(date.left() - 134., 130.);
     let font = FontId::proportional(13.);
-    let secondary = if selected || response.hovered() {
+    let secondary = if selected || response.hovered() || incoming {
         fg
     } else {
         p.muted
@@ -242,7 +273,7 @@ pub fn show(
         if width < 24. {
             break;
         }
-        let (badge_fg, badge_bg) = if p.high_contrast || incoming {
+        let (badge_fg, badge_bg) = if p.high_contrast || incoming || entry.graph.is_stash() {
             (fg, None)
         } else if r.name.starts_with("refs/heads/") {
             (p.diff_added_text, Some(p.diff_added_background))
@@ -329,15 +360,19 @@ pub fn paint_avatar(
         ui.painter().rect_filled(avatar, 4., p.active_selection);
         p.selection_text
     } else {
-        let hue = f32::from(u16::from_be_bytes([digest[0], digest[1]])) / 65_536.;
-        let top: Color32 = egui::ecolor::Hsva::new(hue, 0.83, 0.86, 1.).into();
-        let bottom = top.lerp_to_gamma(Color32::BLACK, 0.13);
+        let palette = [
+            0xc94d63, 0xbc5839, 0xa56e24, 0x7d872d, 0x478751, 0x308979,
+            0x2b819b, 0x406dc0, 0x615fb7, 0x8756ae, 0xae508f, 0x89685a,
+        ];
+        let color = palette[usize::from(digest[0]) * palette.len() / 256];
+        let bottom = Color32::from_rgb((color >> 16) as u8, (color >> 8) as u8, color as u8);
+        let top = bottom.lerp_to_gamma(Color32::BLACK, 0.10);
         paint_avatar_gradient(ui, avatar, top, bottom);
         let luminance = |color| {
             let linear = egui::Rgba::from(color);
             0.2126 * linear.r() + 0.7152 * linear.g() + 0.0722 * linear.b()
         };
-        if (luminance(bottom) + 0.05) / 0.05 > 1.05 / (luminance(top) + 0.05) {
+        if (luminance(top) + 0.05) / 0.05 > 1.05 / (luminance(bottom) + 0.05) {
             Color32::BLACK
         } else {
             Color32::WHITE
@@ -413,6 +448,7 @@ mod tests {
                 color: 0,
                 width: 1,
                 is_merge: false,
+                stash_link: None,
                 lines: vec![],
             },
             references: vec![shovel_core::git::Reference {
@@ -438,7 +474,12 @@ mod tests {
             paint_avatar(ui, avatar, &entry.commit, &Palette::current(ui), std::path::Path::new(""));
         });
         assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
-            egui::Shape::Mesh(mesh) if mesh.vertices.iter().any(|vertex| vertex.color != mesh.vertices[0].color)
+            egui::Shape::Mesh(mesh) if {
+                let top = mesh.vertices.iter().min_by(|a, b| a.pos.y.total_cmp(&b.pos.y)).unwrap().color;
+                let bottom = mesh.vertices.iter().max_by(|a, b| a.pos.y.total_cmp(&b.pos.y)).unwrap().color;
+                u16::from(top.r()) + u16::from(top.g()) + u16::from(top.b()) <
+                    u16::from(bottom.r()) + u16::from(bottom.g()) + u16::from(bottom.b())
+            }
         )));
         assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
             egui::Shape::Text(text) if text.galley.text() == "AB"

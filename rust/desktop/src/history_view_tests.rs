@@ -555,15 +555,10 @@ fn changed_boundary_failed_refresh_and_retry_keep_useful_rows_until_validated() 
     wait(&mut app, &ctx);
     assert!(!app.tabs[0].view.stale);
     assert!(app.tabs[0].error.is_none());
-    assert_eq!(app.tabs[0].page.as_ref().unwrap().cursor.offset, 0);
-    assert!(app.tabs[0].previous.is_empty());
-    assert_eq!(
-        app.tabs[0].page.as_ref().unwrap().entries[0]
-            .commit
-            .message
-            .trim(),
-        "external change"
-    );
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().cursor.offset, 200);
+    assert_eq!(app.tabs[0].selected.as_ref(), Some(&before.0));
+    assert_eq!(app.tabs[0].view.offset.y, before.1.y + history_row::HEIGHT);
+    assert_eq!(app.tabs[0].previous.len(), 1);
 }
 
 #[test]
@@ -645,7 +640,7 @@ fn initial_history_preserves_selection_on_validation_and_clears_on_failure() {
     let offset = egui::vec2(0., history_row::HEIGHT * 48.);
     app.tabs[0].view.offset = offset;
     app.sender
-        .send(Event::Loaded(id, generation, Read::Page(history, page), false))
+        .send(Event::Loaded(id, generation, Read::Page(history, page), false, Vec::new()))
         .unwrap();
     app.receive(&ctx);
     let tab = &app.tabs[0];
@@ -677,6 +672,7 @@ fn obsolete_results_cannot_publish_or_invalidate_newer_history() {
             old,
             Read::Page(Box::new(history), Box::new(page.clone())),
             false,
+            Vec::new(),
         ))
         .unwrap();
     app.sender
@@ -901,4 +897,28 @@ fn fresh_activation_only_checks_identity_and_old_activation_refreshes_without_pr
     wait(&mut app, &ctx);
     assert!(app.tabs[0].view.identity_blocked);
     assert!(app.tabs[0].page.is_none());
+}
+
+#[test]
+fn refreshed_history_follows_new_tip_only_from_the_top() {
+    let fixture = Fixture::new();
+    let ctx = egui::Context::default();
+    let mut app = fixture.app(&ctx);
+    app.tabs[0].view.watch = None;
+    fixture.command(&["commit", "--allow-empty", "-m", "new at top"], &[]);
+    app.refresh(&ctx);
+    wait(&mut app, &ctx);
+    assert_eq!(app.tabs[0].view.offset.y, 0.);
+    assert_eq!(app.tabs[0].page.as_ref().unwrap().entries[0].commit.subject(), "new at top");
+
+    page(&mut app, &ctx, true);
+    let (selected, offset) = position(&mut app, &ctx, 4, egui::vec2(0., history_row::HEIGHT * 4. + 3.));
+    fixture.command(&["commit", "--allow-empty", "-m", "new while reading older"], &[]);
+    app.refresh(&ctx);
+    wait(&mut app, &ctx);
+    let tab = &app.tabs[0];
+    assert_eq!(tab.page.as_ref().unwrap().cursor.offset, 200);
+    assert_eq!(tab.selected.as_ref(), Some(&selected));
+    assert_eq!(tab.view.offset.y, offset.y + history_row::HEIGHT);
+    assert_eq!(tab.previous.len(), 1);
 }

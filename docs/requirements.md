@@ -6,9 +6,15 @@
 
 Use one direct question, the actual affected targets, and a verb for the action beside Cancel. Add one short consequence when the action and targets alone would hide a material effect. Keep instructions and recovery details in tooltips or failure results.
 
+## History and Local Changes continuity (0.52.4)
+
+Show stash markers next to bases reached by the ordinary commit walk. Keep detached-base stashes available in the sidebar. An independently reachable stash object appears once as a normal commit. Preserve scroll and selection when a refresh adds commits above the visible rows. Follow the newest history when already at the top.
+
+Keep verified whole-file actions available during refresh. Before staging, verify the repository and index, retain only reviewed paths when the index changes, and skip disappeared selections. Exact hunk edits require a verified diff. Discard initially focuses its confirmation button and supports Left to Cancel and Enter to activate the focused action.
+
 ## Checkout and workspace-state acceptance (0.47.0)
 
-Stashes belong in the sidebar and must not add history rows or traversal roots. A commit reachable through a branch, remote-tracking branch, tag or HEAD remains a normal history entry. Verify native stash metadata and both directions of history page-edge scrolling.
+Stashes are available in the sidebar. History traversal follows branches, remote-tracking branches, tags and HEAD. Verify native stash metadata and both directions of history page-edge scrolling.
 
 Checkout confirms the immutable commit or named branch target; hide dirty choices for a clean tree. Keep preserves Git’s overwrite protection; stash/reapply restores staged, unstaged and untracked state or retains explicit recovery data on failure. Discard preserves unrelated untracked/ignored paths and submodule worktrees. Reject newly staged work after review. Unrelated fetched refs must not invalidate an otherwise unchanged checkout target. Configured checkout hooks and LFS behavior remain native.
 

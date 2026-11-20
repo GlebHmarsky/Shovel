@@ -418,7 +418,10 @@ fn reference_navigation_finds_old_tags_and_inspects_stashes_from_the_sidebar() {
     assert_eq!(app.tabs[0].selected.as_ref(), Some(&base));
     assert!(!app.tabs[0].previous.is_empty());
     assert!(app.tabs[0].scroll_selected);
-    assert!(!app.tabs[0].page.as_ref().unwrap().entries.iter().any(|e| e.commit.hash == stash));
+    let entries = &app.tabs[0].page.as_ref().unwrap().entries;
+    let leaf = entries.iter().position(|entry| entry.commit.hash == stash).unwrap();
+    assert!(entries[leaf].graph.is_stash());
+    assert_eq!(entries[leaf + 1].commit.hash, base);
     let label = "stash@{0}  On main: old stash";
     sidebar_click(&ctx, &mut app, label, egui::PointerButton::Primary);
     assert_eq!(app.tabs[0].selected.as_ref(), Some(&base));
