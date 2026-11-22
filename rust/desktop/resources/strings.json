@@ -462,7 +462,6 @@
   "CommitStagedCount": "Staged ({0})",
   "CommitNoUnstaged": "No unstaged files in the available snapshot.",
   "CommitNoStaged": "No staged files in the available snapshot.",
-  "CommitTrackedFiles": "Tracked files",
   "CommitFileGroup": "{0} ({1})",
   "CommitChangeRow": "{0} · {1} · {2}",
   "CommitUntrackedRow": "{0} · {1}",

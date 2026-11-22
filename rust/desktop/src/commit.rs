@@ -59,6 +59,7 @@ enum Leave {
     Select {
         entry: Box<Change>,
         selection: BTreeSet<(Group, String)>,
+        move_anchor: bool,
         stage: bool,
     },
 }
@@ -94,6 +95,7 @@ pub struct Editor {
     diff_generation: u64,
     diff_cancel: Cancellation,
     selection: BTreeSet<(Group, String)>,
+    selection_anchor: Option<(Group, String)>,
     focused: Option<Change>,
     diff: Option<shovel_core::diff::FileDiff>,
     displayed_file: Option<(Group, String)>,
@@ -180,6 +182,7 @@ impl Editor {
             diff_generation: 0,
             diff_cancel: Cancellation::default(),
             selection: BTreeSet::new(),
+            selection_anchor: None,
             focused: None,
             diff: None,
             displayed_file: None,
@@ -410,6 +413,7 @@ impl Editor {
             Leave::Select {
                 entry,
                 selection,
+                move_anchor,
                 stage,
             } => {
                 if self
@@ -420,6 +424,9 @@ impl Editor {
                     self.conflict = None;
                 }
                 self.selection = selection;
+                if move_anchor {
+                    self.selection_anchor = Some((entry.group, entry.path.clone()));
+                }
                 let staged = entry.group == Group::Staged;
                 self.show_diff(*entry, ctx);
                 if stage {
@@ -938,6 +945,9 @@ impl Editor {
             .into_iter()
             .filter_map(|(group, path)| matching_row(group, &path).map(|entry| (entry.group, path)))
             .collect();
+        self.selection_anchor = self.selection_anchor.take().and_then(|(group, path)| {
+            matching_row(group, &path).map(|entry| (entry.group, path))
+        });
         let focus = self
             .focused
             .as_ref()
@@ -1451,31 +1461,38 @@ impl Editor {
                                         file_list::file_row(ui, entry, selected)
                                     })
                                     .inner;
+                                let modifiers = ui.input(|input| input.modifiers);
                                 if response.clicked() {
                                     response.request_focus();
                                     self.files_focus = Some(response.id);
-                                    let mut selection = self.selection.clone();
-                                    if !ui.input(|i| i.modifiers.ctrl) {
-                                        selection.clear();
-                                    }
-                                    if selected && ui.input(|i| i.modifiers.ctrl) {
+                                    let range = self.selection_anchor.as_ref()
+                                        .filter(|_| modifiers.shift)
+                                        .and_then(|anchor| rows.inclusive_range(anchor, &key));
+                                    let move_anchor = range.is_none();
+                                    let mut selection = if modifiers.ctrl {
+                                        self.selection.clone()
+                                    } else {
+                                        BTreeSet::new()
+                                    };
+                                    if let Some(range) = range {
+                                        selection.extend(range.map(|file| (file.group, file.path.clone())));
+                                    } else if selected && modifiers.ctrl && !modifiers.shift {
                                         selection.remove(&key);
                                     } else {
-                                        selection.insert(key);
+                                        selection.insert(key.clone());
                                     }
                                     chosen = Some(Leave::Select {
                                         entry: Box::new(entry.clone()),
                                         selection,
+                                        move_anchor,
                                         stage: false,
                                     });
                                 }
-                                if response.double_clicked() {
+                                if response.double_clicked() && modifiers.is_none() {
                                     chosen = Some(Leave::Select {
                                         entry: Box::new(entry.clone()),
-                                        selection: BTreeSet::from([(
-                                            entry.group,
-                                            entry.path.clone(),
-                                        )]),
+                                        selection: BTreeSet::from([key]),
+                                        move_anchor: true,
                                         stage: staged || entry.group.can_stage(),
                                     });
                                 }

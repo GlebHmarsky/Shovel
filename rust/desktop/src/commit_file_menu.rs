@@ -106,6 +106,10 @@ impl Editor {
         {
             self.conflict = None;
         }
+        let key = (menu.entry.group, menu.entry.path.clone());
+        if !self.selection.contains(&key) {
+            self.selection_anchor = Some(key);
+        }
         self.selection = menu
             .selected
             .entries

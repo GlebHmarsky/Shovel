@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.52.6 - 2026-11-22
+
+- Shift-click selects a range in Local Changes. Ctrl-click toggles files and Ctrl+Shift-click adds a range.
+- Selected files stay blue in the active window and turn gray when the window loses focus.
+- Show a single Unstaged count above the file list.
+
 ## Rust 0.52.5 - 2026-11-20
 
 - Left-align text diffs and their line numbers. Hide inline whitespace, layout, hunk and change-navigation controls.

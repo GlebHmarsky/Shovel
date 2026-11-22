@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## File selection in Rust 0.52.6
+
+Local Changes selects an inclusive Shift-click range in the current pane using the full file order, including virtualized rows. Ctrl+Shift-click adds the range to the selection. Selected rows use the active window color and retain their selection when the window loses focus. The main Unstaged header carries the count, with subgroup headers for conflicts and untracked paths.
+
+Four focused headless checks, all-target Clippy and diff checks passed. The 18-check smoke suite passed in 66.24 seconds on source fingerprint `A495023D6ED9C41DF50422433D4F41A29841D1D24A83D6ABC97DB42C8D120A6B`. The focus check simulated window activation and deactivation.
+
 ## Diff layout and selected-file latency in Rust 0.52.5
 
 The shared diff pane left-aligns its line numbers and text. Whitespace, whole-file, side-by-side, hunk and change-navigation controls are hidden in the pane. The reported navigation failure is tracked in TODO. The Local Changes viewer can read a newly selected diff while a status scan is held. A common text preview requests Git's patch and line counts together, checks the selected index entry, and skips hunk preparation. Stage and Unstage overlap targeted status and index reads. A byte-for-byte match on an ordinary index can replace a second native index enumeration, while split, sparse and alternate indexes still use native verification.

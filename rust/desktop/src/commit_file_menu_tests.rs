@@ -214,12 +214,12 @@ fn large_snapshot_groups_visible_rows_and_names_both_message_fields() {
         context.entries.push(entry);
     }
     let list = file_list::FileList::new(Some(&context), false);
-    assert_eq!((list.count(), list.row_count()), (19_999, 20_002));
-    let Some(file_list::Row::File(last)) = list.row(20_001) else {
+    assert_eq!((list.count(), list.row_count()), (19_999, 20_001));
+    let Some(file_list::Row::File(last)) = list.row(20_000) else {
         panic!("last untracked path")
     };
     assert!(std::ptr::eq(last, context.entries.last().unwrap()));
-    assert!(list.row(20_002).is_none());
+    assert!(list.row(20_001).is_none());
     h.editor.context = Some(Arc::new(context));
     for light in [false, true] {
         crate::workspace_style::apply(&h.ctx, light);
@@ -232,7 +232,7 @@ fn large_snapshot_groups_visible_rows_and_names_both_message_fields() {
             .collect::<Vec<_>>();
         for expected in [
             "Conflicted (1)",
-            "Tracked files (1)",
+            "Unstaged (19999)",
             "Untracked (19997)",
             "Conflicted · Unmerged · conflict.txt",
             "Unstaged · Modified · \u{2066}src/שלום.txt\u{2069}",

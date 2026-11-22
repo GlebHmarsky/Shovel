@@ -16,6 +16,10 @@ The current branch and operation progress share one line below the repository na
 
 Commit shows the author, subject, message body and changed paths across the pane. Changed Files shows a path list with change letters and a diff. Drag the divider to set the list width. Shovel saves it across sessions. Use Repository → Refresh or F5 to retry an inspector read.
 
+## Local Changes selection (0.52.6)
+
+Shift-click selects files between the last clicked file and the new one in the same pane. Ctrl-click toggles individual files. Ctrl+Shift-click adds a range. Selected rows are blue while the window has focus and gray when it loses focus. The Unstaged header shows the total count.
+
 ## Local Changes diff pane (0.52.5)
 
 Text and line numbers start at the left edge of each diff column. The pane omits whitespace, whole-file, side-by-side, hunk and change-navigation controls. File selection can open a diff during a background status scan, with the previous diff visible until the replacement is ready.

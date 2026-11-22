@@ -294,6 +294,7 @@ impl Harness {
         h
     }
     fn render(&mut self, mut events: Vec<egui::Event>) -> egui::FullOutput {
+        let focused = !events.iter().any(|event| matches!(event, egui::Event::WindowFocused(false)));
         events.insert(0, egui::Event::ModifiersChanged(self.modifiers));
         self.editor.poll(&self.ctx);
         for activity in self.editor.take_activity() {
@@ -308,6 +309,7 @@ impl Harness {
                     egui::vec2(1400., 1000.),
                 )),
                 events,
+                focused,
                 ..Default::default()
             },
             |ui| {
@@ -1734,4 +1736,67 @@ fn text_diff_opens_during_status_scan_and_paints_from_the_left() {
     }
     release.send(()).unwrap();
     h.until(|editor| !editor.loading);
+}
+
+#[test]
+fn shift_selects_a_file_range_and_window_focus_controls_its_color() {
+    let mut h = Harness::new();
+    for file in ["new.txt", "z-last.txt"] {
+        fs::write(h.editor.path.join(file), b"untracked").unwrap();
+    }
+    h.refresh();
+    h.until(|editor| !editor.loading);
+    let one = "Unstaged · Modified · one.txt";
+    let two = "Unstaged · Modified · two.txt";
+    let new = "Untracked · new.txt";
+    let last = "Untracked · z-last.txt";
+
+    h.click(one);
+    h.modifiers.shift = true;
+    h.click(last);
+    assert_eq!(h.editor.selection.len(), 4);
+    h.click(two);
+    assert_eq!(h.editor.selection.len(), 2);
+
+    h.modifiers.shift = false;
+    h.modifiers.ctrl = true;
+    h.click(new);
+    h.modifiers.shift = true;
+    h.click(last);
+    assert_eq!(h.editor.selection.len(), 4);
+    h.modifiers.shift = false;
+    h.click(new);
+    assert_eq!(h.editor.selection.len(), 3);
+    assert!(!h.editor.selection.contains(&(Group::Untracked, "new.txt".into())));
+    assert!(!h.editor.scheduler.has_accepted_work());
+
+    h.modifiers = egui::Modifiers::NONE;
+    let points = [h.point(one), h.point(two), h.point(last)];
+    let palette = crate::workspace_style::Palette::for_mode(h.ctx.global_style().visuals.dark_mode);
+    for focused in [true, false, true] {
+        let output = h.render(vec![egui::Event::WindowFocused(focused)]);
+        let expected = if focused {
+            palette.active_selection
+        } else if h.ctx.global_style().visuals.dark_mode {
+            palette.selected
+        } else {
+            egui::Color32::from_gray(96)
+        };
+        let filled = points.map(|point| output.shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Rect(rect) if rect.rect.height() == 22.
+                && rect.rect.contains(point) && rect.fill == expected)
+        }));
+        let labels = output.shapes.iter().filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(text) => Some(text.galley.text()),
+            _ => None,
+        }).collect::<Vec<_>>();
+        let unstaged = labels.iter().filter(|&&label| label == "Unstaged (4)").count();
+        let subgroup = labels.contains(&"Untracked (2)");
+        let duplicate = labels.iter().any(|label| label.starts_with("Tracked files"));
+        output.drop_without_applying_deltas();
+        assert_eq!(filled, [true; 3], "window focus = {focused}");
+        assert_eq!(unstaged, 1);
+        assert!(subgroup);
+        assert!(!duplicate);
+    }
 }

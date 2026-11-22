@@ -4,7 +4,6 @@ use crate::workspace_style::Palette;
 /// The two panes borrow sorted slices from the same reviewed snapshot.
 pub(super) struct FileList<'a> {
     groups: [&'a [Change]; 3],
-    headings: bool,
 }
 pub(super) enum Row<'a> {
     Heading(Group, usize),
@@ -30,24 +29,21 @@ impl<'a> FileList<'a> {
                 rows(Group::Untracked),
             ]
         };
-        let headings = !staged && (!groups[0].is_empty() || !groups[2].is_empty());
-        Self { groups, headings }
+        Self { groups }
     }
     pub fn count(&self) -> usize {
         self.groups.iter().map(|group| group.len()).sum()
     }
     pub fn row_count(&self) -> usize {
         self.count()
-            + if self.headings {
-                self.groups.iter().filter(|g| !g.is_empty()).count()
-            } else {
-                0
-            }
+            + self.groups.iter().filter(|group| {
+                group.first().is_some_and(|entry| has_heading(entry.group))
+            }).count()
     }
     pub fn row(&self, mut index: usize) -> Option<Row<'a>> {
         for group in self.groups {
             let Some(first) = group.first() else { continue };
-            if self.headings {
+            if has_heading(first.group) {
                 if index == 0 {
                     return Some(Row::Heading(first.group, group.len()));
                 }
@@ -63,9 +59,24 @@ impl<'a> FileList<'a> {
     pub fn entries(&self) -> impl Iterator<Item = &'a Change> {
         self.groups.into_iter().flatten()
     }
+    pub fn inclusive_range(
+        &self,
+        anchor: &(Group, String),
+        end: &(Group, String),
+    ) -> Option<impl Iterator<Item = &'a Change>> {
+        let index = |(group, path): &(Group, String)| {
+            self.entries().position(|file| file.group == *group && file.path == *path)
+        };
+        let first = index(anchor)?;
+        let last = index(end)?;
+        Some(self.entries().skip(first.min(last)).take(first.abs_diff(last) + 1))
+    }
     pub fn stageable(&self, staged: bool) -> impl Iterator<Item = &'a Change> {
         self.entries().filter(move |entry| staged || entry.group.can_stage())
     }
+}
+fn has_heading(group: Group) -> bool {
+    matches!(group, Group::Conflicted | Group::Untracked)
 }
 fn group_name(group: Group) -> String {
     text(match group {
@@ -77,11 +88,7 @@ fn group_name(group: Group) -> String {
     })
 }
 pub(super) fn heading(ui: &mut egui::Ui, group: Group, count: usize) {
-    let name = if group == Group::Unstaged {
-        text("CommitTrackedFiles")
-    } else {
-        group_name(group)
-    };
+    let name = group_name(group);
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.), egui::Sense::hover());
     let palette = Palette::current(ui);
@@ -108,10 +115,13 @@ pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egu
     let p = Palette::current(ui);
     let (rect, response) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.), egui::Sense::click());
+    let window_focused = ui.input(|input| input.focused);
     let highlighted = selected || response.hovered();
     if highlighted {
-        let fill = if selected && response.has_focus() {
+        let fill = if selected && window_focused {
             p.active_selection
+        } else if selected && !p.high_contrast && !ui.visuals().dark_mode {
+            egui::Color32::from_gray(96)
         } else if selected {
             p.selected
         } else {
@@ -119,7 +129,7 @@ pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egu
         };
         ui.painter().rect_filled(rect, 2., fill);
     }
-    if response.has_focus() {
+    if window_focused && response.has_focus() {
         ui.painter().rect_stroke(
             rect,
             2.,
