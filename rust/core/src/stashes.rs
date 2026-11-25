@@ -10,6 +10,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
@@ -36,6 +37,35 @@ impl Target {
             selector: entry.selector.clone(),
             list_stamp: Some(list.stamp.clone()),
         }
+    }
+}
+
+/// The exact unmerged entries created by an accepted stash Apply or Pop.
+#[derive(Debug)]
+pub struct ConflictOrigin {
+    pub worktree: PathBuf,
+    pub target: Target,
+    identity: String,
+    branch: Option<String>,
+    head: Option<String>,
+    unmerged: String,
+}
+impl ConflictOrigin {
+    pub(crate) fn matches(&self, snapshot: &Snapshot, path: &str, stages: &[u8]) -> bool {
+        if self.identity != snapshot.identity.fingerprint
+            || self.branch != snapshot.branch
+            || self.head != snapshot.head
+            || !snapshot.operations.is_empty()
+        {
+            return false;
+        }
+        let expected = self
+            .unmerged
+            .split_terminator('\0')
+            .filter(|line| line.split_once('\t').is_some_and(|(_, name)| name == path))
+            .flat_map(|line| [line, "\0"])
+            .collect::<String>();
+        !expected.is_empty() && expected.as_bytes() == stages
     }
 }
 #[derive(Clone, Debug)]
@@ -173,6 +203,16 @@ impl Git {
         action: &Action,
         progress: Option<Progress>,
     ) -> Result<Completed, Error> {
+        self.execute_stash_with_conflict(expected, action, progress)
+            .map(|(completed, _)| completed)
+    }
+
+    pub fn execute_stash_with_conflict(
+        &self,
+        expected: &Snapshot,
+        action: &Action,
+        progress: Option<Progress>,
+    ) -> Result<(Completed, Option<ConflictOrigin>), Error> {
         let cancel = Cancellation::default();
         let stage = |s| {
             if let Some(callback) = &progress {
@@ -191,7 +231,9 @@ impl Git {
         }
         let root = &fresh.worktree;
         if let Action::DropMany(targets) = action {
-            return self.drop_reviewed_stashes(expected, current, targets, &cancel, stage);
+            return self
+                .drop_reviewed_stashes(expected, current, targets, &cancel, stage)
+                .map(|completed| (completed, None));
         }
         if !matches!(action, Action::Drop(_)) {
             if !fresh.operations.is_empty() {
@@ -270,6 +312,7 @@ impl Git {
             return Err(Error::Code("StashChanged"));
         }
         let mut log = Transcript::default();
+        let mut conflict = None;
         let result = (|| -> Result<Option<&'static str>, Error> {
             let succeeded = log.write(self, root, args)?;
             if let Action::Apply { target, pop, .. } = action {
@@ -279,6 +322,16 @@ impl Git {
                         Err(_) => return Err(Error::Code("StashInspectFailed")),
                     };
                 if !succeeded || !unmerged.is_empty() {
+                    if !unmerged.is_empty() && unmerged.ends_with('\0') {
+                        conflict = Some(ConflictOrigin {
+                            worktree: root.clone(),
+                            target: target.clone(),
+                            identity: fresh.identity.fingerprint.clone(),
+                            branch: fresh.branch.clone(),
+                            head: fresh.head.clone(),
+                            unmerged,
+                        });
+                    }
                     return Ok(Some("StashApplyFailed"));
                 }
                 if *pop {
@@ -317,7 +370,7 @@ impl Git {
         stage(Stage::Reconciling);
         let mut completed = log.finish(self, root, result)?;
         completed.preserves_worktree = matches!(action, Action::Drop(_));
-        Ok(completed)
+        Ok((completed, conflict))
     }
 
     fn drop_reviewed_stashes(

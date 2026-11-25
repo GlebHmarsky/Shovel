@@ -619,6 +619,30 @@ impl Git {
         if !staged && old.lfs && !new_info.absent {
             new_info.lfs = true;
         }
+        if old.absent && !new_info.absent {
+            if !staged && !new_info.lfs {
+                let attributes = self.read(
+                    root,
+                    [
+                        "--literal-pathspecs",
+                        "check-attr",
+                        "-z",
+                        "filter",
+                        "--",
+                        &entry.path,
+                    ],
+                    cancel,
+                    128 * 1024,
+                )?;
+                new_info.lfs =
+                    attributes.stdout == format!("{}\0filter\0lfs\0", entry.path).as_bytes();
+            }
+            new_info.binary |= new_info.lfs
+                || Path::new(&entry.path)
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("uasset"));
+        }
         let hunk_candidate = prepare_hunks && candidate(entry) && !options.ignore_whitespace && !options.whole_file;
         let content = if hunk_candidate {
             content_stamp(root, &entry.path, cancel)?

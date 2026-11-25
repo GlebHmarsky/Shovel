@@ -390,6 +390,90 @@ pub(crate) fn click_label(app: &mut Workspace, ctx: &egui::Context, label: &str)
 }
 
 #[test]
+fn home_returns_focused_history_to_the_newest_row() {
+    use eframe::App;
+    let fixture = Fixture::new();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = fixture.app(&ctx);
+    let latest = app.tabs[0].selected.clone();
+    let focus_visible_row = |app: &mut Workspace| {
+        let hash = app.tabs[0].selected.clone().unwrap();
+        let out = frame(&ctx, app, vec![]);
+        let label = out
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .find_map(|(_, node)| {
+                node.label().filter(|label| {
+                    node.role() == egui::Role::Button
+                        && node.bounds().is_some()
+                        && label.contains(&hash)
+                })
+            })
+            .unwrap_or_else(|| panic!("missing visible commit {hash}"))
+            .to_owned();
+        out.drop_without_applying_deltas();
+        click_label(app, &ctx, &label);
+    };
+    let home = |pressed| egui::Event::Key {
+        key: egui::Key::Home,
+        physical_key: Some(egui::Key::Home),
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    for older in [false, true] {
+        if older {
+            page(&mut app, &ctx, true);
+            assert_eq!(app.tabs[0].page.as_ref().unwrap().cursor.offset, 200);
+        }
+        position(&mut app, &ctx, 42, egui::vec2(0., 920.));
+        focus_visible_row(&mut app);
+        position(&mut app, &ctx, 42, egui::vec2(0., 1800.));
+        paint(&mut app, &ctx, vec![home(true)]);
+        wait(&mut app, &ctx);
+        paint(&mut app, &ctx, vec![home(false)]);
+        assert_eq!(app.tabs[0].page.as_ref().unwrap().cursor.offset, 0);
+        assert_eq!(app.tabs[0].view.offset.y, 0.);
+        assert_eq!(app.tabs[0].selected, latest);
+    }
+
+    position(&mut app, &ctx, 18, egui::vec2(0., 400.));
+    let mut field = String::from("body");
+    let search = egui::Id::unique("outside-history");
+    for events in [vec![], vec![home(true), egui::Event::Text("*".into())]] {
+        let focus = events.is_empty();
+        ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900., 620.),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                egui::Panel::top("outside-history").show(ui, |ui| {
+                    let edit = egui::TextEdit::singleline(&mut field).id(search).show(ui);
+                    if focus {
+                        edit.response.request_focus();
+                    }
+                });
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            },
+        )
+        .drop_without_applying_deltas();
+    }
+    assert_eq!(field, "*body");
+    assert!(app.tabs[0].view.offset.y > 300.);
+    assert_ne!(app.tabs[0].selected, latest);
+}
+
+#[test]
 fn scrolling_across_page_edges_returns_to_the_first_history_page() {
     let fixture = Fixture::new();
     let ctx = egui::Context::default();

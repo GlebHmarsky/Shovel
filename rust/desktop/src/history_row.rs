@@ -54,6 +54,7 @@ pub(super) fn visible_ref(name: &str) -> bool {
 }
 
 pub(super) struct Style<'a> {
+    pub list_focused: bool,
     pub worktree: &'a std::path::Path,
     pub selected: bool,
     pub peer: bool,
@@ -150,6 +151,7 @@ pub fn show(
     p: &Palette,
 ) -> egui::Response {
     let Style {
+        list_focused,
         worktree,
         selected,
         peer,
@@ -190,7 +192,7 @@ pub fn show(
         egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, &description)
     });
     let background = if selected {
-        if response.has_focus() {
+        if response.has_focus() || list_focused {
             p.active_selection
         } else {
             p.selected
@@ -505,6 +507,7 @@ mod tests {
                     &entry,
                     1,
                     Style {
+                        list_focused: false,
                         worktree: std::path::Path::new(""),
                         selected,
                         peer: false,
@@ -538,6 +541,7 @@ mod tests {
                     &entry,
                     1,
                     Style {
+                        list_focused: false,
                         worktree: std::path::Path::new(""),
                         selected: false,
                         peer: true,

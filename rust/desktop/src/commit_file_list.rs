@@ -142,19 +142,25 @@ pub(super) fn file_row(ui: &mut egui::Ui, entry: &Change, selected: bool) -> egu
     } else {
         p.text
     };
+    let code = match entry.group {
+        Group::Conflicted => 'M',
+        Group::Untracked => 'A',
+        _ => entry.code,
+    };
     let status_color = if p.high_contrast {
         fg
     } else {
-        Palette::change_status(
-            if entry.group == Group::Conflicted { 'M' } else { entry.code },
-            ui.visuals().dark_mode || highlighted,
-        )
+        Palette::change_status(code, ui.visuals().dark_mode || highlighted)
     };
     let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
     painter.text(
         rect.left_center() + egui::vec2(8., 0.),
         egui::Align2::LEFT_CENTER,
-        if entry.group == Group::Conflicted { '!' } else { entry.code },
+        match (entry.group, code) {
+            (Group::Conflicted, _) => '!',
+            (_, 'A') => '+',
+            (_, code) => code,
+        },
         egui::FontId::monospace(12.),
         status_color,
     );

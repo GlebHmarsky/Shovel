@@ -253,6 +253,7 @@ enum Event {
     Prompt(u64, authentication::Prompt),
     ExternalPrompt(u64, PathBuf, &'static str, authentication::Prompt),
     Completed(u64, Box<Result<network::Completed, String>>),
+    StashConflict(PathBuf, Option<Arc<shovel_core::stashes::ConflictOrigin>>),
     Removed(u64, Outcome, Option<&'static str>),
     OptionsReady(u64, Box<ReadyOptions>),
     OptionsClosed(u64),
@@ -358,6 +359,7 @@ pub struct Controller {
     pub divergence: crate::divergence::Display,
     pending: Vec<PendingNetwork>,
     refresh_paths: Vec<PathBuf>,
+    stash_conflicts: VecDeque<Arc<shovel_core::stashes::ConflictOrigin>>,
     options: Option<(Options, Snapshot)>,
     ready_options: VecDeque<ReadyOptions>,
     options_hold: Option<DialogLease>,
@@ -377,6 +379,7 @@ impl Default for Controller {
             divergence: Default::default(),
             pending: vec![],
             refresh_paths: vec![],
+            stash_conflicts: VecDeque::new(),
             options: None,
             ready_options: VecDeque::new(),
             options_hold: None,
@@ -1276,7 +1279,16 @@ impl Controller {
                     let result = if let LocalAction::Recovery(action) = &action {
                         git.execute_recovery(&captured, *action, Some(progress))
                     } else if let LocalAction::Stash(action) = &action {
-                        git.execute_stash(&captured, action, Some(progress))
+                        git.execute_stash_with_conflict(&captured, action, Some(progress))
+                            .map(|(completed, origin)| {
+                                if matches!(action, shovel_core::stashes::Action::Apply { .. }) {
+                                    let _ = sender.send(Event::StashConflict(
+                                        captured.worktree.clone(),
+                                        origin.map(Arc::new),
+                                    ));
+                                }
+                                completed
+                            })
                     } else if let LocalAction::Remote(action) = &action {
                         git.execute_remote(&captured, action, Some(progress))
                     } else if let LocalAction::Submodule(action) = &action {
@@ -1373,6 +1385,15 @@ impl Controller {
     pub fn poll(&mut self, ctx: &egui::Context) -> Vec<PathBuf> {
         while let Ok(event) = self.receiver.try_recv() {
             match event {
+                Event::StashConflict(path, origin) => {
+                    self.forget_stash_conflict(&path);
+                    if let Some(origin) = origin {
+                        self.stash_conflicts.push_back(origin);
+                        if self.stash_conflicts.len() > 16 {
+                            self.stash_conflicts.pop_front();
+                        }
+                    }
+                }
                 Event::BranchStage(id, stage) => {
                     use shovel_core::branches::Stage;
                     if let Some(run) = self.runs.iter_mut().find(|r| r.sequence == id) {
@@ -1547,6 +1568,21 @@ impl Controller {
                 break;
             }
         }
+    }
+
+    pub fn stash_conflict(
+        &self,
+        worktree: &std::path::Path,
+    ) -> Option<Arc<shovel_core::stashes::ConflictOrigin>> {
+        self.stash_conflicts
+            .iter()
+            .find(|origin| crate::Workspace::same_path(&origin.worktree, worktree))
+            .cloned()
+    }
+
+    pub fn forget_stash_conflict(&mut self, worktree: &Path) {
+        self.stash_conflicts
+            .retain(|origin| !crate::Workspace::same_path(&origin.worktree, worktree));
     }
 
     pub fn record_owned(&mut self, path: PathBuf, activity: crate::commit::OwnedActivity) {

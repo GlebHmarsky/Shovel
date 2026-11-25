@@ -1,5 +1,13 @@
 # Roadmap and decision register
 
+## New-file diffs, History Home, and conflict summaries in Rust 0.52.8
+
+New files display a green plus, added text uses the existing added-line style, and added binaries show one New preview. Modified LFS files retain both previews. Home returns the focused History list to its newest commit from any page.
+
+Conflict cards present verified sources and file status. Merge uses the configured external tool. The optional Shovel editor retains typed text across a failed stage. Stash provenance is available during this session for accepted Apply and Pop operations with matching repository identity, HEAD, branch, and unmerged entries.
+
+Core conflict, stash and hunk suites, focused headless layout and keyboard checks, all-target Clippy, the Git diff check, and release-policy checks passed. The 18-check smoke suite passed in 32.36 seconds on source fingerprint `3F0A323B49D9979C8B2A128D8A6BFE57EDF9BB0CD5E5D37F06D6B824B463ECA9`. Physical keyboard, native layout, interactive merge-tool and installed update acceptance remain open.
+
 ## Local Changes layout and keyboard in Rust 0.52.7
 
 The files splitter stops at the fixed-height commit editor. Long descriptions scroll inside the editor. New subject input is capped at 72 characters, with 50 recommended. Ctrl+A respects file-list and text-field focus.

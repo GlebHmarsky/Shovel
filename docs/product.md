@@ -26,13 +26,17 @@ The files divider stops at the top of the fixed-height editor. Long descriptions
 
 Text and line numbers start at the left edge of each diff column. The pane omits whitespace, whole-file, side-by-side, hunk and change-navigation controls. File selection can open a diff during a background status scan, with the previous diff visible until the replacement is ready.
 
+In 0.52.8, a green plus marks new files. An added binary or LFS file has one centered New preview. Modified LFS files keep both previews with the Old and New captions centered. Added text uses the diff's added-line styling.
+
 ## Local Changes (0.51.5)
 
 The selected repository's latest status scan supplies file rows immediately when available. Shovel verifies the worktree in the background before accepting file changes. Files use one repository-relative path per line. The Unstaged and Staged sections have one action each. Hold Shift to act on the entire section. F5 retries status and draft reads.
 
 The previous diff stays visible during a selection or refresh. Hunk operations become available again when the new diff is ready. If a file becomes clean, its last diff stays visible. A verified removal can clear it. Binary cards show each side's extension, size and LFS status. Text options appear with text comparisons.
 
-In 0.51.9, selecting a conflicted file opens its resolver. Check one side to keep it, both to merge, or neither to restore the common base. Resolving applies and stages that file. Stage and Stage All skip unresolved files. During rebase, Ours is the rebased result so far and Theirs is the commit being replayed. Recovery controls appear below the repository tabs when the rebase pauses.
+Selecting a conflicted file opens its resolver. The cards show each side's operation role, known ref or stash, commit and author details, and file status. During rebase, Ours is the rebased result so far and Theirs is the commit being replayed. Stash attribution uses the exact Apply or Pop target and unmerged entries observed by Shovel during this session. When Git supplies no verified source, the card shows the role without a commit.
+
+Select one side to apply it and stage the file. Select both sides to launch the configured external merge tool. Deselect both sides to restore the common base when one exists. Edit result in Shovel opens the optional text editor for supported files. Stage and Stage All skip unresolved files. Recovery controls appear below the repository tabs when a rebase pauses.
 
 The commit editor shows a guide at column 72 in both fields and a remaining-character count on the subject. Enter moves from the subject to the description. Ctrl+Enter attempts the commit. Shovel separates a nonempty description from the subject with one blank line. When a refresh verifies that a conflict is gone, its old diff clears.
 
@@ -285,7 +289,7 @@ Commit drafts now survive closing tabs/restarting. Restore happens after the mod
 - **All Commits:** ancestry of local branches, remote-tracking branches, tags, current HEAD and saved stashes, including detached HEAD. Other reflog-only and unreachable history is excluded. Unborn HEAD does not hide other branches. No scope/filter selector; legacy narrower settings are ignored; scope help is accessible.
 - Headerless virtualized history begins directly below repository tabs. Graph, ref badges, description, author, local commit date and time, and short hash occupy fixed columns. Dates follow Windows regional settings. History has a fixed sort order and column widths. Description adapts to width. Merge nodes have a hollow marker and parent help.
 - Selecting a row exposes full message, author/committer, original-offset dates, hash, parents and full refs below. Row labels are bounded previews with full tooltip/details; parsed messages within the read limit remain complete.
-- View offers Older/Newer, range and status; Ctrl+Page Up/Down or scrolling past a page edge navigates 200-row pages; no total commit ceiling. Cache: three visited tabs, one page each, character budget; 128 back cursors plus First history page. Other tabs retain session-only pages; the selected verified page also supplies the persisted startup preview. Eviction reloads page one. Refresh preserves page for unchanged refs/HEAD; otherwise restarts, retaining the selected hash if present.
+- View offers Older/Newer, range and status. Ctrl+Page Up/Down or scrolling past a page edge navigates 200-row pages with no total commit ceiling. Home returns to the newest commit when the History list has focus. Cache: three visited tabs, one page each, character budget, and 128 back cursors plus First history page. Other tabs retain session-only pages. The selected verified page also supplies the persisted startup preview. Eviction reloads page one. Refresh preserves the page for unchanged refs and HEAD. Otherwise it restarts and retains the selected hash if present.
 - Loading, end/shallow boundary, empty and errors are distinct; View and Diagnostics expose limits. Read failures over retained rows show a compact diagnostic link. Failed/cancelled paging retains rows; ref/boundary changes require refresh. Missing objects are never fetched implicitly. Original Git stderr remains in session Diagnostics.
 - Tab context menu: Refresh, Move left/right, Close, Close others; acts on clicked tab. Middle-click closes it. Active close cancels its read/selects a neighbor; inactive close preserves selected work. Closing never deletes repositories.
 

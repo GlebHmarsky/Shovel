@@ -154,6 +154,7 @@ impl Harness {
         });
     }
     fn edit(&mut self, value: &str) {
+        self.click(&text("ConflictShowEditor"));
         let point = self.point(|n| {
             n.role() == egui::Role::MultilineTextInput
                 && n.value().is_some_and(|v| v.contains("<<<<<<<"))
@@ -179,6 +180,135 @@ impl Harness {
 }
 
 #[test]
+fn conflict_summary_shows_verified_sources_and_only_selected_connector_paths() {
+    let mut h = Harness::new();
+    h.open();
+    let palette = crate::workspace_style::Palette::for_mode(h.ctx.global_style().visuals.dark_mode);
+    let focus_paths = |output: &egui::FullOutput| {
+        output
+            .shapes
+            .iter()
+            .filter(|shape| {
+                matches!(&shape.shape, egui::Shape::Path(path)
+                    if path.points.len() == 3 && matches!(path.stroke.color,
+                        egui::epaint::ColorMode::Solid(color) if color == palette.focus)
+                )
+            })
+            .count()
+    };
+    let out = h.render(vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    assert!(
+        nodes
+            .iter()
+            .any(|(_, node)| node.label() == Some("conflict.txt"))
+    );
+    assert!(nodes.iter().any(|(_, node)| {
+        node.label() == Some(text("ConflictMergeAction").as_str()) && node.is_disabled()
+    }));
+    assert!(
+        !nodes
+            .iter()
+            .any(|(_, node)| node.value().is_some_and(|value| value.contains("<<<<<<<")))
+    );
+    let labels = out
+        .shapes
+        .iter()
+        .filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(label) => Some(label.galley.text()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    for branch in ["main", "side"] {
+        assert!(labels.contains(&branch));
+    }
+    assert_eq!(
+        labels
+            .iter()
+            .filter(|label| label.starts_with("Fixture · "))
+            .count(),
+        2
+    );
+    assert_eq!(focus_paths(&out), 2);
+    out.drop_without_applying_deltas();
+
+    h.click(&text("ConflictCurrentSide"));
+    let out = h.render(vec![]);
+    assert_eq!(focus_paths(&out), 1);
+    out.drop_without_applying_deltas();
+    let incoming = h.point(|node| node.label() == Some(text("ConflictIncomingSide").as_str()));
+    let select = h.point(|node| node.label() == Some(text("ConflictUseTheirs").as_str()));
+    assert!(incoming.y < select.y);
+}
+
+#[test]
+fn accepted_stash_apply_supplies_the_exact_stash_card_and_author() {
+    use shovel_core::stashes::{Action, Target};
+    let mut h = Harness::new();
+    let root = h.editor.path.clone();
+    let git = h.editor.git.clone();
+    ok(&git, &root, &["merge", "--abort"]);
+    ok(&git, &root, &["restore", "other.txt"]);
+    ok(&git, &root, &["config", "user.name", "Stash Author"]);
+    fs::write(root.join("conflict.txt"), "stash content\n").unwrap();
+    ok(&git, &root, &["stash", "push", "-m", "Known stash source"]);
+    ok(&git, &root, &["config", "user.name", "Checkout Author"]);
+    fs::write(root.join("conflict.txt"), "checkout content\n").unwrap();
+    ok(&git, &root, &["commit", "-am", "Changes after stash"]);
+    let cancel = Cancellation::default();
+    let snapshot = git.inspect(&root, &cancel).unwrap();
+    let list = git.stashes(&snapshot, &cancel).unwrap();
+    let mut operations = crate::operations::Controller::default();
+    let target = Target::reviewed(&list, &list.entries[0]);
+    assert!(
+        operations
+            .submit_stash(
+                "ActionTitleStashApply",
+                Action::Apply {
+                    target,
+                    restore_index: false,
+                    pop: false
+                },
+                &snapshot,
+                git,
+                &h.editor.scheduler,
+                &h.ctx,
+            )
+            .is_some()
+    );
+    let started = Instant::now();
+    while operations.stash_conflict(&root).is_none() || h.editor.scheduler.has_accepted_work() {
+        operations.poll(&h.ctx);
+        assert!(started.elapsed() < Duration::from_secs(25));
+        thread::sleep(Duration::from_millis(15));
+    }
+    h.editor
+        .observe_stash_conflict(operations.stash_conflict(&root));
+    h.open();
+    let out = h.render(vec![]);
+    let labels = out
+        .shapes
+        .iter()
+        .filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(label) => Some(label.galley.text()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(labels.contains(&"stash@{0}"));
+    assert!(
+        labels
+            .iter()
+            .any(|label| label.starts_with("Stash Author · "))
+    );
+    assert!(
+        labels
+            .iter()
+            .any(|label| label.starts_with("Checkout Author · "))
+    );
+    out.drop_without_applying_deltas();
+}
+
+#[test]
 fn checkboxes_only_preview_then_explicit_resolution_stages_and_reconciles() {
     let mut h = Harness::new();
     h.render(vec![]).drop_without_applying_deltas();
@@ -197,7 +327,7 @@ fn checkboxes_only_preview_then_explicit_resolution_stages_and_reconciles() {
     assert_eq!(h.editor.context.as_ref().unwrap().index_stamp, index);
     assert!(!h.editor.scheduler.has_accepted_work());
     assert!(!h.editor.unsaved_conflict());
-    h.click(&text("ConflictResolveStage"));
+    h.click(&text("ConflictUseTheirs"));
     h.until(|e| e.conflict.is_none());
     assert_eq!(
         fs::read_to_string(h.editor.path.join("conflict.txt")).unwrap(),
@@ -325,7 +455,7 @@ fn typed_text_survives_cancelled_navigation_failed_stage_and_exit_confirmation()
         "external fixture lock",
     )
     .unwrap();
-    h.click(&text("ConflictMergeAction"));
+    h.click(&text("ConflictStageEdited"));
     h.until(|e| !e.action_busy());
     assert!(h.editor.unsaved_conflict());
     assert!(h.editor.output.contains("index.lock"));
@@ -367,7 +497,7 @@ fn accepted_external_merge_finishes_after_commit_window_closes() {
         mode: 2, command: "touch tool-started\nwhile test ! -f tool-release; do sleep .05; done\ncp -- \"$REMOTE\" \"$MERGED\"".into(), ..Default::default()
     };
     h.open();
-    h.click(&text("ConflictExternal"));
+    h.click(&text("ConflictMergeAction"));
     h.until(|e| e.path.join("tool-started").exists());
     assert!(h.editor.scheduler.has_accepted_work());
     h.editor.request_leave(Leave::Close, &h.ctx);

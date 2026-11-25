@@ -178,9 +178,9 @@ fn conflicted_pop_retains_stash_and_does_not_invent_a_sequence() {
     let target = f.create("saved", false);
     fs::write(f.root.join("file"), "later\n").unwrap();
     command(&f.git, &f.root, &["commit", "-am", "later"]);
-    let result = f
+    let (result, origin) = f
         .git
-        .execute_stash(
+        .execute_stash_with_conflict(
             &f.snapshot(),
             &Action::Apply {
                 target: target.clone(),
@@ -196,6 +196,33 @@ fn conflicted_pop_retains_stash_and_does_not_invent_a_sequence() {
     let updated = result.updated.unwrap();
     assert!(updated.operations.is_empty());
     assert!(updated.recovery.is_none());
+    let cancel = Cancellation::default();
+    let context = Arc::new(f.git.working_copy(&f.root, &cancel).unwrap());
+    let change = context
+        .change(shovel_core::working::Group::Conflicted, "file")
+        .unwrap();
+    let plain = f
+        .git
+        .read_conflict(context.clone(), change, &cancel)
+        .unwrap();
+    assert!(!plain.from_stash && plain.sources[1].revision.is_none());
+    let preview = f
+        .git
+        .read_conflict_with_stash(context.clone(), change, origin.as_ref(), &cancel)
+        .unwrap();
+    assert!(preview.from_stash);
+    assert_eq!(
+        preview.sources[1].reference.as_deref(),
+        Some(target.selector.as_str())
+    );
+    assert_eq!(
+        preview.sources[1].revision.as_deref(),
+        Some(target.hash.as_str())
+    );
+    assert_eq!(
+        preview.sources[1].commit.as_ref().unwrap().author,
+        "Fixture"
+    );
     assert_eq!(
         f.git
             .stashes(&updated, &Cancellation::default())

@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.52.8 - 2026-11-26
+
+- Mark new Local Changes files with a green plus. Show one centered preview for an added binary or LFS file, and keep both previews with centered captions for modified LFS files. Added text uses the existing green diff lines.
+- Press Home in History to return to the newest commit from any page.
+- Show conflict sources with verified operation roles, refs, commits, authors and file status. Choose Use Ours or Use Theirs, or select both sides to Merge in the configured external tool. Open the Shovel text editor separately when available.
+
 ## Rust 0.52.7 - 2026-11-26
 
 - Stop the Local Changes files divider at the fixed-height commit editor and scroll long descriptions inside the editor.

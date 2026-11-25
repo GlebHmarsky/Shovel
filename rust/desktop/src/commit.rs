@@ -80,6 +80,7 @@ pub struct Editor {
     geometry: crate::window_geometry::Geometry,
     files_width: f32,
     pub external_merge_tool: shovel_core::conflicts::ToolSettings,
+    stash_conflict: Option<Arc<shovel_core::stashes::ConflictOrigin>>,
     git: Arc<Git>,
     scheduler: Scheduler,
     store: drafts::Store,
@@ -145,6 +146,9 @@ impl Editor {
             .get("ExternalMergeTool")
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_default();
+        if let Some(pane) = &mut self.conflict {
+            pane.update_saved_tool(self.external_merge_tool.clone());
+        }
     }
 
     pub fn new(path: PathBuf, git: Arc<Git>, scheduler: Scheduler, store: drafts::Store) -> Self {
@@ -166,6 +170,7 @@ impl Editor {
             geometry: Default::default(),
             files_width: 380.,
             external_merge_tool: Default::default(),
+            stash_conflict: None,
             git,
             scheduler,
             store,
@@ -433,6 +438,21 @@ impl Editor {
             }
         }
     }
+    pub(super) fn observe_stash_conflict(
+        &mut self,
+        origin: Option<Arc<shovel_core::stashes::ConflictOrigin>>,
+    ) {
+        match (&self.stash_conflict, &origin) {
+            (None, None) => return,
+            (Some(previous), Some(origin)) if Arc::ptr_eq(previous, origin) => return,
+            _ => {}
+        }
+        self.stash_conflict = origin.clone();
+        if let Some(pane) = &mut self.conflict {
+            pane.observe_stash_conflict(origin);
+        }
+    }
+
     fn open_conflict(&mut self) {
         if !self.working_ready() {
             return;
@@ -466,7 +486,8 @@ impl Editor {
                 self.scheduler.clone(),
                 self.external_merge_tool.clone(),
             )
-            .with_read_workers(self.read_workers.clone()),
+            .with_read_workers(self.read_workers.clone())
+            .with_stash_conflict(self.stash_conflict.clone()),
         );
     }
     pub fn draft_problem(&self) -> Option<&str> {

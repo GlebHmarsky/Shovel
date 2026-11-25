@@ -695,6 +695,7 @@ pub(super) fn show_help(ctx: &egui::Context) {
                                         ("CloseTab", "Ctrl+W"),
                                         ("HelpOlderHistory", "Ctrl+Page Down"),
                                         ("HelpNewerHistory", "Ctrl+Page Up"),
+                                        ("FirstHistoryPage", "Home"),
                                         ("Commit", "Ctrl+Enter"),
                                         ("HelpCommitPush", "Ctrl+Shift+Enter"),
                                         ("HelpStageAll", "Shift"),

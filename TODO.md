@@ -9,6 +9,7 @@ Updated 2026-11-26. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [x] Limit new subject input to 72 characters, with 50 as the recommended length. Headless tests cover typing, Unicode paste, and preserving existing drafts.
 - [x] Select all files in the focused Staged or Unstaged list with Ctrl+A, and select text with Ctrl+A in the focused commit field. Headless tests also cover Ctrl-click, Shift-click, and Ctrl+Shift-click selection.
 - [ ] Verify the divider and commit editor layout, physical shortcut input, and installed update in the public Windows Beta.
+- [ ] Verify new-file previews, the History Home shortcut, and conflict summary cards and merge tool launch in the installed Windows Beta.
 
 ## Diff follow-ups
 

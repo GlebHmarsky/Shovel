@@ -3,11 +3,12 @@
 use crate::{
     conflict_text::{self, Content, Encoding, MAX_BYTES},
     diff,
-    git::{Git, Snapshot},
+    git::{self, Commit, Git, Snapshot},
     identity,
     operation::{self, Error, Transcript},
     process::{self, Cancellation, Lifetime},
     recovery::Kind,
+    stashes::ConflictOrigin,
     working::{self, Change, Context, Group, MutationGate},
 };
 use serde::{Deserialize, Serialize};
@@ -30,19 +31,27 @@ pub struct Side {
     pub lfs: bool,
 }
 #[derive(Clone, Debug)]
+pub struct Source {
+    pub reference: Option<String>,
+    pub revision: Option<String>,
+    pub commit: Option<Commit>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Preview {
     pub context: Arc<Context>,
     pub change: Change,
     pub sides: [Option<Side>; 3],
-    pub current_source: String,
-    pub incoming_source: String,
+    pub sources: [Source; 2],
+    pub from_stash: bool,
     pub worktree_stamp: String,
     pub working: Option<Content>,
     pub can_edit: bool,
     pub attributes: Vec<u8>,
     pub tools: Vec<String>,
+    pub configured_tool: Option<String>,
 }
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", default)]
 pub struct ToolSettings {
     pub mode: u64,
@@ -131,6 +140,150 @@ fn working_content(file: &Path) -> Result<Option<Content>, Error> {
     Ok(conflict_text::decode(&bytes))
 }
 impl Git {
+    fn configured_merge_tool(
+        &self,
+        root: &Path,
+        cancel: &Cancellation,
+    ) -> Result<Option<String>, Error> {
+        for key in ["merge.guitool", "merge.tool"] {
+            let result = process::run(
+                &self.request(root, ["config", "--get", key], Lifetime::Read, 65536),
+                cancel,
+                None,
+            )?;
+            if result.outcome != process::Outcome::Exited || result.exit_code > 1 {
+                return Err(Error::Code("ActionReadFailed"));
+            }
+            if result.exit_code == 0 {
+                let name = text(&result.stdout)?.trim();
+                return Ok((!name.is_empty() && !name.chars().any(char::is_control))
+                    .then(|| name.to_owned()));
+            }
+        }
+        Ok(None)
+    }
+
+    fn conflict_source(
+        &self,
+        root: &Path,
+        reference: Option<String>,
+        revision: Option<String>,
+        find_ref: bool,
+        cancel: &Cancellation,
+    ) -> Source {
+        let reference = reference.or_else(|| {
+            let revision = revision.as_ref().filter(|_| find_ref)?;
+            let names = self
+                .local_read(
+                    root,
+                    &[
+                        "for-each-ref",
+                        &format!("--points-at={revision}"),
+                        "--format=%(refname:short)",
+                        "refs/heads",
+                        "refs/remotes",
+                    ],
+                    cancel,
+                )
+                .ok()?;
+            let mut names = names.lines().filter(|name| {
+                !name.is_empty() && !name.ends_with("/HEAD") && !name.chars().any(char::is_control)
+            });
+            let name = names.next()?;
+            // Multiple branch aliases at the same object cannot identify the source ref.
+            names.next().is_none().then(|| name.to_owned())
+        });
+        let commit = revision.as_deref().and_then(|revision| {
+            let mut args = vec!["log".into(), "--no-walk=unsorted".into()];
+            args.extend(git::log_options());
+            args.extend([revision.into(), "--".into()]);
+            let raw = self.read(root, args, cancel, 1024 * 1024).ok()?;
+            let commit = git::parse_commits(&raw.stdout, 1).ok()?.pop()?;
+            (commit.hash == revision).then_some(commit)
+        });
+        Source {
+            reference,
+            revision,
+            commit,
+        }
+    }
+
+    fn conflict_sources(
+        &self,
+        snapshot: &Snapshot,
+        path: &str,
+        stages: &[Option<Side>; 3],
+        stash: Option<&ConflictOrigin>,
+        cancel: &Cancellation,
+    ) -> [Source; 2] {
+        let root = &snapshot.worktree;
+        let recovery = snapshot.recovery.as_ref();
+        let rebase = recovery.is_some_and(|r| r.kind == Kind::Rebase);
+        let current = snapshot
+            .head
+            .as_ref()
+            .filter(|head| {
+                if recovery.is_some() {
+                    return true;
+                }
+                // Stash and externally created conflicts can use a staged version for stage 2.
+                let expected = stages[1].as_ref().map_or_else(String::new, |side| {
+                    format!("{} blob {}\t{path}\0", side.mode, side.hash)
+                });
+                self.read(
+                    root,
+                    ["--literal-pathspecs", "ls-tree", "-z", head, "--", path],
+                    cancel,
+                    65536,
+                )
+                .is_ok_and(|output| output.stdout == expected.as_bytes())
+            })
+            .cloned();
+        let (incoming_ref, incoming, find_ref) = if let Some(stash) = stash {
+            (
+                Some(stash.target.selector.clone()),
+                Some(stash.target.hash.clone()),
+                false,
+            )
+        } else if let Some(recovery) = recovery {
+            match recovery.kind {
+                Kind::Rebase => (
+                    (!recovery.branch.is_empty()).then(|| recovery.branch.clone()),
+                    oid(&recovery.current).then(|| recovery.current.clone()),
+                    false,
+                ),
+                Kind::CherryPick => (
+                    None,
+                    oid(&recovery.current).then(|| recovery.current.clone()),
+                    true,
+                ),
+                Kind::Merge => {
+                    let revision = File::open(snapshot.git_directory.join("MERGE_HEAD"))
+                        .ok()
+                        .and_then(|file| {
+                            let mut bytes = Vec::new();
+                            file.take(4097).read_to_end(&mut bytes).ok()?;
+                            let head = (bytes.len() <= 4096)
+                                .then(|| text(&bytes).ok())
+                                .flatten()?
+                                .trim();
+                            oid(head).then(|| head.to_owned())
+                        });
+                    (None, revision, true)
+                }
+                // A revert applies an inverse patch. REVERT_HEAD is the target,
+                // which is not necessarily the tree supplying stage 3.
+                Kind::Revert => (None, None, false),
+            }
+        } else {
+            (None, None, false)
+        };
+        [
+            self.conflict_source(root, snapshot.branch.clone(), current, rebase, cancel),
+            self.conflict_source(root, incoming_ref, incoming, find_ref, cancel),
+        ]
+    }
+
     fn conflict_attributes(
         &self,
         root: &Path,
@@ -158,6 +311,16 @@ impl Git {
         &self,
         context: Arc<Context>,
         change: &Change,
+        cancel: &Cancellation,
+    ) -> Result<Preview, Error> {
+        self.read_conflict_with_stash(context, change, None, cancel)
+    }
+
+    pub fn read_conflict_with_stash(
+        &self,
+        context: Arc<Context>,
+        change: &Change,
+        stash: Option<&ConflictOrigin>,
         cancel: &Cancellation,
     ) -> Result<Preview, Error> {
         if change.group != Group::Conflicted || !context.entries.contains(change) {
@@ -255,54 +418,8 @@ impl Git {
             && [values[2], values[5]]
                 .iter()
                 .all(|s| matches!(*s, "unset" | "unspecified"));
-        let mut current_source = snapshot
-            .branch
-            .clone()
-            .or(snapshot.head.clone())
-            .unwrap_or_default();
-        let mut incoming_source = String::new();
-        if let Some(recovery) = &snapshot.recovery {
-            if recovery.kind == Kind::Rebase {
-                current_source = snapshot.head.clone().unwrap_or_default();
-                incoming_source = format!("{} · {}", recovery.branch, recovery.current);
-            } else {
-                let marker = match recovery.kind {
-                    Kind::Merge => "MERGE_HEAD",
-                    Kind::CherryPick => "CHERRY_PICK_HEAD",
-                    Kind::Revert => "REVERT_HEAD",
-                    _ => unreachable!(),
-                };
-                if let Ok(file) = File::open(snapshot.git_directory.join(marker)) {
-                    let mut bytes = Vec::new();
-                    file.take(4096).read_to_end(&mut bytes)?;
-                    if bytes.len() < 4096 {
-                        incoming_source = text(&bytes)?
-                            .lines()
-                            .map(str::trim)
-                            .filter(|s| oid(s))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                    }
-                }
-                if recovery.kind == Kind::Merge && oid(&incoming_source) {
-                    let names = self.local_read(
-                        root,
-                        &[
-                            "for-each-ref",
-                            &format!("--points-at={incoming_source}"),
-                            "--format=%(refname:short)",
-                            "refs/heads",
-                            "refs/remotes",
-                        ],
-                        cancel,
-                    )?;
-                    let names = names.lines().take(3).collect::<Vec<_>>().join(", ");
-                    if !names.is_empty() {
-                        incoming_source = format!("{names} · {incoming_source}");
-                    }
-                }
-            }
-        }
+        let stash = stash.filter(|stash| stash.matches(snapshot, &change.path, &raw));
+        let sources = self.conflict_sources(snapshot, &change.path, &sides, stash, cancel);
         if self.semantic_index(snapshot, cancel)? != context.index_stamp
             || diff::content_stamp(root, &change.path, cancel)? != worktree_stamp
             || identity::read(root)? != snapshot.identity
@@ -347,17 +464,19 @@ impl Git {
                 tools.insert(name.into());
             }
         }
+        let configured_tool = self.configured_merge_tool(root, cancel).ok().flatten();
         Ok(Preview {
             context,
             change: change.clone(),
             sides,
-            current_source,
-            incoming_source,
+            sources,
+            from_stash: stash.is_some(),
             worktree_stamp,
             working,
             can_edit,
             attributes,
             tools: tools.into_iter().take(64).collect(),
+            configured_tool,
         })
     }
     fn validate_conflict(
@@ -429,20 +548,9 @@ impl Git {
             Tool::Configured => {}
         }
         if name.is_empty() {
-            for key in ["merge.guitool", "merge.tool"] {
-                let result = process::run(
-                    &self.request(root, ["config", "--get", key], Lifetime::Read, 65536),
-                    cancel,
-                    None,
-                )?;
-                if result.outcome != process::Outcome::Exited || result.exit_code > 1 {
-                    return Err(Error::Code("ActionReadFailed"));
-                }
-                if result.exit_code == 0 {
-                    name = text(&result.stdout)?.trim().into();
-                    break;
-                }
-            }
+            name = self
+                .configured_merge_tool(root, cancel)?
+                .ok_or(Error::Code("ConflictToolMissing"))?;
         }
         if name.trim().is_empty() || name.chars().any(char::is_control) {
             return Err(Error::Code("ConflictToolMissing"));

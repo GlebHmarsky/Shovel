@@ -29,6 +29,7 @@ pub(super) struct State {
     pub stash_selection: stashes::SidebarSelection,
     pub offset: egui::Vec2,
     pub restore_offset: Option<egui::Vec2>,
+    pub home_requested: bool,
     views: BTreeMap<usize, SavedView>,
 }
 impl State {
@@ -306,6 +307,18 @@ impl Workspace {
     }
 }
 impl Tab {
+    pub(super) fn finish_history_home(&mut self) {
+        self.view.home_requested = false;
+        self.view.offset.y = 0.;
+        self.view.restore_offset = Some(self.view.offset);
+        self.scroll_selected = false;
+        self.selected = self
+            .page
+            .as_ref()
+            .and_then(|page| page.entries.first())
+            .map(|entry| entry.commit.hash.clone());
+    }
+
     pub(super) fn show_initial_history(&mut self, mut page: Page) {
         self.selected = page.entries.first().map(|entry| entry.commit.hash.clone());
         page.next = None;

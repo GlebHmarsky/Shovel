@@ -936,6 +936,9 @@ impl Workspace {
                         });
                         let replaced_page = matches!(read, history_view::Read::Page(..));
                         tab.publish_history(read, first);
+                        if first && tab.view.home_requested {
+                            tab.finish_history_home();
+                        }
                         if replaced_page {
                             tab.previous = previous;
                         }
@@ -1060,6 +1063,7 @@ impl Workspace {
                         .find(|t| t.id == id && t.view.generation == generation)
                     {
                         tab.loading = false;
+                        tab.view.home_requested = false;
                         tab.view.checking_identity = false;
                         tab.discard_initial_history();
                         if tab.view.reopen_commit_owner.take().is_some() {
@@ -1258,6 +1262,20 @@ impl Workspace {
             self.refresh_avatar_sources(ctx);
         }
         for editor in &mut self.editors {
+            let worktree = editor
+                .context
+                .as_ref()
+                .map_or(editor.path.as_path(), |context| {
+                    context.repository.worktree.as_path()
+                });
+            let stash_conflict = self.operations.stash_conflict(worktree);
+            let had_stash_conflicts = stash_conflict.is_some()
+                && editor.context.as_ref().is_some_and(|context| {
+                    !context
+                        .group(shovel_core::working::Group::Conflicted)
+                        .is_empty()
+                });
+            editor.observe_stash_conflict(stash_conflict);
             if changed.iter().any(|path| {
                 Self::same_path(path, &editor.path)
                     || editor
@@ -1279,6 +1297,15 @@ impl Workspace {
                     &context.repository,
                     &self.scheduler,
                 );
+                if had_stash_conflicts
+                    && context
+                        .group(shovel_core::working::Group::Conflicted)
+                        .is_empty()
+                {
+                    self.operations
+                        .forget_stash_conflict(&context.repository.worktree);
+                    editor.observe_stash_conflict(None);
+                }
             }
             for activity in editor.take_activity() {
                 self.operations.record_owned(editor.path.clone(), activity);
@@ -2142,7 +2169,8 @@ impl eframe::App for Workspace {
                         if ui
                             .add_enabled(
                                 first,
-                                egui::Button::new(strings::text("FirstHistoryPage")),
+                                egui::Button::new(strings::text("FirstHistoryPage"))
+                                    .shortcut_text(strings::text("HistoryFirstShortcut")),
                             )
                             .on_disabled_hover_text(
                                 self.tabs
@@ -3220,6 +3248,7 @@ impl eframe::App for Workspace {
         }
         let mut history_edge = None;
         let mut history_action = None;
+        let mut history_home = false;
         egui::CentralPanel::default()
             .frame(workspace_style::pane(palette.canvas, 0, 0))
             .show(ui, |ui| {
@@ -3256,6 +3285,19 @@ impl eframe::App for Workspace {
                 if page.entries.is_empty() {
                     ui.label(strings::text("HistoryEmptyAll"));
                 }
+                let list_focus = ui.interact(
+                    ui.available_rect_before_wrap(),
+                    ui.make_persistent_id(("history_list_focus", tab.id)),
+                    egui::Sense::focusable_noninteractive(),
+                );
+                list_focus.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::Role::List,
+                        ui.is_enabled(),
+                        strings::text("AllCommits"),
+                    )
+                });
+                let mut row_focused = false;
                 let selected_author = page
                     .entries
                     .iter()
@@ -3291,54 +3333,78 @@ impl eframe::App for Workspace {
                 let scroll_output = scroll.show_rows(ui, HEIGHT, page.entries.len(), |ui, range| {
                     for index in range {
                         let entry = &page.entries[index];
+                        let selected = tab.selected.as_ref() == Some(&entry.commit.hash);
+                        let peer = selected_author.is_some_and(|(name, email)| {
+                            !email.trim().is_empty()
+                                && &entry.commit.author == name
+                                && &entry.commit.email == email
+                        });
+                        let response = ui
+                            .push_id(&entry.commit.hash, |ui| {
+                                history_row::show(
+                                    ui, entry, lanes,
+                                    history_row::Style {
+                                        list_focused: list_focus.has_focus(),
+                                        selected, peer, refs_right,
+                                        worktree: &tab.path,
+                                        incoming: tab.divergence.is_incoming(&entry.commit.hash),
+                                    },
+                                    &palette,
+                                )
+                            })
+                            .inner;
+                        row_focused |= response.has_focus();
+                        if response.clicked() {
+                            if response.clicked_by(egui::PointerButton::Primary) {
+                                list_focus.request_focus();
+                            }
+                            tab.selected = Some(entry.commit.hash.clone());
+                        }
+                        if response.secondary_clicked()
+                            && let Some(history) = &tab.history
                         {
-                            let selected = tab.selected.as_ref() == Some(&entry.commit.hash);
-                            let peer = selected_author.is_some_and(|(name, email)| {
-                                !email.trim().is_empty()
-                                    && &entry.commit.author == name
-                                    && &entry.commit.email == email
-                            });
-                            let response = ui
-                                .push_id(&entry.commit.hash, |ui| {
-                                    history_row::show(
-                                        ui, entry, lanes,
-                                        history_row::Style {
-                                            selected, peer, refs_right,
-                                            worktree: &tab.path,
-                                            incoming: tab.divergence.is_incoming(&entry.commit.hash),
-                                        },
-                                        &palette,
-                                    )
-                                })
-                                .inner;
-                            if response.clicked() {
-                                tab.selected = Some(entry.commit.hash.clone());
-                            }
-                            if response.secondary_clicked()
-                                && let Some(history) = &tab.history
-                            {
-                                self.history_menu = Some(HistoryMenu {
-                                    owner: tab.id,
-                                    snapshot: history.snapshot.clone(),
-                                    commit: entry.commit.clone(),
-                                });
-                            }
-                            response.context_menu(|ui| {
-                                if let Some(menu) = &self.history_menu
-                                    && menu.owner == tab.id
-                                    && menu.commit.hash == entry.commit.hash
-                                    && let Some(command) = menu.show(
-                                        ui,
-                                        self.git.is_some() && !tab.view.identity_blocked,
-                                    )
-                                {
-                                    history_action = Some((menu.clone(), command));
-                                }
+                            self.history_menu = Some(HistoryMenu {
+                                owner: tab.id,
+                                snapshot: history.snapshot.clone(),
+                                commit: entry.commit.clone(),
                             });
                         }
+                        response.context_menu(|ui| {
+                            if let Some(menu) = &self.history_menu
+                                && menu.owner == tab.id
+                                && menu.commit.hash == entry.commit.hash
+                                && let Some(command) = menu.show(
+                                    ui,
+                                    self.git.is_some() && !tab.view.identity_blocked,
+                                )
+                            {
+                                history_action = Some((menu.clone(), command));
+                            }
+                        });
                     }
                 });
                 tab.view.offset = scroll_output.state.clamped_offset();
+                if !shortcuts_blocked
+                    && !tab.view.identity_blocked
+                    && (page.cursor.offset == 0 || self.git.is_some())
+                    && (list_focus.has_focus() || row_focused)
+                    && ctx.input_mut(|input| {
+                        input.modifiers.is_none()
+                            && input.consume_key(egui::Modifiers::NONE, egui::Key::Home)
+                    })
+                {
+                    list_focus.request_focus();
+                    tab.view.home_requested = true;
+                }
+                if tab.view.home_requested && !tab.loading && !tab.view.identity_blocked {
+                    if page.cursor.offset == 0 {
+                        tab.finish_history_home();
+                        ctx.request_repaint();
+                    } else {
+                        history_home = true;
+                    }
+                    return;
+                }
                 if !modal_open && !restoring && !tab.loading && !tab.view.identity_blocked
                     && ctx.pointer_hover_pos().is_some_and(|point| {
                         scroll_output.inner_rect.contains(point)
@@ -3358,6 +3424,9 @@ impl eframe::App for Workspace {
                     }
                 }
             });
+        if history_home {
+            self.first_page(&ctx);
+        }
         if let Some((menu, command)) = history_action {
             self.invoke_history_menu(menu, command, &ctx);
         }

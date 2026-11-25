@@ -57,6 +57,10 @@ fn align(lines: &[Line]) -> Vec<Pair> {
 impl View {
     pub fn show(&self, ui: &mut egui::Ui, diff: &FileDiff) {
         if diff.kind == Kind::Binary {
+            if diff.old.absent && !diff.new.absent {
+                card(ui, false, &diff.new, diff.new_extension.as_deref());
+                return;
+            }
             ui.columns(2, |columns| {
                 card(
                     &mut columns[0],
@@ -165,30 +169,50 @@ pub(super) fn binary_size(bytes: u64) -> String {
 
 fn card(ui: &mut egui::Ui, old: bool, summary: &Summary, extension: Option<&str>) {
     let palette = crate::workspace_style::Palette::current(ui);
-    let title = text(if old { "DiffOldSide" } else { "DiffNewSide" });
     let color = if old {
         palette.diff_removed_text
     } else {
         palette.diff_added_text
     };
+    let title = RichText::new(text(if old { "DiffOldSide" } else { "DiffNewSide" }))
+        .strong()
+        .color(color);
+    let badge = summary.lfs.then(|| {
+        RichText::new(text("BinaryLfs"))
+            .small()
+            .strong()
+            .color(palette.selection_text)
+    });
+    let width = |label: &RichText| {
+        egui::WidgetText::from(label.clone())
+            .into_galley(
+                ui,
+                Some(egui::TextWrapMode::Extend),
+                f32::INFINITY,
+                egui::TextStyle::Body,
+            )
+            .size()
+            .x
+    };
+    let heading_width = width(&title)
+        + badge
+            .as_ref()
+            .map_or(0., |label| width(label) + 10. + ui.spacing().item_spacing.x);
     ui.vertical_centered(|ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(title).strong().color(color));
-            if summary.lfs {
-                egui::Frame::new()
-                    .fill(palette.active_selection)
-                    .corner_radius(3)
-                    .inner_margin(egui::Margin::symmetric(5, 2))
-                    .show(ui, |ui| {
-                        ui.label(
-                            RichText::new(text("BinaryLfs"))
-                                .small()
-                                .strong()
-                                .color(palette.selection_text),
-                        );
-                    });
-            }
-        });
+        ui.allocate_ui_with_layout(
+            egui::vec2(heading_width, 0.),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.label(title);
+                if let Some(badge) = badge {
+                    egui::Frame::new()
+                        .fill(palette.active_selection)
+                        .corner_radius(3)
+                        .inner_margin(egui::Margin::symmetric(5, 2))
+                        .show(ui, |ui| ui.label(badge));
+                }
+            },
+        );
         let width = ui.available_width().clamp(44., 152.);
         let (tile, _) = ui.allocate_exact_size(egui::vec2(width, 105.), egui::Sense::hover());
         let painter = ui.painter();

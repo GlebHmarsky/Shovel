@@ -43,8 +43,21 @@ fn rebase_preview_names_rebased_checkout_and_replayed_commit_without_swapping_st
     let onto = f.cmd(&["rev-parse", "side"]);
     assert!(!raw(&f.git, &f.root, &["rebase", "side"]).success());
     let preview = f.preview();
-    assert_eq!(preview.current_source, onto);
-    assert_eq!(preview.incoming_source, format!("main · {replayed}"));
+    assert_eq!(preview.sources[0].reference.as_deref(), Some("side"));
+    assert_eq!(preview.sources[0].revision.as_deref(), Some(onto.as_str()));
+    assert_eq!(
+        preview.sources[0].commit.as_ref().unwrap().subject(),
+        "incoming"
+    );
+    assert_eq!(preview.sources[1].reference.as_deref(), Some("main"));
+    assert_eq!(
+        preview.sources[1].revision.as_deref(),
+        Some(replayed.as_str())
+    );
+    assert_eq!(
+        preview.sources[1].commit.as_ref().unwrap().subject(),
+        "current"
+    );
     assert_eq!(
         preview.sides[1]
             .as_ref()
@@ -235,8 +248,14 @@ fn native_side_selection_runs_hooks_stages_one_file_and_keeps_merge_pending() {
             .text,
         "base\r\n"
     );
-    assert_eq!(preview.current_source, "main");
-    assert!(preview.incoming_source.starts_with("side · "));
+    assert_eq!(preview.sources[0].reference.as_deref(), Some("main"));
+    assert_eq!(preview.sources[1].reference.as_deref(), Some("side"));
+    for (source, subject) in preview.sources.iter().zip(["current", "incoming"]) {
+        let commit = source.commit.as_ref().unwrap();
+        assert_eq!(source.revision.as_deref(), Some(commit.hash.as_str()));
+        assert_eq!(commit.subject(), subject);
+        assert_eq!(commit.author, "Fixture");
+    }
     fs::write(
         f.root.join(".git/hooks/post-checkout"),
         "#!/bin/sh\necho native-checkout >> hook-evidence\n",
@@ -402,6 +421,7 @@ fn configured_and_custom_mergetools_stage_native_results_without_config_changes(
             .insert("MERGETOOL_PROMPT".into(), Some("false".into()));
         let preview = f.preview();
         assert!(preview.tools.contains(&"fixture".into()));
+        assert_eq!(preview.configured_tool.as_deref(), Some("fixture"));
         let configuration = fs::read(f.root.join(".git/config")).unwrap();
         let tool = if saved {
             Tool::Saved(ToolSettings { mode: 2, command: "printf '%s\\n' 'custom  spacing' > \"$MERGED\"\r\nprintf '%s' 'second line' >> \"$MERGED\"".into(), ..Default::default() })

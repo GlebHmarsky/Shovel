@@ -1,6 +1,6 @@
 #![cfg(windows)]
 use shovel_core::{
-    diff::{HunkAvailability, Kind, Options},
+    diff::{HunkAvailability, Kind, LineKind, Options},
     git::Git,
     process::{self, Cancellation, Lifetime},
     working::{Action, Error, Group},
@@ -214,6 +214,53 @@ fn binary_and_lfs_sizes_are_local_and_absent_is_distinct_from_empty() {
                 assert!(diff.lines.is_empty());
             }
         }
+    }
+}
+
+#[test]
+fn new_worktree_and_staged_previews_identify_added_text_and_local_lfs() {
+    let (temp, git, _) = fixture();
+    let root = temp.path();
+    let cancel = Cancellation::default();
+    fs::write(root.join("new.cpp"), "int answer() {\n    return 42;\n}").unwrap();
+    fs::write(
+        root.join(".gitattributes"),
+        "*.uasset filter=lfs diff=lfs merge=lfs -text\n",
+    )
+    .unwrap();
+    fs::write(root.join("New.uasset"), [0, 1, 2, 3]).unwrap();
+    let context = git.working_copy(root, &cancel).unwrap();
+    let entry = context.change(Group::Untracked, "New.uasset").unwrap();
+    let asset = git.file_diff_preview(&context, entry, &cancel).unwrap();
+    assert_eq!(asset.kind, Kind::Binary);
+    assert!(asset.old.absent && asset.new.lfs);
+    assert_eq!(asset.new.bytes, Some(4));
+    assert_eq!(asset.new_extension.as_deref(), Some(".uasset"));
+
+    for group in [Group::Untracked, Group::Staged] {
+        if group == Group::Staged {
+            command(&git, root, &["add", "--", "new.cpp"]);
+        }
+        let context = git.working_copy(root, &cancel).unwrap();
+        let entry = context.change(group, "new.cpp").unwrap();
+        let diff = git.file_diff_preview(&context, entry, &cancel).unwrap();
+        assert_eq!(diff.kind, Kind::Text);
+        assert!(diff.old.absent && !diff.new.absent);
+        assert_eq!((diff.added, diff.removed), (3, 0));
+        let lines = diff
+            .lines
+            .iter()
+            .filter(|line| line.kind == LineKind::Added);
+        assert_eq!(
+            lines
+                .map(|line| (line.new, line.text.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (Some(1), "int answer() {"),
+                (Some(2), "    return 42;"),
+                (Some(3), "}"),
+            ]
+        );
     }
 }
 

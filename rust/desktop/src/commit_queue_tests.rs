@@ -194,6 +194,90 @@ fn select_all_uses_the_whole_focused_file_list() {
 }
 
 #[test]
+fn local_changes_shows_added_markers_and_centers_binary_cards() {
+    let mut h = Harness::new();
+    let pointer = |size| {
+        format!(
+            "version https://git-lfs.github.com/spec/v1\noid sha256:{}\nsize {size}\n",
+            "a".repeat(64),
+        )
+    };
+    let root = h.editor.path.clone();
+    fs::write(root.join("existing.uasset"), pointer(5)).unwrap();
+    h.git(&["add", "existing.uasset"]);
+    h.git(&["commit", "-m", "Add an LFS asset"]);
+    fs::write(root.join("existing.uasset"), pointer(7)).unwrap();
+    fs::write(root.join("new.uasset"), pointer(9)).unwrap();
+    fs::write(root.join("new.cpp"), "return 42;\n").unwrap();
+    h.git(&["add", "new.cpp"]);
+    h.refresh();
+    h.until(|editor| !editor.loading);
+
+    let out = h.render(vec![]);
+    let added_markers = out
+        .shapes
+        .iter()
+        .filter(|shape| {
+            matches!(&shape.shape,
+                egui::Shape::Text(label) if label.galley.text() == "+"
+            )
+        })
+        .count();
+    assert_eq!(added_markers, 2);
+    out.drop_without_applying_deltas();
+
+    for (row, tiles) in [
+        ("Untracked · new.uasset", 1),
+        ("Unstaged · Modified · existing.uasset", 2),
+    ] {
+        h.click(row);
+        h.until(|editor| editor.diff_current);
+        let out = h.render(vec![]);
+        let mut preview_tiles = out
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect) if rect.rect.height() == 105. => Some(rect.rect),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        preview_tiles.dedup();
+        assert_eq!(preview_tiles.len(), tiles);
+        for (index, tile) in preview_tiles.iter().enumerate() {
+            let side = text(if tiles == 2 && index == 0 {
+                "DiffOldSide"
+            } else {
+                "DiffNewSide"
+            });
+            let heading = out
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(label)
+                        if matches!(label.galley.text(), "LFS") || label.galley.text() == side =>
+                    {
+                        let rect = label.visual_bounding_rect();
+                        (rect.bottom() < tile.top() && tile.x_range().contains(rect.center().x))
+                            .then_some(rect)
+                    }
+                    _ => None,
+                })
+                .reduce(egui::Rect::union)
+                .unwrap();
+            assert!((heading.center().x - tile.center().x).abs() < 5.);
+        }
+        out.drop_without_applying_deltas();
+    }
+    h.click("Staged · Added · new.cpp");
+    h.until(|editor| editor.diff_current);
+    let out = h.render(vec![]);
+    assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
+        egui::Shape::Text(label) if label.galley.text().ends_with("+ return 42;")
+    )));
+    out.drop_without_applying_deltas();
+}
+
+#[test]
 fn shift_replaces_each_staging_button_and_operates_on_the_whole_group() {
     let mut h = Harness::new();
     h.click("Unstaged · Modified · one.txt");
