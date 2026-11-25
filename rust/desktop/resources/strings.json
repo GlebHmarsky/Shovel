@@ -452,7 +452,7 @@
   "CommitUnresolved": "Resolve and stage all conflicted files before committing.",
   "CommitNothingStaged": "Stage changes before committing.",
   "CommitReady": "Commit the staged snapshot. Hold Shift to commit and push to the displayed upstream.",
-  "CommitCharactersRemaining": "Characters remaining on this line",
+  "CommitCharactersRemaining": "Subject characters left. Aim for 50 and use at most 72.",
   "CommitDraftHelp": "Message retained while this repository tab remains open.",
   "CommitAmendTarget": "Replace commit {0}. This rewrites its hash.",
   "CommitAmend": "Amend",

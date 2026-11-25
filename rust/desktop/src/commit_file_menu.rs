@@ -760,6 +760,24 @@ impl Editor {
         {
             return;
         }
+        if !self.working_blocked()
+            && let Some(focus) = &self.focused
+            && ctx.input_mut(|input| {
+                input.modifiers.ctrl
+                    && !input.modifiers.shift
+                    && !input.modifiers.alt
+                    && !input.modifiers.mac_cmd
+                    && input.consume_key(egui::Modifiers::CTRL, egui::Key::A)
+            })
+        {
+            let entries = self.context.as_ref().map(|context| context.entries.as_slice());
+            let rows = file_list::FileList::from_entries(
+                entries.or(self.preview_rows.as_deref()).unwrap_or_default(),
+                focus.group == Group::Staged,
+            );
+            self.selection = rows.entries().map(|entry| (entry.group, entry.path.clone())).collect();
+            return;
+        }
         enum Shortcut {
             Open,
             Discard,

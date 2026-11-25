@@ -1,6 +1,14 @@
 # Implementation checklist
 
-Updated 2026-11-18. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+Updated 2026-11-26. Single prioritized task list; [roadmap](docs/roadmap.md) holds completed milestones/evidence. P0 = correctness prerequisite; P1 = next delivery; P2 = later. Later user requests can change order without reapproving a whole historical phase.
+
+## Local Changes follow-ups
+
+- [x] Stop the vertical splitter at the top edge of the commit editor. Headless layout and pointer checks cover two window sizes and UI scales.
+- [x] Fix the editor height, remove its vertical resize handle, and keep long descriptions scrollable inside it.
+- [x] Limit new subject input to 72 characters, with 50 as the recommended length. Headless tests cover typing, Unicode paste, and preserving existing drafts.
+- [x] Select all files in the focused Staged or Unstaged list with Ctrl+A, and select text with Ctrl+A in the focused commit field. Headless tests also cover Ctrl-click, Shift-click, and Ctrl+Shift-click selection.
+- [ ] Verify the divider and commit editor layout, physical shortcut input, and installed update in the public Windows Beta.
 
 ## Diff follow-ups
 

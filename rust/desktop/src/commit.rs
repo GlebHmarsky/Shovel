@@ -79,7 +79,6 @@ pub struct Editor {
     pub size: egui::Vec2,
     geometry: crate::window_geometry::Geometry,
     files_width: f32,
-    message_height: f32,
     pub external_merge_tool: shovel_core::conflicts::ToolSettings,
     git: Arc<Git>,
     scheduler: Scheduler,
@@ -166,7 +165,6 @@ impl Editor {
             size: egui::vec2(1200., 800.),
             geometry: Default::default(),
             files_width: 380.,
-            message_height: 220.,
             external_merge_tool: Default::default(),
             git,
             scheduler,
@@ -1092,7 +1090,6 @@ impl Editor {
                 value("Height", 800., 620., 4320.),
             );
             self.files_width = value("FilesWidth", 380., 250., 3000.);
-            self.message_height = value("MessageHeight", 220., 180., 2000.);
         }
         if let Some(layout) = crate::window_geometry::saved_layout(settings, "CommitWindow") {
             self.size = egui::vec2(
@@ -1111,7 +1108,6 @@ impl Editor {
             ("Width", self.size.x),
             ("Height", self.size.y),
             ("FilesWidth", self.files_width),
-            ("MessageHeight", self.message_height),
         ] {
             layout.insert(key.into(), serde_json::json!(value));
         }
@@ -1232,14 +1228,13 @@ impl Editor {
                 });
             });
         }
-        let message = egui::Panel::bottom(if self.inline {
+        egui::Panel::bottom(if self.inline {
             "inline_commit_message"
         } else {
             "commit_message"
         })
-        .default_size(self.message_height)
-        .min_size(140.)
-        .resizable(true)
+        .exact_size(220.)
+        .resizable(false)
         .show(ui, |ui| {
             if let Some(error) = &self.draft_error {
                 ui.colored_label(ui.visuals().error_fg_color, error);
@@ -1320,7 +1315,6 @@ impl Editor {
                 }
             });
         });
-        self.message_height = message.response.rect.height();
         if !self.operation_output.is_empty() {
             egui::Panel::bottom("commit-output").show(ui, |ui| {
                 egui::CollapsingHeader::new(text("ActionOutput")).show(ui, |ui| {
@@ -1335,6 +1329,10 @@ impl Editor {
                 });
             });
         }
+        // A scroll area's content can extend its panel's frame beyond the reserved space.
+        // Clip both the egui splitter's paint and its input to the area above the editor.
+        let clip = ui.clip_rect();
+        ui.shrink_clip_rect(ui.available_rect_before_wrap());
         let files = egui::Panel::left(if self.inline {
             "inline_commit_files"
         } else {
@@ -1518,12 +1516,15 @@ impl Editor {
                             }
                         },
                     );
-                ui.separator();
+                if !staged {
+                    ui.separator();
+                }
             }
             if let Some(next) = chosen {
                 self.request_leave(next, &ctx);
             }
         });
+        ui.set_clip_rect(clip);
         self.files_width = files.response.rect.width();
         self.open_conflict();
         egui::CentralPanel::default().show(ui, |ui| {
@@ -1641,6 +1642,7 @@ impl Editor {
 #[cfg(test)]
 #[path = "commit_conflict_tests.rs"]
 mod conflict_tests;
+const SUBJECT_RECOMMENDED: usize = 50;
 const MESSAGE_COLUMN: usize = 72;
 
 fn message_field(ui: &mut egui::Ui, value: &mut String, description: bool) -> egui::Response {
@@ -1659,16 +1661,29 @@ fn message_field(ui: &mut egui::Ui, value: &mut String, description: bool) -> eg
         })
         .inner;
     let font = egui::TextStyle::Monospace.resolve(ui.style());
-    let edit = if description {
-        egui::TextEdit::multiline(value).desired_rows(3)
+    let (output, viewport) = if description {
+        let height = ui.text_style_height(&egui::TextStyle::Monospace) * 3. + 8.;
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt("commit_description")
+            .auto_shrink([false, true])
+            .max_height(height)
+            .show(ui, |ui| {
+                egui::TextEdit::multiline(value)
+                    .desired_rows(3)
+                    .font(font.clone())
+                    .desired_width(f32::INFINITY)
+                    .show(ui)
+            });
+        (scroll.inner, scroll.inner_rect)
     } else {
-        egui::TextEdit::singleline(value)
+        let output = egui::TextEdit::singleline(value)
+            .char_limit(MESSAGE_COLUMN)
+            .font(font.clone())
+            .desired_width(f32::INFINITY)
+            .show(ui);
+        (output, ui.clip_rect())
     };
-    let output = edit
-        .font(font.clone())
-        .desired_width(f32::INFINITY)
-        .show(ui);
-    let clip = output.text_clip_rect.intersect(output.response.rect);
+    let clip = output.text_clip_rect.intersect(viewport);
     let guide = output.galley_pos.x
         + ui.fonts_mut(|fonts| fonts.glyph_width(&font, 'M')) * MESSAGE_COLUMN as f32;
     let palette = crate::workspace_style::Palette::current(ui);
@@ -1680,11 +1695,14 @@ fn message_field(ui: &mut egui::Ui, value: &mut String, description: bool) -> eg
         );
     }
     if let Some(count_rect) = count_rect {
-        let remaining = MESSAGE_COLUMN as i64 - value.chars().count() as i64;
-        let color = match remaining {
-            ..=-21 => palette.diff_removed_text,
-            -20..=-1 => crate::workspace_style::Palette::change_status('M', ui.visuals().dark_mode),
-            _ => palette.text,
+        let length = value.chars().count();
+        let remaining = MESSAGE_COLUMN as i64 - length as i64;
+        let color = if length > MESSAGE_COLUMN {
+            palette.diff_removed_text
+        } else if length > SUBJECT_RECOMMENDED {
+            crate::workspace_style::Palette::change_status('M', ui.visuals().dark_mode)
+        } else {
+            palette.text
         };
         // The count belongs to the label above the edit. Do not move the parent layout cursor.
         ui.place(
@@ -1772,7 +1790,6 @@ mod tests {
             let native = egui::vec2(1188., 792.);
             let mut editor = new_editor();
             editor.files_width = 413.;
-            editor.message_height = 237.;
             for _ in 0..2 {
                 ctx.run_ui(fixture_input(native / zoom, 1.5, false), |ui| {
                     editor.observe_geometry(ui.ctx(), egui::ViewportClass::Immediate)
@@ -1791,7 +1808,6 @@ mod tests {
             reopened.restore_layout(&reloaded);
             assert!((reopened.size - native).length() < 0.01);
             assert_eq!(reopened.files_width, 413.);
-            assert_eq!(reopened.message_height, 237.);
             assert!((points(&ctx, reopened.size) * zoom - native).length() < 0.01);
             // Embedded test layouts must not overwrite the native Commit geometry.
             ctx.run_ui(fixture_input(egui::vec2(400., 300.), 1.5, false), |ui| {

@@ -1,5 +1,11 @@
 # Roadmap and decision register
 
+## Local Changes layout and keyboard in Rust 0.52.7
+
+The files splitter stops at the fixed-height commit editor. Long descriptions scroll inside the editor. New subject input is capped at 72 characters, with 50 recommended. Ctrl+A respects file-list and text-field focus.
+
+Four focused headless checks, all-target Clippy, the Git diff check, and the release policy checks passed. The 18-check smoke suite passed in 43.46 seconds on source fingerprint `AEDF05E9A8658677E3C62D57DF70F1D923085E5BFAAAEB4A6B118B79BC90135E`. Physical keyboard, native layout, and installed update acceptance remain open.
+
 ## File selection in Rust 0.52.6
 
 Local Changes selects an inclusive Shift-click range in the current pane using the full file order, including virtualized rows. Ctrl+Shift-click adds the range to the selection. Selected rows use the active window color and retain their selection when the window loses focus. The main Unstaged header carries the count, with subgroup headers for conflicts and untracked paths.

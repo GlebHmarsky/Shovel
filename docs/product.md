@@ -16,9 +16,11 @@ The current branch and operation progress share one line below the repository na
 
 Commit shows the author, subject, message body and changed paths across the pane. Changed Files shows a path list with change letters and a diff. Drag the divider to set the list width. Shovel saves it across sessions. Use Repository → Refresh or F5 to retry an inspector read.
 
-## Local Changes selection (0.52.6)
+## Local Changes selection and editor (0.52.7)
 
-Shift-click selects files between the last clicked file and the new one in the same pane. Ctrl-click toggles individual files. Ctrl+Shift-click adds a range. Selected rows are blue while the window has focus and gray when it loses focus. The Unstaged header shows the total count.
+Shift-click selects files between the last clicked file and the new one in the same pane. Ctrl-click toggles individual files. Ctrl+Shift-click adds a range. Ctrl+A selects all files in the focused Staged or Unstaged list or selects text in the focused commit field. Selected rows are blue while the window has focus and gray when it loses focus. The Unstaged header shows the total count.
+
+The files divider stops at the top of the fixed-height editor. Long descriptions scroll inside the editor. The subject field shows how many characters remain up to 72 and highlights subjects above the recommended 50. New input observes the 72-character limit. Existing drafts keep their full subject.
 
 ## Local Changes diff pane (0.52.5)
 

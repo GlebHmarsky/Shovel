@@ -29,7 +29,13 @@ fn commit_message_fields_accept_pointer_input_without_overlapping_the_footer() {
     let mut h = Harness::new();
     h.stage("one.txt");
     h.until(|e| !e.action_busy());
+    let legacy_subject = "S".repeat(82);
+    h.editor.draft.subject = legacy_subject.clone();
     let out = h.render(vec![]);
+    assert_eq!(h.editor.draft.subject, legacy_subject);
+    assert!(out.shapes.iter().any(
+        |shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "-10")
+    ));
     let tree = out.platform_output.accesskit_update.as_ref().unwrap();
     let bounds = |role| {
         tree.nodes
@@ -57,15 +63,20 @@ fn commit_message_fields_accept_pointer_input_without_overlapping_the_footer() {
         }])
         .drop_without_applying_deltas();
     }
-    let title = "S".repeat(82);
-    let out = h.render(vec![egui::Event::Text(title.clone())]);
-    assert_eq!(h.editor.draft.subject, title);
+    h.select_all();
+    let out = h.render(vec![egui::Event::Text("S".repeat(82))]);
+    assert_eq!(h.editor.draft.subject, "S".repeat(72));
     assert!(
         out.shapes
             .iter()
-            .any(|shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "-10"))
+            .any(|shape| matches!(&shape.shape, egui::Shape::Text(s) if s.galley.text() == "0"))
     );
     out.drop_without_applying_deltas();
+    h.select_all();
+    h.render(vec![egui::Event::Paste("é".repeat(90))])
+        .drop_without_applying_deltas();
+    let title = "é".repeat(72);
+    assert_eq!(h.editor.draft.subject, title);
     for pressed in [true, false] {
         h.render(vec![egui::Event::Key {
             key: egui::Key::Enter,
@@ -94,12 +105,92 @@ fn commit_message_fields_accept_pointer_input_without_overlapping_the_footer() {
     out.drop_without_applying_deltas();
     assert_eq!(h.editor.draft.subject, title);
     assert_eq!(h.editor.draft.description, format!("{first_line}\nTail"));
+    h.select_all();
+    let body = format!("{first_line}\n{}Tail", "More\n".repeat(30));
+    h.render(vec![egui::Event::Paste(body.clone())])
+        .drop_without_applying_deltas();
+    assert_eq!(h.editor.draft.description, body);
+    assert_eq!(h.editor.draft.subject, title);
+    h.point(&text("Commit"));
     h.commit_shortcut(false, false);
     h.until(|e| !e.busy && e.draft.is_empty());
     assert_eq!(
         h.git(&["log", "-1", "--format=%B"]),
-        format!("{title}\n\n{first_line}\nTail")
+        format!("{title}\n\n{body}")
     );
+}
+
+#[test]
+fn inline_file_splitter_ends_at_the_fixed_commit_editor() {
+    let mut h = Harness::new();
+    h.editor.inline = true;
+    for (size, zoom) in [(egui::vec2(1100., 680.), 1.), (egui::vec2(650., 310.), 2.)] {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        ctx.set_zoom_factor(zoom);
+        let mut top = 0.;
+        let mut render = |events| {
+            ctx.run_ui(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                events,
+                ..Default::default()
+            }, |ui| {
+                top = ui.available_rect_before_wrap().bottom() - 220.;
+                h.editor.show_inline(ui, true);
+            })
+        };
+        render(vec![]).drop_without_applying_deltas();
+        let output = render(vec![]);
+        let nodes = &output.platform_output.accesskit_update.as_ref().unwrap().nodes;
+        let mut splitters = nodes.iter().filter(|(_, node)| node.role() == egui::Role::Splitter);
+        let bounds = splitters.next().unwrap().1.bounds().unwrap();
+        assert!(splitters.next().is_none());
+        let x = ((bounds.x0 + bounds.x1) / 2.) as f32;
+        output.drop_without_applying_deltas();
+        let mut render_at = |y| render(vec![egui::Event::PointerMoved(egui::pos2(x, y))]);
+        let boundary = size.y - 220.;
+        let above = render_at(boundary - 12.);
+        assert_eq!(above.platform_output.cursor_icon, egui::CursorIcon::ResizeHorizontal);
+        assert!(above.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::Shape::LineSegment { points, .. } if
+                (points[0].x - x).abs() < 3. && points[0].x == points[1].x
+                && points[1].y.min(shape.clip_rect.bottom()) <= boundary + 1.
+                && points[1].y.min(shape.clip_rect.bottom()) >= boundary - 1.
+        )));
+        above.drop_without_applying_deltas();
+        let below = render_at(boundary + 12.);
+        assert_ne!(below.platform_output.cursor_icon, egui::CursorIcon::ResizeHorizontal);
+        below.drop_without_applying_deltas();
+        assert_eq!(top, boundary);
+    }
+}
+
+#[test]
+fn select_all_uses_the_whole_focused_file_list() {
+    let mut h = Harness::new();
+    let untracked = "extra.txt";
+    fs::write(h.editor.path.join(untracked), "untracked").unwrap();
+    h.refresh();
+    h.until(|editor| !editor.loading);
+    h.click("Unstaged · Modified · one.txt");
+    h.select_all();
+    assert_eq!(h.editor.selection, BTreeSet::from([
+        (Group::Unstaged, "one.txt".into()),
+        (Group::Unstaged, "two.txt".into()),
+        (Group::Untracked, untracked.into()),
+    ]));
+
+    h.git(&["add", "one.txt", "two.txt"]);
+    h.refresh();
+    h.until(|editor| !editor.loading);
+    h.click("Staged · Modified · one.txt");
+    h.select_all();
+    assert_eq!(h.editor.selection, BTreeSet::from([
+        (Group::Staged, "one.txt".into()),
+        (Group::Staged, "two.txt".into()),
+    ]));
+    assert_eq!(h.editor.focused.as_ref().unwrap().path, "one.txt");
+    assert!(!h.editor.scheduler.has_accepted_work());
 }
 
 #[test]
@@ -429,6 +520,24 @@ impl Harness {
             modifiers: self.modifiers,
         }])
         .drop_without_applying_deltas();
+        self.modifiers = egui::Modifiers::NONE;
+    }
+    fn select_all(&mut self) {
+        self.modifiers = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        for pressed in [true, false] {
+            self.render(vec![egui::Event::Key {
+                key: egui::Key::A,
+                physical_key: Some(egui::Key::A),
+                pressed,
+                repeat: false,
+                modifiers: self.modifiers,
+            }])
+            .drop_without_applying_deltas();
+        }
         self.modifiers = egui::Modifiers::NONE;
     }
     fn export(&self, scenario: &str) {

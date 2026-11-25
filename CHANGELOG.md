@@ -1,5 +1,11 @@
 # Changelog
 
+## Rust 0.52.7 - 2026-11-26
+
+- Stop the Local Changes files divider at the fixed-height commit editor and scroll long descriptions inside the editor.
+- Limit new commit subject input to 72 characters, flag subjects longer than the recommended 50, and preserve existing drafts.
+- Select all files in the focused Staged or Unstaged list with Ctrl+A. Ctrl-click toggles files, Shift-click selects a range, and Ctrl+Shift-click adds a range. Ctrl+A in a commit field selects its text.
+
 ## Rust 0.52.6 - 2026-11-22
 
 - Shift-click selects a range in Local Changes. Ctrl-click toggles files and Ctrl+Shift-click adds a range.
