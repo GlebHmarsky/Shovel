@@ -7,6 +7,7 @@ use shovel_core::{
 #[derive(Clone, Copy)]
 pub(super) enum Item {
     Refresh,
+    UndoLastCommit,
     Network(operations::Kind),
     Stash,
     Branch,
@@ -29,6 +30,7 @@ impl Item {
         use operations::Kind;
         match self {
             Self::Refresh => "RefreshRepository",
+            Self::UndoLastCommit => "HistoryUndoLastCommit",
             Self::Network(Kind::Fetch) => "RepositoryFetch",
             Self::Network(Kind::Pull) => "RepositoryPull",
             Self::Network(Kind::Push) => "RepositoryPush",
@@ -102,6 +104,11 @@ fn shortcut_text(ctx: &egui::Context, modifiers: egui::Modifiers, key: egui::Key
 }
 
 impl Workspace {
+    pub(super) fn repository_form_open(&self) -> bool {
+        self.operations.modal_open() || self.remotes.is_open() || self.branches.is_open()
+            || self.repository_dialog.is_some()
+    }
+
     fn repository_menu_unavailable(&self, item: Item) -> Option<&'static str> {
         let Some(tab) = self.tabs.get(self.selected) else {
             return Some("RepositorySelectFirst");
@@ -131,6 +138,21 @@ impl Workspace {
             }
             if !matches!(item, Item::Network(operations::Kind::Fetch)) {
                 return Some("ActionSequence");
+            }
+        }
+        if matches!(item, Item::UndoLastCommit) {
+            if tab.loading || tab.view.stale {
+                return Some("HistoryLoading");
+            }
+            let Some(head) = snapshot.head.as_ref().filter(|_| snapshot.branch.is_some()) else {
+                return Some("HistoryResetNeedsBranch");
+            };
+            if tab.page.as_ref().is_some_and(|page| {
+                page.entries
+                    .iter()
+                    .any(|entry| &entry.commit.hash == head && entry.commit.parents.is_empty())
+            }) {
+                return Some("HistoryUndoNoParent");
             }
         }
         if matches!(item, Item::Network(_) | Item::LfsFetch | Item::LfsPull)
@@ -188,7 +210,7 @@ impl Workspace {
     pub(super) fn repository_menu(&mut self, ui: &mut egui::Ui) {
         use operations::Kind;
         for group in [
-            &[Item::Refresh][..],
+            &[Item::Refresh, Item::UndoLastCommit][..],
             &[
                 Item::Network(Kind::Fetch),
                 Item::Network(Kind::Pull),
@@ -274,6 +296,11 @@ impl Workspace {
         let tab = &self.tabs[self.selected];
         match item {
             Item::Refresh => self.refresh(ctx),
+            Item::UndoLastCommit => {
+                if let Some(history) = &tab.history {
+                    self.branches.confirm_undo_last(&history.snapshot);
+                }
+            }
             Item::Network(kind) => self.operations.open_network_options(
                 kind,
                 &tab.path,
@@ -373,16 +400,24 @@ pub(super) struct Dialog {
     detail: String,
     destination: String,
     target: String,
-    fixed_target: bool,
+    fixed_commit: Option<shovel_core::git::Commit>,
     patch_parent: Option<String>,
     include_untracked: bool,
     picker: Option<mpsc::Receiver<Option<PathBuf>>>,
 }
 
 impl Dialog {
-    pub(super) fn at_commit(snapshot: Snapshot, hash: &str, branch: bool) -> Self {
-        let mut dialog = Self::new(if branch { Item::Branch } else { Item::Tag }, snapshot, Some(hash));
-        dialog.fixed_target = true;
+    pub(super) fn at_commit(
+        snapshot: Snapshot,
+        commit: shovel_core::git::Commit,
+        branch: bool,
+    ) -> Self {
+        let mut dialog = Self::new(
+            if branch { Item::Branch } else { Item::Tag },
+            snapshot,
+            Some(&commit.hash),
+        );
+        dialog.fixed_commit = Some(commit);
         dialog
     }
     pub(super) fn export_patch(
@@ -423,7 +458,7 @@ impl Dialog {
             item,
             snapshot,
             target,
-            fixed_target: false,
+            fixed_commit: None,
             patch_parent: None,
             open: true,
             name,
@@ -445,14 +480,18 @@ impl Dialog {
         let ctx = ctx.clone();
         let root = self.snapshot.worktree.clone();
         let filename = format!("{}.patch", self.target.chars().take(12).collect::<String>());
+        let picker = crate::file_picker::owned(rfd::FileDialog::new().set_directory(root));
         self.picker = Some(receiver);
         thread::spawn(move || {
             let _lease = lease;
-            let picker = rfd::FileDialog::new().set_directory(root);
             let result = match item {
-                Item::Patch => picker.add_filter("Git patch", &["patch", "diff"]).pick_file(),
-                Item::ExportPatch => picker.add_filter("Git patch", &["patch"])
-                    .set_file_name(filename).save_file(),
+                Item::Patch => picker
+                    .add_filter("Git patch", &["patch", "diff"])
+                    .pick_file(),
+                Item::ExportPatch => picker
+                    .add_filter("Git patch", &["patch"])
+                    .set_file_name(filename)
+                    .save_file(),
                 _ => picker.pick_folder(),
             };
             let _ = sender.send(result);
@@ -492,63 +531,69 @@ impl Dialog {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
-        let mut open = self.open;
         let mut dismissed = false;
         let mut submission = None;
         let is_bisecting = self.snapshot.operations == ["bisect"];
         let title = strings::text(self.item.label());
-        let window = egui::Window::new(&title)
-            .id(egui::Id::unique("repository-command"))
-            .collapsible(false)
-            .default_width(410.)
-            .enabled(enabled && !self.picking());
-        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
-                ui.label(self.snapshot.worktree.to_string_lossy());
-                match self.item {
-                    Item::Stash => {
-                        field(ui, "StashMessage", &mut self.detail);
-                        ui.checkbox(
-                            &mut self.include_untracked,
-                            strings::text("RepositoryIncludeUntracked"),
-                        );
+        let (_, closed) = workspace_style::show_dialog(
+            ctx,
+            egui::Id::unique("repository-command"),
+            &title,
+            430.,
+            enabled && !self.picking(),
+            !self.picking(),
+            |ui| {
+                workspace_style::dialog_body(ui, |ui| {
+                    let path = self.snapshot.worktree.to_string_lossy();
+                    ui.add(egui::Label::new(path.as_ref()).truncate())
+                        .on_hover_text(path.as_ref());
+                    if let Some(commit) = &self.fixed_commit {
+                        history_review::commit_card(ui, commit, &self.snapshot);
                     }
-                    Item::Branch => {
-                        field(ui, "RepositoryBranchName", &mut self.name);
-                        ui.monospace(&self.target);
-                    }
-                    Item::Tag => {
-                        field(ui, "RepositoryTagName", &mut self.name);
-                        if self.fixed_target {
-                            ui.monospace(&self.target);
-                        } else {
-                            field(ui, "RepositoryRevision", &mut self.target);
+                    match self.item {
+                        Item::Stash => {
+                            field(ui, "StashMessage", &mut self.detail);
+                            ui.checkbox(
+                                &mut self.include_untracked,
+                                strings::text("RepositoryIncludeUntracked"),
+                            );
                         }
-                        field(ui, "RepositoryTagMessage", &mut self.detail);
+                        Item::Branch => {
+                            field(ui, "RepositoryBranchName", &mut self.name);
+                        }
+                        Item::Tag => {
+                            field(ui, "RepositoryTagName", &mut self.name);
+                            if self.fixed_commit.is_none() {
+                                field(ui, "RepositoryRevision", &mut self.target);
+                            }
+                            field(ui, "RepositoryTagMessage", &mut self.detail);
+                        }
+                        Item::Worktree => {
+                            field(ui, "RepositoryBranchName", &mut self.name);
+                            field(ui, "RepositoryRevision", &mut self.target);
+                            field(ui, "RepositoryWorktreePath", &mut self.destination);
+                        }
+                        Item::Patch => field(ui, "RepositoryPatchPath", &mut self.destination),
+                        Item::FlowInit => {
+                            field(ui, "RepositoryProductionBranch", &mut self.name);
+                            field(ui, "RepositoryDevelopmentBranch", &mut self.detail);
+                        }
+                        Item::Feature(_) => field(ui, "RepositoryFeatureName", &mut self.name),
+                        Item::LfsPattern(_) => field(ui, "RepositoryLfsPattern", &mut self.name),
+                        Item::Bisect if !is_bisecting => {
+                            field(ui, "RepositoryGoodRevision", &mut self.name);
+                            field(ui, "RepositoryBadRevision", &mut self.target);
+                        }
+                        _ => {}
                     }
-                    Item::Worktree => {
-                        field(ui, "RepositoryBranchName", &mut self.name);
-                        field(ui, "RepositoryRevision", &mut self.target);
-                        field(ui, "RepositoryWorktreePath", &mut self.destination);
+                    if matches!(self.item, Item::Patch | Item::Worktree)
+                        && ui.button(strings::text("InitBrowse")).clicked()
+                    {
+                        self.browse(ctx, workers);
                     }
-                    Item::Patch => field(ui, "RepositoryPatchPath", &mut self.destination),
-                    Item::FlowInit => {
-                        field(ui, "RepositoryProductionBranch", &mut self.name);
-                        field(ui, "RepositoryDevelopmentBranch", &mut self.detail);
-                    }
-                    Item::Feature(_) => field(ui, "RepositoryFeatureName", &mut self.name),
-                    Item::LfsPattern(_) => field(ui, "RepositoryLfsPattern", &mut self.name),
-                    Item::Bisect if !is_bisecting => {
-                        field(ui, "RepositoryGoodRevision", &mut self.name);
-                        field(ui, "RepositoryBadRevision", &mut self.target);
-                    }
-                    _ => {}
-                }
-                if matches!(self.item, Item::Patch | Item::Worktree)
-                    && ui.button(strings::text("InitBrowse")).clicked()
-                {
-                    self.browse(ctx, workers);
-                }
-                ui.horizontal_wrapped(|ui| {
+                });
+                workspace_style::dialog_actions(ui, |ui| {
+                    dismissed = ui.button(strings::text("Cancel")).clicked();
                     if is_bisecting {
                         for (key, step) in [
                             ("RepositoryBisectGood", Bisect::Good),
@@ -569,10 +614,10 @@ impl Dialog {
                     {
                         submission = self.submission();
                     }
-                    dismissed = ui.button(strings::text("Cancel")).clicked();
                 });
-        });
-        self.open = (open && !dismissed) || self.picking();
+            },
+        );
+        self.open = (!closed && !dismissed) || self.picking();
         submission
     }
 
@@ -674,57 +719,60 @@ pub(super) fn show_help(ctx: &egui::Context) {
         let window = egui::Window::new(&title)
             .id(egui::Id::unique(("help-window", key)))
             .collapsible(false)
-            .default_size(egui::vec2(650., 470.));
+            .default_pos(ctx.content_rect().center() - egui::vec2(300., 205.))
+            .default_size(
+                (ctx.content_rect().size() - egui::vec2(40., 70.)).min(egui::vec2(650., 470.)),
+            );
         crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        if key == "HelpShortcuts" {
-                            egui::Grid::new("workspace-shortcuts")
-                                .spacing([36., 10.])
-                                .striped(true)
-                                .show(ui, |ui| {
-                                    for &(item, modifiers, key) in SHORTCUTS {
-                                        ui.label(strings::text(item.label()));
-                                        ui.monospace(shortcut_text(ctx, modifiers, key));
-                                        ui.end_row();
-                                    }
-                                    for (label, keys) in [
-                                        ("HelpNextTab", "Ctrl+Tab"),
-                                        ("HelpPreviousTab", "Ctrl+Shift+Tab"),
-                                        ("CloseTab", "Ctrl+W"),
-                                        ("HelpOlderHistory", "Ctrl+Page Down"),
-                                        ("HelpNewerHistory", "Ctrl+Page Up"),
-                                        ("FirstHistoryPage", "Home"),
-                                        ("HelpHistorySelectCommit", "↑ / ↓"),
-                                        ("HelpHistorySwitchRepository", "← / →"),
-                                        ("Commit", "Ctrl+Enter"),
-                                        ("HelpCommitPush", "Ctrl+Shift+Enter"),
-                                        ("HelpStageAll", "Shift"),
-                                    ] {
-                                        ui.label(strings::text(label));
-                                        ui.monospace(keys);
-                                        ui.end_row();
-                                    }
-                                });
-                        } else {
-                            let mut releases = 0;
-                            for line in include_str!("../../../CHANGELOG.md").lines() {
-                                if let Some(title) = line.strip_prefix("## ") {
-                                    if releases == 12 {
-                                        break;
-                                    }
-                                    if releases != 0 {
-                                        ui.separator();
-                                    }
-                                    releases += 1;
-                                    ui.heading(title);
-                                } else if releases > 0 && !line.trim().is_empty() {
-                                    ui.add(egui::Label::new(line).selectable(true).wrap());
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    if key == "HelpShortcuts" {
+                        egui::Grid::new("workspace-shortcuts")
+                            .spacing([36., 10.])
+                            .striped(true)
+                            .show(ui, |ui| {
+                                for &(item, modifiers, key) in SHORTCUTS {
+                                    ui.label(strings::text(item.label()));
+                                    ui.monospace(shortcut_text(ctx, modifiers, key));
+                                    ui.end_row();
                                 }
+                                for (label, keys) in [
+                                    ("HelpNextTab", "Ctrl+Tab"),
+                                    ("HelpPreviousTab", "Ctrl+Shift+Tab"),
+                                    ("CloseTab", "Ctrl+W"),
+                                    ("HelpOlderHistory", "Ctrl+Page Down"),
+                                    ("HelpNewerHistory", "Ctrl+Page Up"),
+                                    ("FirstHistoryPage", "Home"),
+                                    ("HelpHistorySelectCommit", "↑ / ↓"),
+                                    ("HelpHistorySwitchRepository", "← / →"),
+                                    ("Commit", "Ctrl+Enter"),
+                                    ("HelpCommitPush", "Ctrl+Shift+Enter"),
+                                    ("HelpStageAll", "Shift"),
+                                ] {
+                                    ui.label(strings::text(label));
+                                    ui.monospace(keys);
+                                    ui.end_row();
+                                }
+                            });
+                    } else {
+                        let mut releases = 0;
+                        for line in include_str!("../../../CHANGELOG.md").lines() {
+                            if let Some(title) = line.strip_prefix("## ") {
+                                if releases == 12 {
+                                    break;
+                                }
+                                if releases != 0 {
+                                    ui.separator();
+                                }
+                                releases += 1;
+                                ui.heading(title);
+                            } else if releases > 0 && !line.trim().is_empty() {
+                                ui.add(egui::Label::new(line).selectable(true).wrap());
                             }
                         }
-                    });
+                    }
+                });
         });
         if !open {
             ctx.data_mut(|data| data.remove::<bool>(id));

@@ -426,15 +426,17 @@ fn recovery_controls_appear_below_tabs_after_rebase_pauses() {
         |_| {},
     );
     running.recv_timeout(Duration::from_secs(5)).unwrap();
-    let label = text("ActionTitleContinue");
-    assert!(sidebar_point(&h.ctx, &mut app, &label).is_none());
+    let label = text("ActionTitleAbort");
+    assert!(sidebar_point(&h.ctx, &mut app, &label).unwrap().1);
+    assert!(sidebar_point(&h.ctx, &mut app, &text("ActionTitleContinue")).is_none());
     release.send(()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     while app.scheduler.has_accepted_work() {
         assert!(Instant::now() < deadline);
         thread::sleep(Duration::from_millis(5));
     }
-    let (banner, _) = sidebar_point(&h.ctx, &mut app, &label).unwrap();
+    let (banner, disabled) = sidebar_point(&h.ctx, &mut app, &label).unwrap();
+    assert!(!disabled);
     let name = app.tabs[0].name().into_owned();
     let (tab, _) = sidebar_point(&h.ctx, &mut app, &name).unwrap();
     assert!(banner.y > tab.y);

@@ -422,9 +422,18 @@ fn reference_navigation_finds_old_tags_and_inspects_stashes_from_the_sidebar() {
     let leaf = entries.iter().position(|entry| entry.commit.hash == stash).unwrap();
     assert!(entries[leaf].graph.is_stash());
     assert_eq!(entries[leaf + 1].commit.hash, base);
+    app.first_page(&ctx);
+    crate::history_view::tests::wait(&mut app, &ctx);
+    assert!(!app.tabs[0].page.as_ref().unwrap().entries.iter().any(|entry| entry.commit.hash == stash));
+    app.settings.set("CommitInWorkspace", serde_json::json!(true));
+    app.draft_store = Some(shovel_core::drafts::Store { directory: temp.path().join("drafts"), legacy_directory: None });
+    app.open_commit();
+    assert!(app.tabs[0].local_changes);
     let label = "stash@{0}  On main: old stash";
     sidebar_click(&ctx, &mut app, label, egui::PointerButton::Primary);
-    assert_eq!(app.tabs[0].selected.as_ref(), Some(&base));
+    crate::history_view::tests::wait(&mut app, &ctx);
+    assert_eq!(app.tabs[0].selected.as_ref(), Some(&stash));
+    assert!(!app.tabs[0].local_changes);
     assert!(app.stash_views.is_empty());
     let (point, _) = sidebar_point(&ctx, &mut app, label).unwrap();
     // A single sidebar click leaves the stash row focused for keyboard inspection.
@@ -437,13 +446,63 @@ fn reference_navigation_finds_old_tags_and_inspects_stashes_from_the_sidebar() {
         modifiers: egui::Modifiers::NONE,
     }]).drop_without_applying_deltas();
     assert!(app.stash_views.iter().any(|view| view.open));
-    assert_eq!(app.tabs[0].selected.as_ref(), Some(&base));
+    assert_eq!(app.tabs[0].selected.as_ref(), Some(&stash));
 }
 
 struct RepositoryFixture {
     _temp: tempfile::TempDir,
     root: PathBuf,
     git: Arc<Git>,
+}
+
+#[test]
+fn sidebar_stash_with_detached_base_opens_inspector_without_changing_history_selection() {
+    let fixture = RepositoryFixture::new();
+    fixture.command(&["switch", "--detach", "HEAD"]);
+    fixture.command(&["commit", "--allow-empty", "-m", "detached base"]);
+    std::fs::write(fixture.root.join("file"), b"detached changes\n").unwrap();
+    fixture.command(&["stash", "push", "-m", "detached saved"]);
+    fixture.command(&["switch", "main"]);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    ctx.set_embed_viewports(true);
+    let mut app = fixture.workspace();
+    app.open(fixture.root.clone(), &ctx);
+    crate::history_view::tests::wait(&mut app, &ctx);
+    let selected = app.tabs[0].selected.clone();
+    let output = frame(&ctx, &mut app, vec![]);
+    let label = output
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .unwrap()
+        .nodes
+        .iter()
+        .find_map(|(_, node)| {
+            node.label()
+                .filter(|label| label.starts_with("stash@{0}") && label.contains("detached saved"))
+        })
+        .unwrap()
+        .to_owned();
+    output.drop_without_applying_deltas();
+    sidebar_click(&ctx, &mut app, &label, egui::PointerButton::Primary);
+    crate::history_view::tests::wait(&mut app, &ctx);
+    assert!(
+        app.stash_views
+            .iter()
+            .any(|view| view.open && view.path == fixture.root)
+    );
+    assert_eq!(app.tabs[0].selected, selected);
+    assert!(app.tabs[0].error.is_none());
+    assert!(
+        app.tabs[0]
+            .page
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .all(|entry| !entry.graph.is_stash())
+    );
 }
 
 #[test]
@@ -895,6 +954,248 @@ pub(super) fn sidebar_click(
         )
         .drop_without_applying_deltas();
     }
+}
+
+#[test]
+fn conflict_banner_opens_the_configured_editor_and_footer_continues_the_verified_merge() {
+    use shovel_core::process::{self, Lifetime};
+    for inline in [true, false] {
+        let fixture = RepositoryFixture::new();
+        let file = fixture.root.join("file");
+        fixture.command(&["switch", "-c", "incoming"]);
+        std::fs::write(&file, b"incoming\n").unwrap();
+        fixture.command(&["commit", "-am", "incoming"]);
+        fixture.command(&["switch", "main"]);
+        std::fs::write(&file, b"current\n").unwrap();
+        fixture.command(&["commit", "-am", "current"]);
+        let merge = fixture.git.request(
+            &fixture.root,
+            ["merge", "--no-edit", "incoming"],
+            Lifetime::AcceptedCommand,
+            65536,
+        );
+        assert!(
+            !process::run(&merge, &Cancellation::default(), None)
+                .unwrap()
+                .success()
+        );
+        let original = fixture.command(&["rev-parse", "HEAD"]);
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        ctx.set_embed_viewports(true);
+        let mut app = fixture.workspace();
+        app.settings
+            .set("CommitInWorkspace", serde_json::json!(inline));
+        app.draft_store = Some(shovel_core::drafts::Store {
+            directory: fixture._temp.path().join("drafts"),
+            legacy_directory: None,
+        });
+        app.open(fixture.root.clone(), &ctx);
+        until(&mut app, &ctx, |app| {
+            app.tab_markers.verified_conflicts(&app.tabs[0]) == Some(true)
+        });
+        let continue_label = recovery_ui::continue_label(shovel_core::recovery::Kind::Merge);
+        assert!(sidebar_point(&ctx, &mut app, &continue_label).is_none());
+        assert!(sidebar_point(&ctx, &mut app, &strings::text("ActionTitleSkip")).is_none());
+        let resolve_label = strings::text("ConflictResolve");
+        let (resolve, disabled) = sidebar_point(&ctx, &mut app, &resolve_label).unwrap();
+        assert!(resolve.x > 250. && !disabled);
+        sidebar_click(&ctx, &mut app, &resolve_label, egui::PointerButton::Primary);
+        assert_eq!(app.tabs[0].local_changes, inline);
+        assert!(
+            app.editors
+                .iter()
+                .any(|editor| editor.open && editor.inline == inline)
+        );
+        frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        until(&mut app, &ctx, |app| {
+            app.editors[0].current_context().is_some()
+        });
+        assert!(sidebar_point(&ctx, &mut app, &continue_label).is_none());
+        assert!(fixture.root.join(".git/MERGE_HEAD").exists());
+
+        fixture.command(&["checkout", "--ours", "--", "file"]);
+        fixture.command(&["add", "file"]);
+        app.editors[0].request_refresh(&ctx);
+        until(&mut app, &ctx, |app| {
+            app.editors[0]
+                .current_context()
+                .is_some_and(|c| c.group(shovel_core::working::Group::Conflicted).is_empty())
+        });
+        if inline {
+            sidebar_click(
+                &ctx,
+                &mut app,
+                &continue_label,
+                egui::PointerButton::Primary,
+            );
+        } else {
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::Key {
+                    key: egui::Key::Enter,
+                    physical_key: Some(egui::Key::Enter),
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::CTRL,
+                }],
+            )
+            .drop_without_applying_deltas();
+        }
+        until(&mut app, &ctx, |app| {
+            !app.scheduler.has_accepted_work() && !app.operations.has_pending(&fixture.root)
+        });
+        assert!(
+            !fixture.root.join(".git/MERGE_HEAD").exists(),
+            "inline={inline}, scheduler={:?}",
+            app.scheduler.records()
+        );
+        assert_ne!(fixture.command(&["rev-parse", "HEAD"]), original);
+        assert_eq!(std::fs::read(&file).unwrap(), b"current\n");
+    }
+}
+
+#[test]
+fn undo_last_commit_requires_review_and_keeps_the_index_and_worktree() {
+    let fixture = RepositoryFixture::new();
+    let file = fixture.root.join("file");
+    let base = fixture.command(&["rev-parse", "HEAD"]);
+    std::fs::write(&file, b"committed\n").unwrap();
+    fixture.command(&["commit", "-am", "last commit"]);
+    let tip = fixture.command(&["rev-parse", "HEAD"]);
+    std::fs::write(&file, b"staged\n").unwrap();
+    fixture.command(&["add", "file"]);
+    std::fs::write(&file, b"worktree\n").unwrap();
+    let index = std::fs::read(fixture.root.join(".git/index")).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = fixture.workspace();
+    app.open(fixture.root.clone(), &ctx);
+    crate::history_view::tests::wait(&mut app, &ctx);
+    let open = |app: &mut Workspace| {
+        sidebar_click(
+            &ctx,
+            app,
+            &strings::text("RepositoryMenu"),
+            egui::PointerButton::Primary,
+        );
+        let output = frame(&ctx, app, vec![]);
+        let node_y = |label: &str| {
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find_map(|(_, node)| {
+                    node.label()
+                        .filter(|name| name.starts_with(label))
+                        .and_then(|_| node.bounds())
+                        .map(|bounds| bounds.y0)
+                })
+        };
+        assert!(
+            node_y(&strings::text("HistoryUndoLastCommit"))
+                .zip(node_y(&strings::text("RefreshRepository")))
+                .is_some_and(|(undo, refresh)| undo > refresh)
+        );
+        output.drop_without_applying_deltas();
+        sidebar_click(
+            &ctx,
+            app,
+            &strings::text("HistoryUndoLastCommit"),
+            egui::PointerButton::Primary,
+        );
+        assert!(app.branches.is_open());
+    };
+    open(&mut app);
+    assert!(!app.scheduler.has_accepted_work());
+    assert_eq!(fixture.command(&["rev-parse", "HEAD"]), tip);
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("CancelOperation"),
+        egui::PointerButton::Primary,
+    );
+    assert!(!app.branches.is_open());
+    open(&mut app);
+    let submit = strings::text("HistoryUndoSubmit");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !sidebar_point(&ctx, &mut app, &submit).is_some_and(|(_, disabled)| !disabled) {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(fixture.command(&["rev-parse", "HEAD"]), tip);
+    sidebar_click(&ctx, &mut app, &submit, egui::PointerButton::Primary);
+    until(&mut app, &ctx, |app| {
+        !app.scheduler.has_accepted_work() && !app.operations.has_pending(&fixture.root)
+    });
+    assert_eq!(fixture.command(&["rev-parse", "HEAD"]), base);
+    assert_eq!(
+        std::fs::read(fixture.root.join(".git/index")).unwrap(),
+        index
+    );
+    assert_eq!(std::fs::read(file).unwrap(), b"worktree\n");
+}
+
+#[test]
+fn history_cherry_pick_opens_review_and_can_apply_without_committing() {
+    let fixture = RepositoryFixture::new();
+    let head = fixture.command(&["rev-parse", "HEAD"]);
+    fixture.command(&["switch", "-c", "source"]);
+    std::fs::write(fixture.root.join("picked"), b"picked\n").unwrap();
+    fixture.command(&["add", "picked"]);
+    fixture.command(&["commit", "-m", "source change"]);
+    let source = String::from_utf8(fixture.command(&["rev-parse", "HEAD"])).unwrap();
+    fixture.command(&["switch", "main"]);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = fixture.workspace();
+    app.open(fixture.root.clone(), &ctx);
+    crate::history_view::tests::wait(&mut app, &ctx);
+    let output = frame(&ctx, &mut app, vec![]);
+    let commit_row = output
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .unwrap()
+        .nodes
+        .iter()
+        .find_map(|(_, node)| node.label().filter(|label| label.contains(source.trim())))
+        .unwrap()
+        .to_owned();
+    output.drop_without_applying_deltas();
+    sidebar_click(&ctx, &mut app, &commit_row, egui::PointerButton::Secondary);
+    let cherry_pick = strings::text("HistoryCherryPick");
+    sidebar_click(&ctx, &mut app, &cherry_pick, egui::PointerButton::Primary);
+    assert!(app.branches.is_open());
+    assert!(!app.scheduler.has_accepted_work());
+    assert!(!fixture.root.join("picked").exists());
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("CherryPickCommitChanges"),
+        egui::PointerButton::Primary,
+    );
+    assert!(
+        sidebar_point(&ctx, &mut app, &strings::text("CherryPickAppendOrigin"))
+            .is_some_and(|(_, disabled)| disabled)
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !sidebar_point(&ctx, &mut app, &cherry_pick).is_some_and(|(_, disabled)| !disabled) {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(fixture.command(&["rev-parse", "HEAD"]), head);
+    assert!(!fixture.root.join("picked").exists());
+    sidebar_click(&ctx, &mut app, &cherry_pick, egui::PointerButton::Primary);
+    until(&mut app, &ctx, |app| {
+        !app.scheduler.has_accepted_work() && !app.operations.has_pending(&fixture.root)
+    });
+    assert_eq!(fixture.command(&["rev-parse", "HEAD"]), head);
+    assert_eq!(fixture.command(&["show", ":picked"]), b"picked\n");
 }
 
 #[test]

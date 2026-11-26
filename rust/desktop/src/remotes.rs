@@ -2,6 +2,7 @@
 use crate::{
     operations,
     strings::{self, text},
+    workspace_style::{self, Palette},
 };
 use eframe::egui;
 use shovel_core::{
@@ -105,7 +106,7 @@ enum Form {
 struct Dialog {
     snapshot: Snapshot,
     form: Form,
-    viewport: egui::ViewportId,
+    id: egui::Id,
     focus: bool,
 }
 #[derive(Default)]
@@ -153,7 +154,7 @@ impl Dialogs {
         self.active = Some(Dialog {
             snapshot: crate::history_cache::metadata(snapshot),
             form,
-            viewport: egui::ViewportId::from_hash_of(("remote-options", uuid::Uuid::new_v4())),
+            id: egui::Id::unique(("remote-options", uuid::Uuid::new_v4())),
             focus: true,
         });
     }
@@ -179,7 +180,7 @@ impl Dialogs {
         if ui
             .add_enabled(
                 snapshot.is_some() && value.is_some(),
-                egui::Button::new(text("RemoteManageTitle")),
+                egui::Button::new(text("RemoteManageMenu")),
             )
             .on_disabled_hover_text(
                 cache
@@ -212,209 +213,178 @@ impl Dialogs {
             Form::Manage { confirm: true, .. } => "ActionTitleRemoveRemote",
             Form::Manage { .. } => "RemoteManageTitle",
         };
-        ctx.show_viewport_immediate(
-            dialog.viewport,
-            egui::ViewportBuilder::default()
-                .with_title(text(title))
-                .with_inner_size(if matches!(dialog.form, Form::Add { .. }) {
-                    [540., 340.]
-                } else {
-                    [660., 460.]
-                })
-                .with_resizable(false)
-                .with_minimize_button(false)
-                .with_maximize_button(false),
-            |ui, _| {
-                visible |= ui.is_visible();
-                if !enabled {
-                    ui.disable();
-                }
-                if ui.ctx().input(|i| {
-                    i.viewport().close_requested() || enabled && i.key_pressed(egui::Key::Escape)
-                }) {
-                    close = true;
-                }
-                egui::CentralPanel::default()
-                    .frame(crate::workspace_style::pane(
-                        crate::workspace_style::Palette::current(ui).sidebar,
-                        20,
-                        16,
-                    ))
-                    .show(ui, |ui| {
-                        ui.heading(text(title));
-                        ui.add(
-                            egui::Label::new(dialog.snapshot.worktree.to_string_lossy()).truncate(),
-                        )
-                        .on_hover_text(dialog.snapshot.worktree.to_string_lossy());
-                        ui.add_space(12.);
-                        egui::ScrollArea::vertical().show(ui, |ui| match &mut dialog.form {
-                            Form::Add {
-                                names,
-                                name,
-                                location,
-                            } => {
-                                let label = ui.label(text("RemoteAddName"));
-                                ui.text_edit_singleline(name).labelled_by(label.id);
-                                let label = ui.label(text("RemoteAddLocation"));
-                                let input = ui.text_edit_singleline(location).labelled_by(label.id);
-                                if dialog.focus {
-                                    input.request_focus();
-                                }
-                                let readiness = if names.iter().any(|n| n == name.trim()) {
-                                    "RemoteAddExists"
-                                } else if !valid(name.trim(), location.trim()) {
-                                    "RemoteAddInvalid"
-                                } else {
-                                    "RemoteAddReady"
-                                };
-                                ui.add_space(10.);
-                                ui.label(text(readiness));
-                                ui.horizontal(|ui| {
-                                    if ui
-                                        .add_enabled(
-                                            readiness == "RemoteAddReady",
-                                            egui::Button::new(text("RemoteAddSubmit")),
-                                        )
-                                        .clicked()
-                                    {
-                                        submitted = Some((
-                                            "RemoteAddSubmit",
-                                            Action::Add {
-                                                name: name.trim().into(),
-                                                location: location.trim().into(),
-                                            },
-                                        ));
-                                    }
-                                    if ui.button(text("Cancel")).clicked() {
-                                        close = true;
-                                    }
-                                });
+        let (_, dismissed) =
+            workspace_style::show_dialog(ctx, dialog.id, &text(title), 465., enabled, true, |ui| {
+                visible = ui.is_visible() && !ui.is_sizing_pass();
+                let path = dialog.snapshot.worktree.to_string_lossy();
+                ui.add(egui::Label::new(path.as_ref()).truncate())
+                    .on_hover_text(path.as_ref());
+                match &mut dialog.form {
+                    Form::Add {
+                        names,
+                        name,
+                        location,
+                    } => {
+                        let readiness = workspace_style::dialog_body(ui, |ui| {
+                            remote_field(ui, "RemoteAddName", name);
+                            let input = remote_field(ui, "RemoteAddLocation", location);
+                            if dialog.focus && visible {
+                                input.request_focus();
                             }
-                            Form::Manage {
-                                reviewed,
-                                selected,
-                                location,
-                                push,
-                                confirm,
-                            } => {
-                                if *confirm {
-                                    if let Some(remote) = reviewed.remotes.get(*selected) {
-                                        ui.label(strings::format(
-                                            "RemoteRemoveConfirm",
-                                            &[
-                                                &remote.name,
-                                                &dialog.snapshot.worktree.to_string_lossy(),
-                                            ],
-                                        ));
-                                        ui.add_space(16.);
-                                        ui.horizontal(|ui| {
-                                            if ui.button(text("ActionTitleRemoveRemote")).clicked()
-                                            {
-                                                submitted = Some((
-                                                    "ActionTitleRemoveRemote",
-                                                    Action::Change {
-                                                        reviewed: reviewed.clone(),
-                                                        name: remote.name.clone(),
-                                                        location: String::new(),
-                                                        push_location: String::new(),
-                                                        remove: true,
-                                                    },
-                                                ));
-                                            }
-                                            if ui.button(text("Cancel")).clicked() {
-                                                close = true;
-                                            }
-                                        });
-                                    }
-                                    return;
-                                }
-                                let before = *selected;
-                                egui::ComboBox::from_label(text("RemoteAddName"))
-                                    .selected_text(
-                                        reviewed
-                                            .remotes
-                                            .get(*selected)
-                                            .map(|r| r.name.as_str())
-                                            .unwrap_or_default(),
-                                    )
-                                    .show_ui(ui, |ui| {
-                                        for (i, remote) in reviewed.remotes.iter().enumerate() {
-                                            ui.selectable_value(selected, i, &remote.name);
-                                        }
-                                    });
-                                let remote = reviewed.remotes.get(*selected);
-                                if *selected != before
-                                    && let Some(remote) = remote
-                                {
-                                    *location = remote.location.clone();
-                                    *push = remote.push_location.clone();
-                                }
-                                let editable = remote.is_some_and(|r| r.can_edit);
-                                ui.add_enabled_ui(editable, |ui| {
-                                    let label = ui.label(text("RemoteFetchUrl"));
-                                    ui.add(
-                                        egui::TextEdit::singleline(location)
-                                            .desired_width(f32::INFINITY),
-                                    )
-                                    .labelled_by(label.id);
-                                    let label = ui.label(text("RemotePushUrl"));
-                                    ui.add(
-                                        egui::TextEdit::singleline(push)
-                                            .desired_width(f32::INFINITY),
-                                    )
-                                    .labelled_by(label.id);
-                                });
-                                let readiness = match remote {
-                                    None => "RemoteManageEmpty",
-                                    Some(_) if !editable => "RemoteManageUnsupported",
-                                    Some(r)
-                                        if !valid(&r.name, location.trim())
-                                            || !push.trim().is_empty()
-                                                && !valid(&r.name, push.trim()) =>
-                                    {
-                                        "RemoteAddInvalid"
-                                    }
-                                    _ => "RemoteManageReady",
-                                };
-                                ui.add_space(10.);
-                                ui.label(text(readiness));
-                                ui.horizontal(|ui| {
-                                    if ui
-                                        .add_enabled(
-                                            remote.is_some(),
-                                            egui::Button::new(text("ActionTitleRemoveRemote")),
-                                        )
-                                        .clicked()
-                                    {
-                                        *confirm = true;
-                                    }
-                                    if ui
-                                        .add_enabled(
-                                            readiness == "RemoteManageReady",
-                                            egui::Button::new(text("RemoteSave")),
-                                        )
-                                        .clicked()
-                                    {
-                                        submitted = Some((
-                                            "ActionTitleEditRemote",
-                                            Action::Change {
-                                                reviewed: reviewed.clone(),
-                                                name: remote.unwrap().name.clone(),
-                                                location: location.trim().into(),
-                                                push_location: push.trim().into(),
-                                                remove: false,
-                                            },
-                                        ));
-                                    }
-                                    if ui.button(text("Cancel")).clicked() {
-                                        close = true;
-                                    }
-                                });
+                            let readiness = if names.iter().any(|n| n == name.trim()) {
+                                "RemoteAddExists"
+                            } else if !valid(name.trim(), location.trim()) {
+                                "RemoteAddInvalid"
+                            } else {
+                                "RemoteAddReady"
+                            };
+                            if readiness != "RemoteAddReady" {
+                                ui.weak(text(readiness));
+                            }
+                            readiness
+                        });
+                        workspace_style::dialog_actions(ui, |ui| {
+                            close |= ui.button(text("Cancel")).clicked();
+                            if ui
+                                .add_enabled(
+                                    readiness == "RemoteAddReady",
+                                    egui::Button::new(text("RemoteAddSubmit")),
+                                )
+                                .clicked()
+                            {
+                                submitted = Some((
+                                    "RemoteAddSubmit",
+                                    Action::Add {
+                                        name: name.trim().into(),
+                                        location: location.trim().into(),
+                                    },
+                                ));
                             }
                         });
-                    });
-            },
-        );
+                    }
+                    Form::Manage {
+                        reviewed,
+                        selected,
+                        location,
+                        push,
+                        confirm,
+                    } => {
+                        if *confirm {
+                            let remote = reviewed.remotes.get(*selected);
+                            workspace_style::dialog_body(ui, |ui| {
+                                if let Some(remote) = remote {
+                                    ui.label(strings::format(
+                                        "RemoteRemoveReview",
+                                        &[&remote.name],
+                                    ));
+                                }
+                            });
+                            workspace_style::dialog_actions(ui, |ui| {
+                                if ui.button(text("Cancel")).clicked() {
+                                    *confirm = false;
+                                }
+                                let remove = egui::Button::new(
+                                    egui::RichText::new(text("ActionTitleRemoveRemote"))
+                                        .color(Palette::current(ui).diff_removed_text),
+                                );
+                                if ui.add_enabled(remote.is_some(), remove).clicked()
+                                    && let Some(remote) = remote
+                                {
+                                    submitted = Some((
+                                        "ActionTitleRemoveRemote",
+                                        Action::Change {
+                                            reviewed: reviewed.clone(),
+                                            name: remote.name.clone(),
+                                            location: String::new(),
+                                            push_location: String::new(),
+                                            remove: true,
+                                        },
+                                    ));
+                                }
+                            });
+                            return;
+                        }
+                        let (remote, readiness) = workspace_style::dialog_body(ui, |ui| {
+                            if reviewed.remotes.is_empty() {
+                                ui.weak(text("RemoteManageEmpty"));
+                                return (None, None);
+                            }
+                            let before = *selected;
+                            let label = ui.label(text("RemoteAddName"));
+                            let picker = egui::ComboBox::from_id_salt("remote")
+                                .width(ui.available_width())
+                                .selected_text(&reviewed.remotes[*selected].name)
+                                .show_ui(ui, |ui| {
+                                    for (i, remote) in reviewed.remotes.iter().enumerate() {
+                                        ui.selectable_value(selected, i, &remote.name);
+                                    }
+                                });
+                            let input = picker.response.labelled_by(label.id);
+                            if dialog.focus && visible {
+                                input.request_focus();
+                            }
+                            let remote = &reviewed.remotes[*selected];
+                            if *selected != before {
+                                location.clone_from(&remote.location);
+                                push.clone_from(&remote.push_location);
+                            }
+                            ui.add_enabled_ui(remote.can_edit, |ui| {
+                                remote_field(ui, "RemoteFetchUrl", location);
+                                remote_field(ui, "RemotePushUrl", push);
+                            });
+                            let problem = if !remote.can_edit {
+                                Some("RemoteManageUnsupported")
+                            } else if !valid(&remote.name, location.trim())
+                                || !push.trim().is_empty() && !valid(&remote.name, push.trim())
+                            {
+                                Some("RemoteAddInvalid")
+                            } else {
+                                None
+                            };
+                            if let Some(problem) = problem {
+                                ui.weak(text(problem));
+                            }
+                            (Some(remote), problem)
+                        });
+                        workspace_style::dialog_actions(ui, |ui| {
+                            close |= ui.button(text("Cancel")).clicked();
+                            if ui
+                                .add_enabled(
+                                    remote.is_some() && readiness.is_none(),
+                                    egui::Button::new(text("RemoteSave")),
+                                )
+                                .clicked()
+                                && let Some(remote) = remote
+                            {
+                                submitted = Some((
+                                    "ActionTitleEditRemote",
+                                    Action::Change {
+                                        reviewed: reviewed.clone(),
+                                        name: remote.name.clone(),
+                                        location: location.trim().into(),
+                                        push_location: push.trim().into(),
+                                        remove: false,
+                                    },
+                                ));
+                            }
+                            if ui
+                                .add_enabled(
+                                    remote.is_some(),
+                                    egui::Button::new(text("ActionTitleRemoveRemote")),
+                                )
+                                .clicked()
+                            {
+                                *confirm = true;
+                            }
+                        });
+                    }
+                }
+            });
+        if dismissed && let Form::Manage { confirm, .. } = &mut dialog.form && *confirm {
+            *confirm = false;
+        } else {
+            close |= dismissed;
+        }
         if visible {
             dialog.focus = false;
         }
@@ -426,6 +396,12 @@ impl Dialogs {
             self.active = None;
         }
     }
+}
+
+fn remote_field(ui: &mut egui::Ui, key: &str, value: &mut String) -> egui::Response {
+    let label = ui.label(text(key));
+    ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY))
+        .labelled_by(label.id)
 }
 
 #[cfg(test)]

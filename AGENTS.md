@@ -4,7 +4,7 @@
 
 Master is the native Rust Shovel application and askpass helper. The owner explicitly requested replacing the C# tree and starting GitHub Windows builds. This supersedes all older no-merge/C#-master instructions. C# history is preserved at codex/csharp-archive-0.47.0 (2175458). Do not restore C# application projects into master.
 
-Read docs/product.md, docs/requirements.md, docs/architecture.md, docs/roadmap.md, then TODO.md; README.md owns current commands. Historical C# documentation is baseline evidence, not the current stack. TODO remains the single parity checklist; merging does not complete unchecked functionality.
+Read docs/product.md, docs/requirements.md, docs/architecture.md, docs/roadmap.md, then TODO.md; README.md owns current commands. Read [the Shovel UI style guide](docs/style-guide.md) before changing desktop windows, dialogs or controls. Historical C# documentation is baseline evidence, not the current stack. TODO remains the single parity checklist; merging does not complete unchecked functionality.
 
 - Rust/Cargo owns versions. Native Rust UI and askpass; no C# host or WebView wrapper. Resources live under rust/assets and rust/desktop/resources.
 - Keep Git/process/filesystem work off the UI thread. Menus use cached state. Deliver working behavior/progress/errors, never placeholders.

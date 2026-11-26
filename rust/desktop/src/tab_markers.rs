@@ -169,6 +169,7 @@ pub(super) struct Controller {
     observations: HashMap<u64, Observation>,
     scan: Option<Scan>,
     preview: Option<(u64, Arc<[shovel_core::working::Change]>)>,
+    preview_verified: bool,
 }
 
 impl Controller {
@@ -177,6 +178,18 @@ impl Controller {
             .as_ref()
             .filter(|(id, _)| *id == tab.id && !tab.view.identity_blocked)
             .map(|(_, rows)| rows.clone())
+    }
+    pub fn verified_conflicts(&self, tab: &Tab) -> Option<bool> {
+        if !self.preview_verified || tab.view.identity_blocked {
+            return None;
+        }
+        self.preview
+            .as_ref()
+            .filter(|(id, _)| *id == tab.id)
+            .map(|(_, rows)| {
+                rows.iter()
+                    .any(|row| row.group == shovel_core::working::Group::Conflicted)
+            })
     }
     pub fn status(&self, tab: &Tab) -> Status {
         if tab.view.identity_blocked {
@@ -204,6 +217,9 @@ impl Controller {
     }
 
     pub fn invalidate(&mut self, id: u64) {
+        if self.preview.as_ref().is_some_and(|(owner, _)| *owner == id) {
+            self.preview_verified = false;
+        }
         if let Some(read) = self.observations.get_mut(&id) {
             read.due = Some(Instant::now());
         }
@@ -217,6 +233,7 @@ impl Controller {
     pub fn reset(&mut self) {
         self.observations.clear();
         self.preview = None;
+        self.preview_verified = false;
         if let Some(scan) = &self.scan {
             scan.cancel.cancel();
         }
@@ -226,6 +243,7 @@ impl Controller {
         self.observations.remove(&id);
         if self.preview.as_ref().is_some_and(|(owner, _)| *owner == id) {
             self.preview = None;
+            self.preview_verified = false;
         }
         self.invalidate(id);
     }
@@ -290,6 +308,7 @@ impl Workspace {
                                 }
                             }
                             markers.preview = Some((tab.id, rows));
+                            markers.preview_verified = true;
                         }
                         let retry = matches!(result.read, Read::Count(None) | Read::Marker(Status::Unavailable));
                         let read = if retry {
@@ -363,6 +382,14 @@ impl Workspace {
         let (tx, result) = mpsc::channel();
         let cancel = Cancellation::default();
         let count = Some(tab.id) == active;
+        if count
+            && markers
+                .preview
+                .as_ref()
+                .is_some_and(|(owner, _)| *owner == tab.id)
+        {
+            markers.preview_verified = false;
+        }
         markers.scan = Some(Scan {
             id: tab.id,
             count,

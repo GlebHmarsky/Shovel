@@ -1,5 +1,13 @@
 # Changelog
 
+## Rust 0.54.0 - 2026-11-26
+
+- Review Reset Branch to Here in one dialog with the destination commit and Soft, Mixed or Hard choices. Mixed is selected initially. The dialog explains what Hard can discard and asks before running Git.
+- Center Shovel forms and confirmations on their owner, block background tab and keyboard input while they are open, and use a shared title, close button, scrolling body and action row. Manage Remotes edits local URLs in a compact form.
+- Show recovery above History. Resolve opens the configured Local Changes or Commit layout. Continue is available there once Shovel verifies that conflicts are resolved.
+- Review a cherry-pick before running it, with options to apply without committing or append the origin. Undo Last Commit reviews the first parent and keeps staged changes and working files.
+- Reveal a reachable stash from the sidebar. Offer the inspector for detached stashes. A single stash on the newest base sits above that commit until a newer commit moves the stash to its own lane.
+
 ## Rust 0.53.0 - 2026-11-26
 
 - Press Up or Down in History to select commits and update their details immediately. Press Left or Right to switch to an adjacent repository and keep each tab's history position.

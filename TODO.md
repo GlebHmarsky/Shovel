@@ -15,6 +15,8 @@ Updated 2026-11-26. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 
 - [ ] Verify physical arrow input, the full-width stash graph and the History stash menu in the installed Windows Beta.
 - [ ] Verify Fetch, Pull and Push keyboard focus and dialog close-button hover across Windows appearance settings in the installed Windows Beta.
+- [ ] Verify the recovery banner and Continue footer, sidebar stash navigation, and Cherry-pick and Undo Last Commit reviews with physical input in the installed Windows app.
+- [ ] Verify the 0.54.0 dialog audit in the installed Windows app. Cover physical keyboard and pointer focus, Escape and caption close, add/edit/remove remotes, mixed-DPI monitor placement, Settings, and the Reset and Undo reviews. See the [style guide](docs/style-guide.md).
 
 ## Diff follow-ups
 

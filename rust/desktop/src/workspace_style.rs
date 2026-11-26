@@ -261,26 +261,42 @@ pub fn show_closable_window(
         return;
     }
     window.title_bar(false).show(ctx, |ui| {
-        let close_width = 28.;
-        let palette = Palette::current(ui);
-        ui.horizontal(|ui| {
+        if dialog_heading(ui, title, true) {
+            *open = false;
+        }
+        body(ui);
+    });
+}
+
+fn dialog_heading(ui: &mut egui::Ui, title: &str, dismissible: bool) -> bool {
+    let closed = ui
+        .horizontal(|ui| {
+            let close_width = 28.;
+            let palette = Palette::current(ui);
             let width = (ui.available_width() - close_width - ui.spacing().item_spacing.x).max(0.);
             ui.allocate_ui_with_layout(
                 egui::vec2(width, 28.),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    ui.add(egui::Label::new(egui::RichText::new(title).heading()).truncate());
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(title).heading())
+                            .truncate()
+                            .selectable(false),
+                    );
                 },
             );
-            let (rect, response) =
-                ui.allocate_exact_size(egui::vec2(close_width, 28.), egui::Sense::click());
+            let (rect, response) = ui
+                .add_enabled_ui(dismissible, |ui| {
+                    ui.allocate_exact_size(egui::vec2(close_width, 28.), egui::Sense::click())
+                })
+                .inner;
             let label = crate::strings::text("WindowClose");
             response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &label)
+                egui::WidgetInfo::labeled(egui::Role::Button, response.enabled(), &label)
             });
             let response = response.on_hover_text(label);
             let painter = ui.painter();
-            let foreground = if ui.is_enabled()
+            let foreground = if response.enabled()
                 && (response.hovered() || response.is_pointer_button_down_on())
             {
                 let (fill, foreground) = if palette.high_contrast {
@@ -292,7 +308,8 @@ pub fn show_closable_window(
                 };
                 painter.rect_filled(rect, 4., fill);
                 foreground
-            } else if ui.is_enabled() {
+            } else if response.enabled() {
+                painter.rect_filled(rect, 4., palette.raised);
                 palette.text
             } else {
                 palette.disabled
@@ -312,13 +329,92 @@ pub fn show_closable_window(
                     Stroke::new(1.5, foreground),
                 );
             }
-            if response.clicked() {
-                *open = false;
+            response.clicked()
+        })
+        .inner;
+    ui.separator();
+    closed
+}
+
+/// A blocking, owner-relative dialog. Clicking the backdrop leaves the review open.
+pub fn show_dialog<T>(
+    ctx: &egui::Context,
+    id: egui::Id,
+    title: &str,
+    preferred_width: f32,
+    enabled: bool,
+    dismissible: bool,
+    contents: impl FnOnce(&mut egui::Ui) -> T,
+) -> (T, bool) {
+    modal_focus(ctx, true);
+    let width = (ctx.content_rect().width() - 44.)
+        .min(preferred_width)
+        .max(1.);
+    let response = egui::Modal::new(id)
+        .frame(egui::Frame::window(&ctx.style_of(ctx.theme())).inner_margin(12))
+        .show(ctx, |ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing.y = 6.;
+            ui.spacing_mut().interact_size.y = 26.;
+            if !enabled {
+                ui.disable();
             }
+            let close = dialog_heading(ui, title, dismissible);
+            (contents(ui), close)
         });
-        ui.separator();
-        body(ui);
-    });
+    let escape = enabled
+        && dismissible
+        && response.is_top_modal
+        && !response.any_popup_open
+        && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+    (response.inner.0, response.inner.1 || escape)
+}
+
+pub fn dialog_body<T>(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui) -> T) -> T {
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, true])
+        .max_height((ui.ctx().content_rect().height() - 115.).max(42.))
+        .show(ui, contents)
+        .inner
+}
+
+pub fn dialog_actions<T>(ui: &mut egui::Ui, actions: impl FnOnce(&mut egui::Ui) -> T) -> T {
+    ui.separator();
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), ui.spacing().interact_size.y.max(29.)),
+        egui::Layout::right_to_left(egui::Align::Center),
+        actions,
+    )
+    .inner
+}
+
+pub fn dim_owner(ctx: &egui::Context) {
+    ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::unique("disabled-owner"),
+    ))
+    .rect_filled(ctx.content_rect(), 0., Color32::from_black_alpha(100));
+}
+
+pub fn modal_focus(ctx: &egui::Context, blocking: bool) {
+    let id = egui::Id::unique(("dialog-owner-focus", ctx.viewport_id()));
+    let previous = ctx.data(|data| data.get_temp::<Option<egui::Id>>(id));
+    if blocking && previous.is_none() {
+        let focus = ctx.memory_mut(|memory| {
+            let focus = memory.focused();
+            if let Some(focus) = focus {
+                memory.surrender_focus(focus);
+            }
+            focus
+        });
+        ctx.data_mut(|data| data.insert_temp(id, focus));
+        egui::Popup::close_all(ctx);
+    } else if !blocking && let Some(focus) = previous {
+        ctx.data_mut(|data| data.remove::<Option<egui::Id>>(id));
+        if let Some(focus) = focus {
+            ctx.memory_mut(|memory| memory.request_focus(focus));
+        }
+    }
 }
 
 fn apply_palette(ctx: &egui::Context, light: bool, p: Palette) {
@@ -405,6 +501,7 @@ pub fn lower_tab(ui: &mut egui::Ui, active: bool, label: String) -> egui::Respon
 }
 
 pub const TOOLBAR_HEIGHT: f32 = 38.;
+pub const CONTROL_GAP: f32 = 4.;
 
 /// A single keyboard/accessibility target for the icon and its caption.
 pub fn action(ui: &mut egui::Ui, key: &str, enabled: bool) -> egui::Response {
@@ -481,7 +578,8 @@ pub fn action_with_count(
         }
         if key == "BranchToolbar" {
             for (x, y) in [(5., 3.5), (5., 17.5), (15., 3.5)] {
-                ui.painter().circle_stroke(origin + egui::vec2(x,y), 2.4, Stroke::new(1.5, color));
+                ui.painter()
+                    .circle_stroke(origin + egui::vec2(x, y), 2.4, Stroke::new(1.5, color));
             }
         }
         for path in paths {
@@ -612,9 +710,16 @@ pub fn reference_row(ui: &mut egui::Ui, selected: bool, label: &str, kind: &str)
     }
     let center = egui::pos2(rect.left() + 9., rect.center().y);
     let fg = if selected { p.selection_text } else { p.text };
-    let stroke = Stroke::new(1.2, if kind == "Stashes" && !p.high_contrast {
-        Color32::from_gray(if ui.visuals().dark_mode { 168 } else { 102 })
-    } else if selected { fg } else { p.muted });
+    let stroke = Stroke::new(
+        1.2,
+        if kind == "Stashes" && !p.high_contrast {
+            Color32::from_gray(if ui.visuals().dark_mode { 168 } else { 102 })
+        } else if selected {
+            fg
+        } else {
+            p.muted
+        },
+    );
     if kind == "Tags" {
         let points = vec![
             center + egui::vec2(-5., -4.),

@@ -87,6 +87,7 @@ pub(super) struct State {
     pub watch: Option<repository_watch::Watch>,
     pub external_history_change: bool,
     pub stash_selection: stashes::SidebarSelection,
+    pub pending_stash_reveal: Option<String>,
     pub offset: egui::Vec2,
     pub restore_offset: Option<egui::Vec2>,
     pub home_requested: bool,
@@ -140,6 +141,7 @@ impl State {
     pub fn clear_views(&mut self) {
         self.views.clear();
         self.stash_selection = Default::default();
+        self.pending_stash_reveal = None;
         self.offset = egui::Vec2::ZERO;
         self.restore_offset = Some(self.offset);
     }

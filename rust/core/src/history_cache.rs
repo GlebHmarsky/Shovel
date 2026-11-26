@@ -12,8 +12,8 @@ use std::{
 };
 
 pub const MAX_BYTES: usize = 4 * 1024 * 1024;
-// Older previews encode a stash node as an inset from its base lane.
-pub const PREVIEW_SCHEMA: u32 = 8;
+// Older previews do not distinguish a stash at the tip from a side branch.
+pub const PREVIEW_SCHEMA: u32 = 9;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Preview {
     pub schema: u32,
@@ -55,7 +55,9 @@ impl Preview {
                     && g.node < g.width
                     && g.width <= MAX_DISPLAY_LANES
                     && match g.stash_link {
-                        Some(StashLink::Base { lane, .. }) => g.node < lane && lane < g.width,
+                        Some(StashLink::Base { lane, shared }) => {
+                            lane < g.width && (g.node < lane || !shared && g.node == lane)
+                        }
                         _ => true,
                     }
                     && g.lines.len() <= 256

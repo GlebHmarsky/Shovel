@@ -1,7 +1,7 @@
 #![cfg(windows)]
 use shovel_core::{
     git::{Git, Snapshot},
-    history_actions::{Action, Reset},
+    history_actions::{Action, CherryPickPreview, Reset},
     operation::{Completed, Error},
     process::{self, Cancellation, Lifetime},
 };
@@ -121,6 +121,41 @@ fn reset(mode: Reset) {
 fn soft_reset_keeps_index_and_working_files() {
     reset(Reset::Soft);
 }
+
+#[test]
+fn undo_last_prepares_the_captured_first_parent_and_rejects_changed_or_root_tips() {
+    let f = Fixture::new();
+    let cancel = Cancellation::default();
+    let captured = f.snapshot();
+    let parent = f.git.prepare_undo_last_commit(&captured, &cancel).unwrap();
+    assert_eq!(parent, f.base);
+    let context = f.git.prepare_local(&captured, true, &cancel).unwrap();
+    f.cmd(&["commit", "--allow-empty", "-m", "later"]);
+    assert!(f.git.prepare_undo_last_commit(&captured, &cancel).is_err());
+    let latest = f.cmd(&["rev-parse", "HEAD"]);
+    assert!(
+        f.git
+            .execute_history(
+                &context,
+                &Action::Reset {
+                    target: parent,
+                    mode: Reset::Soft
+                },
+                None
+            )
+            .is_err()
+    );
+    assert_eq!(f.cmd(&["rev-parse", "HEAD"]), latest);
+    f.cmd(&["switch", "-c", "root-only", &f.base]);
+    assert_eq!(
+        f.git
+            .prepare_undo_last_commit(&f.snapshot(), &cancel)
+            .unwrap_err()
+            .code(),
+        "HistoryUndoNoParent"
+    );
+}
+
 #[test]
 fn mixed_reset_keeps_working_files_and_replaces_index() {
     reset(Reset::Mixed);
@@ -128,6 +163,89 @@ fn mixed_reset_keeps_working_files_and_replaces_index() {
 #[test]
 fn hard_reset_replaces_tracked_files_and_retains_unrelated_files() {
     reset(Reset::Hard);
+}
+
+#[test]
+fn cherry_pick_preview_is_read_only_and_native_flags_preserve_intent() {
+    let f = Fixture::new();
+    f.cmd(&["switch", "-c", "source", &f.base]);
+    fs::write(f.root.join("file"), "conflicting\n").unwrap();
+    f.cmd(&["commit", "-am", "conflicting change"]);
+    let conflicting = f.cmd(&["rev-parse", "HEAD"]);
+    fs::write(f.root.join("new"), "clean change\n").unwrap();
+    f.cmd(&["add", "new"]);
+    f.cmd(&["commit", "-m", "clean change"]);
+    let clean = f.cmd(&["rev-parse", "HEAD"]);
+    f.cmd(&["switch", "main"]);
+    let cancel = Cancellation::default();
+    let captured = f.snapshot();
+    let history = f.git.history(captured.clone(), &cancel).unwrap();
+    let page = f.git.page(&history, &Default::default(), &cancel).unwrap();
+    let source = |hash: &str| {
+        &page
+            .entries
+            .iter()
+            .find(|entry| entry.commit.hash == hash)
+            .unwrap()
+            .commit
+    };
+    let index = fs::read(f.root.join(".git/index")).unwrap();
+    let objects = f.cmd(&["count-objects", "-v"]);
+    assert_eq!(
+        f.git
+            .preview_cherry_pick(&captured, source(&conflicting), 0, &cancel),
+        CherryPickPreview::Conflicts
+    );
+    assert_eq!(
+        f.git
+            .preview_cherry_pick(&captured, source(&clean), 0, &cancel),
+        CherryPickPreview::Clean
+    );
+    assert_eq!(f.cmd(&["count-objects", "-v"]), objects);
+    assert_eq!(fs::read(f.root.join(".git/index")).unwrap(), index);
+    assert_eq!(f.cmd(&["rev-parse", "HEAD"]), f.tip);
+    assert_eq!(fs::read_to_string(f.root.join("file")).unwrap(), "second\n");
+    assert!(!f.root.join("new").exists());
+
+    let pick_without_commit = Action::CherryPick {
+        target: clean.clone(),
+        mainline: 0,
+        commit: false,
+        append_origin: true,
+    };
+    let result = f.run(pick_without_commit).unwrap();
+    assert!(result.succeeded(), "{}", result.output);
+    assert_eq!(f.cmd(&["rev-parse", "HEAD"]), f.tip);
+    assert_eq!(f.cmd(&["show", ":new"]), "clean change");
+    assert_eq!(
+        f.git
+            .preview_cherry_pick(&captured, source(&conflicting), 0, &cancel),
+        CherryPickPreview::Unavailable
+    );
+    f.cmd(&["restore", "--source=HEAD", "--staged", "--worktree", "new"]);
+    let pick_with_origin = Action::CherryPick {
+        target: clean.clone(),
+        mainline: 0,
+        commit: true,
+        append_origin: true,
+    };
+    let result = f.run(pick_with_origin).unwrap();
+    assert!(result.succeeded(), "{}", result.output);
+    assert!(
+        f.cmd(&["log", "-1", "--format=%B"])
+            .contains(&format!("(cherry picked from commit {clean})"))
+    );
+    assert_eq!(
+        f.git
+            .preview_cherry_pick(&f.snapshot(), source(&clean), 0, &cancel),
+        CherryPickPreview::NoChanges
+    );
+    assert_eq!(
+        f.git
+            .preview_cherry_pick(&captured, source(&conflicting), 0, &cancel),
+        CherryPickPreview::Stale
+    );
+    assert!(f.git.prepare_local(&captured, true, &cancel).is_err());
 }
 
 #[test]
@@ -528,6 +646,8 @@ fn history_menu_integrates_the_captured_commit_with_native_git() {
         .run(Action::CherryPick {
             target: incoming.clone(),
             mainline: 0,
+            commit: true,
+            append_origin: false,
         })
         .unwrap();
     assert!(picked.succeeded(), "{}", picked.output);

@@ -18,6 +18,7 @@ mod git_identity;
 mod git_selection;
 mod history_cache;
 mod history_menu;
+mod history_review;
 use history_menu::HistoryMenu;
 mod history_row;
 mod history_view;
@@ -28,6 +29,7 @@ mod read_workers;
 mod remotes;
 mod repository_init;
 mod repository_menu;
+mod recovery_ui;
 mod repository_tools;
 mod repository_watch;
 mod settings_ui;
@@ -37,6 +39,7 @@ mod strings;
 mod ui_scale;
 mod updater;
 mod update_restart;
+mod native_windows;
 mod window_geometry;
 mod tab_markers;
 mod workspace_split;
@@ -107,7 +110,7 @@ enum Event {
     CachedIdentity(u64, u64, Result<(), history_view::Failure>),
     Loaded(u64, u64, history_view::Read, bool, Vec<Cursor>),
     Page(u64, u64, Box<Page>, bool, Option<f32>),
-    Located(u64, u64, String, Result<(Page, Vec<Cursor>), String>),
+    Located(u64, u64, String, bool, Result<Option<(Page, Vec<Cursor>)>, String>),
     Failed(u64, u64, history_view::Failure),
     Saved(Box<SettingsStore>, Result<(), String>),
     PreferencesSaved(Box<SettingsStore>, Box<Settings>, Result<(), String>, u64),
@@ -564,16 +567,25 @@ impl Workspace {
         );
     }
     fn locate(&mut self, hash: String, ctx: &egui::Context) {
+        self.locate_history_target(hash, false, ctx);
+    }
+    fn reveal_stash(&mut self, hash: String, ctx: &egui::Context) {
+        self.locate_history_target(hash, true, ctx);
+    }
+    fn locate_history_target(&mut self, hash: String, stash: bool, ctx: &egui::Context) {
         if self.closing || self.pending_exit || self.confirm_exit_without_save {
             return;
         }
-        self.show_history(ctx);
+        if !stash {
+            self.show_history(ctx);
+        }
         let Some(tab) = self.tabs.get_mut(self.selected) else {
             return;
         };
         if tab.view.identity_blocked {
             return;
         }
+        tab.view.pending_stash_reveal = None;
         if tab
             .page
             .as_ref()
@@ -583,14 +595,24 @@ impl Workspace {
             tab.locating = None;
             tab.selected = Some(hash);
             tab.scroll_selected = true;
+            if stash {
+                self.show_history(ctx);
+            }
             return;
         }
         if tab.loading || tab.view.stale {
+            if stash {
+                tab.view.pending_stash_reveal = Some(hash);
+                if !tab.loading {
+                    self.refresh_at(self.selected, ctx);
+                }
+            }
             return;
         }
         let (Some(git), Some(history)) = (self.git.clone(), tab.history.clone()) else {
             return;
         };
+        tab.locate_cancel.cancel();
         tab.locate_cancel = Cancellation::default();
         tab.view.locate_generation = tab.view.locate_generation.wrapping_add(1);
         let generation = tab.view.locate_generation;
@@ -611,29 +633,32 @@ impl Workspace {
                     loop {
                         let page = git.page(&history, &cursor, &cancel).map_err(error_text)?;
                         if page.entries.iter().any(|e| e.commit.hash == hash) {
-                            return Ok((page, previous));
+                            return Ok(Some((page, previous)));
                         }
                         let Some(next) = page.next else {
-                            return Err(strings::text("RustRefNotFound"));
+                            return Ok(None);
                         };
                         history_view::push_cursor(&mut previous, cursor);
                         cursor = next;
                     }
                 })();
-                Event::Located(id, generation, hash, result)
+                Event::Located(id, generation, hash, stash, result)
             },
             move || {
                 Event::Located(
                     id,
                     generation,
                     failed_hash,
+                    stash,
                     Err(strings::text("RustHistoryWorkerFailed")),
                 )
             },
         );
     }
+
     fn pick_repository(&mut self, ctx: &egui::Context) {
-        self.begin_repository_picker(ctx, || rfd::FileDialog::new().pick_folder());
+        let picker = file_picker::owned(rfd::FileDialog::new());
+        self.begin_repository_picker(ctx, move || picker.pick_folder());
     }
     fn begin_repository_picker(
         &mut self,
@@ -1003,7 +1028,8 @@ impl Workspace {
                         }
                     }
                 }
-                Event::Located(id, generation, hash, result) => {
+                Event::Located(id, generation, hash, stash, result) => {
+                    let active = self.tabs.get(self.selected).is_some_and(|tab| tab.id == id);
                     if let Some(tab) = self
                         .tabs
                         .iter_mut()
@@ -1017,7 +1043,7 @@ impl Workspace {
                             continue;
                         }
                         match result {
-                            Ok((page, previous)) => {
+                            Ok(Some((page, previous))) => {
                                 tab.error = None;
                                 tab.view.remember(tab.page.as_ref(), &tab.selected);
                                 tab.view.restore(&page, &mut tab.selected);
@@ -1026,7 +1052,12 @@ impl Workspace {
                                 tab.selected = Some(hash);
                                 tab.scroll_selected = true;
                                 tab.estimate_cache();
+                                if active && stash { self.show_history(ctx); }
                             }
+                            Ok(None) if stash => {
+                                if active { self.open_stashes(Some(hash)); }
+                            }
+                            Ok(None) => tab.error = Some(strings::text("RustRefNotFound")),
                             Err(error) => tab.error = Some(error),
                         }
                     }
@@ -1389,6 +1420,12 @@ impl Workspace {
             .collect::<Vec<_>>();
         for index in pending {
             self.refresh_at(index, ctx);
+        }
+        if let Some(tab) = self.tabs.get_mut(self.selected)
+            && !tab.loading && !tab.view.stale
+            && let Some(hash) = tab.view.pending_stash_reveal.take()
+        {
+            self.reveal_stash(hash, ctx);
         }
         self.poll_tab_markers(ctx);
         self.warm_restored_tabs(ctx);
@@ -1877,22 +1914,6 @@ fn prime_comparison(tab: &mut Tab, git: &Arc<Git>, settings: &Settings, workers:
     tab.comparison = Some(pane);
 }
 
-fn recovery_controls_visible(
-    snapshot: &shovel_core::git::Snapshot,
-    scheduler: &shovel_core::scheduler::Scheduler,
-) -> bool {
-    let rebase = snapshot.operations.iter().any(|name| name.starts_with("rebase"));
-    if !rebase {
-        return true;
-    }
-    snapshot.recovery.as_ref().is_some_and(|state| !state.current.is_empty())
-        && !scheduler.active_records().iter().any(|record| {
-            record.running
-                && record.lane == shovel_core::scheduler::Lane::Exclusive
-                && record.repository == snapshot.identity.fingerprint
-        })
-}
-
 impl eframe::App for Workspace {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.receive(ctx);
@@ -1906,54 +1927,67 @@ impl eframe::App for Workspace {
         self.sync_ui_scale(&ctx);
         self.main_geometry.observe(&ctx);
         let sidebar_commit = self.settings.commit_in_workspace();
+        let native_editor = self.editors.iter().any(|editor| editor.open && !editor.inline);
+        let stash_confirmation = self.stash_views.iter().any(stashes::View::confirming);
+        let inline_prompt = self.inline_editor().is_some_and(|i| self.editors[i].has_prompt());
+        let authenticating = self.operations.authentication_open();
+        let choosing = self.git_selection.busy() || self.repository_picker.is_some()
+            || self.editors.iter().any(commit::Editor::native_picker_open);
         let workspace_modal = self.closing
             || self.pending_exit
             || self.confirm_exit_without_save
-            || self.git_selection.busy()
+            || choosing
             || self.settings_dialog.is_some()
-            || self.operations.authentication_open()
-            || self.initialization.is_open();
-        let modal_open = workspace_modal
-            || self
-                .editors
-                .iter()
-                .any(|editor| editor.open && !editor.inline)
-            || self.operations.modal_open()
-            || self.remotes.is_open()
-            || self.branches.is_open()
-            || self.repository_dialog.is_some()
-            || self.stash_views.iter().any(|view| view.open);
-        let inline_prompt = self
-            .inline_editor()
-            .is_some_and(|i| self.editors[i].has_prompt());
-        let shortcuts_blocked = modal_open || inline_prompt;
-        if workspace_modal {
+            || self.initialization.is_open()
+            || native_editor
+            || inline_prompt
+            || self.updater.open
+            || stash_confirmation;
+        if !workspace_modal && !self.repository_form_open() {
+            self.repository_shortcuts(&ctx);
+        }
+        let modal_open = workspace_modal || self.repository_form_open();
+        let shortcuts_blocked = modal_open;
+        if modal_open {
             ui.disable();
         }
-        if self.confirm_exit_without_save {
-            egui::Window::new(strings::text("SettingsSaveFailedStatus"))
-                .collapsible(false)
-                .resizable(false)
-                .show(&ctx, |ui| {
-                    ui.label(strings::text("SettingsSaveFailedQuestion"));
-                    ui.horizontal(|ui| {
-                        if ui.button(strings::text("RustExitWithoutSaving")).clicked() {
-                            self.exit_without_saving(&ctx);
-                        }
-                        if ui.button(strings::text("RustStayOpen")).clicked() {
-                            self.confirm_exit_without_save = false;
-                            self.pending_exit = false;
-                            self.discard_settings_on_exit = false;
-                            self.updater.restart_requested = false;
-                        }
-                    });
-                });
+        workspace_style::modal_focus(&ctx, modal_open);
+        caption::set_modal(modal_open && !self.closing);
+        let shutdown_prompt = self.confirm_exit_without_save;
+        if authenticating || shutdown_prompt || !native_editor && !stash_confirmation {
+            native_windows::block_root(false);
+        }
+        let workspace_protected = native_editor || stash_confirmation || choosing || self.pending_exit;
+        if workspace_protected && !authenticating && !shutdown_prompt && !inline_prompt {
+            workspace_style::dim_owner(&ctx);
+        }
+        if shutdown_prompt {
+            let title = strings::text("SettingsSaveFailedStatus");
+            let ((exit, stay), dismissed) = workspace_style::show_dialog(
+                &ctx, egui::Id::unique("exit-save-failed"), &title, 420., !authenticating, !authenticating, |ui| {
+                    workspace_style::dialog_body(ui, |ui| ui.label(strings::text("SettingsSaveFailedQuestion")));
+                    workspace_style::dialog_actions(ui, |ui| {
+                        let stay = ui.button(strings::text("RustStayOpen")).clicked();
+                        let exit = ui.button(strings::text("RustExitWithoutSaving")).clicked();
+                        (exit, stay)
+                    })
+                }
+            );
+            if exit {
+                self.exit_without_saving(&ctx);
+            } else if stay || dismissed {
+                self.confirm_exit_without_save = false;
+                self.pending_exit = false;
+                self.discard_settings_on_exit = false;
+                self.updater.restart_requested = false;
+            }
         }
         if ctx.input(|i| i.viewport().close_requested()) {
-            self.close(&ctx);
-        }
-        if !shortcuts_blocked {
-            self.repository_shortcuts(&ctx);
+            if modal_open && !self.closing {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            } else {
+                self.close(&ctx);
+            }
         }
         if !shortcuts_blocked
             && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::PageDown))
@@ -1994,7 +2028,7 @@ impl eframe::App for Workspace {
                     == Some(1),
             );
         }
-        if !workspace_modal && !inline_prompt && !self.tabs.is_empty() {
+        if !shortcuts_blocked && !self.tabs.is_empty() {
             if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::W)) {
                 self.close_tab(self.tabs[self.selected].id, &ctx);
             } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Tab)) {
@@ -2236,7 +2270,7 @@ impl eframe::App for Workspace {
                     egui::vec2(ui.available_width(), workspace_style::TOOLBAR_HEIGHT),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
-                        ui.spacing_mut().item_spacing.x = 2.;
+                        ui.spacing_mut().item_spacing.x = workspace_style::CONTROL_GAP;
                         if workspace_style::action(ui, "OpenRepository", true).clicked() {
                             self.pick_repository(&ctx);
                         }
@@ -2474,9 +2508,9 @@ impl eframe::App for Workspace {
             let size = egui::vec2(760., 415.)
                 .min(available.size() - egui::vec2(16., 80.))
                 .max(min_size);
-            let mut window = egui::Window::new(strings::text("ActivityTitle"))
+            let title = strings::text("ActivityTitle");
+            let mut window = egui::Window::new(&title)
                 .id(egui::Id::unique("workspace-activity"))
-                .open(&mut open)
                 .enabled(!modal_open && !self.closing)
                 .default_size(size)
                 .min_size(min_size)
@@ -2492,8 +2526,8 @@ impl eframe::App for Workspace {
                     window = window.current_pos(pos);
                 }
             }
-            let reopen = window
-                .show(&ctx, |ui| {
+            let mut reopen = None;
+            workspace_style::show_closable_window(&ctx, window, &title, &mut open, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         for (filter, key) in [
                             (operations::ActivityFilter::All, "ActivityAll"),
@@ -2507,10 +2541,8 @@ impl eframe::App for Workspace {
                     });
                     ui.separator();
                     let scope = selected_path.as_ref().filter(|_| !self.activity_all);
-                    self.operations.activity(ui, scope, &self.scheduler)
-                })
-                .and_then(|response| response.inner)
-                .flatten();
+                    reopen = self.operations.activity(ui, scope, &self.scheduler);
+                });
             self.activity_open = open;
             if let Some((path, owner)) = reopen {
                 self.reopen_failed_commit(path, owner, &ctx);
@@ -2522,6 +2554,9 @@ impl eframe::App for Workspace {
                 0, 0,
             ))
             .show(ui, |ui| {
+                if modal_open {
+                    ui.disable();
+                }
                 ui.spacing_mut().item_spacing.x = 0.;
                 let count = self.tabs.len();
                 let width = if count == 0 {
@@ -2533,7 +2568,7 @@ impl eframe::App for Workspace {
                 let pointer = ctx.input(|i| {
                     i.pointer
                         .interact_pos()
-                        .filter(|_| i.pointer.primary_down() || self.tab_drag.is_some())
+                        .filter(|_| !modal_open && (i.pointer.primary_down() || self.tab_drag.is_some()))
                 });
                 let mut nearest: Option<(f32, usize, egui::Rect)> = None;
                 let mut action = None;
@@ -2638,7 +2673,7 @@ impl eframe::App for Workspace {
                 });
                 if let Some((drag, original)) = &self.tab_drag {
                     let active = self.tabs.get(self.selected).map(|t| t.id);
-                    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    if modal_open || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                         self.tabs.sort_by_key(|t| {
                             original
                                 .iter()
@@ -2689,73 +2724,18 @@ impl eframe::App for Workspace {
                     self.select_tab(index, &ctx);
                 }
             });
-        if let Some(tab) = self.tabs.get(self.selected)
-            && let Some(history) = &tab.history
-            && !history.snapshot.operations.is_empty()
-            && recovery_controls_visible(&history.snapshot, &self.scheduler)
-        {
-            let snapshot = &history.snapshot;
-            egui::Panel::top("repository-recovery")
-                .frame(workspace_style::pane(palette.chrome, 6, 3))
-                .show(ui, |ui| {
-                    ui.add_enabled_ui(!modal_open, |ui| {
-                        if let Some(state) = &snapshot.recovery {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(strings::format(
-                                    "RecoveryHelp",
-                                    &[&branches::recovery_name(state.kind)],
-                                ));
-                                if ui
-                                    .button(strings::text("ActionTitleContinue"))
-                                    .on_hover_text(strings::text("RecoveryContinueHelp"))
-                                    .clicked()
-                                    && let Some(git) = &self.git
-                                {
-                                    self.operations.submit_recovery(
-                                        "ActionTitleContinue",
-                                        shovel_core::recovery::Action::Continue,
-                                        snapshot,
-                                        git.clone(),
-                                        &self.scheduler,
-                                        &ctx,
-                                    );
-                                }
-                                if state.can_skip()
-                                    && ui
-                                        .button(strings::text("ActionTitleSkip"))
-                                        .on_hover_text(strings::text("RecoverySkipHelp"))
-                                        .clicked()
-                                {
-                                    self.branches.confirm_recovery(
-                                        snapshot,
-                                        shovel_core::recovery::Action::Skip,
-                                    );
-                                }
-                                if ui
-                                    .button(strings::text("ActionTitleAbort"))
-                                    .on_hover_text(strings::text("RecoveryAbortHelp"))
-                                    .clicked()
-                                {
-                                    self.branches.confirm_recovery(
-                                        snapshot,
-                                        shovel_core::recovery::Action::Abort,
-                                    );
-                                }
-                            });
-                        } else {
-                            ui.label(strings::text(if snapshot.operations == ["bisect"] {
-                                "RepositoryBisectActive"
-                            } else {
-                                "RecoveryUnavailable"
-                            }));
-                        }
-                    });
-                });
+        if !self.tabs.is_empty() {
+            egui::Panel::top("workspace-top-gap")
+                .exact_size(workspace_style::CONTROL_GAP)
+                .resizable(false)
+                .frame(egui::Frame::new().fill(palette.canvas))
+                .show(ui, |_| {});
         }
         use workspace_split::Divider;
         let width = ui.available_width();
         let mut locate_request = None;
         let mut stash_request = None;
+        let mut stash_reveal = None;
         let mut submodule_open = None;
         let sidebar = egui::Panel::left("sidebar")
             .frame(workspace_style::pane(palette.sidebar, 8, 4))
@@ -2766,6 +2746,7 @@ impl eframe::App for Workspace {
                     ui.disable();
                 }
                 if sidebar_commit && self.tabs.get(self.selected).is_some() {
+                    ui.spacing_mut().item_spacing.y = workspace_style::CONTROL_GAP;
                     let local = self.inline_editor().is_some();
                     let row_size = egui::vec2(ui.available_width(), 24.);
                     let navigation = |selected, label| {
@@ -3060,6 +3041,8 @@ impl eframe::App for Workspace {
                                                 if stash {
                                                     if activated {
                                                         stash_request = Some(reference.hash.clone());
+                                                    } else {
+                                                        stash_reveal = Some(reference.hash.clone());
                                                     }
                                                 } else {
                                                     locate_request = Some(reference.hash.clone());
@@ -3177,12 +3160,22 @@ impl eframe::App for Workspace {
         if let Some(hash) = locate_request {
             self.locate(hash, &ctx);
         }
+        if let Some(hash) = stash_reveal {
+            self.reveal_stash(hash, &ctx);
+        }
         if let Some(hash) = stash_request {
+            let tab = &mut self.tabs[self.selected];
+            if tab.locating.as_ref() == Some(&hash) {
+                tab.locate_cancel.cancel();
+                tab.locating = None;
+            }
+            tab.view.pending_stash_reveal = None;
             self.open_stashes(Some(hash));
         }
-        let height = ui.available_height();
         self.preferences_dirty |=
             Divider::Sidebar.handle(ui, sidebar.response.rect, width, &mut self.settings);
+        self.show_recovery_banner(ui, !modal_open && !inline_prompt);
+        let height = ui.available_height();
         let inline_editor = self.inline_editor();
         let details_panel = egui::Panel::bottom("details")
             .frame(workspace_style::pane(palette.panel, 6, 3))
@@ -3258,7 +3251,10 @@ impl eframe::App for Workspace {
                     ui.disable();
                 }
                 if let Some(index) = inline_editor {
-                    self.editors[index].show_inline(ui, !modal_open);
+                    self.editors[index].show_inline(
+                        ui,
+                        !modal_open || inline_prompt && !authenticating && !shutdown_prompt,
+                    );
                     return;
                 }
                 let Some(tab) = self.tabs.get_mut(self.selected) else {
@@ -3512,13 +3508,17 @@ impl eframe::App for Workspace {
         if let Some((older, height)) = history_edge {
             self.read_history_page(older, Some(height), &ctx);
         }
-        let stash_input = !self.closing
-            && !self.operations.modal_open()
-            && !self.branches.is_open()
-            && !self.remotes.is_open();
+        let forms_open = self.closing || self.pending_exit || shutdown_prompt || choosing
+            || self.settings_dialog.is_some() || self.initialization.is_open()
+            || self.operations.active_modal_open() || self.branches.is_open() || self.remotes.is_open()
+            || self.repository_dialog.is_some() || self.updater.open;
+        let stash_input = !forms_open && !native_editor && !inline_prompt;
+        let mut native_owner_blocks = false;
         self.sync_inspector_layouts(false);
         for view in &mut self.stash_views {
-            view.show(&ctx, &mut self.operations, &self.scheduler, stash_input);
+            let enabled = stash_input && (!stash_confirmation || view.confirming());
+            view.show(&ctx, &mut self.operations, &self.scheduler, enabled);
+            native_owner_blocks |= enabled && view.native_modal_visible(&ctx);
         }
         let failure_editor = self.operations.failure_path().and_then(|path| {
             self.editors.iter().position(|editor| {
@@ -3527,28 +3527,37 @@ impl eframe::App for Workspace {
         });
         for (index, editor) in self.editors.iter_mut().enumerate() {
             let open = editor.open;
-            let show_failure = !self.closing && failure_editor == Some(index);
-            if editor.inline && editor.exit_prompt_open() {
+            let enabled = (!forms_open || editor.exit_prompt_open() || editor.native_picker_open())
+                && !stash_confirmation && !authenticating && !shutdown_prompt;
+            let show_failure = enabled && !editor.has_prompt()
+                && !editor.native_picker_open() && failure_editor == Some(index);
+            if !authenticating && editor.inline && editor.exit_prompt_open() {
                 editor.show_leave_prompt(&ctx);
             }
             editor.show(
                 &ctx,
-                !self.closing
-                    && !self.operations.modal_open()
-                    && !self.branches.is_open()
-                    && !self.remotes.is_open(),
+                enabled,
                 |ctx| {
                     if show_failure {
                         self.operations.show_failure(ctx);
                     }
                 },
             );
+            native_owner_blocks |= enabled && editor.native_modal_visible(&ctx);
             if open && !editor.open {
                 editor.save_layout(&mut self.settings);
                 self.preferences_dirty = true;
             }
         }
-        if !self.closing {
+        native_windows::block_root(native_owner_blocks);
+        for editor in &mut self.editors {
+            if let Some(context) = editor.take_continue_request()
+                && let Some(git) = &self.git
+            {
+                recovery_ui::submit_continue(&mut self.operations, &context.repository, git, &self.scheduler, &ctx);
+            }
+        }
+        if !self.closing && !authenticating && !shutdown_prompt {
             self.initialization.show(
                 &ctx,
                 self.git.as_ref(),
@@ -3565,15 +3574,29 @@ impl eframe::App for Workspace {
                 .editors
                 .iter()
                 .any(|e| e.blocks_exit() || e.unsaved_conflict() || e.native_picker_open());
-        self.show_repository_dialog(&ctx);
-        repository_menu::show_help(&ctx);
-        self.updater
-            .show(&ctx, update_blocked, self.external_tools_opened);
+        if !authenticating && !shutdown_prompt {
+            self.show_repository_dialog(&ctx);
+        }
+        if !modal_open {
+            repository_menu::show_help(&ctx);
+        }
+        let can_show_update = !authenticating && !shutdown_prompt && !choosing
+            && !native_editor && !stash_confirmation && !inline_prompt
+            && self.settings_dialog.is_none() && !self.initialization.is_open()
+            && !self.branches.is_open() && !self.remotes.is_open()
+            && self.repository_dialog.is_none() && !self.operations.modal_open();
+        if can_show_update || !self.updater.open {
+            self.updater.show(&ctx, update_blocked, self.external_tools_opened);
+        }
         if self.updater.restart_requested && !self.closing {
             self.close(&ctx);
         }
 
-        if !self.closing && !self.remotes.is_open() {
+        let can_show_options = !self.closing && !self.pending_exit && !shutdown_prompt && !authenticating
+            && !choosing && !native_editor && !inline_prompt && !stash_confirmation
+            && self.settings_dialog.is_none() && !self.initialization.is_open()
+            && self.repository_dialog.is_none();
+        if can_show_options && !self.remotes.is_open() {
             self.operations.open_ready_branch(&mut self.branches);
             if !self.branches.is_open() {
                 self.preferences_dirty |= self.operations.options_dialog(
@@ -3584,25 +3607,15 @@ impl eframe::App for Workspace {
                 );
             }
         }
-        let allow_remote_input =
-            !self.closing && !self.operations.active_modal_open() && !self.branches.is_open();
-        self.remotes.show(
-            &ctx,
-            self.git.as_ref(),
-            &mut self.operations,
-            &self.scheduler,
-            allow_remote_input,
-        );
-        let allow_branch_input =
-            !self.closing && !self.operations.active_modal_open() && !self.remotes.is_open();
-        self.branches.show(
-            &ctx,
-            self.git.as_ref(),
-            &mut self.operations,
-            &self.scheduler,
-            allow_branch_input,
-        );
-        if !self.closing && failure_editor.is_none() {
+        if can_show_options && !self.operations.active_modal_open() {
+            let remotes_open = self.remotes.is_open();
+            if remotes_open {
+                self.remotes.show(&ctx, self.git.as_ref(), &mut self.operations, &self.scheduler, true);
+            } else {
+                self.branches.show(&ctx, self.git.as_ref(), &mut self.operations, &self.scheduler, true);
+            }
+        }
+        if !modal_open && failure_editor.is_none() {
             self.operations.show_failure(&ctx);
         }
         self.operations.show_prompt(&ctx);

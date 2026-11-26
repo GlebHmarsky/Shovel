@@ -360,26 +360,33 @@ impl Inspector {
             }
         });
     }
-    pub fn show(&mut self, ctx: &egui::Context) {
+    pub fn show(&mut self, ctx: &egui::Context, launcher: windows_sys::Win32::Foundation::HWND, enabled: bool) {
         self.poll(ctx);
         if !self.open {
             return;
         }
         let mut visible = false;
-        ctx.show_viewport_immediate(
-            self.id,
+        crate::native_windows::show(
+            ctx, self.id,
             self.layout
                 .builder(ctx)
                 .with_title(strings::format("FileHistoryTitle", &[&self.entry.path])),
+            launcher,
+            enabled,
             |ui, class| {
                 visible = ui.is_visible();
                 let ctx = ui.ctx().clone();
                 self.layout.observe(&ctx, class);
-                if ctx.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape))
-                {
+                let close = ctx.input(|i| i.viewport().close_requested());
+                if close {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                }
+                if enabled && (close || ctx.input(|i| i.key_pressed(egui::Key::Escape))) {
                     self.close();
                     return;
+                }
+                if !enabled {
+                    ui.disable();
                 }
                 egui::Panel::top("file_history_scope").show(ui, |ui| {
                     ui.label(strings::format(

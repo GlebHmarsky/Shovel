@@ -265,7 +265,7 @@ fn failed_init_retains_files_and_picker_ownership_blocks_exit() {
     let receiver = std::sync::Mutex::new(rx);
     let chosen = h.temp.path().join("chosen");
     let result = chosen.clone();
-    h.app.initialization.picker = Arc::new(move || {
+    h.app.initialization.picker = Arc::new(move |_| {
         let _ = receiver.lock().unwrap().recv();
         Some(result.clone())
     });

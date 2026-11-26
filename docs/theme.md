@@ -1,5 +1,7 @@
 # Shared visual theme
 
+The [current Rust UI style guide](style-guide.md) covers window behavior and reusable controls. This document retains the palette rationale and historical C# implementation.
+
 Updated 2026-10-30. **Confirmed direction:** restrained Fork-inspired dark surfaces, with live Dark/Light selection added in 0.24.0. Further polish stays P2 in [TODO](../TODO.md). This document owns palette/state conventions; [product](product.md) owns workflow and [roadmap](roadmap.md) records verification. No Fork artwork, branding or proprietary style resources are used.
 
 ## Palette and hierarchy (0.12.1)

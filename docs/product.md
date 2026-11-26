@@ -8,6 +8,24 @@ History selects the newest visible commit for a new view. Press Up or Down in Hi
 
 Reachable stashes have gray commit-sized markers in a separate full-width lane to the right. Stashes with the same base keep their own markers and link to that base. Right-click a stash in History for Apply, Pop or Drop. Drop asks for confirmation of the clicked stash.
 
+## Window and dialog behavior (0.54.0)
+
+Shovel centers forms and confirmations in the window they belong to. Use the upper-right close control, Cancel or Escape where available. While a modal dialog is open, clicks and shortcuts stay with the dialog. Activity, Help, File History and Blame remain available as inspectors. The Stashes inspector allows normal workspace interaction until you open its Drop confirmation.
+
+Manage Remotes shows the chosen remote and its local fetch and push URLs. Saving updates the repository configuration. Removing a remote asks for confirmation and leaves branches on the server available.
+
+## History reviews and recovery
+
+The recovery banner sits above History, alongside the sidebar. Resolve opens the configured Local Changes or Commit layout and selects a conflicted file. Once the working state has been checked and the conflicts are resolved, Continue becomes available in the banner and in the Commit footer. The footer also accepts Ctrl+Enter for that action. Abort opens a separate confirmation.
+
+Click a stash in the sidebar to select its History entry. If History cannot reach the stash, the Stashes inspector opens. Double-click opens the inspector for either kind of stash. One stash on the first commit in History sits above its base in the same lane. Older bases and bases shared by multiple stashes use independent leaves to the right.
+
+Cherry-pick reviews the selected commit and destination before running Git. Commit the changes is selected initially. Clear it to apply to the index and working files for review. Append origin uses Git's commit-message attribution when creating a commit. A background preview can report conflicts or an already-applied change for supported clean working states.
+
+History → Reset Branch to Here opens one review with the current branch and destination commit. Mixed, the initial choice, keeps working files and unstages changes. Soft preserves the index and working files. Hard replaces the index and tracked working files, discards uncommitted tracked changes and can delete untracked or ignored files in the way. Shovel runs the selected mode only when you press the named branch action.
+
+Repository → Undo Last Commit reviews the current branch's tip and first parent. Confirm to move the local branch back while preserving the index and working files. An earlier published commit will still be present on the remote.
+
 ## Repository menu and tab warming (0.51.6)
 
 Repository tabs share a dark strip with thin dividers. Markers sit at the left edge of their tabs. File lists recent repositories, Window controls the current window, and Help opens keyboard shortcuts and bundled release notes.

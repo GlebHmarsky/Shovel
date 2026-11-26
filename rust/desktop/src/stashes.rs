@@ -63,6 +63,14 @@ impl View {
         self
     }
 
+    pub fn confirming(&self) -> bool {
+        self.open && self.confirm.is_some()
+    }
+
+    pub fn native_modal_visible(&self, ctx: &egui::Context) -> bool {
+        self.confirming() && !crate::native_windows::handle(ctx, self.viewport).is_null()
+    }
+
     pub fn can_retire(&self) -> bool {
         !self.open && !self.reading && !self.inspecting && self.pending.is_empty()
     }
@@ -239,7 +247,8 @@ impl View {
                             self.list = Some(list);
                             // An existing inspection is immutable. A fresh reflog list
                             // does not reset the selected stash's comparison.
-                            let displayed = self.inspection.as_ref().map(|data| &data.worktree.hash);
+                            let displayed =
+                                self.inspection.as_ref().map(|data| &data.worktree.hash);
                             if displayed != self.selected.as_ref()
                                 || (self.selected.is_some() && self.pane.is_none())
                             {
@@ -259,7 +268,11 @@ impl View {
                     self.inspecting = false;
                     match *result {
                         Ok(data) => {
-                            if self.inspection.as_ref().is_none_or(|old| old.worktree.hash != data.worktree.hash) {
+                            if self
+                                .inspection
+                                .as_ref()
+                                .is_none_or(|old| old.worktree.hash != data.worktree.hash)
+                            {
                                 self.comparison = 0;
                             }
                             self.inspection = Some(data);
@@ -317,20 +330,28 @@ impl View {
         let mut inspect = false;
         let mut compare = false;
         let mut action: Option<(Action, Snapshot)> = None;
-        ctx.show_viewport_immediate(
+        crate::native_windows::show(
+            ctx,
             self.viewport,
             self.layout.builder(ctx).with_title(text("Stashes")),
+            std::ptr::null_mut(),
+            enabled,
             |ui, class| {
                 self.layout.observe(ui.ctx(), class);
                 visible |= ui.is_visible();
-                if !enabled {
+                let child = ui.ctx().clone();
+                let confirming = self.confirming();
+                crate::workspace_style::modal_focus(&child, confirming);
+                if !enabled || confirming {
                     ui.disable();
                 }
-                let child = ui.ctx().clone();
-                close |= child.input(|i| i.viewport().close_requested())
-                    || enabled
-                        && self.confirm.is_none()
-                        && child.input(|i| i.key_pressed(egui::Key::Escape));
+                let requested = child.input(|i| i.viewport().close_requested());
+                if requested {
+                    child.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                }
+                close |= enabled
+                    && !confirming
+                    && (requested || child.input(|i| i.key_pressed(egui::Key::Escape)));
                 egui::Panel::top("stash-toolbar").show(ui, |ui| {
                     ui.heading(text("Stashes"));
                     ui.label(self.path.to_string_lossy());
@@ -491,9 +512,16 @@ impl View {
                             .enumerate()
                             {
                                 if index != 3 || data.untracked.is_some() {
-                                    ui.add_enabled_ui(self.selected.as_ref() == Some(&data.worktree.hash), |ui| {
-                                        ui.selectable_value(&mut self.comparison, index, text(key));
-                                    });
+                                    ui.add_enabled_ui(
+                                        self.selected.as_ref() == Some(&data.worktree.hash),
+                                        |ui| {
+                                            ui.selectable_value(
+                                                &mut self.comparison,
+                                                index,
+                                                text(key),
+                                            );
+                                        },
+                                    );
                                 }
                             }
                         });
@@ -503,40 +531,40 @@ impl View {
                         pane.show(ui);
                     }
                 });
-                if let Some(confirmation) = &self.confirm {
-                    let mut dismiss = false;
-                    egui::Modal::new(egui::Id::unique("stash-drop-confirmation")).show(
+                if let Some(confirmation) = &self.confirm
+                    && enabled
+                {
+                    let ((remove, cancel), dismissed) = crate::workspace_style::show_dialog(
                         &child,
+                        egui::Id::unique("stash-drop-confirmation"),
+                        &text("ActionTitleStashDrop"),
+                        442.,
+                        true,
+                        true,
                         |ui| {
-                            if !enabled {
-                                ui.disable();
-                            }
-                            ui.set_max_width(600.);
-                            ui.heading(text("ActionTitleStashDrop"));
-                            ui.label(strings::format(
-                                "StashConfirmDrop",
-                                &[
-                                    &confirmation.snapshot.worktree.to_string_lossy(),
-                                    &confirmation.entry.selector,
-                                    &confirmation.entry.hash,
-                                    &confirmation.entry.message,
-                                ],
-                            ));
-                            ui.horizontal(|ui| {
-                                if ui.button(text("RustConfirmStashDrop")).clicked() {
-                                    action = Some((
-                                        Action::Drop(confirmation.target.clone()),
-                                        confirmation.snapshot.clone(),
-                                    ));
-                                    dismiss = true;
-                                }
-                                if ui.button(text("ActionCancel")).clicked() {
-                                    dismiss = true;
-                                }
+                            crate::workspace_style::dialog_body(ui, |ui| {
+                                ui.label(confirmation.snapshot.worktree.to_string_lossy());
+                                let entry = &confirmation.entry;
+                                ui.strong(entry.message.lines().next().unwrap_or_default());
+                                let hash = entry.hash.get(..8).unwrap_or(&entry.hash);
+                                ui.monospace(format!("{} · {hash}", entry.selector))
+                                    .on_hover_text(&entry.hash);
+                                ui.label(text("StashDropEffect"));
                             });
+                            crate::workspace_style::dialog_actions(ui, |ui| {
+                                let cancel = ui.button(text("ActionCancel")).clicked();
+                                let remove = ui.button(text("RustConfirmStashDrop")).clicked();
+                                (remove, cancel)
+                            })
                         },
                     );
-                    if dismiss {
+                    if remove {
+                        action = Some((
+                            Action::Drop(confirmation.target.clone()),
+                            confirmation.snapshot.clone(),
+                        ));
+                    }
+                    if remove || cancel || dismissed {
                         self.confirm = None;
                     }
                 }
@@ -780,7 +808,8 @@ mod tests {
         let mut app = workspace();
         app.tabs.clear();
         app.git = Some(git.clone());
-        app.settings.set("AutoFetchEnabled", serde_json::json!(false));
+        app.settings
+            .set("AutoFetchEnabled", serde_json::json!(false));
         app.open(path.clone(), &ctx);
         crate::history_view::tests::wait(&mut app, &ctx);
         let newest = "stash@{0}  On main: three";
@@ -789,24 +818,52 @@ mod tests {
         let (pos, _) = sidebar_point(&ctx, &mut app, oldest).unwrap();
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)]).drop_without_applying_deltas();
         for pressed in [true, false] {
-            frame(&ctx, &mut app, vec![
-                egui::Event::ModifiersChanged(egui::Modifiers::CTRL),
-                egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::CTRL },
-            ]).drop_without_applying_deltas();
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::ModifiersChanged(egui::Modifiers::CTRL),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::CTRL,
+                    },
+                ],
+            )
+            .drop_without_applying_deltas();
         }
-        frame(&ctx, &mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]).drop_without_applying_deltas();
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)],
+        )
+        .drop_without_applying_deltas();
         sidebar_click(&ctx, &mut app, newest, egui::PointerButton::Secondary);
-        sidebar_click(&ctx, &mut app, "Delete 2 stashes…", egui::PointerButton::Primary);
+        sidebar_click(
+            &ctx,
+            &mut app,
+            "Delete 2 stashes…",
+            egui::PointerButton::Primary,
+        );
         assert!(app.branches.is_open() && !app.scheduler.has_accepted_work());
         assert_eq!(command(&git, path, &["stash", "list"]).lines().count(), 3);
-        sidebar_click(&ctx, &mut app, "Delete 2 stashes", egui::PointerButton::Primary);
+        sidebar_click(
+            &ctx,
+            &mut app,
+            "Delete 2 stashes",
+            egui::PointerButton::Primary,
+        );
         let deadline = Instant::now() + Duration::from_secs(20);
         while app.scheduler.has_accepted_work() || app.tabs[0].loading {
             app.receive(&ctx);
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(5));
         }
-        assert_eq!(command(&git, path, &["stash", "list"]), "stash@{0}: On main: two");
+        assert_eq!(
+            command(&git, path, &["stash", "list"]),
+            "stash@{0}: On main: two"
+        );
     }
     struct Harness {
         ctx: egui::Context,

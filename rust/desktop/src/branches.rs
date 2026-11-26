@@ -5,8 +5,8 @@ use crate::{
 use eframe::egui;
 use shovel_core::{
     branches::{Action, Changes, Checkout, Manage},
-    git::{Git, Reference, Snapshot},
-    history_actions::{self, Reset},
+    git::{Commit, Git, Reference, Snapshot},
+    history_actions,
     process::Cancellation,
     recovery,
     scheduler::Scheduler,
@@ -36,14 +36,6 @@ pub fn recovery_name(kind: recovery::Kind) -> String {
         recovery::Kind::Revert => "OperationRevert",
     })
 }
-pub fn reset_title(mode: Reset) -> &'static str {
-    match mode {
-        Reset::Soft => "ActionTitleResetSoft",
-        Reset::Mixed => "ActionTitleResetMixed",
-        Reset::Hard => "ActionTitleResetHard",
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Management {
     SetUpstream,
@@ -71,6 +63,7 @@ impl Management {
 }
 struct Review {
     target: Checkout,
+    commit: Option<Box<Commit>>,
     changes: Changes,
     context: Option<Arc<working::Context>>,
     receiver: Option<Receiver<Result<working::Context, &'static str>>>,
@@ -83,6 +76,7 @@ impl Review {
     fn new(target: Checkout) -> Self {
         Self {
             target,
+            commit: None,
             changes: Changes::Keep,
             context: None,
             receiver: None,
@@ -188,6 +182,7 @@ impl Drop for Review {
     }
 }
 enum Form {
+    HistoryReview(crate::history_review::Review),
     StashDrop {
         target: shovel_core::stashes::Target,
         message: String,
@@ -196,9 +191,13 @@ enum Form {
     Recovery(recovery::Action),
     Integrate {
         action: history_actions::Action,
+        commit: Box<Commit>,
         title: &'static str,
     },
-    Rename { branch: Reference, name: String },
+    Rename {
+        branch: Reference,
+        name: String,
+    },
     New {
         name: String,
         start: String,
@@ -214,15 +213,19 @@ enum Form {
         branch: Reference,
     },
     Checkout(Review),
-    Reset {
-        target: String,
-        mode: Reset,
-    },
 }
+enum Submission {
+    Branch(Action),
+    History(history_actions::Action),
+    Recovery(recovery::Action),
+    Stash(shovel_core::stashes::Action),
+    ReviewCheckout(Checkout),
+}
+
 struct Dialog {
     snapshot: Snapshot,
     form: Form,
-    viewport: egui::ViewportId,
+    id: egui::Id,
     queue_hold: Option<operations::DialogLease>,
 }
 #[derive(Default)]
@@ -231,19 +234,51 @@ pub struct Dialogs {
     active: Option<Dialog>,
 }
 impl Dialogs {
+    pub fn confirm_undo_last(&mut self, snapshot: &Snapshot) {
+        self.set(
+            snapshot,
+            Form::HistoryReview(crate::history_review::Review::UndoLast(
+                crate::history_review::UndoLast::default(),
+            )),
+        );
+    }
+    pub fn confirm_cherry_pick(
+        &mut self,
+        snapshot: &Snapshot,
+        commit: shovel_core::git::Commit,
+        mainline: usize,
+    ) {
+        self.set(
+            snapshot,
+            Form::HistoryReview(crate::history_review::Review::CherryPick(Box::new(
+                crate::history_review::CherryPick::new(commit, mainline),
+            ))),
+        );
+    }
     pub fn confirm_integration(
         &mut self,
         snapshot: &Snapshot,
         action: history_actions::Action,
+        commit: Commit,
         title: &'static str,
     ) {
-        self.set(snapshot, Form::Integrate { action, title });
+        self.set(
+            snapshot,
+            Form::Integrate {
+                action,
+                commit: Box::new(commit),
+                title,
+            },
+        );
     }
     pub fn rename(&mut self, snapshot: &Snapshot, branch: &Reference) {
-        self.set(snapshot, Form::Rename {
-            branch: branch.clone(),
-            name: branch.name.trim_start_matches("refs/heads/").to_owned(),
-        });
+        self.set(
+            snapshot,
+            Form::Rename {
+                branch: branch.clone(),
+                name: branch.name.trim_start_matches("refs/heads/").to_owned(),
+            },
+        );
     }
     pub fn is_open(&self) -> bool {
         self.active.is_some()
@@ -272,6 +307,11 @@ impl Dialogs {
     pub fn checkout(&mut self, snapshot: &Snapshot, target: Checkout) {
         self.set(snapshot, Form::Checkout(Review::new(target)));
     }
+    pub fn checkout_commit(&mut self, snapshot: &Snapshot, commit: Commit) {
+        let mut review = Review::new(Checkout::Detached(commit.hash.clone()));
+        review.commit = Some(Box::new(commit));
+        self.set(snapshot, Form::Checkout(review));
+    }
     pub fn confirm_stash_drop(
         &mut self,
         snapshot: &Snapshot,
@@ -296,13 +336,12 @@ impl Dialogs {
     ) {
         self.set(snapshot, Form::StashesDrop(targets));
     }
-    pub fn reset(&mut self, snapshot: &Snapshot, target: &str, mode: Reset) {
+    pub fn reset(&mut self, snapshot: &Snapshot, target: shovel_core::git::Commit) {
         self.set(
             snapshot,
-            Form::Reset {
-                target: target.into(),
-                mode,
-            },
+            Form::HistoryReview(crate::history_review::Review::Reset(Box::new(
+                crate::history_review::ResetReview::new(target),
+            ))),
         );
     }
     pub fn confirm_delete(&mut self, snapshot: &Snapshot, branch: &Reference) {
@@ -355,7 +394,7 @@ impl Dialogs {
         self.active = Some(Dialog {
             snapshot: snapshot.clone(),
             form,
-            viewport: egui::ViewportId::from_hash_of(("branch-options", uuid::Uuid::new_v4())),
+            id: egui::Id::unique(("branch-options", uuid::Uuid::new_v4())),
             queue_hold: None,
         });
     }
@@ -470,10 +509,30 @@ impl Dialogs {
         let Some(git) = git else {
             return;
         };
+        if let Form::HistoryReview(review) = &mut dialog.form {
+            use crate::history_review::Decision;
+            match review.show(ctx, git, &dialog.snapshot, &self.read_workers, enabled) {
+                Decision::Visible => {}
+                Decision::Close => self.active = None,
+                Decision::Submit(action) => {
+                    operations.submit_history(
+                        review.label(),
+                        action,
+                        &dialog.snapshot,
+                        git.clone(),
+                        scheduler,
+                        ctx,
+                    );
+                    self.active = None;
+                }
+            }
+            return;
+        }
         if let Form::Checkout(review) = &mut dialog.form {
             review.poll();
         }
         let title = match &dialog.form {
+            Form::HistoryReview(_) => unreachable!(),
             Form::Integrate { title, .. } => title,
             Form::Rename { .. } => "HistoryRenameBranch",
             Form::StashDrop { .. } | Form::StashesDrop(_) => "ActionTitleStashDrop",
@@ -482,544 +541,445 @@ impl Dialogs {
             Form::Manage { action, .. } => action.title(),
             Form::ConfirmDelete { .. } => "BranchManageTitleDeleteBranch",
             Form::Checkout(review) => review.title(),
-            Form::Reset { mode, .. } => reset_title(*mode),
         };
-        let mut close = false;
-        let mut submitted = None;
-        let mut submitted_history = None;
-        let mut submitted_recovery = None;
-        let mut submitted_stash = None;
-        let mut next_review = None;
         let mut visible = false;
         let snapshot = &dialog.snapshot;
-        ctx.show_viewport_immediate(
-            dialog.viewport,
-            egui::ViewportBuilder::default()
-                .with_title(text(title))
-                .with_inner_size(if matches!(dialog.form, Form::Checkout(_)) {
-                    [720., 420.]
-                } else {
-                    [720., 540.]
-                })
-                .with_min_inner_size([480., 420.])
-                .with_resizable(false)
-                .with_minimize_button(false)
-                .with_maximize_button(false),
-            |ui, _| {
-                visible |= ui.is_visible();
-                let child_ctx = ui.ctx().clone();
-                if !enabled {
-                    ui.disable();
-                }
-                if child_ctx.input(|i| i.viewport().close_requested())
-                    || enabled && child_ctx.input(|i| i.key_pressed(egui::Key::Escape))
-                {
-                    close = true;
-                }
-                egui::CentralPanel::default()
-                    .frame(crate::workspace_style::pane(
-                        crate::workspace_style::Palette::current(ui).sidebar,
-                        20,
-                        16,
-                    ))
-                    .show(ui, |ui| {
-                        ui.heading(text(title));
-                        ui.add_space(8.);
-                        ui.add(egui::Label::new(snapshot.worktree.to_string_lossy()).truncate())
-                            .on_hover_text(snapshot.worktree.to_string_lossy());
-                        ui.add_space(12.);
-                        egui::ScrollArea::vertical()
-                            .id_salt("branch-options-body")
-                            .max_height((ui.available_height() - 36.).max(120.))
-                            .show(ui, |ui| {
-                                match &mut dialog.form {
-                                    Form::Integrate { action, title } => {
-                                        let branch = snapshot.branch.as_deref().unwrap_or_default();
-                                        let prompt = match action {
-                                            history_actions::Action::Merge { fast_forward: true, .. } => "HistoryConfirmFastForward",
-                                            history_actions::Action::Merge { .. } => "HistoryConfirmMerge",
-                                            _ => "HistoryConfirmRebase",
-                                        };
-                                        ui.label(strings::format(prompt, &[branch, action.target()]));
-                                        if ui.button(text(title)).clicked() {
-                                            submitted_history = Some(action.clone());
-                                        }
-                                    }
-                                    Form::Rename { branch, name } => {
-                                        ui.label(branch.name.trim_start_matches("refs/heads/"));
-                                        let label = ui.label(text("RepositoryBranchName"));
-                                        ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY))
-                                            .labelled_by(label.id);
-                                        if ui.add_enabled(!name.trim().is_empty()
-                                            && name.trim() != branch.name.trim_start_matches("refs/heads/"),
-                                            egui::Button::new(text("HistoryRename"))).clicked()
-                                        {
-                                            submitted = Some(Action::Manage {
-                                                branch: branch.clone(),
-                                                action: Manage::Rename(name.trim().to_owned()),
-                                            });
-                                        }
-                                    }
-                                    Form::StashDrop { target, message } => {
-                                        ui.label(strings::format(
-                                            "StashConfirmDrop",
-                                            &[
-                                                &snapshot.worktree.to_string_lossy(),
-                                                &target.selector,
-                                                &target.hash,
-                                                message,
-                                            ],
+        let ((request, canceled), dismissed) = crate::workspace_style::show_dialog(
+            ctx,
+            dialog.id,
+            &text(title),
+            490.,
+            enabled,
+            true,
+            |ui| {
+                visible = ui.is_visible() && !ui.is_sizing_pass();
+                let (label, request) = crate::workspace_style::dialog_body(ui, |ui| {
+                    ui.add(egui::Label::new(snapshot.worktree.to_string_lossy()).truncate())
+                        .on_hover_text(snapshot.worktree.to_string_lossy());
+                    match &mut dialog.form {
+                        Form::HistoryReview(_) => unreachable!(),
+                        Form::Integrate {
+                            action,
+                            commit,
+                            title,
+                        } => {
+                            let branch = snapshot.branch.as_deref().unwrap_or_default();
+                            let prompt = match action {
+                                history_actions::Action::Merge {
+                                    fast_forward: true, ..
+                                } => "HistoryConfirmFastForward",
+                                history_actions::Action::Merge { .. } => "HistoryConfirmMerge",
+                                _ => "HistoryConfirmRebase",
+                            };
+                            let target = action.target();
+                            ui.label(strings::format(
+                                prompt,
+                                &[branch, target.get(..8).unwrap_or(target)],
+                            ))
+                            .on_hover_text(target);
+                            crate::history_review::commit_card(ui, commit, snapshot);
+                            (text(title), Some(Submission::History(action.clone())))
+                        }
+                        Form::Rename { branch, name } => {
+                            ui.label(branch.name.trim_start_matches("refs/heads/"));
+                            let label = ui.label(text("RepositoryBranchName"));
+                            ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY))
+                                .labelled_by(label.id);
+                            let valid = !name.trim().is_empty()
+                                && name.trim() != branch.name.trim_start_matches("refs/heads/");
+                            (
+                                text("HistoryRename"),
+                                valid.then(|| {
+                                    Submission::Branch(Action::Manage {
+                                        branch: branch.clone(),
+                                        action: Manage::Rename(name.trim().to_owned()),
+                                    })
+                                }),
+                            )
+                        }
+                        Form::StashDrop { target, message } => {
+                            let hash = target.hash.get(..8).unwrap_or(&target.hash);
+                            ui.strong(message.lines().next().unwrap_or_default());
+                            ui.monospace(format!("{} · {hash}", target.selector))
+                                .on_hover_text(&target.hash);
+                            ui.label(text("StashDropEffect"));
+                            (
+                                text("RustConfirmStashDrop"),
+                                Some(Submission::Stash(shovel_core::stashes::Action::Drop(
+                                    target.clone(),
+                                ))),
+                            )
+                        }
+                        Form::StashesDrop(targets) => {
+                            let count = targets.len().to_string();
+                            ui.label(strings::format("StashConfirmDropMany", &[&count]));
+                            egui::ScrollArea::vertical()
+                                .max_height(115.)
+                                .show(ui, |ui| {
+                                    for target in targets.iter() {
+                                        ui.label(format!(
+                                            "{} · {}",
+                                            target.selector,
+                                            &target.hash[..target.hash.len().min(12)]
                                         ));
-                                        if ui.button(text("RustConfirmStashDrop")).clicked() {
-                                            submitted_stash = Some(
-                                                shovel_core::stashes::Action::Drop(target.clone()),
-                                            );
-                                        }
                                     }
-                                    Form::StashesDrop(targets) => {
-                                        let count = targets.len().to_string();
-                                        ui.label(strings::format("StashConfirmDropMany", &[&count]));
-                                        egui::ScrollArea::vertical().max_height(115.).show(ui, |ui| {
-                                            for target in targets.iter() {
-                                                ui.label(format!("{} · {}", target.selector, &target.hash[..target.hash.len().min(12)]));
-                                            }
-                                        });
-                                        if ui.button(strings::format("StashDropMany", &[&count])).clicked() {
-                                            submitted_stash = Some(
-                                                shovel_core::stashes::Action::DropMany(targets.clone()),
-                                            );
-                                        }
-                                    }
-                                    Form::Recovery(action) => {
-                                        if let Some(state) = &snapshot.recovery {
-                                            let key = if *action == recovery::Action::Skip {
-                                                "RecoveryConfirmSkip"
-                                            } else {
-                                                "RecoveryConfirmAbort"
-                                            };
-                                            let unknown = text("RustRecoveryTargetUnknown");
-                                            ui.label(strings::format(
-                                                key,
-                                                &[
-                                                    &snapshot.worktree.to_string_lossy(),
-                                                    &recovery_name(state.kind),
-                                                    snapshot
-                                                        .branch
-                                                        .as_deref()
-                                                        .unwrap_or(&state.branch),
-                                                    if state.target.is_empty() {
-                                                        &unknown
-                                                    } else {
-                                                        &state.target
-                                                    },
-                                                    &state.current,
-                                                ],
-                                            ));
-                                            ui.add_space(12.);
-                                            let submit = if *action == recovery::Action::Skip {
-                                                "RustConfirmSkip"
-                                            } else {
-                                                "RustConfirmAbort"
-                                            };
-                                            if ui
-                                                .add_enabled(
-                                                    *action != recovery::Action::Skip
-                                                        || state.can_skip(),
-                                                    egui::Button::new(text(submit)),
-                                                )
-                                                .clicked()
-                                            {
-                                                submitted_recovery = Some(*action);
-                                            }
+                                });
+                            (
+                                strings::format("StashDropMany", &[&count]),
+                                Some(Submission::Stash(shovel_core::stashes::Action::DropMany(
+                                    targets.clone(),
+                                ))),
+                            )
+                        }
+                        Form::Recovery(action) => {
+                            if let Some(state) = &snapshot.recovery {
+                                let key = if *action == recovery::Action::Skip {
+                                    "RecoveryConfirmSkip"
+                                } else {
+                                    "RecoveryConfirmAbort"
+                                };
+                                let unknown = text("RustRecoveryTargetUnknown");
+                                ui.label(strings::format(
+                                    key,
+                                    &[
+                                        &snapshot.worktree.to_string_lossy(),
+                                        &recovery_name(state.kind),
+                                        snapshot.branch.as_deref().unwrap_or(&state.branch),
+                                        if state.target.is_empty() {
+                                            &unknown
                                         } else {
-                                            ui.label(text("RecoveryUnavailable"));
-                                        }
-                                    }
-                                    Form::Reset { target, mode } => {
-                                        let effect = text(match mode {
-                                            Reset::Soft => "HistoryEffectResetSoft",
-                                            Reset::Mixed => "HistoryEffectResetMixed",
-                                            Reset::Hard => "HistoryEffectResetHard",
-                                        });
-                                        ui.label(strings::format(
-                                            "HistoryResetConfirm",
-                                            &[
-                                                &snapshot.worktree.to_string_lossy(),
-                                                snapshot.branch.as_deref().unwrap_or_default(),
-                                                snapshot.head.as_deref().unwrap_or_default(),
-                                                target,
-                                                &effect,
-                                            ],
-                                        ));
-                                        ui.add_space(12.);
-                                        if ui
-                                            .add_enabled(
-                                                snapshot.branch.is_some()
-                                                    && snapshot.head.is_some(),
-                                                egui::Button::new(text("RustConfirmReset")),
-                                            )
-                                            .on_disabled_hover_text(text("HistoryResetNeedsBranch"))
-                                            .clicked()
-                                        {
-                                            submitted_history =
-                                                Some(history_actions::Action::Reset {
-                                                    target: target.clone(),
-                                                    mode: *mode,
-                                                });
-                                        }
-                                    }
-                                    Form::New {
-                                        name,
-                                        start,
-                                        checkout,
-                                    } => {
-                                        ui.label(text("RustNewBranchHelp"));
-                                        let name_label = ui.label(text("ActionBranchNameLabel"));
-                                        ui.add(
-                                            egui::TextEdit::singleline(name)
-                                                .char_limit(1024)
-                                                .desired_width(f32::INFINITY),
-                                        )
-                                        .labelled_by(name_label.id);
-                                        ui.label(text("ActionStart"));
-                                        egui::ComboBox::from_id_salt("branch-start")
-                                            .selected_text(start.as_str())
-                                            .width(ui.available_width().min(620.))
-                                            .show_ui(ui, |ui| {
-                                                for reference in &snapshot.references {
-                                                    ui.selectable_value(
-                                                        start,
-                                                        reference.name.clone(),
-                                                        format!(
-                                                            "{} · {}",
-                                                            reference.name, reference.hash
-                                                        ),
-                                                    );
-                                                }
-                                            });
-                                        ui.checkbox(checkout, text("ActionCheckout"));
-                                        let reference =
-                                            snapshot.references.iter().find(|r| &r.name == start);
-                                        let valid = !name.trim().is_empty() && reference.is_some();
-                                        if ui
-                                            .add_enabled(
-                                                valid,
-                                                egui::Button::new(text("ActionTitleNewBranch")),
-                                            )
-                                            .clicked()
-                                        {
-                                            let start = reference.unwrap().clone();
-                                            if *checkout {
-                                                next_review = Some(Checkout::New {
-                                                    name: name.clone(),
-                                                    start,
-                                                });
-                                            } else {
-                                                submitted = Some(Action::Create {
-                                                    name: name.clone(),
-                                                    start,
-                                                });
-                                            }
-                                        }
-                                        if !valid {
-                                            ui.label(text(if reference.is_none() {
-                                                "ActionNoStart"
-                                            } else {
-                                                "ActionEnterBranchName"
-                                            }));
-                                        }
-                                    }
-                                    Form::Manage {
-                                        action,
-                                        branch,
-                                        upstream,
-                                    } => {
-                                        ui.label(text(action.explanation()));
-                                        ui.add_space(10.);
-                                        ui.label(text("BranchManageLocalBranch"));
-                                        egui::ComboBox::from_id_salt("branch")
-                                            .selected_text(branch.trim_start_matches("refs/heads/"))
-                                            .width(ui.available_width().min(620.))
-                                            .show_ui(ui, |ui| {
-                                                for reference in snapshot
-                                                    .references
-                                                    .iter()
-                                                    .filter(|r| r.name.starts_with("refs/heads/"))
-                                                {
-                                                    ui.selectable_value(
-                                                        branch,
-                                                        reference.name.clone(),
-                                                        reference
-                                                            .name
-                                                            .trim_start_matches("refs/heads/"),
-                                                    );
-                                                }
-                                            });
-                                        let selected =
-                                            snapshot.references.iter().find(|r| &r.name == branch);
-                                        if let Some(selected) = selected {
-                                            ui.label(strings::format(
-                                                "BranchManageTarget",
-                                                &[
-                                                    &selected.name,
-                                                    &selected.hash,
-                                                    selected
-                                                        .upstream
-                                                        .as_deref()
-                                                        .unwrap_or(&text("BranchManageNoUpstream")),
-                                                ],
-                                            ));
-                                        }
-                                        if *action == Management::SetUpstream {
-                                            ui.label(text("BranchManageRemoteBranch"));
-                                            egui::ComboBox::from_id_salt("upstream")
-                                                .selected_text(
-                                                    upstream.trim_start_matches("refs/remotes/"),
-                                                )
-                                                .width(ui.available_width().min(620.))
-                                                .show_ui(ui, |ui| {
-                                                    for reference in
-                                                        snapshot.references.iter().filter(|r| {
-                                                            r.name.starts_with("refs/remotes/")
-                                                                && !r.name.ends_with("/HEAD")
-                                                        })
-                                                    {
-                                                        ui.selectable_value(
-                                                            upstream,
-                                                            reference.name.clone(),
-                                                            reference.name.trim_start_matches(
-                                                                "refs/remotes/",
-                                                            ),
-                                                        );
-                                                    }
-                                                });
-                                        }
-                                        let remote = snapshot
-                                            .references
-                                            .iter()
-                                            .find(|r| &r.name == upstream);
-                                        let problem = if selected.is_none() {
-                                            Some("BranchManageChooseBranch")
-                                        } else if *action == Management::SetUpstream
-                                            && remote.is_none()
-                                        {
-                                            Some("BranchManageNoRemoteRef")
-                                        } else {
-                                            None
-                                        };
-                                        if let Some(problem) = problem {
-                                            ui.label(text(problem));
-                                        }
-                                        if ui
-                                            .add_enabled(
-                                                problem.is_none(),
-                                                egui::Button::new(text(action.submit())),
-                                            )
-                                            .clicked()
-                                        {
-                                            submitted = Some(Action::Manage {
-                                                branch: selected.unwrap().clone(),
-                                                action: match action {
-                                                    Management::UnsetUpstream => {
-                                                        Manage::UnsetUpstream
-                                                    }
-                                                    Management::SetUpstream => {
-                                                        Manage::SetUpstream(remote.unwrap().clone())
-                                                    }
-                                                },
-                                            });
-                                        }
-                                    }
-                                    Form::ConfirmDelete { branch } => {
-                                        // Confirmation displays the actual immutable repository,
-                                        // full branch name and exact reviewed tip before enabling deletion.
-                                        ui.label(strings::format(
-                                            "RustDeleteBranchConfirmation",
-                                            &[
-                                                &snapshot.worktree.to_string_lossy(),
-                                                &branch.name,
-                                                &branch.hash,
-                                            ],
-                                        ));
-                                        let current = branch.name
-                                            == format!(
-                                                "refs/heads/{}",
-                                                snapshot.branch.as_deref().unwrap_or_default()
-                                            );
-                                        if current {
-                                            ui.label(text("BranchManageCurrent"));
-                                        }
-                                        if ui
-                                            .add_enabled(
-                                                !current,
-                                                egui::Button::new(text("RustConfirmDeleteBranch")),
-                                            )
-                                            .clicked()
-                                        {
-                                            submitted = Some(Action::Manage {
-                                                branch: branch.clone(),
-                                                action: Manage::Delete,
-                                            });
-                                        }
-                                    }
-                                    Form::Checkout(review) => {
-                                        ui.label(text(
-                                            if matches!(review.target, Checkout::Detached(_)) {
-                                                "CheckoutDetachedHelp"
-                                            } else {
-                                                "CheckoutBranchHelp"
-                                            },
-                                        ));
-                                        ui.strong(review.target_text());
-                                        ui.add_space(14.);
-                                        if review
-                                            .context
-                                            .as_ref()
-                                            .is_some_and(|c| !c.entries.is_empty())
-                                        {
-                                            ui.label(text("CheckoutLocalChanges"));
-                                            ui.radio_value(
-                                                &mut review.changes,
-                                                Changes::Keep,
-                                                text("CheckoutKeep"),
-                                            );
-                                            ui.radio_value(
-                                                &mut review.changes,
-                                                Changes::StashAndReapply,
-                                                text("CheckoutStash"),
-                                            );
-                                            ui.radio_value(
-                                                &mut review.changes,
-                                                Changes::DiscardTracked,
-                                                text("CheckoutDiscard"),
-                                            );
-                                        }
-                                        let discard = review.changes == Changes::DiscardTracked
-                                            && review
-                                                .context
-                                                .as_ref()
-                                                .is_some_and(|c| !c.entries.is_empty());
-                                        if discard {
-                                            // The final button is an explicit destructive confirmation
-                                            // naming repository, checkout target and every reviewed tracked path.
-                                            ui.label(strings::format(
-                                                "RustDiscardCheckoutConfirmation",
-                                                &[
-                                                    &snapshot.worktree.to_string_lossy(),
-                                                    &review.target_text(),
-                                                ],
-                                            ));
-                                            let files = review
-                                                .context
-                                                .as_ref()
-                                                .unwrap()
-                                                .entries
-                                                .iter()
-                                                .filter(|e| {
-                                                    e.group != working::Group::Untracked
-                                                        && e.group != working::Group::Ignored
-                                                })
-                                                .flat_map(|e| {
-                                                    std::iter::once(&e.path)
-                                                        .chain(e.original.iter())
-                                                })
-                                                .collect::<BTreeSet<_>>()
-                                                .into_iter()
-                                                .collect::<Vec<_>>();
-                                            egui::ScrollArea::vertical()
-                                                .id_salt("discard-targets")
-                                                .max_height(100.)
-                                                .show_rows(ui, 20., files.len(), |ui, range| {
-                                                    for index in range {
-                                                        ui.label(files[index]);
-                                                    }
-                                                });
-                                        }
-                                        ui.add_space(12.);
-                                        ui.colored_label(
-                                            if review.started
-                                                && review.receiver.is_none()
-                                                && review.context.is_none()
-                                            {
-                                                ui.visuals().error_fg_color
-                                            } else {
-                                                ui.visuals().text_color()
-                                            },
-                                            &review.status,
+                                            &state.target
+                                        },
+                                        &state.current,
+                                    ],
+                                ));
+                                let submit = if *action == recovery::Action::Skip {
+                                    "RustConfirmSkip"
+                                } else {
+                                    "RustConfirmAbort"
+                                };
+                                (
+                                    text(submit),
+                                    (*action != recovery::Action::Skip || state.can_skip())
+                                        .then_some(Submission::Recovery(*action)),
+                                )
+                            } else {
+                                ui.label(text("RecoveryUnavailable"));
+                                (text(title), None)
+                            }
+                        }
+                        Form::New {
+                            name,
+                            start,
+                            checkout,
+                        } => {
+                            ui.label(text("RustNewBranchHelp"));
+                            let name_label = ui.label(text("ActionBranchNameLabel"));
+                            ui.add(
+                                egui::TextEdit::singleline(name)
+                                    .char_limit(1024)
+                                    .desired_width(f32::INFINITY),
+                            )
+                            .labelled_by(name_label.id);
+                            ui.label(text("ActionStart"));
+                            egui::ComboBox::from_id_salt("branch-start")
+                                .selected_text(start.as_str())
+                                .width(ui.available_width().min(620.))
+                                .show_ui(ui, |ui| {
+                                    for reference in &snapshot.references {
+                                        ui.selectable_value(
+                                            start,
+                                            reference.name.clone(),
+                                            format!("{} · {}", reference.name, reference.hash),
                                         );
-                                        if review.can_retry
-                                            && ui.button(text("CheckoutRetry")).clicked()
-                                        {
-                                            review.can_retry = false;
-                                            review.started = false;
-                                            review.status = text("CheckoutReading");
-                                        }
-                                        let confirmation = if discard {
-                                            "RustConfirmDiscardCheckout"
-                                        } else {
-                                            title
-                                        };
-                                        if ui
-                                            .add_enabled(
-                                                review.context.is_some(),
-                                                egui::Button::new(text(confirmation)),
-                                            )
-                                            .clicked()
-                                        {
-                                            let context = review.context.as_ref().unwrap().clone();
-                                            submitted = Some(Action::Checkout {
-                                                target: review.target.clone(),
-                                                changes: if context.entries.is_empty() {
-                                                    Changes::Keep
-                                                } else {
-                                                    review.changes
-                                                },
-                                                review: context,
-                                                stash_message: text("CheckoutStashMessage"),
-                                            });
-                                        }
                                     }
+                                });
+                            ui.checkbox(checkout, text("ActionCheckout"));
+                            let reference = snapshot.references.iter().find(|r| &r.name == start);
+                            let valid = !name.trim().is_empty() && reference.is_some();
+                            if !valid {
+                                ui.weak(text(if reference.is_none() {
+                                    "ActionNoStart"
+                                } else {
+                                    "ActionEnterBranchName"
+                                }));
+                            }
+                            let request = reference.filter(|_| valid).map(|start| {
+                                if *checkout {
+                                    Submission::ReviewCheckout(Checkout::New {
+                                        name: name.clone(),
+                                        start: start.clone(),
+                                    })
+                                } else {
+                                    Submission::Branch(Action::Create {
+                                        name: name.clone(),
+                                        start: start.clone(),
+                                    })
                                 }
                             });
-                        if ui.button(text("ActionCancel")).clicked() {
-                            close = true;
+                            (text("ActionTitleNewBranch"), request)
                         }
-                    });
+                        Form::Manage {
+                            action,
+                            branch,
+                            upstream,
+                        } => {
+                            ui.label(text(action.explanation()));
+                            ui.add_space(10.);
+                            ui.label(text("BranchManageLocalBranch"));
+                            egui::ComboBox::from_id_salt("branch")
+                                .selected_text(branch.trim_start_matches("refs/heads/"))
+                                .width(ui.available_width().min(620.))
+                                .show_ui(ui, |ui| {
+                                    for reference in snapshot
+                                        .references
+                                        .iter()
+                                        .filter(|r| r.name.starts_with("refs/heads/"))
+                                    {
+                                        ui.selectable_value(
+                                            branch,
+                                            reference.name.clone(),
+                                            reference.name.trim_start_matches("refs/heads/"),
+                                        );
+                                    }
+                                });
+                            let selected = snapshot.references.iter().find(|r| &r.name == branch);
+                            if let Some(selected) = selected {
+                                ui.label(strings::format(
+                                    "BranchManageTarget",
+                                    &[
+                                        &selected.name,
+                                        &selected.hash,
+                                        selected
+                                            .upstream
+                                            .as_deref()
+                                            .unwrap_or(&text("BranchManageNoUpstream")),
+                                    ],
+                                ));
+                            }
+                            if *action == Management::SetUpstream {
+                                ui.label(text("BranchManageRemoteBranch"));
+                                egui::ComboBox::from_id_salt("upstream")
+                                    .selected_text(upstream.trim_start_matches("refs/remotes/"))
+                                    .width(ui.available_width().min(620.))
+                                    .show_ui(ui, |ui| {
+                                        for reference in snapshot.references.iter().filter(|r| {
+                                            r.name.starts_with("refs/remotes/")
+                                                && !r.name.ends_with("/HEAD")
+                                        }) {
+                                            ui.selectable_value(
+                                                upstream,
+                                                reference.name.clone(),
+                                                reference.name.trim_start_matches("refs/remotes/"),
+                                            );
+                                        }
+                                    });
+                            }
+                            let remote = snapshot.references.iter().find(|r| &r.name == upstream);
+                            let problem = if selected.is_none() {
+                                Some("BranchManageChooseBranch")
+                            } else if *action == Management::SetUpstream && remote.is_none() {
+                                Some("BranchManageNoRemoteRef")
+                            } else {
+                                None
+                            };
+                            if let Some(problem) = problem {
+                                ui.label(text(problem));
+                            }
+                            let request = problem.is_none().then(|| {
+                                Submission::Branch(Action::Manage {
+                                    branch: selected.unwrap().clone(),
+                                    action: match action {
+                                        Management::UnsetUpstream => Manage::UnsetUpstream,
+                                        Management::SetUpstream => {
+                                            Manage::SetUpstream(remote.unwrap().clone())
+                                        }
+                                    },
+                                })
+                            });
+                            (text(action.submit()), request)
+                        }
+                        Form::ConfirmDelete { branch } => {
+                            // Confirmation displays the actual immutable repository,
+                            // full branch name and exact reviewed tip before enabling deletion.
+                            ui.label(strings::format(
+                                "RustDeleteBranchConfirmation",
+                                &[
+                                    &snapshot.worktree.to_string_lossy(),
+                                    &branch.name,
+                                    &branch.hash,
+                                ],
+                            ));
+                            let current = branch.name
+                                == format!(
+                                    "refs/heads/{}",
+                                    snapshot.branch.as_deref().unwrap_or_default()
+                                );
+                            if current {
+                                ui.label(text("BranchManageCurrent"));
+                            }
+                            (
+                                text("RustConfirmDeleteBranch"),
+                                (!current).then(|| {
+                                    Submission::Branch(Action::Manage {
+                                        branch: branch.clone(),
+                                        action: Manage::Delete,
+                                    })
+                                }),
+                            )
+                        }
+                        Form::Checkout(review) => {
+                            ui.label(text(if matches!(review.target, Checkout::Detached(_)) {
+                                "CheckoutDetachedHelp"
+                            } else {
+                                "CheckoutBranchHelp"
+                            }));
+                            if let Some(commit) = &review.commit {
+                                crate::history_review::commit_card(ui, commit, snapshot);
+                            } else {
+                                ui.strong(review.target_text());
+                            }
+                            if review
+                                .context
+                                .as_ref()
+                                .is_some_and(|c| !c.entries.is_empty())
+                            {
+                                ui.label(text("CheckoutLocalChanges"));
+                                ui.radio_value(
+                                    &mut review.changes,
+                                    Changes::Keep,
+                                    text("CheckoutKeep"),
+                                );
+                                ui.radio_value(
+                                    &mut review.changes,
+                                    Changes::StashAndReapply,
+                                    text("CheckoutStash"),
+                                );
+                                ui.radio_value(
+                                    &mut review.changes,
+                                    Changes::DiscardTracked,
+                                    text("CheckoutDiscard"),
+                                );
+                            }
+                            let discard = review.changes == Changes::DiscardTracked
+                                && review
+                                    .context
+                                    .as_ref()
+                                    .is_some_and(|c| !c.entries.is_empty());
+                            if discard {
+                                // The final button is an explicit destructive confirmation
+                                // naming repository, checkout target and every reviewed tracked path.
+                                ui.label(strings::format(
+                                    "RustDiscardCheckoutConfirmation",
+                                    &[&snapshot.worktree.to_string_lossy(), &review.target_text()],
+                                ));
+                                let files = review
+                                    .context
+                                    .as_ref()
+                                    .unwrap()
+                                    .entries
+                                    .iter()
+                                    .filter(|e| {
+                                        e.group != working::Group::Untracked
+                                            && e.group != working::Group::Ignored
+                                    })
+                                    .flat_map(|e| std::iter::once(&e.path).chain(e.original.iter()))
+                                    .collect::<BTreeSet<_>>()
+                                    .into_iter()
+                                    .collect::<Vec<_>>();
+                                egui::ScrollArea::vertical()
+                                    .id_salt("discard-targets")
+                                    .max_height(100.)
+                                    .show_rows(ui, 20., files.len(), |ui, range| {
+                                        for index in range {
+                                            ui.label(files[index]);
+                                        }
+                                    });
+                            }
+                            ui.add_space(12.);
+                            ui.colored_label(
+                                if review.started
+                                    && review.receiver.is_none()
+                                    && review.context.is_none()
+                                {
+                                    ui.visuals().error_fg_color
+                                } else {
+                                    ui.visuals().text_color()
+                                },
+                                &review.status,
+                            );
+                            if review.can_retry && ui.button(text("CheckoutRetry")).clicked() {
+                                review.can_retry = false;
+                                review.started = false;
+                                review.status = text("CheckoutReading");
+                            }
+                            let confirmation = if discard {
+                                "RustConfirmDiscardCheckout"
+                            } else {
+                                title
+                            };
+                            let request = review.context.as_ref().map(|context| {
+                                Submission::Branch(Action::Checkout {
+                                    target: review.target.clone(),
+                                    changes: if context.entries.is_empty() {
+                                        Changes::Keep
+                                    } else {
+                                        review.changes
+                                    },
+                                    review: context.clone(),
+                                    stash_message: text("CheckoutStashMessage"),
+                                })
+                            });
+                            (text(confirmation), request)
+                        }
+                    }
+                });
+                crate::workspace_style::dialog_actions(ui, |ui| {
+                    let canceled = ui.button(text("ActionCancel")).clicked();
+                    let confirmed = ui
+                        .add_enabled(request.is_some(), egui::Button::new(label))
+                        .clicked();
+                    (request.filter(|_| confirmed), canceled)
+                })
             },
         );
-        if let Some(action) = submitted_stash {
-            operations.submit_stash(title, action, snapshot, git.clone(), scheduler, ctx);
-            close = true;
-        }
-        if let Some(action) = submitted_recovery {
-            operations.submit_recovery(title, action, snapshot, git.clone(), scheduler, ctx);
-            close = true;
-        }
-        if let Some(action) = submitted_history {
-            operations.submit_history(title, action, snapshot, git.clone(), scheduler, ctx);
-            close = true;
-        }
-        if let Some(action) = submitted {
-            let command =
-                operations.submit_branch(title, action, snapshot, git.clone(), scheduler, ctx);
-            if let Some(lease) = &dialog.queue_hold {
-                lease.continue_with(scheduler, command);
-            }
-            close = true;
-        }
-        if let Some(target) = next_review {
-            dialog.form = Form::Checkout(Review::new(target));
-            ctx.request_repaint();
-        } else if !close
-            && visible
-            && let Form::Checkout(review) = &mut dialog.form
-            && !review.started
-        {
-            review.start(git.clone(), snapshot, ctx, &self.read_workers);
-        }
-        if close {
+        if canceled || dismissed {
             self.active = None;
+            return;
         }
+        match request {
+            Some(Submission::Stash(action)) => {
+                operations.submit_stash(title, action, snapshot, git.clone(), scheduler, ctx);
+            }
+            Some(Submission::Recovery(action)) => {
+                operations.submit_recovery(title, action, snapshot, git.clone(), scheduler, ctx);
+            }
+            Some(Submission::History(action)) => {
+                operations.submit_history(title, action, snapshot, git.clone(), scheduler, ctx);
+            }
+            Some(Submission::Branch(action)) => {
+                let command =
+                    operations.submit_branch(title, action, snapshot, git.clone(), scheduler, ctx);
+                if let Some(lease) = &dialog.queue_hold {
+                    lease.continue_with(scheduler, command);
+                }
+            }
+            Some(Submission::ReviewCheckout(target)) => {
+                dialog.form = Form::Checkout(Review::new(target));
+                ctx.request_repaint();
+                return;
+            }
+            None => {
+                if visible
+                    && let Form::Checkout(review) = &mut dialog.form
+                    && !review.started
+                {
+                    review.start(git.clone(), snapshot, ctx, &self.read_workers);
+                }
+                return;
+            }
+        }
+        self.active = None;
     }
 }
 
@@ -1131,6 +1091,9 @@ mod tests {
             output
         }
         fn click(&mut self, label: &str) {
+            for _ in 0..2 {
+                self.render(vec![]).drop_without_applying_deltas();
+            }
             let output = self.visible();
             let update = output.platform_output.accesskit_update.as_ref().unwrap();
             let node = update
@@ -1144,7 +1107,16 @@ mod tests {
                             egui::Role::Button | egui::Role::RadioButton | egui::Role::CheckBox
                         )
                 })
-                .unwrap_or_else(|| panic!("missing control {label}"));
+                .unwrap_or_else(|| {
+                    panic!(
+                        "missing control {label}; visible labels: {:?}",
+                        update
+                            .nodes
+                            .iter()
+                            .filter_map(|(_, node)| node.label().or(node.value()))
+                            .collect::<Vec<_>>()
+                    )
+                });
             let bounds = node.1.bounds().unwrap();
             let point = egui::pos2(
                 (bounds.x0 + bounds.x1) as f32 / 2.,
@@ -1221,24 +1193,26 @@ mod tests {
         )
         .unwrap();
         let target = base.head.as_ref().unwrap();
+        let commit = git
+            .history_commit(&base, target, &Cancellation::default())
+            .unwrap();
         let mut h = Harness::new(git.clone());
-        h.dialogs.reset(&snapshot, target, Reset::Hard);
+        h.dialogs.reset(&snapshot, commit.clone());
         let output = h.visible();
-        let labels = output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
+        let update = output.platform_output.accesskit_update.as_ref().unwrap();
+        let labels = update
             .nodes
             .iter()
-            .filter_map(|(_, n)| n.value().or(n.label()))
+            .filter_map(|(_, node)| node.value().or(node.label()))
             .collect::<Vec<_>>()
             .join("\n");
         for required in [
             snapshot.worktree.to_string_lossy().as_ref(),
             "main",
-            snapshot.head.as_ref().unwrap(),
-            target,
+            &snapshot.head.as_ref().unwrap()[..8],
+            &target[..8],
+            "base",
+            "Fixture",
             &text("HistoryEffectResetHard"),
         ] {
             assert!(
@@ -1246,9 +1220,23 @@ mod tests {
                 "missing confirmation detail {required}"
             );
         }
+        assert!(update.nodes.iter().any(|(_, node)| {
+            node.role() == egui::Role::RadioButton
+                && node.label() == Some(text("HistoryResetMixed").as_str())
+                && node.toggled() == Some(egui::accesskit::Toggled::True)
+        }));
         output.drop_without_applying_deltas();
+        h.click(&text("HistoryResetHard"));
         assert!(!h.scheduler.has_accepted_work());
-        h.click(&text("ActionCancel"));
+        h.render(vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            modifiers: egui::Modifiers::NONE,
+            pressed: true,
+            repeat: false,
+        }])
+        .drop_without_applying_deltas();
+        assert!(!h.dialogs.is_open());
         assert_eq!(
             command(&git, root, &["rev-parse", "HEAD"]),
             *snapshot.head.as_ref().unwrap()
@@ -1257,8 +1245,9 @@ mod tests {
             fs::read_to_string(root.join("tracked.txt")).unwrap(),
             "discarded only after confirmation\n"
         );
-        h.dialogs.reset(&snapshot, target, Reset::Hard);
-        h.click(&text("RustConfirmReset"));
+        h.dialogs.reset(&snapshot, commit);
+        h.click(&text("HistoryResetHard"));
+        h.click(&strings::format("HistoryResetHardSubmit", &["main"]));
         assert!(!h.dialogs.is_open());
         h.settled();
         assert_eq!(command(&git, root, &["rev-parse", "HEAD"]), *target);
@@ -1371,6 +1360,8 @@ mod tests {
         output.drop_without_applying_deltas();
         h.ready();
         h.click(&text("CheckoutStash"));
+        assert!(matches!(&h.dialogs.active.as_ref().unwrap().form,
+            Form::Checkout(review) if review.changes == Changes::StashAndReapply));
         fs::write(root.join(".git/hooks/post-checkout"), "#!/bin/sh\necho entered > .git/entered\nwhile [ ! -f .git/release ]; do sleep 0.05; done\n").unwrap();
         struct Release(PathBuf);
         impl Drop for Release {
@@ -1454,7 +1445,9 @@ mod tests {
             .checkout(&snapshot, Checkout::Branch(target.clone()));
         h.ready();
         h.click(&text("CheckoutDiscard"));
-        let output = h.render(vec![]);
+        assert!(matches!(&h.dialogs.active.as_ref().unwrap().form,
+            Form::Checkout(review) if review.changes == Changes::DiscardTracked));
+        let output = h.visible();
         let nodes = &output
             .platform_output
             .accesskit_update
@@ -1477,23 +1470,6 @@ mod tests {
             fs::read_to_string(root.join("tracked.txt")).unwrap(),
             "discarded\n"
         );
-        // The exact-path explanation makes this action scroll below the
-        // viewport's body. Scroll it into view before clicking; accessibility
-        // bounds alone include clipped controls and can overlap Cancel.
-        h.render(vec![
-            egui::Event::PointerMoved(egui::pos2(200., 300.)),
-            egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                phase: egui::TouchPhase::Move,
-                source: egui::MouseWheelSource::Unknown,
-                delta: egui::vec2(0., -240.),
-                modifiers: egui::Modifiers::NONE,
-            },
-        ])
-        .drop_without_applying_deltas();
-        for _ in 0..8 {
-            h.render(vec![]).drop_without_applying_deltas();
-        }
         h.click(&text("RustConfirmDiscardCheckout"));
         h.settled();
         assert_eq!(

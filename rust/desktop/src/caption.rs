@@ -16,6 +16,14 @@ thread_local! {
     static TOP_RESIZE: Cell<i32> = const { Cell::new(0) };
     static SYSTEM_CHANGED: Cell<bool> = const { Cell::new(false) };
     static REPAINT: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
+    static MODAL: Cell<bool> = const { Cell::new(false) };
+    static ROOT: Cell<HWND> = const { Cell::new(std::ptr::null_mut()) };
+}
+pub fn root() -> HWND {
+    ROOT.get()
+}
+pub fn set_modal(blocking: bool) {
+    MODAL.set(blocking);
 }
 pub fn take_system_change() -> bool {
     SYSTEM_CHANGED.replace(false)
@@ -37,6 +45,8 @@ fn attach(hwnd: HWND) {
     unsafe {
         if SetWindowSubclass(hwnd, Some(proc), 1, 0) != 0 {
             ACTIVE.set(true);
+            ROOT.set(hwnd);
+            MODAL.set(false);
             SetWindowPos(
                 hwnd,
                 std::ptr::null_mut(),
@@ -82,13 +92,18 @@ unsafe extern "system" fn proc(
         }
         if msg == WM_NCDESTROY {
             ACTIVE.set(false);
+            ROOT.set(std::ptr::null_mut());
             REGION.set(None);
             TOP_RESIZE.set(0);
             SYSTEM_CHANGED.set(false);
+            MODAL.set(false);
             REPAINT.replace(None);
             RemoveWindowSubclass(hwnd, Some(proc), 1);
         }
         let hit = DefSubclassProc(hwnd, msg, w, l);
+        if MODAL.get() && msg == WM_NCHITTEST && hit != HTNOWHERE as isize {
+            return HTCLIENT as isize;
+        }
         if msg == WM_NCHITTEST
             && matches!(
                 hit as u32,
@@ -133,7 +148,10 @@ pub fn controls(ui: &mut egui::Ui) {
     {
         let label = crate::strings::text(key);
         let r = ui
-            .add_sized([44., height], egui::Button::new("").frame_when_inactive(false))
+            .add_sized(
+                [44., height],
+                egui::Button::new("").frame_when_inactive(false),
+            )
             .on_hover_text(&label);
         r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &label));
         let c = r.rect.center();

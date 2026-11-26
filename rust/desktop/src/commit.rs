@@ -120,6 +120,8 @@ pub struct Editor {
     pub(crate) authentication: Option<crate::operations::ExternalAuthentication>,
     refresh_history: bool,
     conflict: Option<crate::conflict::Pane>,
+    reveal_conflict: bool,
+    continue_request: Option<Arc<Context>>,
     operation_output: String,
     leave: Option<Leave>,
     exit_cancelled: bool,
@@ -210,6 +212,8 @@ impl Editor {
             authentication: None,
             refresh_history: false,
             conflict: None,
+            reveal_conflict: false,
+            continue_request: None,
             operation_output: String::new(),
             leave: None,
             exit_cancelled: false,
@@ -451,6 +455,37 @@ impl Editor {
         if let Some(pane) = &mut self.conflict {
             pane.observe_stash_conflict(origin);
         }
+    }
+
+    pub(super) fn reveal_conflict(&mut self) {
+        self.reveal_conflict = true;
+    }
+
+    pub(super) fn take_continue_request(&mut self) -> Option<Arc<Context>> {
+        self.continue_request.take()
+    }
+
+    fn recovery_kind(&self) -> Option<shovel_core::recovery::Kind> {
+        self.context
+            .as_ref()?
+            .repository
+            .recovery
+            .as_ref()
+            .map(|state| state.kind)
+    }
+
+    fn can_continue(&self) -> bool {
+        self.working_ready()
+            && !self.loading
+            && !self.refresh_pending
+            && !self.has_working_queue()
+            && !self.has_prompt()
+            && self.file_menu.is_none()
+            && self.context.as_ref().is_some_and(|context| {
+                context.repository.recovery.is_some()
+                    && context.group(Group::Conflicted).is_empty()
+                    && !crate::recovery_ui::sequence_busy(&context.repository, &self.scheduler)
+            })
     }
 
     fn open_conflict(&mut self) {
@@ -926,6 +961,31 @@ impl Editor {
         {
             self.show_diff(entry, ctx);
         }
+        if self.reveal_conflict
+            && self.open
+            && self.working_ready()
+            && !self.loading
+            && !self.refresh_pending
+        {
+            self.reveal_conflict = false;
+            if let Some(context) = &self.context
+                && self
+                    .focused
+                    .as_ref()
+                    .is_none_or(|entry| entry.group != Group::Conflicted)
+                && let Some(entry) = context.group(Group::Conflicted).first().cloned()
+            {
+                self.request_leave(
+                    Leave::Select {
+                        selection: BTreeSet::from([(entry.group, entry.path.clone())]),
+                        entry: Box::new(entry.clone()),
+                        move_anchor: true,
+                        stage: false,
+                    },
+                    ctx,
+                );
+            }
+        }
         std::mem::take(&mut self.refresh_history)
     }
     fn failed_reinspection(&mut self, detail: String) {
@@ -1057,9 +1117,7 @@ impl Editor {
             Some("CommitMessageLimit")
         } else if !context.group(Group::Conflicted).is_empty() {
             Some("CommitUnresolved")
-        } else if !context.repository.operations.is_empty()
-            && context.repository.operations != ["merge"]
-        {
+        } else if !context.repository.operations.is_empty() {
             Some("ActionSequence")
         } else if !self.amend
             && context.repository.operations != ["merge"]
@@ -1088,6 +1146,15 @@ impl Editor {
             self.confirm_amend = Some(review);
         } else {
             self.submit_commit(review, false, ctx);
+        }
+    }
+    fn request_primary_action(&mut self, push: bool, ctx: &egui::Context) {
+        if self.recovery_kind().is_some() {
+            if !push && self.can_continue() {
+                self.continue_request = self.context.clone();
+            }
+        } else {
+            self.request_commit(push, ctx);
         }
     }
     fn submit_commit(&mut self, review: CommitReview, amend: bool, ctx: &egui::Context) {
@@ -1143,39 +1210,53 @@ impl Editor {
             }
         }
     }
+    pub fn native_modal_visible(&self, ctx: &egui::Context) -> bool {
+        self.open && !self.inline && !crate::native_windows::handle(ctx, self.viewport()).is_null()
+    }
+
+    fn viewport(&self) -> egui::ViewportId {
+        egui::ViewportId::from_hash_of(("commit", &self.recovery_id))
+    }
+
     pub fn show(
         &mut self,
         ctx: &egui::Context,
         enabled: bool,
         mut show_failure: impl FnMut(&egui::Context),
     ) {
+        let id = self.viewport();
+        let inspector_input = enabled && !self.has_prompt();
         if let Some(inspector) = &mut self.inspector {
-            inspector.show(ctx);
+            let launcher = crate::native_windows::handle(ctx, id);
+            inspector.show(ctx, launcher, inspector_input);
         }
         if !self.open || self.inline {
             return;
         }
-        let id = egui::ViewportId::from_hash_of(("commit", &self.recovery_id));
         let title = format!(
             "{} · {}",
             text("LocalChanges"),
             self.path.file_name().unwrap_or_default().to_string_lossy()
         );
         let mut visible = false;
-        ctx.show_viewport_immediate(
-            id,
+        crate::native_windows::show(
+            ctx, id,
             egui::ViewportBuilder::default()
                 .with_title(title)
                 .with_inner_size(crate::window_geometry::points(ctx, self.size))
                 .with_min_inner_size(crate::window_geometry::points(ctx, egui::vec2(900., 620.)))
                 .with_minimize_button(false)
                 .with_maximize_button(false),
+            std::ptr::null_mut(),
+            enabled,
             |ui, class| {
                 visible = ui.is_visible();
                 let ctx = ui.ctx().clone();
                 if ctx.input(|i| i.viewport().close_requested()) {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                    self.request_leave(Leave::Close, &ctx);
+                    if enabled && !self.has_prompt() && !self.native_picker_open() {
+                        self.request_leave(Leave::Close, &ctx);
+                    }
                 }
                 self.observe_geometry(&ctx, class);
                 self.show_contents(ui, enabled);
@@ -1199,17 +1280,21 @@ impl Editor {
 
     fn show_contents(&mut self, ui: &mut egui::Ui, enabled: bool) {
         let ctx = ui.ctx().clone();
-        if !enabled {
+        let protected = self.has_prompt() || self.native_picker_open();
+        if !self.inline {
+            crate::workspace_style::modal_focus(&ctx, protected);
+        }
+        if !enabled || protected {
             ui.disable();
         }
         if !self.inline
             && enabled
-            && self.leave.is_none()
+            && !protected
             && ctx.input(|i| i.key_pressed(egui::Key::F5))
         {
             self.request_refresh(&ctx);
         }
-        let commit_shortcut = if enabled && !self.has_prompt() && self.file_menu.is_none() {
+        let commit_shortcut = if enabled && !protected && self.file_menu.is_none() {
             ctx.input_mut(|input| {
                 let index = input.events.iter().position(|event| {
                     matches!(event, egui::Event::Key {
@@ -1285,9 +1370,34 @@ impl Editor {
                 self.edited();
             }
             if let Some(push) = commit_shortcut {
-                self.request_commit(push, &ctx);
+                self.request_primary_action(push, &ctx);
             }
             ui.horizontal(|ui| {
+                if let Some(kind) = self.recovery_kind() {
+                    if self.can_continue() {
+                        if ui
+                            .button(crate::recovery_ui::continue_label(kind))
+                            .on_hover_text(text("RecoveryContinueHelp"))
+                            .clicked()
+                        {
+                            self.request_primary_action(false, &ctx);
+                        }
+                    } else {
+                        ui.weak(text(
+                            if !self.loading
+                                && !self.refresh_pending
+                                && self
+                                    .current_context()
+                                    .is_some_and(|c| !c.group(Group::Conflicted).is_empty())
+                            {
+                                "CommitUnresolved"
+                            } else {
+                                "RecoveryStatusChecking"
+                            },
+                        ));
+                    }
+                    return;
+                }
                 let allow_amend = self.context.as_ref().is_some_and(|c| {
                     c.repository.head.is_some() && c.repository.operations.is_empty()
                 });
@@ -1590,67 +1700,65 @@ impl Editor {
                 });
             }
         });
-        if let Some(review) = &self.confirm_amend {
-            let mut confirmed = false;
-            let mut dismissed = false;
-            egui::Modal::new(egui::Id::unique("confirm_amend")).show(&ctx, |ui| {
-                ui.label(strings::format(
-                    "CommitConfirmAmend",
-                    &[
-                        review
-                            .context
-                            .repository
-                            .branch
-                            .as_deref()
-                            .unwrap_or("HEAD"),
-                        review.context.repository.head.as_deref().unwrap_or(""),
-                    ],
-                ));
-                if let Some(target) = &review.push {
-                    ui.label(strings::format(
-                        "CommitPushTarget",
-                        &[&target.remote, &target.branch],
-                    ));
-                }
-                ui.horizontal(|ui| {
-                    confirmed = ui.button(text("CommitAmend")).clicked();
-                    dismissed = ui.button(text("ActionCancel")).clicked();
-                });
-            });
+        if let Some(review) = &self.confirm_amend && enabled {
+            let ((confirmed, canceled), dismissed) = crate::workspace_style::show_dialog(
+                &ctx, egui::Id::unique("confirm_amend"), &text("CommitAmendReview"), 420., true, true, |ui| {
+                    crate::workspace_style::dialog_body(ui, |ui| {
+                        let branch = review.context.repository.branch.as_deref().unwrap_or("HEAD");
+                        let hash = review.context.repository.head.as_deref().unwrap_or("");
+                        ui.label(strings::format("CommitConfirmAmend", &[branch, hash.get(..8).unwrap_or(hash)]))
+                            .on_hover_text(hash);
+                        if let Some(target) = &review.push {
+                            ui.label(strings::format("CommitPushTarget", &[&target.remote, &target.branch]));
+                        }
+                    });
+                    crate::workspace_style::dialog_actions(ui, |ui| {
+                        let canceled = ui.button(text("ActionCancel")).clicked();
+                        let confirmed = ui.button(text("CommitAmendReview")).clicked();
+                        (confirmed, canceled)
+                    })
+                },
+            );
             if confirmed && let Some(review) = self.confirm_amend.take() {
                 self.submit_commit(review, true, &ctx);
-            } else if dismissed {
+            } else if canceled || dismissed {
                 self.confirm_amend = None;
             }
         }
-        self.show_file_menu(&ctx);
-        self.show_file_confirmation(&ctx);
         if enabled {
-            self.file_shortcuts(&ctx);
+            self.show_file_menu(&ctx);
+            self.show_file_confirmation(&ctx);
+            if !self.inline || !self.exit_prompt_open() {
+                self.show_leave_prompt(&ctx);
+            }
         }
-        if !self.inline || !self.exit_prompt_open() {
-            self.show_leave_prompt(&ctx);
+        if enabled && !protected {
+            self.file_shortcuts(&ctx);
         }
     }
 
     pub fn show_leave_prompt(&mut self, ctx: &egui::Context) {
         if self.leave.is_some() {
             let mut answer = None;
-            let response = egui::Modal::new(egui::Id::unique("conflict_leave")).show(ctx, |ui| {
-                ui.heading(text("ConflictResolve"));
-                if let Some(pane) = &self.conflict {
-                    ui.label(strings::format("ConflictCloseEdits", &[&pane.path]));
-                }
-                ui.horizontal(|ui| {
-                    if ui.button(text("RustDiscardConflictText")).clicked() {
-                        answer = Some(true);
-                    }
-                    if ui.button(text("ActionCancel")).clicked() {
-                        answer = Some(false);
-                    }
-                });
-            });
-            if response.should_close() && answer.is_none() {
+            let (_, dismissed) = crate::workspace_style::show_dialog(
+                ctx, egui::Id::unique("conflict_leave"), &text("ConflictResolve"),
+                420., true, true, |ui| {
+                    crate::workspace_style::dialog_body(ui, |ui| {
+                        if let Some(pane) = &self.conflict {
+                            ui.label(strings::format("ConflictCloseEdits", &[&pane.path]));
+                        }
+                    });
+                    crate::workspace_style::dialog_actions(ui, |ui| {
+                        if ui.button(text("ActionCancel")).clicked() {
+                            answer = Some(false);
+                        }
+                        if ui.button(text("RustDiscardConflictText")).clicked() {
+                            answer = Some(true);
+                        }
+                    });
+                },
+            );
+            if dismissed && answer.is_none() {
                 answer = Some(false);
             }
             if let Some(discard) = answer {

@@ -95,7 +95,10 @@ impl Editor {
                         && context.repository.operations == reviewed.repository.operations
                         && context.index_stamp == reviewed.index_stamp
                         && context.config_stamp == reviewed.config_stamp
-                        && selection.entries.iter().all(|entry| context.change(entry.group, &entry.path) == Some(entry))
+                        && selection
+                            .entries
+                            .iter()
+                            .all(|entry| context.change(entry.group, &entry.path) == Some(entry))
             })
     }
     pub(super) fn begin_file_menu(&mut self, menu: Menu) {
@@ -175,7 +178,10 @@ impl Editor {
             let single = menu.selected.entries.len() == 1;
             let deleted = menu.entry.code == 'D';
             if ui
-                .add_enabled(enabled && single && !deleted, egui::Button::new(text("FileMenuOpen")).shortcut_text(text("FileMenuOpenKeys")))
+                .add_enabled(
+                    enabled && single && !deleted,
+                    egui::Button::new(text("FileMenuOpen")).shortcut_text(text("FileMenuOpenKeys")),
+                )
                 .on_hover_text(text("FileMenuOpenHelp"))
                 .on_disabled_hover_text(if !enabled {
                     reason.clone()
@@ -189,9 +195,16 @@ impl Editor {
                 action = Some(12);
             }
             if ui
-                .add_enabled(enabled && single, egui::Button::new(text("FileMenuExplorer")))
+                .add_enabled(
+                    enabled && single,
+                    egui::Button::new(text("FileMenuExplorer")),
+                )
                 .on_hover_text(text("FileMenuExplorerHelp"))
-                .on_disabled_hover_text(if !enabled { reason.clone() } else { text("FileMenuSingle") })
+                .on_disabled_hover_text(if !enabled {
+                    reason.clone()
+                } else {
+                    text("FileMenuSingle")
+                })
                 .clicked()
             {
                 action = Some(13);
@@ -213,10 +226,11 @@ impl Editor {
             }
             if ui
                 .add_enabled(
-                    self.working_ready() && super::file_list::FileList::new(Some(&menu.selected.context), staged)
-                        .stageable(staged)
-                        .next()
-                        .is_some(),
+                    self.working_ready()
+                        && super::file_list::FileList::new(Some(&menu.selected.context), staged)
+                            .stageable(staged)
+                            .next()
+                            .is_some(),
                     egui::Button::new(text(if staged {
                         "CommitUnstageAll"
                     } else {
@@ -312,9 +326,14 @@ impl Editor {
             let supported = files::supported(&menu.selected.entries);
             for (id, key, available) in [
                 (14, "FileHistoryMenu", true),
-                (15, "FileBlameMenu", menu.selected.context.repository.head.is_some()),
+                (
+                    15,
+                    "FileBlameMenu",
+                    menu.selected.context.repository.head.is_some(),
+                ),
             ] {
-                if ui.add_enabled(enabled && single && available, egui::Button::new(text(key)))
+                if ui
+                    .add_enabled(enabled && single && available, egui::Button::new(text(key)))
                     .on_hover_text(text("FileHistoryHelp"))
                     .on_disabled_hover_text(if !enabled {
                         reason.clone()
@@ -329,7 +348,10 @@ impl Editor {
                 }
             }
             if ui
-                .add_enabled(enabled && supported, egui::Button::new(text("FilePatchMenu")))
+                .add_enabled(
+                    enabled && supported,
+                    egui::Button::new(text("FilePatchMenu")),
+                )
                 .on_hover_text(text("FilePatchHelp"))
                 .on_disabled_hover_text(if !enabled {
                     reason.clone()
@@ -406,7 +428,12 @@ impl Editor {
             match action {
                 0 | 1 => {
                     let entries = if action == 0 {
-                        menu.selected.entries.iter().filter(|entry| can_stage(entry)).cloned().collect()
+                        menu.selected
+                            .entries
+                            .iter()
+                            .filter(|entry| can_stage(entry))
+                            .cloned()
+                            .collect()
                     } else {
                         super::file_list::FileList::new(Some(&menu.selected.context), staged)
                             .stageable(staged)
@@ -486,130 +513,154 @@ impl Editor {
         let current = self.file_selection_current(selection);
         let mut accept = false;
         let mut cancel = false;
-        let response = egui::Modal::new(egui::Id::unique("discard-files")).show(ctx, |ui| {
-            ui.set_width(460.);
-            ui.heading(text(if stash {
-                "FileStashTitle"
-            } else {
-                "FileDiscardTitle"
-            }));
-            let repository = &selection.context.repository;
-            let root = repository.worktree.to_string_lossy();
-            let root = crate::path_text::PathText::new(ctx, &root);
-            ui.label(text(if stash {
-                "FileStashExplanation"
-            } else {
-                "FileDiscardExplanation"
-            }));
-            crate::path_text::label(
-                ui,
-                root.visual().to_owned(),
-                root.reordered().then(|| root.spoken().to_owned()),
-            );
-            egui::ScrollArea::vertical().max_height(260.).show_rows(
-                ui,
-                19.,
-                selection.entries.len(),
-                |ui, range| {
-                    for index in range {
-                        let entry = &selection.entries[index];
-                        let path = crate::path_text::PathText::new(ctx, &entry.path);
-                        let old = entry
-                            .original
-                            .as_ref()
-                            .filter(|_| entry.code == 'R')
-                            .map(|p| crate::path_text::PathText::new(ctx, p));
-                        let key = if stash {
-                            "FileStashTarget"
-                        } else if entry.group == Group::Untracked
-                            || entry.group == Group::Staged
-                                && selection.context.repository.head.is_none()
-                        {
-                            "FileDiscardNewTarget"
-                        } else if entry.group == Group::Staged {
-                            "FileDiscardStagedTarget"
-                        } else {
-                            "FileDiscardWorktreeTarget"
-                        };
-                        let message = |path: &str, old: Option<&str>| match old {
-                            Some(old) => strings::format(
-                                key,
-                                &[&strings::format("FileActionPath", &[path, old])],
-                            ),
-                            None => strings::format(key, &[path]),
-                        };
-                        let reordered =
-                            path.reordered() || old.as_ref().is_some_and(|p| p.reordered());
-                        let target = message(path.visual(), old.as_ref().map(|p| p.visual()));
-                        let response = ui
-                            .add(egui::Label::new(&target).truncate())
-                            .on_hover_text(&target);
-                        if reordered {
-                            ctx.accesskit_node_builder(response.id, |node| {
-                                node.set_value(message(
-                                    path.spoken(),
-                                    old.as_ref().map(|p| p.spoken()),
-                                ));
-                            });
-                        }
-                    }
-                },
-            );
-            if !current {
-                ui.label(text("FileMenuStale"));
-            }
-            if stash {
-                let label = ui.label(text("StashMessage"));
-                ui.add(
-                    egui::TextEdit::singleline(&mut confirmation.message)
-                        .char_limit(4096)
-                        .hint_text(text("StashMessage")),
-                )
-                .labelled_by(label.id);
-                if confirmation.message.len() > 4096 || confirmation.message.contains('\0') {
-                    ui.label(text("StashMessageLimit"));
-                }
-            }
-            let enabled = current
-                && !self.action_busy()
-                && (!stash || confirmation.message.len() <= 4096 && !confirmation.message.contains('\0'));
-            let (left, right, enter) = if stash {
-                (false, false, false)
-            } else {
-                ui.input_mut(|input| {
-                    let left = input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft);
-                    let right = input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight);
-                    let mut enter = false;
-                    input.events.retain(|event| {
-                        if let egui::Event::Key { key: egui::Key::Enter, pressed: true, repeat, modifiers, .. } = event {
-                            enter |= !repeat && modifiers.is_none();
-                            return false;
-                        }
-                        true
-                    });
-                    (left, right, enter)
-                })
-            };
-            ui.horizontal(|ui| {
-                let discard = ui.add_enabled(enabled, egui::Button::new(text(if stash {
-                    "FileStashButton"
-                } else {
-                    "FileDiscardButton"
-                })));
-                let dismiss = ui.button(text("ActionCancel"));
-                if !stash {
-                    if left || !enabled && (confirmation.keyboard_focus || discard.has_focus()) {
-                        dismiss.request_focus();
-                    } else if enabled && (right || confirmation.keyboard_focus) {
-                        discard.request_focus();
-                    }
-                    confirmation.keyboard_focus = false;
-                }
-                accept = discard.clicked() || enabled && enter && discard.has_focus();
-                cancel = dismiss.clicked() || enter && dismiss.has_focus();
-            });
+        let title = text(if stash {
+            "FileStashTitle"
+        } else {
+            "FileDiscardTitle"
         });
-        if accept || cancel || response.should_close() {
+        let (_, dismissed) = crate::workspace_style::show_dialog(
+            ctx,
+            egui::Id::unique("discard-files"),
+            &title,
+            460.,
+            true,
+            true,
+            |ui| {
+                crate::workspace_style::dialog_body(ui, |ui| {
+                    let repository = &selection.context.repository;
+                    let root = repository.worktree.to_string_lossy();
+                    let root = crate::path_text::PathText::new(ctx, &root);
+                    ui.label(text(if stash {
+                        "FileStashExplanation"
+                    } else {
+                        "FileDiscardExplanation"
+                    }));
+                    crate::path_text::label(
+                        ui,
+                        root.visual().to_owned(),
+                        root.reordered().then(|| root.spoken().to_owned()),
+                    );
+                    egui::ScrollArea::vertical().max_height(260.).show_rows(
+                        ui,
+                        19.,
+                        selection.entries.len(),
+                        |ui, range| {
+                            for index in range {
+                                let entry = &selection.entries[index];
+                                let path = crate::path_text::PathText::new(ctx, &entry.path);
+                                let old = entry
+                                    .original
+                                    .as_ref()
+                                    .filter(|_| entry.code == 'R')
+                                    .map(|p| crate::path_text::PathText::new(ctx, p));
+                                let key = if stash {
+                                    "FileStashTarget"
+                                } else if entry.group == Group::Untracked
+                                    || entry.group == Group::Staged
+                                        && selection.context.repository.head.is_none()
+                                {
+                                    "FileDiscardNewTarget"
+                                } else if entry.group == Group::Staged {
+                                    "FileDiscardStagedTarget"
+                                } else {
+                                    "FileDiscardWorktreeTarget"
+                                };
+                                let message = |path: &str, old: Option<&str>| match old {
+                                    Some(old) => strings::format(
+                                        key,
+                                        &[&strings::format("FileActionPath", &[path, old])],
+                                    ),
+                                    None => strings::format(key, &[path]),
+                                };
+                                let reordered =
+                                    path.reordered() || old.as_ref().is_some_and(|p| p.reordered());
+                                let target =
+                                    message(path.visual(), old.as_ref().map(|p| p.visual()));
+                                let response = ui
+                                    .add(egui::Label::new(&target).truncate())
+                                    .on_hover_text(&target);
+                                if reordered {
+                                    ctx.accesskit_node_builder(response.id, |node| {
+                                        node.set_value(message(
+                                            path.spoken(),
+                                            old.as_ref().map(|p| p.spoken()),
+                                        ));
+                                    });
+                                }
+                            }
+                        },
+                    );
+                    if !current {
+                        ui.label(text("FileMenuStale"));
+                    }
+                    if stash {
+                        let label = ui.label(text("StashMessage"));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut confirmation.message)
+                                .char_limit(4096)
+                                .hint_text(text("StashMessage")),
+                        )
+                        .labelled_by(label.id);
+                        if confirmation.message.len() > 4096 || confirmation.message.contains('\0')
+                        {
+                            ui.label(text("StashMessageLimit"));
+                        }
+                    }
+                });
+                let enabled = current
+                    && !self.action_busy()
+                    && (!stash
+                        || confirmation.message.len() <= 4096
+                            && !confirmation.message.contains('\0'));
+                let (left, right, enter) = if stash {
+                    (false, false, false)
+                } else {
+                    ui.input_mut(|input| {
+                        let left = input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft);
+                        let right = input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight);
+                        let mut enter = false;
+                        input.events.retain(|event| {
+                            if let egui::Event::Key {
+                                key: egui::Key::Enter,
+                                pressed: true,
+                                repeat,
+                                modifiers,
+                                ..
+                            } = event
+                            {
+                                enter |= !repeat && modifiers.is_none();
+                                return false;
+                            }
+                            true
+                        });
+                        (left, right, enter)
+                    })
+                };
+                crate::workspace_style::dialog_actions(ui, |ui| {
+                    let dismiss = ui.button(text("ActionCancel"));
+                    let discard = ui.add_enabled(
+                        enabled,
+                        egui::Button::new(text(if stash {
+                            "FileStashButton"
+                        } else {
+                            "FileDiscardButton"
+                        })),
+                    );
+                    if !stash {
+                        if left || !enabled && (confirmation.keyboard_focus || discard.has_focus())
+                        {
+                            dismiss.request_focus();
+                        } else if enabled && (right || confirmation.keyboard_focus) {
+                            discard.request_focus();
+                        }
+                        confirmation.keyboard_focus = false;
+                    }
+                    accept = discard.clicked() || enabled && enter && discard.has_focus();
+                    cancel = dismiss.clicked() || enter && dismiss.has_focus();
+                });
+            },
+        );
+        if accept || cancel || dismissed {
             if !stash && let Some(id) = self.files_focus {
                 ctx.memory_mut(|memory| memory.request_focus(id));
             }
@@ -770,12 +821,18 @@ impl Editor {
                     && input.consume_key(egui::Modifiers::CTRL, egui::Key::A)
             })
         {
-            let entries = self.context.as_ref().map(|context| context.entries.as_slice());
+            let entries = self
+                .context
+                .as_ref()
+                .map(|context| context.entries.as_slice());
             let rows = file_list::FileList::from_entries(
                 entries.or(self.preview_rows.as_deref()).unwrap_or_default(),
                 focus.group == Group::Staged,
             );
-            self.selection = rows.entries().map(|entry| (entry.group, entry.path.clone())).collect();
+            self.selection = rows
+                .entries()
+                .map(|entry| (entry.group, entry.path.clone()))
+                .collect();
             return;
         }
         enum Shortcut {

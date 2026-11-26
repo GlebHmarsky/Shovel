@@ -59,69 +59,75 @@ impl Dialog {
     ) -> (bool, bool) {
         self.identity.poll();
         let mut result = (false, false);
-        let available =
-            (ctx.content_rect().size() - egui::vec2(20., 48.)).max(egui::vec2(160., 120.));
-        egui::Window::new(text("SettingsTitle"))
-            .id(egui::Id::unique("settings"))
-            .collapsible(false)
-            .default_size(available.min(egui::vec2(760., 520.)))
-            .min_size(available.min(egui::vec2(400., 275.)))
-            .max_size(available)
-            .show(ctx, |ui| {
-                let p = Palette::current(ui);
-                let nav_width = (ui.available_width() * 0.26).clamp(88., 148.);
-                egui::Panel::bottom("settings-footer")
-                    .resizable(false)
-                    .frame(egui::Frame::new().fill(p.panel).inner_margin(9))
-                    .show(ui, |ui| result = self.footer(ui));
-                let active_tab = egui::Panel::left("settings-categories")
-                    .exact_size(nav_width)
-                    .resizable(false)
-                    .frame(egui::Frame::new().fill(p.sidebar).inner_margin(5))
-                    .show(ui, |ui| {
-                        ui.add_enabled_ui(!self.saving, |ui| {
-                            ui.add_space(5.);
-                            egui::ScrollArea::vertical()
-                                .id_salt("settings-navigation")
-                                .show(ui, |ui| self.category_tabs(ui, &p))
-                                .inner
+        let height = (ctx.content_rect().height() - 95.).clamp(100., 465.);
+        let dismissible = !self.saving && !self.identity.busy;
+        let (_, dismissed) = crate::workspace_style::show_dialog(
+            ctx,
+            egui::Id::unique("settings"),
+            &text("SettingsTitle"),
+            710.,
+            true,
+            dismissible,
+            |ui| {
+                ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
+                    ui.set_height(height);
+                    let p = Palette::current(ui);
+                    let nav_width = (ui.available_width() * 0.26).clamp(88., 148.);
+                    egui::Panel::bottom("settings-footer")
+                        .resizable(false)
+                        .frame(egui::Frame::new().fill(p.panel).inner_margin(9))
+                        .show(ui, |ui| result = self.footer(ui));
+                    let active_tab = egui::Panel::left("settings-categories")
+                        .exact_size(nav_width)
+                        .resizable(false)
+                        .frame(egui::Frame::new().fill(p.sidebar).inner_margin(5))
+                        .show(ui, |ui| {
+                            ui.add_enabled_ui(!self.saving, |ui| {
+                                ui.add_space(5.);
+                                egui::ScrollArea::vertical()
+                                    .id_salt("settings-navigation")
+                                    .show(ui, |ui| self.category_tabs(ui, &p))
+                                    .inner
+                            })
+                            .inner
                         })
-                        .inner
-                    })
-                    .inner;
-                let margin = if ui.available_width() < 390. { 10 } else { 18 };
-                egui::CentralPanel::default()
-                    .frame(egui::Frame::new().fill(p.panel).inner_margin(margin))
-                    .show(ui, |ui| {
-                        ui.add_enabled_ui(!self.saving, |ui| {
-                            egui::ScrollArea::vertical()
-                                .id_salt(("settings-page", self.page))
-                                .show(ui, |ui| {
-                                    let panel = ui.unique_id();
-                                    ctx.accesskit_node_builder(panel, |node| {
-                                        node.set_role(egui::Role::TabPanel);
-                                        node.set_labelled_by(vec![active_tab.accesskit_id()]);
+                        .inner;
+                    let margin = if ui.available_width() < 390. { 10 } else { 18 };
+                    egui::CentralPanel::default()
+                        .frame(egui::Frame::new().fill(p.panel).inner_margin(margin))
+                        .show(ui, |ui| {
+                            ui.add_enabled_ui(!self.saving, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .id_salt(("settings-page", self.page))
+                                    .show(ui, |ui| {
+                                        let panel = ui.unique_id();
+                                        ctx.accesskit_node_builder(panel, |node| {
+                                            node.set_role(egui::Role::TabPanel);
+                                            node.set_labelled_by(vec![active_tab.accesskit_id()]);
+                                        });
+                                        ctx.accesskit_node_builder(active_tab, |node| {
+                                            node.set_controls(vec![panel.accesskit_id()]);
+                                        });
+                                        ui.set_min_width(ui.available_width());
+                                        ui.spacing_mut().item_spacing.y = 6.;
+                                        ui.heading(text(self.page.key()));
+                                        ui.add_space(5.);
+                                        match self.page {
+                                            Page::Appearance => appearance(ui, &mut self.values),
+                                            Page::History => history(ui, &mut self.values),
+                                            Page::Diff => diff(ui, &mut self.values),
+                                            Page::Git => fetch(ui, &mut self.values),
+                                            Page::Identity => self.identity.show(ui, git),
+                                            Page::Tools => tools(ui, &mut self.values),
+                                            Page::Updates => updates(ui, &mut self.values),
+                                        }
                                     });
-                                    ctx.accesskit_node_builder(active_tab, |node| {
-                                        node.set_controls(vec![panel.accesskit_id()]);
-                                    });
-                                    ui.set_min_width(ui.available_width());
-                                    ui.spacing_mut().item_spacing.y = 6.;
-                                    ui.heading(text(self.page.key()));
-                                    ui.add_space(5.);
-                                    match self.page {
-                                        Page::Appearance => appearance(ui, &mut self.values),
-                                        Page::History => history(ui, &mut self.values),
-                                        Page::Diff => diff(ui, &mut self.values),
-                                        Page::Git => fetch(ui, &mut self.values),
-                                        Page::Identity => self.identity.show(ui, git),
-                                        Page::Tools => tools(ui, &mut self.values),
-                                        Page::Updates => updates(ui, &mut self.values),
-                                    }
-                                });
+                            });
                         });
-                    });
-            });
+                });
+            },
+        );
+        result.1 |= dismissed;
         result
     }
 

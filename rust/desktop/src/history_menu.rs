@@ -2,7 +2,7 @@ use super::*;
 use crate::strings::{format, text};
 use shovel_core::{
     git::{Commit, Reference, Snapshot},
-    history_actions::{Action, Reset},
+    history_actions::Action,
 };
 
 #[derive(Clone)]
@@ -16,8 +16,9 @@ pub(super) struct HistoryMenu {
 pub(super) enum Command {
     Create(bool),
     Checkout,
-    Reset(Reset),
+    Reset,
     Integrate(Action, &'static str),
+    CherryPick(usize),
     Apply(Action, &'static str),
     Rename(Reference),
     Pull,
@@ -149,19 +150,9 @@ impl HistoryMenu {
                 "HistoryRebase",
             ));
         }
-        ui.add_enabled_ui(writable && attached, |ui| {
-            ui.menu_button(text("HistoryResetMenu"), |ui| {
-                for (mode, label) in [
-                    (Reset::Soft, "HistoryMenuResetSoft"),
-                    (Reset::Mixed, "HistoryMenuResetMixed"),
-                    (Reset::Hard, "HistoryMenuResetHard"),
-                ] {
-                    if button(ui, label, true) {
-                        choice = Some(Command::Reset(mode));
-                    }
-                }
-            });
-        });
+        if button(ui, "HistoryResetMenu", writable && attached) {
+            choice = Some(Command::Reset);
+        }
         if button(ui, "HistoryMenuCheckoutCommit", writable) {
             choice = Some(Command::Checkout);
         }
@@ -171,13 +162,7 @@ impl HistoryMenu {
             &self.commit,
             writable && snapshot.head.is_some(),
         ) {
-            choice = Some(Command::Apply(
-                Action::CherryPick {
-                    target: target.clone(),
-                    mainline,
-                },
-                "HistoryCherryPick",
-            ));
+            choice = Some(Command::CherryPick(mainline));
         }
         if let Some(mainline) = relative_to_parent(
             ui,
@@ -243,18 +228,18 @@ impl Workspace {
             Command::Create(branch) => {
                 self.repository_dialog = Some(repository_menu::Dialog::at_commit(
                     snapshot,
-                    &commit.hash,
+                    commit,
                     branch,
                 ))
             }
-            Command::Checkout => self.branches.checkout(
-                &snapshot,
-                shovel_core::branches::Checkout::Detached(commit.hash),
-            ),
-            Command::Reset(mode) => self.branches.reset(&snapshot, &commit.hash, mode),
+            Command::Checkout => self.branches.checkout_commit(&snapshot, commit),
+            Command::Reset => self.branches.reset(&snapshot, commit),
             Command::Integrate(action, title) => {
-                self.branches.confirm_integration(&snapshot, action, title)
+                self.branches.confirm_integration(&snapshot, action, commit, title)
             }
+            Command::CherryPick(mainline) => self
+                .branches
+                .confirm_cherry_pick(&snapshot, commit, mainline),
             Command::Apply(action, title) => {
                 self.operations
                     .submit_history(title, action, &snapshot, git, &self.scheduler, ctx)

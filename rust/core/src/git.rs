@@ -867,12 +867,13 @@ impl Git {
         let graph_commits = projected
             .iter()
             .take(PAGE_SIZE)
-            .map(|&(commit, _, index, count)| {
+            .map(|&(commit, raw_index, index, count)| {
+                let vertical = cursor.offset == 0 && cursor.raw_offset == 0 && raw_index == 0 && count == 1;
                 if index == count {
                     (
                         commit.hash.as_str(),
                         commit.parents.as_slice(),
-                        graph::Placement::Commit { stashes: count },
+                        graph::Placement::Commit { stashes: count, vertical_stash: vertical },
                     )
                 } else {
                     (
@@ -881,6 +882,7 @@ impl Git {
                         graph::Placement::Stash {
                             first: index == 0,
                             shared: count > 1,
+                            vertical,
                         },
                     )
                 }

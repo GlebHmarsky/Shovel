@@ -2,8 +2,9 @@
 use crate::{Workspace, error_text, strings::text};
 use eframe::egui;
 use shovel_core::{git::Git, process::Cancellation};
+#[cfg(test)]
+use std::path::PathBuf;
 use std::{
-    path::PathBuf,
     sync::{
         Arc,
         mpsc::{self, Receiver},
@@ -27,14 +28,19 @@ impl Controller {
         let ctx = ctx.clone();
         #[cfg(test)]
         let fixture = self.test_choice.take();
+        let picker = crate::file_picker::owned(
+            rfd::FileDialog::new()
+                .set_title(text("ChooseGitTitle"))
+                .add_filter(text("RustGitExecutableFilter"), &["exe"]),
+        );
         thread::spawn(move || {
             #[cfg(test)]
             let selected = match fixture {
                 Some(path) => path,
-                None => pick(),
+                None => picker.pick_file(),
             };
             #[cfg(not(test))]
-            let selected = pick();
+            let selected = picker.pick_file();
             let result = selected
                 .map(|path| {
                     Git::discover(Some(&path), &Cancellation::default()).map_err(error_text)
@@ -54,12 +60,6 @@ impl Controller {
         self.receiver = None;
         Some(value)
     }
-}
-fn pick() -> Option<PathBuf> {
-    rfd::FileDialog::new()
-        .set_title(text("ChooseGitTitle"))
-        .add_filter(text("RustGitExecutableFilter"), &["exe"])
-        .pick_file()
 }
 impl Workspace {
     pub(super) fn can_choose_git(&self) -> bool {

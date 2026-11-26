@@ -35,6 +35,75 @@ fn fixture() -> (tempfile::TempDir, Git) {
 }
 
 #[test]
+fn top_stash_uses_its_base_lane_until_newer_history_is_above_it() {
+    use shovel_core::graph::StashLink;
+    let (temp, git) = fixture();
+    let root = temp.path();
+    let run = |args: &[&str]| command(&git, root, args, b"");
+    fs::write(root.join("file"), "base\n").unwrap();
+    run(&["add", "file"]);
+    run(&["commit", "-m", "base"]);
+    fs::write(root.join("file"), "stashed\n").unwrap();
+    run(&["stash", "push", "-m", "first saved"]);
+    let cancel = Cancellation::default();
+    let read = || {
+        let history = git
+            .history(git.inspect(root, &cancel).unwrap(), &cancel)
+            .unwrap();
+        git.page(&history, &Cursor::default(), &cancel)
+            .unwrap()
+            .entries
+    };
+    let rows = read();
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].graph.is_stash());
+    assert_eq!(rows[0].graph.node, rows[1].graph.node);
+    assert_eq!(
+        rows[1].graph.stash_link,
+        Some(StashLink::Base {
+            lane: rows[0].graph.node,
+            shared: false
+        })
+    );
+
+    fs::write(root.join("file"), "second saved\n").unwrap();
+    run(&["stash", "push", "-m", "second saved"]);
+    let rows = read();
+    assert_eq!(rows.len(), 3);
+    for (index, row) in rows[..2].iter().enumerate() {
+        assert!(row.graph.node > rows[2].graph.node);
+        assert_eq!(
+            row.graph.stash_link,
+            Some(StashLink::Leaf {
+                first: index == 0,
+                shared: true
+            })
+        );
+    }
+    assert_eq!(
+        rows[2].graph.stash_link,
+        Some(StashLink::Base {
+            lane: rows[0].graph.node,
+            shared: true
+        })
+    );
+
+    run(&["stash", "drop", "stash@{0}"]);
+    run(&["commit", "--allow-empty", "-m", "newer"]);
+    let rows = read();
+    assert_eq!(rows[0].commit.subject(), "newer");
+    assert!(rows[1].graph.is_stash());
+    assert!(rows[1].graph.node > rows[2].graph.node);
+    assert_eq!(
+        rows[2].graph.stash_link,
+        Some(StashLink::Base {
+            lane: rows[1].graph.node,
+            shared: false
+        })
+    );
+}
+
+#[test]
 fn history_waits_for_git_to_confirm_the_captured_worktree() {
     let (temp, git) = fixture();
     let root = temp.path();

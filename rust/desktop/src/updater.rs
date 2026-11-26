@@ -417,7 +417,10 @@ fn installed_cache_for_check(executable: &Path) -> Option<PathBuf> {
         .read_to_string(&mut manifest)
         .ok()?;
     if manifest.len() as u64 > MAX_MANIFEST
-        || velopack::bundle::read_manifest_from_string(&manifest).ok()?.id != updates::PRODUCT
+        || velopack::bundle::read_manifest_from_string(&manifest)
+            .ok()?
+            .id
+            != updates::PRODUCT
     {
         return None;
     }
@@ -487,10 +490,12 @@ fn verify_for_restart(package: &Path, release: &VerifiedRelease) -> Result<File,
         std::io::ErrorKind::NotFound => ApplyError::DownloadAgain,
         _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
     })?;
-    release.verify_package(&input).map_err(|error| match error {
-        updates::UpdateError::PackageMismatch => ApplyError::DownloadAgain,
-        _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
-    })?;
+    release
+        .verify_package(&input)
+        .map_err(|error| match error {
+            updates::UpdateError::PackageMismatch => ApplyError::DownloadAgain,
+            _ => ApplyError::Retry(text("RustUpdateCacheUnavailable")),
+        })?;
     Ok(input)
 }
 fn confirm_published_offer(
@@ -622,7 +627,9 @@ impl Controller {
         channel: Channel,
         periodic: bool,
         now: Instant,
-        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError> + Send + 'static,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError>
+        + Send
+        + 'static,
     ) {
         if self.channel != channel {
             self.cancel();
@@ -753,7 +760,9 @@ impl Controller {
         &mut self,
         ctx: &egui::Context,
         now: Instant,
-        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError> + Send + 'static,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError>
+        + Send
+        + 'static,
     ) {
         self.open = true;
         self.begin_check(ctx, now, run);
@@ -762,7 +771,9 @@ impl Controller {
         &mut self,
         ctx: &egui::Context,
         now: Instant,
-        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError> + Send + 'static,
+        run: impl FnOnce(Channel, Cancellation) -> Result<Option<Discovered>, CheckError>
+        + Send
+        + 'static,
     ) {
         if self.busy()
             || self.apply_when_ready
@@ -932,40 +943,54 @@ impl Controller {
         if !self.open {
             return;
         }
-        let mut open = true;
         let mut dismiss = false;
-        let title = text("RustUpdatesTitle");
-        let window = egui::Window::new(&title)
-            .enabled(!self.restart_requested && !self.workers.stopping())
-            .default_width(510.)
-            .collapsible(false);
-        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
-                ui.label(format!(
-                    "Shovel {} · {}",
-                    env!("CARGO_PKG_VERSION"),
-                    self.channel.label()
-                ));
-                let cancelling = self.cancel.is_cancelled()
-                    && matches!(self.phase, Phase::Checking | Phase::Downloading(_));
-                let status = if cancelling {
-                    text("RustUpdateCancelling")
-                } else if self.apply_when_ready && self.ready && blocked {
-                    text("RustUpdateWaiting")
-                } else {
-                    self.status.clone()
-                };
-                match self.phase {
-                    Phase::Downloading(percent) => {
-                        ui.add(egui::ProgressBar::new(f32::from(percent) / 100.).text(status));
+        let enabled = !self.restart_requested && !self.workers.stopping();
+        let (_, closed) = crate::workspace_style::show_dialog(
+            ctx,
+            egui::Id::unique("updater-dialog"),
+            &text("RustUpdatesTitle"),
+            510.,
+            enabled,
+            enabled,
+            |ui| {
+                let cancelling = crate::workspace_style::dialog_body(ui, |ui| {
+                    ui.label(format!(
+                        "Shovel {} · {}",
+                        env!("CARGO_PKG_VERSION"),
+                        self.channel.label()
+                    ));
+                    let cancelling = self.cancel.is_cancelled()
+                        && matches!(self.phase, Phase::Checking | Phase::Downloading(_));
+                    let status = if cancelling {
+                        text("RustUpdateCancelling")
+                    } else if self.apply_when_ready && self.ready && blocked {
+                        text("RustUpdateWaiting")
+                    } else {
+                        self.status.clone()
+                    };
+                    match self.phase {
+                        Phase::Downloading(percent) => {
+                            ui.add(egui::ProgressBar::new(f32::from(percent) / 100.).text(status));
+                        }
+                        Phase::Checking | Phase::Applying | Phase::Idle => {
+                            ui.label(status);
+                        }
                     }
-                    Phase::Checking | Phase::Applying | Phase::Idle => {
-                        ui.label(status);
+                    if let Some(offer) = &self.offer {
+                        release_notes(ui, offer.release.notes());
                     }
-                }
-                if let Some(offer) = &self.offer {
-                    release_notes(ui, offer.release.notes());
-                }
-                ui.horizontal_wrapped(|ui| {
+                    cancelling
+                });
+                crate::workspace_style::dialog_actions(ui, |ui| {
+                    dismiss = ui
+                        .button(text(if self.apply_when_ready {
+                            "RustUpdateHide"
+                        } else if self.offer.is_some() {
+                            "RustUpdateLater"
+                        } else {
+                            "UpdateClose"
+                        }))
+                        .clicked();
                     if ui
                         .add_enabled(
                             !self.busy() && !self.apply_when_ready,
@@ -993,18 +1018,10 @@ impl Controller {
                     {
                         self.start_update(ctx);
                     }
-                    dismiss = ui
-                        .button(text(if self.apply_when_ready {
-                            "RustUpdateHide"
-                        } else if self.offer.is_some() {
-                            "RustUpdateLater"
-                        } else {
-                            "UpdateClose"
-                        }))
-                        .clicked();
                 });
-        });
-        self.open = open && !dismiss;
+            },
+        );
+        self.open = !closed && !dismiss;
         self.request_approved_restart(blocked, tools_opened);
     }
     pub fn apply(
@@ -1153,9 +1170,10 @@ mod tests {
             .accesskit_update
             .as_ref()
             .is_some_and(|access| {
-                access.nodes.iter().any(|(_, node)| {
-                    node.label() == Some(label.as_str()) && !node.is_disabled()
-                })
+                access
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.label() == Some(label.as_str()) && !node.is_disabled())
             });
         output.drop_without_applying_deltas();
         assert!(restart_available);
@@ -1321,10 +1339,7 @@ mod tests {
             controller.tools_confirmed = true;
             controller.restart_requested = true;
             let error = confirm_published_offer(&old.release, result).unwrap_err();
-            controller
-                .tx
-                .send(Event::Applied(Err(error)))
-                .unwrap();
+            controller.tx.send(Event::Applied(Err(error))).unwrap();
             controller.tick(&egui::Context::default(), Channel::Beta, false);
             assert_eq!(controller.offer.is_some(), retained);
             assert_eq!(controller.ready, retained);
@@ -1403,7 +1418,10 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(3);
         while app.updater.busy() {
             app.receive(&ctx);
-            assert!(Instant::now() < deadline, "restart preflight did not settle");
+            assert!(
+                Instant::now() < deadline,
+                "restart preflight did not settle"
+            );
             std::thread::sleep(Duration::from_millis(2));
         }
         app.receive(&ctx);
@@ -1559,19 +1577,26 @@ mod tests {
     #[test]
     fn long_release_notes_keep_the_download_action_visible_and_empty_notes_take_no_space() {
         let ctx = egui::Context::default();
-        let notes = "- Local Changes keeps the previous file selection after refresh.\n".repeat(100);
+        let notes =
+            "- Local Changes keeps the previous file selection after refresh.\n".repeat(100);
         for value in [notes.as_str(), ""] {
             let mut action = egui::Rect::NOTHING;
             let mut height = 0.;
-            let out = ctx.run_ui(egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600., 380.))),
-                ..Default::default()
-            }, |ui| {
-                let before = ui.cursor().top();
-                release_notes(ui, value);
-                height = ui.cursor().top() - before;
-                action = ui.button(text("RustUpdateDownload")).rect;
-            });
+            let out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(600., 380.),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    let before = ui.cursor().top();
+                    release_notes(ui, value);
+                    height = ui.cursor().top() - before;
+                    action = ui.button(text("RustUpdateDownload")).rect;
+                },
+            );
             out.drop_without_applying_deltas();
             assert!(action.bottom() < 380.);
             if value.is_empty() {

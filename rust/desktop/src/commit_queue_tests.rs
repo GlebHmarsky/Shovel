@@ -845,12 +845,12 @@ fn amend_confirmation_keeps_the_reviewed_head_and_destination_through_refresh() 
     assert!(
         nodes
             .iter()
-            .any(|(_, n)| n.value().is_some_and(|v| v.contains(&original)))
+            .any(|(_, n)| n.value().is_some_and(|v| v.contains(&original[..8])))
     );
     assert!(nodes.iter().any(|(_, n)| n.value()
         == Some(strings::format("CommitPushTarget", &["team", "review/main"]).as_str())));
     frame.drop_without_applying_deltas();
-    h.click(&text("CommitAmend"));
+    h.click(&text("CommitAmendReview"));
     h.until(|e| !e.busy);
     assert_eq!(h.git(&["rev-parse", "HEAD"]), external);
     assert_eq!(
@@ -870,7 +870,7 @@ fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
     h.editor.edited();
     h.commit_shortcut(false, false);
     assert!(h.editor.confirm_amend.is_some());
-    h.click(&text("CommitAmend"));
+    h.click(&text("CommitAmendReview"));
     h.until(|e| !e.busy && !e.draft_saving && !e.draft_dirty);
     let amended = h.git(&["rev-parse", "HEAD"]);
     assert_ne!(first, amended);
@@ -884,6 +884,10 @@ fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
     let side = h.git(&["rev-parse", "HEAD"]);
     h.git(&["switch", "main"]);
     h.git(&["merge", "--no-ff", "--no-commit", "side"]);
+    let merge_message = fs::read_to_string(h.editor.path.join(".git/MERGE_MSG")).unwrap();
+    Arc::make_mut(&mut h.editor.git)
+        .environment
+        .insert("GIT_EDITOR".into(), Some("true".into()));
     h.editor.activate();
     h.editor.refresh(&h.ctx);
     h.until(|e| !e.loading && e.context.as_ref().unwrap().repository.operations == ["merge"]);
@@ -891,14 +895,26 @@ fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
     h.editor.draft.description = "reviewed in Local Changes".into();
     h.editor.edited();
     h.commit_shortcut(false, false);
-    h.until(|e| !e.busy && !e.draft_saving && !e.draft_dirty);
+    let review = h.editor.take_continue_request().unwrap();
+    let mut operations = crate::operations::Controller::default();
+    crate::recovery_ui::submit_continue(
+        &mut operations,
+        &review.repository,
+        &h.editor.git,
+        &h.editor.scheduler,
+        &h.ctx,
+    );
+    h.until(|e| !e.scheduler.has_accepted_work());
+    operations.poll(&h.ctx);
+    h.editor.refresh(&h.ctx);
+    h.until(|e| !e.loading && e.context.as_ref().unwrap().repository.operations.is_empty());
     assert_eq!(
         h.git(&["log", "-1", "--format=%P"]),
         format!("{amended} {side}")
     );
     assert_eq!(
         h.git(&["log", "-1", "--format=%B"]),
-        "merge side\n\nreviewed in Local Changes"
+        merge_message.trim_end()
     );
     assert!(
         h.editor
@@ -909,7 +925,7 @@ fn confirmed_amend_and_merge_from_the_editor_preserve_native_parents() {
             .operations
             .is_empty()
     );
-    assert!(h.editor.draft.is_empty());
+    assert_eq!(h.editor.draft.subject, "merge side");
     assert_eq!(
         fs::read_to_string(h.editor.path.join("one.txt")).unwrap(),
         "one\n"

@@ -56,7 +56,7 @@ impl Harness {
         )
     }
     fn node(&mut self, label: Option<&str>, input: usize) -> (egui::Pos2, bool) {
-        // Embedded native viewport layout settles without any desktop capture.
+        // Settle the centered dialog layout offscreen.
         self.render(vec![]).drop_without_applying_deltas();
         let out = self.render(vec![]);
         let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
@@ -234,10 +234,7 @@ fn actual_form_input_add_edit_fallback_noop_and_confirmed_remove() {
         Form::Manage { confirm: true, .. }
     ));
     let output = h.render(vec![]);
-    let expected = strings::format(
-        "RemoteRemoveConfirm",
-        &["origin", &snapshot.worktree.to_string_lossy()],
-    );
+    let expected = strings::format("RemoteRemoveReview", &["origin"]);
     let found = output
         .platform_output
         .accesskit_update
@@ -245,7 +242,9 @@ fn actual_form_input_add_edit_fallback_noop_and_confirmed_remove() {
         .unwrap()
         .nodes
         .iter()
-        .any(|(_, n)| n.label().or(n.value()) == Some(expected.as_str()));
+        .any(|(_, n)| n.label().or(n.value()) == Some(expected.as_str()))
+        && output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
+            .any(|(_, n)| n.label().or(n.value()) == Some(snapshot.worktree.to_string_lossy().as_ref()));
     output.drop_without_applying_deltas();
     assert!(found, "exact repository and remote confirmation missing");
     h.click(&text("Cancel"));
@@ -435,7 +434,7 @@ fn workspace_menus_refresh_linked_caches_and_retained_owner_after_submission() {
         )
         .drop_without_applying_deltas();
     }
-    click(&mut app, &text("RemoteManageTitle"));
+    click(&mut app, &text("RemoteManageMenu"));
     assert!(matches!(&app.remotes.active.as_ref().unwrap().form,
         Form::Manage { reviewed, selected, .. } if reviewed.remotes[*selected].name=="origin"));
 }

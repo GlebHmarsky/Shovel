@@ -769,23 +769,11 @@ impl Controller {
         let kind = options.kind;
         let already_confirmed = Options::confirmed(settings, &snapshot.worktree, kind);
         let mut confirmed_now = false;
-        let mut open = true;
         let mut close = false;
-        let popup_was_open = egui::Popup::is_any_open(ctx);
-        let width = (ctx.content_rect().width() - 46.).clamp(236., 442.);
         let title = strings::format("RustNetworkOptions", &[&text(kind.key())]);
-        let window = egui::Window::new(&title)
-            .id(egui::Id::unique("network-options"))
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-            .default_width(width)
-            .max_width(width);
-        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
+        let (_, dismissed) = crate::workspace_style::show_dialog(
+            ctx, egui::Id::unique("network-options"), &title, 442., true, true, |ui| {
             use crate::workspace_style::Palette;
-            ui.set_width(width);
-            ui.spacing_mut().item_spacing.y = 6.;
-            ui.spacing_mut().interact_size.y = 26.;
             let palette = Palette::current(ui);
             egui::ScrollArea::vertical()
                 .max_height((ctx.content_rect().height() - 128.).max(80.))
@@ -807,7 +795,7 @@ impl Controller {
                         .min_col_width(label_width)
                         .spacing([gap, 7.])
                         .show(ui, |ui| {
-                            options.show_destinations(ui, &snapshot, width - label_width - gap);
+                            options.show_destinations(ui, &snapshot, (ui.available_width() - label_width - gap).max(20.));
                         });
                     ui.add_space(4.);
                     ui.horizontal_top(|ui| {
@@ -892,8 +880,7 @@ impl Controller {
         if changed {
             options.save(settings, &snapshot, confirmed_now);
         }
-        let escape = !popup_was_open && ctx.input(|input| input.key_pressed(egui::Key::Escape));
-        if open && !close && !escape {
+        if !dismissed && !close {
             self.options = Some((options, snapshot));
         } else {
             // Release the repository lane only after remembered choices are saved
@@ -2054,9 +2041,10 @@ impl Controller {
             return;
         };
         let mut reply = None;
-        egui::Modal::new(egui::Id::unique("authentication")).show(ctx, |ui| {
-            ui.set_max_width(600.);
-            ui.heading(text("AuthTitle"));
+        let (_, dismissed) = crate::workspace_style::show_dialog(
+            ctx, egui::Id::unique("authentication"), &text("AuthTitle"), 500., true, true, |ui| {
+            let mut entered = false;
+            crate::workspace_style::dialog_body(ui, |ui| {
             if let Some(run) = self.runs.iter().find(|r| r.sequence == question.run) {
                 let path = run.path.to_string_lossy();
                 let path = PathText::new(ctx, &path);
@@ -2089,28 +2077,31 @@ impl Controller {
                     .show(ui);
                 output.state.clear_undoer();
                 output.state.store(ctx, output.response.id);
-                output.response.response.labelled_by(label.id);
-                if ui.button(text("AuthSubmit")).clicked()
-                    || ui.input(|i| i.key_pressed(egui::Key::Enter))
-                {
-                    reply = Some(Some(question.response.as_bytes().to_vec().into()));
-                }
-            } else if ui.button(text("AuthApprove")).clicked() {
-                reply = Some(Some(
-                    if question.prompt.kind == authentication::Kind::Confirmation {
+                let response = output.response.response.labelled_by(label.id);
+                entered = response.lost_focus()
+                    && ui.input(|input| input.key_pressed(egui::Key::Enter));
+            }
+            });
+            crate::workspace_style::dialog_actions(ui, |ui| {
+                if ui.button(text("RustAuthDecline")).clicked() {
+                    reply = Some(None);
+                } else if question.prompt.kind == authentication::Kind::Secret {
+                    if ui.button(text("AuthSubmit")).clicked() || entered {
+                        reply = Some(Some(question.response.as_bytes().to_vec().into()));
+                    }
+                } else if ui.button(text("AuthApprove")).clicked() {
+                    let response = if question.prompt.kind == authentication::Kind::Confirmation {
                         b"yes".to_vec()
                     } else {
                         vec![]
-                    }
-                    .into(),
-                ));
-            }
-            if ui.button(text("RustAuthDecline")).clicked()
-                || ui.input(|i| i.key_pressed(egui::Key::Escape))
-            {
-                reply = Some(None);
-            }
+                    };
+                    reply = Some(Some(response.into()));
+                }
+            });
         });
+        if dismissed {
+            reply = Some(None);
+        }
         if let Some(reply) = reply {
             question.response.zeroize();
             let _ = question.prompt.answer.send(reply);
@@ -2539,12 +2530,13 @@ mod tests {
     }
 
     #[test]
-    fn repository_options_keep_their_owner_during_tab_switch_and_close() {
+    fn repository_options_block_tab_navigation_and_keep_their_captured_owner() {
         use crate::workspace_interaction_tests::{frame, workspace};
 
         let (_first, git, owner) = fixture();
         let (_second, _, other) = fixture();
         let ctx = egui::Context::default();
+        ctx.enable_accesskit();
         let mut app = workspace();
         app.tabs.clear();
         app.git = Some(git);
@@ -2557,6 +2549,20 @@ mod tests {
             owner.clone(),
         ));
         frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
+        let other_name = app.tabs[1].name().into_owned();
+        let (other_tab, disabled) = crate::workspace_interaction_tests::sidebar_point(
+            &ctx, &mut app, &other_name,
+        ).unwrap();
+        assert!(disabled);
+        for button in [egui::PointerButton::Primary, egui::PointerButton::Middle] {
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(other_tab)])
+                .drop_without_applying_deltas();
+            for pressed in [true, false] {
+                frame(&ctx, &mut app, vec![egui::Event::PointerButton {
+                    pos: other_tab, button, pressed, modifiers: egui::Modifiers::NONE,
+                }]).drop_without_applying_deltas();
+            }
+        }
 
         let press = |app: &mut crate::Workspace, key| {
             let modifiers = egui::Modifiers {
@@ -2582,10 +2588,15 @@ mod tests {
             }
         };
         press(&mut app, egui::Key::Tab);
-        assert_eq!(app.tabs[app.selected].path, other.worktree);
-        press(&mut app, egui::Key::Tab);
-        assert_eq!(app.tabs[app.selected].id, owner_id);
         press(&mut app, egui::Key::W);
+        assert_eq!(app.tabs[app.selected].id, owner_id);
+        assert_eq!(app.tabs.len(), 2);
+        assert!(app.retained_tabs.is_empty());
+
+        // Closing an owner through application state still retains its captured
+        // context. User tab changes remain blocked until the form is dismissed.
+        app.select_tab(1, &ctx);
+        app.close_tab(owner_id, &ctx);
         assert_eq!(app.tabs[app.selected].path, other.worktree);
         assert!(app.retained_tabs.iter().any(|tab| tab.id == owner_id));
 

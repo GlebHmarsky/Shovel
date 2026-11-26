@@ -65,7 +65,7 @@ impl Harness {
                 events,
                 ..Default::default()
             },
-            |_| self.view.show(&ctx),
+            |_| self.view.show(&ctx, std::ptr::null_mut(), true),
         );
         out.textures_delta.clear();
         out

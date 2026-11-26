@@ -47,8 +47,15 @@ pub enum StashLink {
 
 #[derive(Clone, Copy)]
 pub(crate) enum Placement {
-    Commit { stashes: usize },
-    Stash { first: bool, shared: bool },
+    Commit {
+        stashes: usize,
+        vertical_stash: bool,
+    },
+    Stash {
+        first: bool,
+        shared: bool,
+        vertical: bool,
+    },
 }
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
@@ -87,7 +94,12 @@ pub(crate) fn build<'a>(
         if !seen.insert(hash) || parents.iter().any(|p| seen.contains(p.as_str())) {
             return Err(GraphError::InvalidTopology);
         }
-        if let Placement::Stash { first, shared } = placement {
+        if let Placement::Stash {
+            first,
+            shared,
+            vertical,
+        } = placement
+        {
             let [base] = parents else {
                 return Err(GraphError::InvalidTopology);
             };
@@ -112,11 +124,15 @@ pub(crate) fn build<'a>(
             if base_lane >= MAX_LANES {
                 return Err(GraphError::TooWide);
             }
-            let node = lanes.len().max(base_lane + 1);
+            let node = if vertical {
+                base_lane
+            } else {
+                lanes.len().max(base_lane + 1)
+            };
             rows.push(Row {
                 node,
                 color: 0,
-                width: node + 1,
+                width: lanes.len().max(node + 1),
                 is_merge: false,
                 stash_link: Some(StashLink::Leaf { first, shared }),
                 lines,
@@ -140,8 +156,11 @@ pub(crate) fn build<'a>(
         };
         let before = lanes.clone();
         let stash_link = match placement {
-            Placement::Commit { stashes } if stashes > 0 => Some(StashLink::Base {
-                lane: before.len(),
+            Placement::Commit {
+                stashes,
+                vertical_stash,
+            } if stashes > 0 => Some(StashLink::Base {
+                lane: if vertical_stash { node } else { before.len() },
                 shared: stashes > 1,
             }),
             _ => None,
@@ -184,10 +203,11 @@ pub(crate) fn build<'a>(
                 outgoing.push(target);
             }
         }
-        let width = before
-            .len()
-            .max(lanes.len())
-            .max(before.len() + usize::from(stash_link.is_some()));
+        let stash_width = match stash_link {
+            Some(StashLink::Base { lane, .. }) => lane + 1,
+            _ => 0,
+        };
+        let width = before.len().max(lanes.len()).max(stash_width);
         let mut lines = Vec::new();
         for (i, lane) in before
             .iter()
@@ -241,7 +261,10 @@ pub(crate) fn build<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    const COMMIT: Placement = Placement::Commit { stashes: 0 };
+    const COMMIT: Placement = Placement::Commit {
+        stashes: 0,
+        vertical_stash: false,
+    };
 
     #[test]
     fn page_boundaries_preserve_graph_exactly() {
@@ -278,6 +301,7 @@ mod tests {
                     Placement::Stash {
                         first: index == 0,
                         shared: true,
+                        vertical: false,
                     },
                 )
             }),
@@ -302,6 +326,7 @@ mod tests {
                 &[][..],
                 Placement::Commit {
                     stashes: hashes.len(),
+                    vertical_stash: false,
                 },
             )],
             &cursor,
@@ -336,9 +361,17 @@ mod tests {
                 Placement::Stash {
                     first: true,
                     shared: false,
+                    vertical: false,
                 },
             ),
-            ("previous", &parents[..], Placement::Commit { stashes: 1 }),
+            (
+                "previous",
+                &parents[..],
+                Placement::Commit {
+                    stashes: 1,
+                    vertical_stash: false,
+                },
+            ),
             ordinary[2],
         ];
         let (expected, expected_cursor) = build(ordinary, &Cursor::default()).unwrap();
@@ -386,13 +419,21 @@ mod tests {
                 Placement::Stash {
                     first: true,
                     shared: false,
+                    vertical: false,
                 },
             )],
             &cursor,
         )
         .unwrap();
         let (base, _) = build(
-            [("parent0", &[][..], Placement::Commit { stashes: 1 })],
+            [(
+                "parent0",
+                &[][..],
+                Placement::Commit {
+                    stashes: 1,
+                    vertical_stash: false,
+                },
+            )],
             &continuation,
         )
         .unwrap();

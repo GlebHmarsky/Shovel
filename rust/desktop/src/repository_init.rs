@@ -70,7 +70,7 @@ pub struct Controller {
     origin: Option<u64>,
     sender: Sender<Event>,
     receiver: Receiver<Event>,
-    picker: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>,
+    picker: Arc<dyn Fn(rfd::FileDialog) -> Option<PathBuf> + Send + Sync>,
 }
 pub struct Completion {
     pub path: Option<PathBuf>,
@@ -93,11 +93,7 @@ impl Default for Controller {
             origin: None,
             sender,
             receiver,
-            picker: Arc::new(|| {
-                rfd::FileDialog::new()
-                    .set_title(text("InitChooseFolder"))
-                    .pick_folder()
-            }),
+            picker: Arc::new(rfd::FileDialog::pick_folder),
         }
     }
 }
@@ -262,70 +258,81 @@ impl Controller {
         } else {
             initialization::destination(&PathBuf::from(&form.directory)).is_ok()
         };
-        let response =
-            egui::Modal::new(egui::Id::unique("initialize_repository")).show(ctx, |ui| {
-                ui.set_width(560.);
-                ui.heading(text(self.kind.title()));
-                ui.label(text(if self.kind == Kind::Clone {
-                    "ActionExplainClone"
-                } else {
-                    "ActionExplainInit"
-                }));
-                ui.separator();
-                if self.kind == Kind::Clone {
-                    let source_label = ui.label(text("CloneSource"));
-                    ui.add_enabled(
-                        !self.picking,
-                        egui::TextEdit::singleline(&mut form.source).desired_width(f32::INFINITY),
-                    )
-                    .labelled_by(source_label.id);
-                }
-                let directory_label = ui.label(text(if self.kind == Kind::Clone {
-                    "CloneDirectory"
-                } else {
-                    "InitDirectory"
-                }));
-                ui.horizontal(|ui| {
-                    ui.add_enabled(
-                        !self.picking,
-                        egui::TextEdit::singleline(&mut form.directory).desired_width(440.),
-                    )
-                    .labelled_by(directory_label.id);
-                    if ui
-                        .add_enabled(!self.picking, egui::Button::new(text("InitBrowse")))
-                        .clicked()
-                    {
-                        self.picking = true;
-                        let picker = self.picker.clone();
-                        let tx = self.sender.clone();
-                        let ctx = ctx.clone();
-                        thread::spawn(move || {
-                            let _ = tx.send(Event::Picked(picker()));
-                            ctx.request_repaint();
-                        });
+        let (_, dismissed) = crate::workspace_style::show_dialog(
+            ctx,
+            egui::Id::unique("initialize_repository"),
+            &text(self.kind.title()),
+            490.,
+            !self.picking,
+            !self.picking,
+            |ui| {
+                crate::workspace_style::dialog_body(ui, |ui| {
+                    ui.label(text(if self.kind == Kind::Clone {
+                        "ActionExplainClone"
+                    } else {
+                        "ActionExplainInit"
+                    }));
+                    ui.separator();
+                    if self.kind == Kind::Clone {
+                        let source_label = ui.label(text("CloneSource"));
+                        ui.add_enabled(
+                            !self.picking,
+                            egui::TextEdit::singleline(&mut form.source)
+                                .desired_width(f32::INFINITY),
+                        )
+                        .labelled_by(source_label.id);
                     }
+                    let directory_label = ui.label(text(if self.kind == Kind::Clone {
+                        "CloneDirectory"
+                    } else {
+                        "InitDirectory"
+                    }));
+                    ui.horizontal(|ui| {
+                        ui.add_enabled(
+                            !self.picking,
+                            egui::TextEdit::singleline(&mut form.directory)
+                                .desired_width((ui.available_width() - 93.).max(45.)),
+                        )
+                        .labelled_by(directory_label.id);
+                        if ui
+                            .add_enabled(!self.picking, egui::Button::new(text("InitBrowse")))
+                            .clicked()
+                        {
+                            self.picking = true;
+                            let picker = self.picker.clone();
+                            let dialog = crate::file_picker::owned(
+                                rfd::FileDialog::new().set_title(text("InitChooseFolder")),
+                            );
+                            let tx = self.sender.clone();
+                            let ctx = ctx.clone();
+                            thread::spawn(move || {
+                                let _ = tx.send(Event::Picked(picker(dialog)));
+                                ctx.request_repaint();
+                            });
+                        }
+                    });
+                    let branch_label = ui.label(text(if self.kind == Kind::Clone {
+                        "CloneBranch"
+                    } else {
+                        "InitBranch"
+                    }));
+                    ui.add_enabled(
+                        !self.picking,
+                        egui::TextEdit::singleline(&mut form.branch).desired_width(f32::INFINITY),
+                    )
+                    .labelled_by(branch_label.id);
+                    if self.kind == Kind::Initialize {
+                        ui.label(text("InitBranchHelp"));
+                    }
+                    ui.label(text(match (self.kind, ready) {
+                        (Kind::Initialize, true) => "InitReady",
+                        (Kind::Initialize, false) => "InitEnterDirectory",
+                        (Kind::Clone, true) => "CloneReady",
+                        (Kind::Clone, false) => "CloneInvalid",
+                    }));
                 });
-                let branch_label = ui.label(text(if self.kind == Kind::Clone {
-                    "CloneBranch"
-                } else {
-                    "InitBranch"
-                }));
-                ui.add_enabled(
-                    !self.picking,
-                    egui::TextEdit::singleline(&mut form.branch).desired_width(f32::INFINITY),
-                )
-                .labelled_by(branch_label.id);
-                if self.kind == Kind::Initialize {
-                    ui.label(text("InitBranchHelp"));
-                }
-                ui.label(text(match (self.kind, ready) {
-                    (Kind::Initialize, true) => "InitReady",
-                    (Kind::Initialize, false) => "InitEnterDirectory",
-                    (Kind::Clone, true) => "CloneReady",
-                    (Kind::Clone, false) => "CloneInvalid",
-                }));
-                ui.separator();
-                ui.horizontal(|ui| {
+                crate::workspace_style::dialog_actions(ui, |ui| {
+                    close = ui.button(text("ActionCancel")).clicked();
                     create = ui
                         .add_enabled(
                             ready && !self.picking && git.is_some(),
@@ -336,14 +343,9 @@ impl Controller {
                             })),
                         )
                         .clicked();
-                    close = ui
-                        .add_enabled(!self.picking, egui::Button::new(text("ActionCancel")))
-                        .clicked();
                 });
-            });
-        if !self.picking && ready && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            create = true;
-        }
+            },
+        );
         if create && let Some(git) = git {
             self.submit(
                 if self.kind == Kind::Clone {
@@ -364,7 +366,7 @@ impl Controller {
                 ctx,
                 operations,
             );
-        } else if !close && (!response.should_close() || self.picking) {
+        } else if !close && (!dismissed || self.picking) {
             self.form = Some(form);
         }
     }
