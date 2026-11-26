@@ -584,7 +584,7 @@ fn toolbar_network_actions_confirm_once_per_worktree_and_use_saved_edits() {
     click_label(&ctx, &mut app, &text("Fetch"));
     assert!(app.operations.options.as_ref().unwrap().0.all_remotes);
     click_label(&ctx, &mut app, &text("ActionAllRemotes"));
-    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("CancelOperation"));
     assert!(!Options::confirmed(&app.settings, path, Kind::Fetch));
     assert!(app.operations.runs.is_empty());
 
@@ -615,7 +615,7 @@ fn toolbar_network_actions_confirm_once_per_worktree_and_use_saved_edits() {
     click_label(&ctx, &mut app, &text("RustFetchOptions"));
     assert!(app.operations.options.as_ref().unwrap().0.all_remotes);
     click_label(&ctx, &mut app, &text("ActionAllRemotes"));
-    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("CancelOperation"));
     click_label(&ctx, &mut app, &text("Fetch"));
     assert!(!app.operations.modal_open());
     wait(|| {
@@ -632,7 +632,7 @@ fn toolbar_network_actions_confirm_once_per_worktree_and_use_saved_edits() {
     for kind in [Kind::Pull, Kind::Push] {
         click_label(&ctx, &mut app, &text(kind.key()));
         assert_eq!(app.operations.options.as_ref().unwrap().0.kind, kind);
-        click_label(&ctx, &mut app, &text("Close"));
+        click_label(&ctx, &mut app, &text("CancelOperation"));
     }
     app.open(other.worktree.clone(), &ctx);
     crate::history_view::tests::wait(&mut app, &ctx);
@@ -641,7 +641,7 @@ fn toolbar_network_actions_confirm_once_per_worktree_and_use_saved_edits() {
         app.operations.options.as_ref().unwrap().1.worktree,
         other.worktree
     );
-    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("CancelOperation"));
     assert_eq!(app.operations.runs.len(), 2);
 }
 
@@ -670,7 +670,7 @@ fn initializing_main_fetch_opens_options_and_keeps_the_original_worktree() {
     frame(&ctx, &mut app, vec![]).drop_without_applying_deltas();
     let (_, captured) = app.operations.options.as_ref().unwrap();
     assert_eq!(captured.worktree, snapshot.worktree);
-    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("CancelOperation"));
     wait(|| {
         app.receive(&ctx);
         !app.scheduler.has_accepted_work()
@@ -744,7 +744,7 @@ fn initializing_fetch_options_survive_closure_save_without_fetch_and_hold_queue_
             .iter()
             .any(|r| r.id == fetch && !r.running && r.outcome.is_none())
     );
-    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("CancelOperation"));
     wait(|| {
         app.receive(&ctx);
         !app.scheduler.has_accepted_work()
@@ -795,7 +795,7 @@ fn initializing_pull_and_push_options_keep_their_order_and_original_repository()
         app.operations.options.as_ref().unwrap().1.worktree,
         snapshot.worktree
     );
-    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("CancelOperation"));
     assert!(Options::load(&app.settings, &snapshot, Kind::Pull).auto_stash);
     assert!(!snapshot.git_directory.join("FETCH_HEAD").exists());
     wait(|| {
@@ -1217,7 +1217,7 @@ fn initializing_new_branch_removal_sequence_failure_and_cancel_do_not_mutate() {
     });
     click_label(&ctx, &mut app, &text("ActionCancel"));
     assert!(!app.branches.is_open());
-    click_label(&ctx, &mut app, &text("Close"));
+    click_label(&ctx, &mut app, &text("CancelOperation"));
     wait(|| {
         app.operations.poll(&ctx);
         !app.scheduler.has_accepted_work()

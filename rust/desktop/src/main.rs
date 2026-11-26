@@ -3249,6 +3249,8 @@ impl eframe::App for Workspace {
         let mut history_edge = None;
         let mut history_action = None;
         let mut history_home = false;
+        let mut history_tab = None;
+        use history_view::Navigation;
         egui::CentralPanel::default()
             .frame(workspace_style::pane(palette.canvas, 0, 0))
             .show(ui, |ui| {
@@ -3279,15 +3281,9 @@ impl eframe::App for Workspace {
                 if let Some(error) = &tab.error {
                     ui.colored_label(palette.diff_removed_text, error);
                 }
-                let Some(page) = &tab.page else {
-                    return;
-                };
-                if page.entries.is_empty() {
-                    ui.label(strings::text("HistoryEmptyAll"));
-                }
                 let list_focus = ui.interact(
                     ui.available_rect_before_wrap(),
-                    ui.make_persistent_id(("history_list_focus", tab.id)),
+                    ui.make_persistent_id("history_list_focus"),
                     egui::Sense::focusable_noninteractive(),
                 );
                 list_focus.widget_info(|| {
@@ -3297,7 +3293,21 @@ impl eframe::App for Workspace {
                         strings::text("AllCommits"),
                     )
                 });
-                let mut row_focused = false;
+                let history_input = !shortcuts_blocked && !popup_was_open;
+                let Some(page) = &tab.page else {
+                    if history_input
+                        && list_focus.has_focus()
+                        && let Some(Navigation::Repository(step)) =
+                            history_view::keyboard_step(&ctx, &list_focus, None, false)
+                    {
+                        history_tab = Some(step);
+                    }
+                    return;
+                };
+                if page.entries.is_empty() {
+                    ui.label(strings::text("HistoryEmptyAll"));
+                }
+                let mut row_focus = None;
                 let selected_author = page
                     .entries
                     .iter()
@@ -3330,71 +3340,130 @@ impl eframe::App for Workspace {
                 {
                     scroll = scroll.vertical_scroll_offset(((index as f32 - 2.) * HEIGHT).max(0.));
                 }
-                let scroll_output = scroll.show_rows(ui, HEIGHT, page.entries.len(), |ui, range| {
-                    for index in range {
-                        let entry = &page.entries[index];
-                        let selected = tab.selected.as_ref() == Some(&entry.commit.hash);
-                        let peer = selected_author.is_some_and(|(name, email)| {
-                            !email.trim().is_empty()
-                                && &entry.commit.author == name
-                                && &entry.commit.email == email
-                        });
-                        let response = ui
-                            .push_id(&entry.commit.hash, |ui| {
-                                history_row::show(
-                                    ui, entry, lanes,
-                                    history_row::Style {
-                                        list_focused: list_focus.has_focus(),
-                                        selected, peer, refs_right,
-                                        worktree: &tab.path,
-                                        incoming: tab.divergence.is_incoming(&entry.commit.hash),
-                                    },
-                                    &palette,
-                                )
-                            })
-                            .inner;
-                        row_focused |= response.has_focus();
-                        if response.clicked() {
-                            if response.clicked_by(egui::PointerButton::Primary) {
-                                list_focus.request_focus();
+                let scroll_output =
+                    scroll.show_rows(ui, HEIGHT, page.entries.len(), |ui, range| {
+                        for index in range {
+                            let entry = &page.entries[index];
+                            let selected = tab.selected.as_ref() == Some(&entry.commit.hash);
+                            let peer = selected_author.is_some_and(|(name, email)| {
+                                !email.trim().is_empty()
+                                    && &entry.commit.author == name
+                                    && &entry.commit.email == email
+                            });
+                            let response = ui
+                                .push_id(&entry.commit.hash, |ui| {
+                                    history_row::show(
+                                        ui,
+                                        entry,
+                                        lanes,
+                                        history_row::Style {
+                                            list_focused: list_focus.has_focus(),
+                                            selected,
+                                            peer,
+                                            refs_right,
+                                            worktree: &tab.path,
+                                            incoming: tab
+                                                .divergence
+                                                .is_incoming(&entry.commit.hash),
+                                        },
+                                        &palette,
+                                    )
+                                })
+                                .inner;
+                            if response.has_focus() {
+                                row_focus = Some(response.id);
                             }
-                            tab.selected = Some(entry.commit.hash.clone());
-                        }
-                        if response.secondary_clicked()
-                            && let Some(history) = &tab.history
-                        {
-                            self.history_menu = Some(HistoryMenu {
-                                owner: tab.id,
-                                snapshot: history.snapshot.clone(),
-                                commit: entry.commit.clone(),
+                            if response.clicked() {
+                                if response.clicked_by(egui::PointerButton::Primary) {
+                                    list_focus.request_focus();
+                                }
+                                tab.selected = Some(entry.commit.hash.clone());
+                            }
+                            if response.secondary_clicked()
+                                && let Some(history) = &tab.history
+                            {
+                                self.history_menu = Some(HistoryMenu {
+                                    owner: tab.id,
+                                    snapshot: history.snapshot.clone(),
+                                    commit: entry.commit.clone(),
+                                    stash: entry
+                                        .references
+                                        .iter()
+                                        .find(|reference| reference.name.starts_with("stash@{"))
+                                        .cloned(),
+                                });
+                            }
+                            response.context_menu(|ui| {
+                                if let Some(menu) = &self.history_menu
+                                    && menu.owner == tab.id
+                                    && menu.commit.hash == entry.commit.hash
+                                {
+                                    let git =
+                                        self.git.as_ref().filter(|_| !tab.view.identity_blocked);
+                                    if let Some(reference) = &menu.stash {
+                                        stashes::quick_actions(
+                                            ui,
+                                            stashes::QuickTarget {
+                                                snapshot: &menu.snapshot,
+                                                reference,
+                                                message: menu.commit.subject(),
+                                            },
+                                            git,
+                                            &mut self.operations,
+                                            &mut self.branches,
+                                            &self.scheduler,
+                                        );
+                                    } else if let Some(command) = menu.show(ui, git.is_some()) {
+                                        history_action = Some((menu.clone(), command));
+                                    }
+                                }
                             });
                         }
-                        response.context_menu(|ui| {
-                            if let Some(menu) = &self.history_menu
-                                && menu.owner == tab.id
-                                && menu.commit.hash == entry.commit.hash
-                                && let Some(command) = menu.show(
-                                    ui,
-                                    self.git.is_some() && !tab.view.identity_blocked,
-                                )
-                            {
-                                history_action = Some((menu.clone(), command));
-                            }
-                        });
-                    }
-                });
+                    });
                 tab.view.offset = scroll_output.state.clamped_offset();
-                if !shortcuts_blocked
-                    && !tab.view.identity_blocked
-                    && (page.cursor.offset == 0 || self.git.is_some())
-                    && (list_focus.has_focus() || row_focused)
-                    && ctx.input_mut(|input| {
-                        input.modifiers.is_none()
-                            && input.consume_key(egui::Modifiers::NONE, egui::Key::Home)
-                    })
+                if history_input
+                    && let Some(navigation) = history_view::keyboard_step(
+                        &ctx,
+                        &list_focus,
+                        row_focus,
+                        !page.entries.is_empty(),
+                    )
                 {
-                    list_focus.request_focus();
-                    tab.view.home_requested = true;
+                    match navigation {
+                        Navigation::First
+                            if !tab.view.identity_blocked
+                                && (page.cursor.offset == 0 || self.git.is_some()) =>
+                        {
+                            tab.view.home_requested = true;
+                        }
+                        Navigation::Commit(step) if !page.entries.is_empty() => {
+                            let next = page
+                                .entries
+                                .iter()
+                                .position(|entry| Some(&entry.commit.hash) == tab.selected.as_ref())
+                                .map_or(0, |index| {
+                                    index
+                                        .saturating_add_signed(step)
+                                        .min(page.entries.len() - 1)
+                                });
+                            tab.selected = Some(page.entries[next].commit.hash.clone());
+                            let top = next as f32 * HEIGHT;
+                            let bottom = top + HEIGHT;
+                            let visible_height = scroll_output.inner_rect.height();
+                            let offset = tab
+                                .view
+                                .offset
+                                .y
+                                .clamp((bottom - visible_height).min(top).max(0.), top);
+                            if offset != tab.view.offset.y {
+                                tab.view.restore_offset =
+                                    Some(egui::vec2(tab.view.offset.x, offset));
+                            }
+                            ctx.request_repaint();
+                        }
+                        Navigation::Repository(step) => history_tab = Some(step),
+                        _ => {}
+                    }
                 }
                 if tab.view.home_requested && !tab.loading && !tab.view.identity_blocked {
                     if page.cursor.offset == 0 {
@@ -3424,6 +3493,16 @@ impl eframe::App for Workspace {
                     }
                 }
             });
+        if let Some(step) = history_tab {
+            let index = self
+                .selected
+                .saturating_add_signed(step)
+                .min(self.tabs.len().saturating_sub(1));
+            if index != self.selected {
+                self.select_tab(index, &ctx);
+                ctx.request_repaint();
+            }
+        }
         if history_home {
             self.first_page(&ctx);
         }

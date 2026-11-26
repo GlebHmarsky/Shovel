@@ -1,5 +1,13 @@
 # Changelog
 
+## Rust 0.53.0 - 2026-11-26
+
+- Press Up or Down in History to select commits and update their details immediately. Press Left or Right to switch to an adjacent repository and keep each tab's history position.
+- Draw stashes at commit size on a separate gray lane. Right-click a stash in History to Apply, Pop or Drop it.
+- Align the Fetch, Pull and Push forms around the remote and branch fields, use more visible checkboxes, and focus the primary action when the dialog opens.
+- Highlight the close button in Shovel's in-app dialog title bars when the pointer is over it.
+- Make generated author initials bold and white on a wider palette of colored gradients.
+
 ## Rust 0.52.8 - 2026-11-26
 
 - Mark new Local Changes files with a green plus. Show one centered preview for an added binary or LFS file, and keep both previews with centered captions for modified LFS files. Added text uses the existing green diff lines.

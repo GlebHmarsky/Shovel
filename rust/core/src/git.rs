@@ -878,7 +878,10 @@ impl Git {
                     (
                         commit.hash.as_str(),
                         &commit.parents[..1],
-                        graph::Placement::Stash { index, count },
+                        graph::Placement::Stash {
+                            first: index == 0,
+                            shared: count > 1,
+                        },
                     )
                 }
             });

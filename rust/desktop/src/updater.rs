@@ -934,12 +934,12 @@ impl Controller {
         }
         let mut open = true;
         let mut dismiss = false;
-        egui::Window::new(text("RustUpdatesTitle"))
-            .open(&mut open)
+        let title = text("RustUpdatesTitle");
+        let window = egui::Window::new(&title)
             .enabled(!self.restart_requested && !self.workers.stopping())
             .default_width(510.)
-            .collapsible(false)
-            .show(ctx, |ui| {
+            .collapsible(false);
+        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
                 ui.label(format!(
                     "Shovel {} · {}",
                     env!("CARGO_PKG_VERSION"),
@@ -1003,7 +1003,7 @@ impl Controller {
                         }))
                         .clicked();
                 });
-            });
+        });
         self.open = open && !dismiss;
         self.request_approved_restart(blocked, tools_opened);
     }

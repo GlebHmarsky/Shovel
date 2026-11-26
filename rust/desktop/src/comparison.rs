@@ -129,6 +129,10 @@ impl Pane {
     pub fn is_loading(&self) -> bool {
         self.loading
     }
+    #[cfg(test)]
+    pub(super) fn selected_hash(&self) -> Option<&str> {
+        self.selected.as_ref().map(|commit| commit.hash.as_str())
+    }
     fn begin(&mut self) -> (u64, Cancellation) {
         self.cancel.cancel();
         self.cancel = Cancellation::default();

@@ -25,7 +25,7 @@ pub struct Line {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Row {
-    /// Commit lane. A stash marker is inset to the right of its base's lane.
+    /// Display lane of the commit or stash marker.
     pub node: usize,
     pub color: usize,
     pub width: usize,
@@ -42,13 +42,13 @@ impl Row {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum StashLink {
     Leaf { first: bool, shared: bool },
-    Base { shared: bool },
+    Base { lane: usize, shared: bool },
 }
 
 #[derive(Clone, Copy)]
 pub(crate) enum Placement {
     Commit { stashes: usize },
-    Stash { index: usize, count: usize },
+    Stash { first: bool, shared: bool },
 }
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
@@ -87,7 +87,7 @@ pub(crate) fn build<'a>(
         if !seen.insert(hash) || parents.iter().any(|p| seen.contains(p.as_str())) {
             return Err(GraphError::InvalidTopology);
         }
-        if let Placement::Stash { index, count } = placement {
+        if let Placement::Stash { first, shared } = placement {
             let [base] = parents else {
                 return Err(GraphError::InvalidTopology);
             };
@@ -104,23 +104,21 @@ pub(crate) fn build<'a>(
                 })
                 .collect::<Vec<_>>();
             // Predict the base's lane without reserving it or advancing branch colors.
-            let node = lanes
+            let base_lane = lanes
                 .iter()
                 .position(|lane| lane.hash == *base)
                 .or_else(|| lanes.iter().position(|lane| lane.hash.is_empty()))
                 .unwrap_or(lanes.len());
-            if node >= MAX_LANES {
+            if base_lane >= MAX_LANES {
                 return Err(GraphError::TooWide);
             }
+            let node = lanes.len().max(base_lane + 1);
             rows.push(Row {
                 node,
                 color: 0,
-                width: lanes.len().max(node + 2),
+                width: node + 1,
                 is_merge: false,
-                stash_link: Some(StashLink::Leaf {
-                    first: index == 0,
-                    shared: count > 1,
-                }),
+                stash_link: Some(StashLink::Leaf { first, shared }),
                 lines,
             });
             continue;
@@ -142,9 +140,10 @@ pub(crate) fn build<'a>(
         };
         let before = lanes.clone();
         let stash_link = match placement {
-            Placement::Commit { stashes } if stashes > 0 => {
-                Some(StashLink::Base { shared: stashes > 1 })
-            }
+            Placement::Commit { stashes } if stashes > 0 => Some(StashLink::Base {
+                lane: before.len(),
+                shared: stashes > 1,
+            }),
             _ => None,
         };
         let color = before[node].color;
@@ -188,7 +187,7 @@ pub(crate) fn build<'a>(
         let width = before
             .len()
             .max(lanes.len())
-            .max(node + 1 + usize::from(stash_link.is_some()));
+            .max(before.len() + usize::from(stash_link.is_some()));
         let mut lines = Vec::new();
         for (i, lane) in before
             .iter()
@@ -277,8 +276,8 @@ mod tests {
                     h.as_str(),
                     parents.as_slice(),
                     Placement::Stash {
-                        index,
-                        count: hashes.len(),
+                        first: index == 0,
+                        shared: true,
                     },
                 )
             }),
@@ -293,7 +292,7 @@ mod tests {
                     shared: true
                 })
             );
-            assert_eq!((row.node, row.width), (0, 2));
+            assert_eq!((row.node, row.width), (1, 2));
             assert!(row.lines.is_empty());
         }
         assert_eq!(cursor, Cursor::default());
@@ -311,7 +310,10 @@ mod tests {
         assert_eq!(base[0].node, 0);
         assert_eq!(
             base[0].stash_link,
-            Some(StashLink::Base { shared: true })
+            Some(StashLink::Base {
+                lane: 1,
+                shared: true
+            })
         );
         assert_eq!(end.next_color, 1);
         assert!(end.lanes.is_empty());
@@ -331,7 +333,10 @@ mod tests {
             (
                 "stash",
                 &stash_parents[..],
-                Placement::Stash { index: 0, count: 1 },
+                Placement::Stash {
+                    first: true,
+                    shared: false,
+                },
             ),
             ("previous", &parents[..], Placement::Commit { stashes: 1 }),
             ordinary[2],
@@ -339,7 +344,7 @@ mod tests {
         let (expected, expected_cursor) = build(ordinary, &Cursor::default()).unwrap();
         let (mut rows, cursor) = build(with_stash, &Cursor::default()).unwrap();
         let stash = rows.remove(1);
-        assert_eq!(stash.node, rows[1].node);
+        assert_eq!(stash.node, rows[1].node + 1);
         assert_eq!(
             stash.lines,
             vec![Line {
@@ -352,10 +357,57 @@ mod tests {
         );
         assert_eq!(
             rows[1].stash_link.take(),
-            Some(StashLink::Base { shared: false })
+            Some(StashLink::Base {
+                lane: stash.node,
+                shared: false
+            })
         );
         rows[1].width -= 1;
         assert_eq!(rows, expected);
         assert_eq!(cursor, expected_cursor);
+    }
+
+    #[test]
+    fn stash_lane_stays_outside_live_branches_at_the_width_limit() {
+        let cursor = Cursor {
+            lanes: (0..MAX_LANES)
+                .map(|color| Lane {
+                    hash: format!("parent{color}"),
+                    color,
+                })
+                .collect(),
+            next_color: MAX_LANES,
+        };
+        let parents = ["parent0".to_owned()];
+        let (stash, continuation) = build(
+            [(
+                "stash",
+                &parents[..],
+                Placement::Stash {
+                    first: true,
+                    shared: false,
+                },
+            )],
+            &cursor,
+        )
+        .unwrap();
+        let (base, _) = build(
+            [("parent0", &[][..], Placement::Commit { stashes: 1 })],
+            &continuation,
+        )
+        .unwrap();
+        assert_eq!(continuation, cursor);
+        assert_eq!(stash[0].node, MAX_LANES);
+        assert_eq!(stash[0].width, MAX_DISPLAY_LANES);
+        assert_eq!(stash[0].lines.len(), MAX_LANES);
+        assert_eq!(base[0].node, 0);
+        assert_eq!(
+            base[0].stash_link,
+            Some(StashLink::Base {
+                lane: stash[0].node,
+                shared: false
+            })
+        );
+        assert_eq!(base[0].width, MAX_DISPLAY_LANES);
     }
 }

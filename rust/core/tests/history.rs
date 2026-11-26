@@ -208,7 +208,15 @@ fn reachable_stashes_annotate_their_actual_base_across_history_pages() {
         let leaf = entries.iter().position(|entry| entry.commit.hash == stash.hash).unwrap();
         assert!(entries[leaf].graph.is_stash());
         assert_eq!(entries[leaf + 1].commit.hash, stash.parents[0]);
-        assert_eq!(entries[leaf].graph.node, entries[leaf + 1].graph.node);
+        let lane = entries[leaf].graph.node;
+        assert!(lane > entries[leaf + 1].graph.node);
+        assert_eq!(
+            entries[leaf + 1].graph.stash_link,
+            Some(shovel_core::graph::StashLink::Base {
+                lane,
+                shared: false
+            }),
+        );
         assert!(!entries.iter().any(|entry| entry.commit.hash == stash.parents[1]));
     }
     assert!(entries[0].commit.message.contains("complete body שלום"));

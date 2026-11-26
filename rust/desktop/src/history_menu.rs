@@ -10,6 +10,7 @@ pub(super) struct HistoryMenu {
     pub owner: u64,
     pub snapshot: Snapshot,
     pub commit: Commit,
+    pub stash: Option<Reference>,
 }
 
 pub(super) enum Command {

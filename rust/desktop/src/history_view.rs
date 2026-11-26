@@ -4,6 +4,66 @@ pub(super) use shovel_core::git::HistoryRead as Read;
 use shovel_core::identity::Identity;
 use std::{collections::BTreeMap, time::Instant};
 
+pub(super) enum Navigation {
+    First,
+    Commit(isize),
+    Repository(isize),
+}
+
+pub(super) fn keyboard_step(
+    ctx: &egui::Context,
+    list: &egui::Response,
+    row_focus: Option<egui::Id>,
+    has_entries: bool,
+) -> Option<Navigation> {
+    let focused = row_focus.or_else(|| list.has_focus().then_some(list.id));
+    if let Some(id) = focused {
+        ctx.memory_mut(|memory| {
+            memory.set_focus_lock_filter(
+                id,
+                egui::EventFilter {
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            );
+        });
+    } else if !has_entries || ctx.memory(|memory| memory.focused().is_some()) {
+        return None;
+    }
+    let (key, count) = ctx.input_mut(|input| {
+        if !input.modifiers.is_none() {
+            return None;
+        }
+        [
+            egui::Key::Home,
+            egui::Key::ArrowUp,
+            egui::Key::ArrowDown,
+            egui::Key::ArrowLeft,
+            egui::Key::ArrowRight,
+        ]
+        .into_iter()
+        .filter(|key| *key != egui::Key::Home || focused.is_some() && has_entries)
+        .find_map(|key| {
+            let count = input.count_and_consume_key(egui::Modifiers::NONE, key);
+            (count != 0).then_some((key, count as isize))
+        })
+    })?;
+    if !list.has_focus() {
+        list.request_focus();
+    }
+    // Egui also handles initial arrow events as spatial focus traversal.
+    ctx.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+    match key {
+        egui::Key::Home => Some(Navigation::First),
+        egui::Key::ArrowUp => Some(Navigation::Commit(-count)),
+        egui::Key::ArrowDown => Some(Navigation::Commit(count)),
+        egui::Key::ArrowLeft => Some(Navigation::Repository(-count)),
+        egui::Key::ArrowRight => Some(Navigation::Repository(count)),
+        _ => None,
+    }
+}
+
 const VIEW_LIMIT: usize = 128;
 #[derive(Clone)]
 struct SavedView {

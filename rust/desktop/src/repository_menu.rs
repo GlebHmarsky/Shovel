@@ -496,13 +496,13 @@ impl Dialog {
         let mut dismissed = false;
         let mut submission = None;
         let is_bisecting = self.snapshot.operations == ["bisect"];
-        egui::Window::new(strings::text(self.item.label()))
+        let title = strings::text(self.item.label());
+        let window = egui::Window::new(&title)
             .id(egui::Id::unique("repository-command"))
-            .open(&mut open)
             .collapsible(false)
             .default_width(410.)
-            .enabled(enabled && !self.picking())
-            .show(ctx, |ui| {
+            .enabled(enabled && !self.picking());
+        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
                 ui.label(self.snapshot.worktree.to_string_lossy());
                 match self.item {
                     Item::Stash => {
@@ -571,7 +571,7 @@ impl Dialog {
                     }
                     dismissed = ui.button(strings::text("Cancel")).clicked();
                 });
-            });
+        });
         self.open = (open && !dismissed) || self.picking();
         submission
     }
@@ -670,12 +670,12 @@ pub(super) fn show_help(ctx: &egui::Context) {
             continue;
         }
         let mut open = true;
-        egui::Window::new(strings::text(key))
+        let title = strings::text(key);
+        let window = egui::Window::new(&title)
             .id(egui::Id::unique(("help-window", key)))
-            .open(&mut open)
             .collapsible(false)
-            .default_size(egui::vec2(650., 470.))
-            .show(ctx, |ui| {
+            .default_size(egui::vec2(650., 470.));
+        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
@@ -696,6 +696,8 @@ pub(super) fn show_help(ctx: &egui::Context) {
                                         ("HelpOlderHistory", "Ctrl+Page Down"),
                                         ("HelpNewerHistory", "Ctrl+Page Up"),
                                         ("FirstHistoryPage", "Home"),
+                                        ("HelpHistorySelectCommit", "↑ / ↓"),
+                                        ("HelpHistorySwitchRepository", "← / →"),
                                         ("Commit", "Ctrl+Enter"),
                                         ("HelpCommitPush", "Ctrl+Shift+Enter"),
                                         ("HelpStageAll", "Shift"),
@@ -723,7 +725,7 @@ pub(super) fn show_help(ctx: &egui::Context) {
                             }
                         }
                     });
-            });
+        });
         if !open {
             ctx.data_mut(|data| data.remove::<bool>(id));
         }

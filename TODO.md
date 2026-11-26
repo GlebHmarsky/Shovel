@@ -11,6 +11,11 @@ Updated 2026-11-26. Single prioritized task list; [roadmap](docs/roadmap.md) hol
 - [ ] Verify the divider and commit editor layout, physical shortcut input, and installed update in the public Windows Beta.
 - [ ] Verify new-file previews, the History Home shortcut, and conflict summary cards and merge tool launch in the installed Windows Beta.
 
+## History and dialog follow-ups
+
+- [ ] Verify physical arrow input, the full-width stash graph and the History stash menu in the installed Windows Beta.
+- [ ] Verify Fetch, Pull and Push keyboard focus and dialog close-button hover across Windows appearance settings in the installed Windows Beta.
+
 ## Diff follow-ups
 
 - [ ] Repair Previous Change and Next Change navigation before returning those controls to the diff pane. The reported issue is that they fail to move to the next or previous hunk.

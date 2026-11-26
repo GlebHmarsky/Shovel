@@ -2,6 +2,12 @@
 
 **2026-11-16 migration:** The owner approved Rust replacing C# on master. Current build commands and GitHub automation are in [README](../README.md). Earlier C# paths/branch policies describe the historical baseline, archived at codex/csharp-archive-0.47.0. Unchecked parity and verification requirements remain open.
 
+## History navigation and stash actions (0.53.0)
+
+History selects the newest visible commit for a new view. Press Up or Down in History to select a commit on the current page and update its details. Left and Right switch to adjacent repository tabs and keep each tab's history position. Home returns to the first page. Focused text inputs retain their own arrow behavior.
+
+Reachable stashes have gray commit-sized markers in a separate full-width lane to the right. Stashes with the same base keep their own markers and link to that base. Right-click a stash in History for Apply, Pop or Drop. Drop asks for confirmation of the clicked stash.
+
 ## Repository menu and tab warming (0.51.6)
 
 Repository tabs share a dark strip with thin dividers. Markers sit at the left edge of their tabs. File lists recent repositories, Window controls the current window, and Help opens keyboard shortcuts and bundled release notes.
@@ -47,6 +53,8 @@ Pull and Push badges keep the last verified counts for the same branch and upstr
 Fetch, Pull and Push each open their options the first time you use the main button in a repository. Click the named action in the dialog to run Git and confirm the saved options. Later clicks run directly with those choices. Use the arrow or Repository menu to reopen options. Closing the dialog saves edits, and the first-use prompt stays active until you submit the action.
 
 The toolbar accepts requests while a repository tab loads. Requests use the original repository's branch and remote choices when ready. Closing the tab keeps the request.
+
+In 0.53.0, Fetch, Pull and Push show aligned destination fields before the operation options. Pull lists cached branches for the selected remote and shows the current local destination. The branch dropdown also accepts a branch name. The action button starts focused when Git is available. Enter activates the focused control. Cancel closes the form and remembers changes without starting Git. Close buttons in Shovel's in-app dialogs highlight on hover.
 
 ## Repository tab markers (0.50.12)
 

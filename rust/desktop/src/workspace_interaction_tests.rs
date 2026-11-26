@@ -445,6 +445,116 @@ struct RepositoryFixture {
     root: PathBuf,
     git: Arc<Git>,
 }
+
+#[test]
+fn history_stash_menu_applies_pops_and_confirms_drop_for_the_clicked_stash() {
+    use crate::history_view::tests::wait;
+    let fixture = RepositoryFixture::new();
+    let file = fixture.root.join("file");
+    let output = |args: &[&str]| {
+        String::from_utf8(fixture.command(args))
+            .unwrap()
+            .trim_end()
+            .to_owned()
+    };
+    std::fs::write(&file, b"older stash\n").unwrap();
+    fixture.command(&["stash", "push", "-m", "older stash"]);
+    let older = output(&["rev-parse", "refs/stash"]);
+    std::fs::write(&file, b"newer stash\n").unwrap();
+    fixture.command(&["stash", "push", "-m", "newer stash"]);
+    let newer = output(&["rev-parse", "refs/stash"]);
+
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = fixture.workspace();
+    app.open(fixture.root.clone(), &ctx);
+    wait(&mut app, &ctx);
+    let open_menu = |app: &mut Workspace, hash: &str, selector: &str| {
+        let out = frame(&ctx, app, vec![]);
+        let row = out
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .find_map(|(_, node)| {
+                node.label()
+                    .filter(|label| node.role() == egui::Role::Button && label.contains(hash))
+            })
+            .unwrap()
+            .to_owned();
+        out.drop_without_applying_deltas();
+        sidebar_click(&ctx, app, &row, egui::PointerButton::Secondary);
+        let menu = app.history_menu.as_ref().unwrap();
+        assert_eq!(menu.commit.hash, hash);
+        assert_eq!(menu.stash.as_ref().unwrap().name, selector);
+        for action in [
+            "ActionTitleStashApply",
+            "ActionTitleStashPop",
+            "ActionTitleStashDrop",
+        ] {
+            assert!(
+                sidebar_point(&ctx, app, &strings::text(action))
+                    .is_some_and(|(_, disabled)| !disabled)
+            );
+        }
+        assert!(sidebar_point(&ctx, app, &strings::text("HistoryCopySha")).is_none());
+    };
+    let finish = |app: &mut Workspace| {
+        until(app, &ctx, |app| {
+            !app.scheduler.has_accepted_work() && !app.operations.has_pending(&fixture.root)
+        });
+        app.receive(&ctx);
+        wait(app, &ctx);
+    };
+
+    open_menu(&mut app, &older, "stash@{1}");
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("ActionTitleStashApply"),
+        egui::PointerButton::Primary,
+    );
+    finish(&mut app);
+    assert_eq!(std::fs::read(&file).unwrap(), b"older stash\n");
+    assert_eq!(
+        output(&["stash", "list", "--format=%H"]),
+        format!("{newer}\n{older}")
+    );
+
+    fixture.command(&["restore", "--", "file"]);
+    open_menu(&mut app, &older, "stash@{1}");
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("ActionTitleStashPop"),
+        egui::PointerButton::Primary,
+    );
+    finish(&mut app);
+    assert_eq!(std::fs::read(&file).unwrap(), b"older stash\n");
+    assert_eq!(output(&["stash", "list", "--format=%H"]), newer);
+
+    open_menu(&mut app, &newer, "stash@{0}");
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("ActionTitleStashDrop"),
+        egui::PointerButton::Primary,
+    );
+    assert!(app.branches.is_open());
+    assert_eq!(output(&["stash", "list", "--format=%H"]), newer);
+    sidebar_click(
+        &ctx,
+        &mut app,
+        &strings::text("RustConfirmStashDrop"),
+        egui::PointerButton::Primary,
+    );
+    finish(&mut app);
+    assert!(output(&["stash", "list", "--format=%H"]).is_empty());
+    assert_eq!(std::fs::read(&file).unwrap(), b"older stash\n");
+}
+
 impl RepositoryFixture {
     fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();

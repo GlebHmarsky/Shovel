@@ -174,6 +174,153 @@ pub fn apply(ctx: &egui::Context, light: bool) {
     apply_palette(ctx, light, p);
 }
 
+pub fn dialog_checkbox(ui: &mut egui::Ui, checked: &mut bool, label: String) -> egui::Response {
+    let p = Palette::current(ui);
+    let enabled = ui.is_enabled();
+    let color = if enabled { p.text } else { p.disabled };
+    let galley = ui.painter().layout(
+        label.clone(),
+        egui::TextStyle::Body.resolve(ui.style()),
+        color,
+        (ui.available_width() - 29.).max(24.),
+    );
+    let (rect, mut response) = ui.allocate_exact_size(
+        egui::vec2(galley.size().x + 29., (galley.size().y + 6.).max(27.)),
+        egui::Sense::click(),
+    );
+    if response.clicked() {
+        response.request_focus();
+        *checked = !*checked;
+        response.mark_changed();
+    }
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::Role::CheckBox, enabled, *checked, &label)
+    });
+    let painter = ui.painter();
+    let square = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + 10., rect.center().y),
+        egui::Vec2::splat(19.),
+    );
+    let (fill, tick) = if !enabled {
+        (p.raised, p.disabled)
+    } else if p.high_contrast {
+        (p.active_selection, p.selection_text)
+    } else {
+        (
+            Palette::for_mode(true).accent,
+            Color32::from_rgb(32, 32, 32),
+        )
+    };
+    painter.rect(
+        square,
+        3.,
+        if *checked { fill } else { p.input },
+        Stroke::new(
+            1.,
+            if enabled && (*checked || response.hovered()) {
+                p.accent
+            } else {
+                p.border
+            },
+        ),
+        egui::StrokeKind::Inside,
+    );
+    if *checked {
+        let center = square.center();
+        painter.add(egui::Shape::line(
+            [(-5., 0.), (-1.5, 3.5), (5.5, -4.)]
+                .map(|(x, y)| center + egui::vec2(x, y))
+                .to_vec(),
+            Stroke::new(2.3, tick),
+        ));
+    }
+    if response.has_focus() {
+        painter.rect_stroke(
+            square.expand(2.),
+            4.,
+            Stroke::new(1.5, p.focus),
+            egui::StrokeKind::Outside,
+        );
+    }
+    painter.galley(
+        egui::pos2(rect.left() + 29., rect.center().y - galley.size().y / 2.),
+        galley,
+        color,
+    );
+    response
+}
+
+pub fn show_closable_window(
+    ctx: &egui::Context,
+    window: egui::Window<'_>,
+    title: &str,
+    open: &mut bool,
+    body: impl FnOnce(&mut egui::Ui),
+) {
+    if !*open {
+        return;
+    }
+    window.title_bar(false).show(ctx, |ui| {
+        let close_width = 28.;
+        let palette = Palette::current(ui);
+        ui.horizontal(|ui| {
+            let width = (ui.available_width() - close_width - ui.spacing().item_spacing.x).max(0.);
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 28.),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.add(egui::Label::new(egui::RichText::new(title).heading()).truncate());
+                },
+            );
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(close_width, 28.), egui::Sense::click());
+            let label = crate::strings::text("WindowClose");
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &label)
+            });
+            let response = response.on_hover_text(label);
+            let painter = ui.painter();
+            let foreground = if ui.is_enabled()
+                && (response.hovered() || response.is_pointer_button_down_on())
+            {
+                let (fill, foreground) = if palette.high_contrast {
+                    (palette.active_selection, palette.selection_text)
+                } else if response.is_pointer_button_down_on() {
+                    (Color32::from_rgb(154, 32, 25), Color32::WHITE)
+                } else {
+                    (Color32::from_rgb(196, 43, 28), Color32::WHITE)
+                };
+                painter.rect_filled(rect, 4., fill);
+                foreground
+            } else if ui.is_enabled() {
+                palette.text
+            } else {
+                palette.disabled
+            };
+            if response.has_focus() {
+                painter.rect_stroke(
+                    rect,
+                    4.,
+                    Stroke::new(1.5, palette.focus),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            let center = rect.center();
+            for direction in [egui::vec2(4.5, 4.5), egui::vec2(4.5, -4.5)] {
+                painter.line_segment(
+                    [center - direction, center + direction],
+                    Stroke::new(1.5, foreground),
+                );
+            }
+            if response.clicked() {
+                *open = false;
+            }
+        });
+        ui.separator();
+        body(ui);
+    });
+}
+
 fn apply_palette(ctx: &egui::Context, light: bool, p: Palette) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique("workspace-palette"), p));
     ctx.set_theme(if p.high_contrast {
@@ -536,38 +683,133 @@ pub fn options_menu(
 }
 
 pub fn install_windows_font(ctx: &egui::Context) {
-    use std::io::Read;
     let Some(system) = std::env::var_os("SystemRoot") else {
         return;
     };
-    let path = std::path::PathBuf::from(system)
-        .join("Fonts")
-        .join("segoeui.ttf");
-    let Ok(file) = std::fs::File::open(path) else {
-        return;
-    };
+    let path = std::path::PathBuf::from(system).join("Fonts");
+    let mut definitions = egui::FontDefinitions::default();
+    if let Some(data) = read_windows_font(&path.join("segoeui.ttf")) {
+        definitions.font_data.insert("Segoe UI".into(), data.into());
+        definitions
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "Segoe UI".into());
+    }
+    if let Some(data) = read_windows_font(&path.join("segoeuib.ttf")) {
+        definitions
+            .font_data
+            .insert("Segoe UI Bold".into(), data.into());
+        let mut family = definitions.families[&egui::FontFamily::Proportional].clone();
+        family.insert(0, "Segoe UI Bold".into());
+        definitions
+            .families
+            .insert(egui::FontFamily::Name("author-avatar-bold".into()), family);
+    }
+    ctx.set_fonts(definitions);
+    ctx.request_repaint();
+}
+
+fn read_windows_font(path: &std::path::Path) -> Option<egui::FontData> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).ok()?;
     const MAX: u64 = 8 * 1024 * 1024;
     let mut bytes = Vec::new();
-    if file.take(MAX + 1).read_to_end(&mut bytes).is_err()
-        || bytes.len() as u64 > MAX
-        || bytes.get(..4) != Some(&[0, 1, 0, 0])
-    {
-        return;
-    }
-    ctx.add_font(egui::epaint::text::FontInsert {
-        name: "Segoe UI".into(),
-        data: egui::FontData::from_owned(bytes),
-        families: vec![egui::epaint::text::InsertFontFamily {
-            family: egui::FontFamily::Proportional,
-            priority: egui::epaint::text::FontPriority::Highest,
-        }],
-    });
-    ctx.request_repaint();
+    file.take(MAX + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() as u64 <= MAX && bytes.get(..4) == Some(&[0, 1, 0, 0]))
+        .then(|| egui::FontData::from_owned(bytes))
+}
+
+pub fn avatar_bold_font(ctx: &egui::Context, size: f32) -> Option<egui::FontId> {
+    let family = egui::FontFamily::Name("author-avatar-bold".into());
+    ctx.fonts(|fonts| fonts.definitions().families.contains_key(&family))
+        .then_some(egui::FontId::new(size, family))
 }
 
 #[cfg(test)]
 mod native_caption_tests {
     use super::*;
+
+    #[test]
+    fn app_dialog_close_highlights_the_hit_target_and_keeps_disabled_close_inert() {
+        use egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
+        for light in [false, true] {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            apply_palette(&ctx, light, Palette::for_mode(!light));
+            let mut open = true;
+            let frame = |open: &mut bool, enabled, events| {
+                ctx.run_ui(
+                    RawInput {
+                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800., 600.))),
+                        events,
+                        ..Default::default()
+                    },
+                    |_| {
+                        let window = egui::Window::new("Dialog fixture")
+                            .resizable(false)
+                            .fade_in(false)
+                            .fixed_pos(egui::pos2(130., 145.))
+                            .enabled(enabled);
+                        show_closable_window(&ctx, window, "Dialog fixture", open, |ui| {
+                            ui.label("Dialog contents");
+                        });
+                    },
+                )
+            };
+            frame(&mut open, true, vec![]).drop_without_applying_deltas();
+            let output = frame(&mut open, true, vec![]);
+            let close = crate::strings::text("WindowClose");
+            let bounds = output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find_map(|(_, node)| {
+                    (node.label() == Some(&close))
+                        .then(|| node.bounds())
+                        .flatten()
+                })
+                .unwrap();
+            let point = egui::pos2(
+                ((bounds.x0 + bounds.x1) / 2.) as f32,
+                ((bounds.y0 + bounds.y1) / 2.) as f32,
+            );
+            let highlighted = |output: &egui::FullOutput| {
+                output.shapes.iter().any(|shape| {
+                    matches!(&shape.shape,
+                    egui::Shape::Rect(rect) if rect.rect.contains(point)
+                        && rect.fill == Color32::from_rgb(196, 43, 28))
+                })
+            };
+            assert!(!highlighted(&output));
+            output.drop_without_applying_deltas();
+            let output = frame(&mut open, true, vec![Event::PointerMoved(point)]);
+            assert!(highlighted(&output));
+            output.drop_without_applying_deltas();
+            let click = |pressed| Event::PointerButton {
+                pos: point,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            let output = frame(&mut open, false, vec![]);
+            assert!(!highlighted(&output));
+            output.drop_without_applying_deltas();
+            for pressed in [true, false] {
+                frame(&mut open, false, vec![click(pressed)]).drop_without_applying_deltas();
+            }
+            assert!(open);
+            frame(&mut open, true, vec![]).drop_without_applying_deltas();
+            for pressed in [true, false] {
+                frame(&mut open, true, vec![click(pressed)]).drop_without_applying_deltas();
+            }
+            assert!(!open);
+        }
+    }
+
     #[test]
     fn native_caption_theme_follows_user_appearance_and_system_contrast_in_each_window() {
         use egui::{

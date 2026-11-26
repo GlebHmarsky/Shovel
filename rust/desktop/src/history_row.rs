@@ -101,28 +101,21 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32, i
     } else {
         Color32::from_gray(if ui.visuals().dark_mode { 168 } else { 102 })
     };
-    let stash_stroke = Stroke::new(1.3, stash_color);
-    let stash_point = |y| point(entry.graph.node, y) + egui::vec2(9., 0.);
-    let rail = |y, shared| stash_point(y) - egui::vec2(if shared { 5. } else { 0. }, 0.);
+    let stash_stroke = Stroke::new(1.7, stash_color);
+    let rail = |lane, y, shared| point(lane, y) - egui::vec2(if shared { 8. } else { 0. }, 0.);
     match entry.graph.stash_link {
         Some(StashLink::Leaf { first, shared }) => {
-            let marker = stash_point(0.5);
+            let lane = entry.graph.node;
             if shared {
-                painter.line_segment(
-                    [rail(0.5, shared), marker - egui::vec2(3., 0.)],
-                    stash_stroke,
-                );
+                curve(rail(lane, 0.5, shared), center, stash_stroke);
             }
-            let start = if !first {
-                rail(0., shared)
-            } else if shared {
-                rail(0.5, shared)
-            } else {
-                marker + egui::vec2(0., 3.)
-            };
-            painter.line_segment([start, rail(1., shared)], stash_stroke);
+            curve(
+                rail(lane, if first { 0.5 } else { 0. }, shared),
+                rail(lane, 1., shared),
+                stash_stroke,
+            );
         }
-        Some(StashLink::Base { shared }) => curve(rail(0., shared), center, stash_stroke),
+        Some(StashLink::Base { lane, shared }) => curve(rail(lane, 0., shared), center, stash_stroke),
         None => {}
     }
     for line in &entry.graph.lines {
@@ -134,7 +127,7 @@ fn graph(ui: &Ui, entry: &Entry, rect: Rect, p: &Palette, foreground: Color32, i
     }
     let color = lane_color(entry.graph.color);
     if entry.graph.is_stash() {
-        painter.circle_filled(stash_point(0.5), 3.3, stash_color);
+        painter.circle_filled(center, 3.3, stash_color);
     } else if entry.graph.is_merge {
         painter.circle_stroke(center, 4., Stroke::new(1.5, color));
         painter.circle_filled(center, 1.3, color);
@@ -345,48 +338,68 @@ pub fn paint_avatar(
 ) {
     if let Some(texture) = crate::avatars::picture(ui.ctx(), worktree, c) {
         let size = texture.size_vec2();
-        let uv = Rect::from_center_size(egui::pos2(0.5, 0.5), egui::Vec2::splat(size.min_elem()) / size);
+        let uv = Rect::from_center_size(
+            egui::pos2(0.5, 0.5),
+            egui::Vec2::splat(size.min_elem()) / size,
+        );
         egui::Image::new(&texture)
             .uv(uv)
             .corner_radius(4)
             .paint_at(ui, avatar);
         return;
     }
-    let email = c.email.trim().to_lowercase();
-    let digest = Sha256::digest(if email.is_empty() {
-        c.author.trim().as_bytes()
-    } else {
-        email.as_bytes()
-    });
-    let ink = if p.high_contrast {
-        ui.painter().rect_filled(avatar, 4., p.active_selection);
-        p.selection_text
-    } else {
-        let palette = [
-            0xc94d63, 0xbc5839, 0xa56e24, 0x7d872d, 0x478751, 0x308979,
-            0x2b819b, 0x406dc0, 0x615fb7, 0x8756ae, 0xae508f, 0x89685a,
-        ];
-        let color = palette[usize::from(digest[0]) * palette.len() / 256];
-        let bottom = Color32::from_rgb((color >> 16) as u8, (color >> 8) as u8, color as u8);
-        let top = bottom.lerp_to_gamma(Color32::BLACK, 0.10);
-        paint_avatar_gradient(ui, avatar, top, bottom);
-        let luminance = |color| {
-            let linear = egui::Rgba::from(color);
-            0.2126 * linear.r() + 0.7152 * linear.g() + 0.0722 * linear.b()
-        };
-        if (luminance(top) + 0.05) / 0.05 > 1.05 / (luminance(bottom) + 0.05) {
-            Color32::BLACK
-        } else {
-            Color32::WHITE
-        }
-    };
-    ui.painter().text(
-        avatar.center(),
-        Align2::CENTER_CENTER,
-        initials(&c.author),
-        FontId::proportional(avatar.height() * 0.45),
-        ink,
+    let bottom = avatar_color(c);
+    paint_avatar_gradient(
+        ui,
+        avatar,
+        bottom.lerp_to_gamma(Color32::BLACK, 0.26),
+        bottom,
     );
+    let painter = ui.painter().with_clip_rect(avatar);
+    if p.high_contrast {
+        painter.rect_stroke(
+            avatar,
+            4.,
+            Stroke::new(1., p.border),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let font = crate::workspace_style::avatar_bold_font(ui.ctx(), avatar.height() * 0.52);
+    let label = initials(&c.author);
+    if let Some(font) = font {
+        painter.text(
+            avatar.center(),
+            Align2::CENTER_CENTER,
+            label,
+            font,
+            Color32::WHITE,
+        );
+    } else {
+        let font = FontId::proportional(avatar.height() * 0.52);
+        let galley = painter.layout_no_wrap(label, font, Color32::WHITE);
+        let origin = avatar.center() - galley.size() * 0.5;
+        for x in [-0.28, 0.28] {
+            painter.galley(origin + egui::vec2(x, 0.), galley.clone(), Color32::WHITE);
+        }
+    }
+}
+
+const AVATAR_COLORS: [u32; 22] = [
+    0xb33f57, 0xb3461d, 0xa85717, 0x93620e, 0x756911, 0x5f7715, 0x357b28, 0x177d49, 0x007f58,
+    0x007b6a, 0x007a75, 0x007787, 0x006f9e, 0x1e69b4, 0x3160c6, 0x5451c8, 0x6c49bf, 0x8244b0,
+    0x983b9c, 0xa73585, 0xaa3e65, 0xb4374d,
+];
+
+fn avatar_color(commit: &Commit) -> Color32 {
+    let email = commit.email.trim().to_lowercase();
+    let identity = if email.is_empty() {
+        commit.author.trim()
+    } else {
+        &email
+    };
+    let digest = Sha256::digest(identity.as_bytes());
+    let color = AVATAR_COLORS[usize::from(digest[0]) * AVATAR_COLORS.len() / 256];
+    Color32::from_rgb((color >> 16) as u8, (color >> 8) as u8, color as u8)
 }
 
 fn initials(author: &str) -> String {
@@ -484,9 +497,33 @@ mod tests {
             }
         )));
         assert!(out.shapes.iter().any(|shape| matches!(&shape.shape,
-            egui::Shape::Text(text) if text.galley.text() == "AB"
+            egui::Shape::Text(text) if text.galley.text() == "AB" && text.fallback_color == Color32::WHITE
         )));
         out.drop_without_applying_deltas();
+    }
+
+    #[test]
+    fn avatar_colors_keep_aliases_stable_and_white_initials_legible() {
+        let original = entry().commit;
+        let mut alias = original.clone();
+        alias.email = "  ONE@example.invalid  ".into();
+        alias.author = "Another display name".into();
+        assert_eq!(avatar_color(&original), avatar_color(&alias));
+        alias.email = "two@example.invalid".into();
+        alias.author.clone_from(&original.author);
+        assert_ne!(avatar_color(&original), avatar_color(&alias));
+        for color in AVATAR_COLORS {
+            let linear = egui::Rgba::from(Color32::from_rgb(
+                (color >> 16) as u8,
+                (color >> 8) as u8,
+                color as u8,
+            ));
+            let luminance = 0.2126 * linear.r() + 0.7152 * linear.g() + 0.0722 * linear.b();
+            assert!(
+                1.05 / (luminance + 0.05) >= 4.5,
+                "avatar color #{color:06x}"
+            );
+        }
     }
 
     #[test]

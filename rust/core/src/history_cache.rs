@@ -1,7 +1,7 @@
 //! Disposable presentation cache; it cannot create a live History or action context.
 use crate::{
     git::{Entry, PAGE_SIZE, Snapshot},
-    graph::{MAX_DISPLAY_LANES, MAX_LANES},
+    graph::{MAX_DISPLAY_LANES, MAX_LANES, StashLink},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -12,8 +12,8 @@ use std::{
 };
 
 pub const MAX_BYTES: usize = 4 * 1024 * 1024;
-// Older previews can include stash-only history rows.
-pub const PREVIEW_SCHEMA: u32 = 7;
+// Older previews encode a stash node as an inset from its base lane.
+pub const PREVIEW_SCHEMA: u32 = 8;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Preview {
     pub schema: u32,
@@ -51,9 +51,13 @@ impl Preview {
                 .all(|v| v.is_finite() && *v >= 0.)
             && self.entries.iter().all(|entry| {
                 let g = &entry.graph;
-                g.node < MAX_LANES
+                (g.is_stash() || g.node < MAX_LANES)
                     && g.node < g.width
                     && g.width <= MAX_DISPLAY_LANES
+                    && match g.stash_link {
+                        Some(StashLink::Base { lane, .. }) => g.node < lane && lane < g.width,
+                        _ => true,
+                    }
                     && g.lines.len() <= 256
                     && g.lines.iter().all(|line| {
                         line.from < g.width.min(MAX_LANES)

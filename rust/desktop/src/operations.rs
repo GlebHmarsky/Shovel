@@ -213,6 +213,161 @@ impl Options {
             },
         }
     }
+
+    fn show_destinations(&mut self, ui: &mut egui::Ui, snapshot: &Snapshot, field_width: f32) {
+        let remote_label = ui.label(text("ActionRemote"));
+        let old = self.remote.clone();
+        ui.add_enabled_ui(self.kind != Kind::Fetch || !self.all_remotes, |ui| {
+            egui::ComboBox::from_id_salt("remote")
+                .width(field_width)
+                .selected_text(display_network_target(&self.remote))
+                .show_ui(ui, |ui| {
+                    for remote in &snapshot.remotes {
+                        ui.selectable_value(&mut self.remote, remote.clone(), remote);
+                    }
+                })
+                .response
+                .labelled_by(remote_label.id);
+        });
+        self.explicit |= self.remote != old;
+        ui.end_row();
+
+        if self.kind != Kind::Fetch {
+            let branch_label = ui.label(text("NetworkBranch"));
+            let branch = if self.remote.is_empty() || self.branch.is_empty() {
+                display_network_target(&self.branch)
+            } else {
+                format!("{}/{}", self.remote, self.branch)
+            };
+            egui::ComboBox::from_id_salt("remote-branch")
+                .width(field_width)
+                .selected_text(branch)
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                .show_ui(ui, |ui| {
+                    let name = text("NetworkBranchName");
+                    let entry = ui.add_sized(
+                        egui::vec2(ui.available_width(), 26.),
+                        egui::TextEdit::singleline(&mut self.branch)
+                            .char_limit(1024)
+                            .hint_text(&name),
+                    );
+                    self.explicit |= entry.changed();
+                    if entry.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                        ui.close();
+                    }
+                    let branches = cached_remote_branches(snapshot, &self.remote);
+                    if !branches.is_empty() {
+                        ui.separator();
+                    }
+                    for name in branches {
+                        if ui.selectable_label(self.branch == name, name).clicked() {
+                            self.explicit |= self.branch != name;
+                            self.branch = name.into();
+                            ui.close();
+                        }
+                    }
+                })
+                .response
+                .labelled_by(branch_label.id);
+            ui.end_row();
+        }
+
+        match self.kind {
+            Kind::Fetch => {}
+            Kind::Pull => {
+                ui.label(text("NetworkInto"));
+                let branch = snapshot.branch.clone().unwrap_or_else(|| {
+                    snapshot.head.as_deref().map_or_else(
+                        || text("NetworkNoTarget"),
+                        |head| strings::format("DetachedHead", &[head.get(..7).unwrap_or(head)]),
+                    )
+                });
+                ui.monospace(branch);
+                ui.end_row();
+            }
+            Kind::Push => {
+                let source = ui.label(text("ActionBranchLabel"));
+                if self.remember {
+                    let old = self.source.clone();
+                    egui::ComboBox::from_id_salt("source")
+                        .width(field_width)
+                        .selected_text(display_network_target(&self.source))
+                        .show_ui(ui, |ui| {
+                            for reference in &snapshot.references {
+                                if let Some(branch) = reference.name.strip_prefix("refs/heads/") {
+                                    ui.selectable_value(
+                                        &mut self.source,
+                                        branch.to_owned(),
+                                        branch,
+                                    );
+                                }
+                            }
+                        })
+                        .response
+                        .labelled_by(source.id);
+                    self.explicit |= self.source != old;
+                } else {
+                    ui.monospace(display_network_target(&self.source));
+                }
+                ui.end_row();
+            }
+        }
+    }
+
+    fn show_flags(&mut self, ui: &mut egui::Ui) {
+        use crate::workspace_style::dialog_checkbox as checkbox;
+        match self.kind {
+            Kind::Fetch => {
+                checkbox(ui, &mut self.all_remotes, text("ActionAllRemotes"));
+            }
+            Kind::Pull => {
+                let mut rebase = self.strategy == Strategy::Rebase;
+                if checkbox(ui, &mut rebase, text("NetworkRebase"))
+                    .on_hover_text(text("ActionPullStrategyHelp"))
+                    .changed()
+                {
+                    self.strategy = if rebase {
+                        Strategy::Rebase
+                    } else {
+                        Strategy::Merge
+                    };
+                }
+                checkbox(ui, &mut self.auto_stash, text("ActionAutoStash"))
+                    .on_hover_text(text("ActionAutoStashHelp"));
+            }
+            Kind::Push => {
+                checkbox(ui, &mut self.all_tags, text("ActionAllTags"));
+                checkbox(ui, &mut self.set_upstream, text("ActionSetUpstream"));
+            }
+        }
+    }
+}
+
+fn display_network_target(value: &str) -> String {
+    if value.is_empty() {
+        text("NetworkNoTarget")
+    } else {
+        value.to_owned()
+    }
+}
+
+fn cached_remote_branches<'a>(snapshot: &'a Snapshot, remote: &str) -> Vec<&'a str> {
+    snapshot
+        .references
+        .iter()
+        .filter_map(|reference| {
+            let path = reference.name.strip_prefix("refs/remotes/")?;
+            let (owner, branch) = snapshot
+                .remotes
+                .iter()
+                .filter_map(|owner| {
+                    let branch = path.strip_prefix(owner)?.strip_prefix('/')?;
+                    Some((owner, branch))
+                })
+                .max_by_key(|(owner, _)| owner.len())?;
+            (owner == remote && branch != "HEAD").then_some(branch)
+        })
+        .collect()
 }
 enum LocalAction {
     Branch(shovel_core::branches::Action),
@@ -361,6 +516,7 @@ pub struct Controller {
     refresh_paths: Vec<PathBuf>,
     stash_conflicts: VecDeque<Arc<shovel_core::stashes::ConflictOrigin>>,
     options: Option<(Options, Snapshot)>,
+    options_opened: bool,
     ready_options: VecDeque<ReadyOptions>,
     options_hold: Option<DialogLease>,
     next: u64,
@@ -381,6 +537,7 @@ impl Default for Controller {
             refresh_paths: vec![],
             stash_conflicts: VecDeque::new(),
             options: None,
+            options_opened: false,
             ready_options: VecDeque::new(),
             options_hold: None,
             next: 1,
@@ -614,121 +771,135 @@ impl Controller {
         let mut confirmed_now = false;
         let mut open = true;
         let mut close = false;
-        egui::Window::new(strings::format("RustNetworkOptions", &[&text(kind.key())]))
+        let popup_was_open = egui::Popup::is_any_open(ctx);
+        let width = (ctx.content_rect().width() - 46.).clamp(236., 442.);
+        let title = strings::format("RustNetworkOptions", &[&text(kind.key())]);
+        let window = egui::Window::new(&title)
             .id(egui::Id::unique("network-options"))
-            .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(480.)
-            .show(ctx, |ui| {
-                ui.label(snapshot.worktree.display().to_string());
-                if options.remember && !already_confirmed {
-                    ui.label(text("NetworkConfirmOptions"));
-                }
-                ui.label(text(if options.explicit {
-                    "ActionCachedTargets"
-                } else {
-                    "RustNetworkConfigured"
-                }));
-                if kind == Kind::Fetch {
-                    ui.checkbox(&mut options.all_remotes, text("ActionAllRemotes"));
-                }
-                if kind == Kind::Pull {
-                    ui.radio_value(
-                        &mut options.strategy,
-                        Strategy::Rebase,
-                        text("ActionPullRebase"),
-                    );
-                    ui.radio_value(
-                        &mut options.strategy,
-                        Strategy::Merge,
-                        text("ActionPullMerge"),
-                    );
-                    ui.checkbox(&mut options.auto_stash, text("ActionAutoStash"));
-                }
-                if kind == Kind::Push {
-                    ui.checkbox(&mut options.all_tags, text("ActionAllTags"));
-                    ui.checkbox(&mut options.set_upstream, text("ActionSetUpstream"));
-                    ui.label(text("ActionBranchLabel"));
-                    if options.remember {
-                        let old = options.source.clone();
-                        egui::ComboBox::from_id_salt("source")
-                            .selected_text(&options.source)
-                            .show_ui(ui, |ui| {
-                                for reference in &snapshot.references {
-                                    if let Some(branch) = reference.name.strip_prefix("refs/heads/") {
-                                        ui.selectable_value(
-                                            &mut options.source,
-                                            branch.to_owned(),
-                                            branch,
-                                        );
-                                    }
-                                }
-                            });
-                        options.explicit |= options.source != old;
-                    } else {
-                        ui.monospace(&options.source);
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .default_width(width)
+            .max_width(width);
+        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
+            use crate::workspace_style::Palette;
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing.y = 6.;
+            ui.spacing_mut().interact_size.y = 26.;
+            let palette = Palette::current(ui);
+            egui::ScrollArea::vertical()
+                .max_height((ctx.content_rect().height() - 128.).max(80.))
+                .show(ui, |ui| {
+                    let path = snapshot.worktree.to_string_lossy();
+                    let repository = PathText::new(ctx, &path);
+                    ui.add(
+                        egui::Label::new(RichText::new(repository.visual()).strong()).truncate(),
+                    )
+                    .on_hover_text(repository.spoken());
+                    if options.remember && !already_confirmed {
+                        ui.label(RichText::new(text("NetworkConfirmOptions")).color(palette.muted));
                     }
-                }
-                ui.label(text("ActionRemote"));
-                let old = options.remote.clone();
-                egui::ComboBox::from_id_salt("remote")
-                    .selected_text(&options.remote)
-                    .show_ui(ui, |ui| {
-                        for remote in &snapshot.remotes {
-                            ui.selectable_value(&mut options.remote, remote.clone(), remote);
-                        }
+                    ui.separator();
+                    let label_width = 97.;
+                    let gap = 12.;
+                    egui::Grid::new("network-destinations")
+                        .num_columns(2)
+                        .min_col_width(label_width)
+                        .spacing([gap, 7.])
+                        .show(ui, |ui| {
+                            options.show_destinations(ui, &snapshot, width - label_width - gap);
+                        });
+                    ui.add_space(4.);
+                    ui.horizontal_top(|ui| {
+                        ui.add_space(label_width + gap - ui.spacing().item_spacing.x);
+                        ui.vertical(|ui| options.show_flags(ui));
                     });
-                options.explicit |= old != options.remote;
-                if kind != Kind::Fetch {
-                    ui.label(text("ActionRemoteBranch"));
-                    options.explicit |= ui
-                        .add(egui::TextEdit::singleline(&mut options.branch).char_limit(1024))
-                        .changed();
-                }
-                if options.remember
-                    && options.explicit
-                    && ui.button(text("RustNetworkUseConfigured")).clicked()
-                {
-                    options.explicit = false;
-                }
-
-                ui.separator();
-                ui.horizontal(|ui| {
-                    if ui.button(text("Close")).clicked() {
-                        close = true;
-                    }
-                    if ui.button(text(kind.key())).clicked() {
-                        if let Some(git) = git {
-                            let command = self.submit(
-                                options.clone(),
-                                &snapshot,
-                                git.clone(),
-                                scheduler,
-                                ctx,
-                            );
-                            if let Some(lease) = &self.options_hold {
-                                lease.continue_with(scheduler, command);
-                            }
-                            // A matching command may already be queued. The user
-                            // still confirmed these choices for this worktree.
-                            confirmed_now = true;
-                        }
-                        close = true;
+                    ui.label(
+                        RichText::new(text(if options.explicit {
+                            "ActionCachedTargets"
+                        } else {
+                            "RustNetworkConfigured"
+                        }))
+                        .small()
+                        .color(palette.muted),
+                    );
+                    if options.remember
+                        && options.explicit
+                        && ui.button(text("RustNetworkUseConfigured")).clicked()
+                    {
+                        options.explicit = false;
                     }
                 });
+            ui.separator();
+            ui.horizontal(|ui| {
+                let button_size = egui::vec2(85., 29.);
+                ui.add_space(
+                    ui.available_width() - button_size.x * 2. - ui.spacing().item_spacing.x,
+                );
+                let mut primary = egui::Button::new(RichText::new(text(kind.key())).strong())
+                    .min_size(button_size);
+                if git.is_some() {
+                    let (fill, foreground) = if palette.high_contrast {
+                        (palette.active_selection, palette.selection_text)
+                    } else if ui.visuals().dark_mode {
+                        (palette.accent, palette.chrome)
+                    } else {
+                        (palette.accent, palette.selection_text)
+                    };
+                    primary = egui::Button::new(
+                        RichText::new(text(kind.key())).strong().color(foreground),
+                    )
+                    .min_size(button_size)
+                    .fill(fill);
+                }
+                let primary = ui.add_enabled(git.is_some(), primary);
+                let cancel =
+                    ui.add(egui::Button::new(text("CancelOperation")).min_size(button_size));
+                if !self.options_opened && !ui.is_sizing_pass() {
+                    if primary.enabled() {
+                        primary.request_focus();
+                    } else {
+                        cancel.request_focus();
+                    }
+                    self.options_opened = true;
+                }
+                if primary.has_focus() {
+                    ui.painter().rect_stroke(
+                        primary.rect.expand(2.),
+                        4.,
+                        egui::Stroke::new(1.5, palette.focus),
+                        egui::StrokeKind::Outside,
+                    );
+                }
+                if primary.clicked()
+                    && let Some(git) = git
+                {
+                    let command =
+                        self.submit(options.clone(), &snapshot, git.clone(), scheduler, ctx);
+                    if let Some(lease) = &self.options_hold {
+                        lease.continue_with(scheduler, command);
+                    }
+                    // A matching command can already be queued for this worktree.
+                    confirmed_now = true;
+                    close = true;
+                } else if cancel.clicked() {
+                    close = true;
+                }
             });
+        });
         let changed =
             options.remember && (options != before || (confirmed_now && !already_confirmed));
         if changed {
             options.save(settings, &snapshot, confirmed_now);
         }
-        if open && !close && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        let escape = !popup_was_open && ctx.input(|input| input.key_pressed(egui::Key::Escape));
+        if open && !close && !escape {
             self.options = Some((options, snapshot));
         } else {
             // Release the repository lane only after remembered choices are saved
             // and any explicit submission has entered the queue.
             self.options_hold.take();
+            self.options_opened = false;
         }
         changed
     }
@@ -1986,13 +2157,13 @@ impl Controller {
         }
         let mut open = true;
         let mut dismiss = false;
-        egui::Window::new(text("OperationAttentionTitle"))
+        let title = text("OperationAttentionTitle");
+        let window = egui::Window::new(&title)
             .id(egui::Id::unique("operation-failure"))
-            .open(&mut open)
             .collapsible(false)
             .order(egui::Order::Foreground)
-            .default_width(580.)
-            .show(ctx, |ui| {
+            .default_width(580.);
+        crate::workspace_style::show_closable_window(ctx, window, &title, &mut open, |ui| {
                 ui.heading(text(run.label));
                 let path = run.path.to_string_lossy();
                 let display = PathText::new(ctx, &path);
@@ -2019,7 +2190,7 @@ impl Controller {
                         });
                 }
                 dismiss = ui.button(text("OperationAttentionDismiss")).clicked();
-            });
+        });
         run.show_failure = open && !dismiss;
         if !run.show_failure {
             self.active_failure = None;
@@ -2152,7 +2323,7 @@ mod tests {
             }
             out.drop_without_applying_deltas();
         }
-        for label in [text("ActionPullMerge"), text("Close")] {
+        for label in [text("NetworkRebase"), text("CancelOperation")] {
             let point = nodes[&label];
             for events in [
                 vec![egui::Event::PointerMoved(point)],
@@ -2185,6 +2356,188 @@ mod tests {
         assert!(!scheduler.has_accepted_work());
         assert!(controller.runs.is_empty());
     }
+    #[test]
+    fn network_form_aligns_fields_filters_branch_choices_and_activates_only_focused_controls() {
+        let (_temp, git, mut snapshot) = fixture();
+        snapshot.remotes.extend(["team".into(), "team/docs".into()]);
+        for name in [
+            "origin/review",
+            "team/main",
+            "team/docs/handbook",
+            "origin/HEAD",
+        ] {
+            snapshot.references.push(shovel_core::git::Reference {
+                name: format!("refs/remotes/{name}"),
+                hash: snapshot.head.clone().unwrap(),
+                upstream: None,
+            });
+        }
+        assert_eq!(cached_remote_branches(&snapshot, "team"), ["main"]);
+        assert_eq!(cached_remote_branches(&snapshot, "team/docs"), ["handbook"]);
+        let mut settings = Settings::default();
+        let mut controller = Controller::default();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let scheduler = Scheduler::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800., 600.));
+        let frame = |controller: &mut Controller, settings: &mut Settings, events| {
+            ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    events,
+                    ..Default::default()
+                },
+                |_| {
+                    controller.options_dialog(&ctx, settings, Some(&git), &scheduler);
+                },
+            )
+        };
+        let open = |controller: &mut Controller, settings: &Settings, kind| {
+            controller.open_network_options(
+                kind,
+                &snapshot.worktree,
+                Some(&snapshot),
+                settings,
+                &scheduler,
+                &ctx,
+            );
+        };
+        let tap = |controller: &mut Controller, settings: &mut Settings, key| {
+            for pressed in [true, false] {
+                frame(
+                    controller,
+                    settings,
+                    vec![egui::Event::Key {
+                        key,
+                        physical_key: Some(key),
+                        pressed,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                )
+                .drop_without_applying_deltas();
+            }
+        };
+        let click = |controller: &mut Controller, settings: &mut Settings, point| {
+            frame(controller, settings, vec![egui::Event::PointerMoved(point)])
+                .drop_without_applying_deltas();
+            for pressed in [true, false] {
+                frame(
+                    controller,
+                    settings,
+                    vec![egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                )
+                .drop_without_applying_deltas();
+            }
+        };
+        let rect = |output: &egui::FullOutput, key, by_value: bool| {
+            let label = text(key);
+            let bounds = output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find_map(|(_, node)| {
+                    let matched =
+                        node.value() == Some(&label) || !by_value && node.label() == Some(&label);
+                    matched.then(|| node.bounds()).flatten()
+                })
+                .unwrap_or_else(|| panic!("Missing {label}"));
+            egui::Rect::from_min_max(
+                egui::pos2(bounds.x0 as f32, bounds.y0 as f32),
+                egui::pos2(bounds.x1 as f32, bounds.y1 as f32),
+            )
+        };
+        open(&mut controller, &settings, Kind::Pull);
+        frame(&mut controller, &mut settings, vec![]).drop_without_applying_deltas();
+        let output = frame(&mut controller, &mut settings, vec![]);
+        let remote = rect(&output, "origin", true);
+        let branch = rect(&output, "origin/main", true);
+        let into = rect(&output, "NetworkInto", false);
+        let rebase = rect(&output, "NetworkRebase", false);
+        let stash = rect(&output, "ActionAutoStash", false);
+        let primary = rect(&output, "Pull", false);
+        let cancel = rect(&output, "CancelOperation", false);
+        assert!(remote.top() < branch.top() && branch.bottom() <= into.top());
+        assert!(into.bottom() <= rebase.top() && rebase.bottom() <= stash.top());
+        assert!((remote.left() - branch.left()).abs() < 1.);
+        assert!(primary.right() <= cancel.left() && primary.left() > screen.center().x);
+        let tree = output.platform_output.accesskit_update.as_ref().unwrap();
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|(id, node)| *id == tree.focus && node.label() == Some("Pull"))
+        );
+        output.drop_without_applying_deltas();
+
+        click(&mut controller, &mut settings, rebase.center());
+        assert_eq!(
+            controller.options.as_ref().unwrap().0.strategy,
+            Strategy::Merge
+        );
+        tap(&mut controller, &mut settings, egui::Key::Enter);
+        assert_eq!(
+            controller.options.as_ref().unwrap().0.strategy,
+            Strategy::Rebase
+        );
+        assert!(controller.runs.is_empty());
+
+        click(&mut controller, &mut settings, branch.center());
+        let output = frame(&mut controller, &mut settings, vec![]);
+        assert!(rect(&output, "review", false).is_positive());
+        let tree = output.platform_output.accesskit_update.as_ref().unwrap();
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("handbook") || node.label() == Some("HEAD"))
+        );
+        output.drop_without_applying_deltas();
+        tap(&mut controller, &mut settings, egui::Key::Escape);
+        assert!(controller.modal_open() && !egui::Popup::is_any_open(&ctx));
+        tap(&mut controller, &mut settings, egui::Key::Escape);
+        assert!(!controller.modal_open() && controller.runs.is_empty());
+
+        // Submission uses a live, disposable snapshot with one local bare remote.
+        command(&git, &snapshot.worktree, &["push", "origin", "main"]);
+        let snapshot = git
+            .inspect(&snapshot.worktree, &Cancellation::default())
+            .unwrap();
+        controller.open_network_options(
+            Kind::Fetch,
+            &snapshot.worktree,
+            Some(&snapshot),
+            &settings,
+            &scheduler,
+            &ctx,
+        );
+        frame(&mut controller, &mut settings, vec![]).drop_without_applying_deltas();
+        tap(&mut controller, &mut settings, egui::Key::Enter);
+        assert!(!controller.modal_open());
+        assert!(Options::confirmed(
+            &settings,
+            &snapshot.worktree,
+            Kind::Fetch
+        ));
+        wait(|| {
+            controller.poll(&ctx);
+            controller.runs.last().is_some_and(|run| run.done)
+        });
+        assert_eq!(
+            controller.runs[0].status,
+            text("ActionCompletedShort"),
+            "{}",
+            controller.runs[0].output
+        );
+    }
+
     #[test]
     fn repository_options_keep_their_owner_during_tab_switch_and_close() {
         use crate::workspace_interaction_tests::{frame, workspace};

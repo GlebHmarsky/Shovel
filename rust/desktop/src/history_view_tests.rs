@@ -474,6 +474,122 @@ fn home_returns_focused_history_to_the_newest_row() {
 }
 
 #[test]
+fn history_arrows_activate_commits_and_keep_focus_between_repositories() {
+    use eframe::App;
+    let first = Fixture::new();
+    let second = Fixture::new();
+    second.command(
+        &["commit", "--allow-empty", "-m", "Second repository tip"],
+        &[],
+    );
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = first.app(&ctx);
+    let second_tab = app.ensure_tab(second.root.clone());
+    let key = |key, pressed, repeat| egui::Event::Key {
+        key,
+        physical_key: Some(key),
+        pressed,
+        repeat,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let arrow = |app: &mut Workspace, key_code| {
+        paint(app, &ctx, vec![key(key_code, true, false)]);
+        paint(app, &ctx, vec![key(key_code, false, false)]);
+    };
+    let selected = |app: &Workspace| {
+        let tab = &app.tabs[app.selected];
+        tab.page
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .position(|entry| Some(&entry.commit.hash) == tab.selected.as_ref())
+            .unwrap()
+    };
+    paint(&mut app, &ctx, vec![]);
+    assert_eq!(selected(&app), 0);
+    arrow(&mut app, egui::Key::ArrowDown);
+    assert_eq!(selected(&app), 1);
+    assert_eq!(
+        app.tabs[0].comparison.as_ref().unwrap().selected_hash(),
+        app.tabs[0].selected.as_deref(),
+    );
+    arrow(&mut app, egui::Key::ArrowUp);
+    assert_eq!(selected(&app), 0);
+    paint(
+        &mut app,
+        &ctx,
+        (0..34)
+            .map(|i| key(egui::Key::ArrowDown, true, i > 0))
+            .collect(),
+    );
+    paint(
+        &mut app,
+        &ctx,
+        vec![key(egui::Key::ArrowDown, false, false)],
+    );
+    assert_eq!(selected(&app), 34);
+    let first_offset = app.tabs[0].view.offset;
+    assert!(first_offset.y > 300.);
+
+    arrow(&mut app, egui::Key::ArrowRight);
+    assert_eq!(app.selected, second_tab);
+    wait(&mut app, &ctx);
+    paint(&mut app, &ctx, vec![]);
+    assert_eq!(selected(&app), 0);
+    arrow(&mut app, egui::Key::ArrowRight);
+    assert_eq!(app.selected, second_tab);
+    arrow(&mut app, egui::Key::ArrowDown);
+    assert_eq!(selected(&app), 1);
+    arrow(&mut app, egui::Key::ArrowLeft);
+    assert_eq!(app.selected, 0);
+    assert_eq!(selected(&app), 34);
+    assert_eq!(app.tabs[0].view.offset, first_offset);
+    arrow(&mut app, egui::Key::ArrowUp);
+    assert_eq!(selected(&app), 33);
+
+    let mut field = String::from("ab");
+    for events in [
+        vec![],
+        vec![
+            key(egui::Key::ArrowLeft, true, false),
+            egui::Event::Text("*".into()),
+        ],
+    ] {
+        let focus = events.is_empty();
+        ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900., 620.),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                egui::Panel::top("history-arrow-text").show(ui, |ui| {
+                    let mut edit = egui::TextEdit::singleline(&mut field).show(ui);
+                    if focus {
+                        edit.response.request_focus();
+                        let end = egui::text::CCursor::new(2);
+                        edit.state
+                            .cursor
+                            .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                        edit.state.store(ui.ctx(), edit.response.id);
+                    }
+                });
+                app.ui(ui, &mut eframe::Frame::_new_kittest());
+            },
+        )
+        .drop_without_applying_deltas();
+    }
+    assert_eq!(field, "a*b");
+    assert_eq!(app.selected, 0);
+    assert_eq!(selected(&app), 33);
+}
+
+#[test]
 fn scrolling_across_page_edges_returns_to_the_first_history_page() {
     let fixture = Fixture::new();
     let ctx = egui::Context::default();
